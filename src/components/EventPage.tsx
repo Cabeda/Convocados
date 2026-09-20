@@ -35,6 +35,7 @@ import {
 import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
+import { SignInButton } from "./SignInButton";
 import { PushPromptBanner } from "./PushPromptBanner";
 
 
@@ -56,7 +57,7 @@ function isHighIntentForPush(
 export default function EventPage({ eventId }: { eventId: string }) {
   const t = useT();
   const locale = detectLocale();
-  const { data: session } = useSession();
+  const { data: session, refetch: refetchSession } = useSession();
 
   // ADR 0018: Detect ?action= from notification deep links
   const [deepLinkAction] = useState(() => {
@@ -1122,15 +1123,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
               if (!isAuthenticated) {
                 return (
                   <Paper elevation={1} sx={{ borderRadius: 3, p: 2, textAlign: "center" }}>
-                    <Button
+                    <SignInButton
                       variant="contained"
                       color="primary"
                       size="large"
-                      href={`/auth/signin?callbackURL=/events/${eventId}`}
+                      callbackURL={`/events/${eventId}`}
+                      onSuccess={() => {
+                        refetchSession?.();
+                        fetchEvent();
+                      }}
                       sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
                     >
                       {t("signInToJoin")}
-                    </Button>
+                    </SignInButton>
                   </Paper>
                 );
               }

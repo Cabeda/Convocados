@@ -306,12 +306,12 @@ describe("PostGameBanner Season Rank reveal (rank transparency)", () => {
     edges: [0, 1000, 1600, 2000, 2300, 2600],
   };
 
-  it("shows before → after and the RP delta when the game counted", async () => {
+  it("shows the settled rank and the RP delta when the game counted", async () => {
     mockFetchStatus({ ...baseStatus, isParticipant: true, seasonRank: rank });
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
-    expect(screen.getByText("1500")).toBeInTheDocument();
-    expect(screen.getByText("1532")).toBeInTheDocument();
+    // The Rank counts up to the settled value.
+    await waitFor(() => expect(screen.getByTestId("rank-value")).toHaveTextContent("1532"), { timeout: 3000 });
     expect(screen.getByText("+32 RP")).toBeInTheDocument();
   });
 

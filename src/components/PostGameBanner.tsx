@@ -311,6 +311,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
           {status.seasonRank?.counted && (
             <SeasonRankReveal
               eventId={eventId}
+              historyId={status.latestHistoryId}
               rank={status.seasonRank}
               scoreOne={status.scoreOne}
               scoreTwo={status.scoreTwo}
