@@ -14,6 +14,7 @@ vi.mock("~/lib/auth.server", () => ({
     api: { getSession: vi.fn() },
   },
   ensureTrustedClientInDB: vi.fn().mockResolvedValue(undefined),
+  ensureAuthKeysHealthy: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("~/lib/googleToken.server", () => ({
   verifyGoogleIdToken: (token: string, audiences: string[]) => mockVerifyGoogle(token, audiences),

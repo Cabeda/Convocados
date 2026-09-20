@@ -37,12 +37,11 @@ class SeasonRankRevealTest {
     )
 
     @Test
-    fun `shows before after delta and tier and fires the why callback`() {
+    fun `shows the settled rank, delta and tier and fires the why callback`() {
         var clicked = false
         composeRule.setContent {
-            MaterialTheme { SeasonRankReveal(rank, onWhyClick = { clicked = true }, onDismiss = {}) }
+            MaterialTheme { SeasonRankReveal(rank, onWhyClick = { clicked = true }, onDismiss = {}, animate = false) }
         }
-        composeRule.onNodeWithText("1500").assertIsDisplayed()
         composeRule.onNodeWithText("1532").assertIsDisplayed()
         composeRule.onNodeWithText("+32 RP").assertIsDisplayed()
         composeRule.onNodeWithText("Silver", useUnmergedTree = true).assertIsDisplayed()
@@ -54,7 +53,7 @@ class SeasonRankRevealTest {
     fun `fires the dismiss callback when Got it is tapped`() {
         var dismissed = false
         composeRule.setContent {
-            MaterialTheme { SeasonRankReveal(rank, onWhyClick = {}, onDismiss = { dismissed = true }) }
+            MaterialTheme { SeasonRankReveal(rank, onWhyClick = {}, onDismiss = { dismissed = true }, animate = false) }
         }
         composeRule.onNodeWithText("Got it").performClick()
         assertTrue(dismissed)
@@ -68,6 +67,7 @@ class SeasonRankRevealTest {
                     rank.copy(provisional = true, before = 868.0, after = 900.0, tierAfter = 0, gamesThisSeason = 2),
                     onWhyClick = {},
                     onDismiss = {},
+                    animate = false,
                 )
             }
         }
@@ -77,7 +77,7 @@ class SeasonRankRevealTest {
     @Test
     fun `renders nothing when the game did not count`() {
         composeRule.setContent {
-            MaterialTheme { SeasonRankReveal(rank.copy(counted = false), onWhyClick = {}, onDismiss = {}) }
+            MaterialTheme { SeasonRankReveal(rank.copy(counted = false), onWhyClick = {}, onDismiss = {}, animate = false) }
         }
         composeRule.onNodeWithTag("season_rank_reveal").assertDoesNotExist()
     }

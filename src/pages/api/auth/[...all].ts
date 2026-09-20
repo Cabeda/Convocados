@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { auth, ensureTrustedClientInDB } from "../../../lib/auth.server";
+import { auth, ensureTrustedClientInDB, ensureAuthKeysHealthy } from "../../../lib/auth.server";
 import { oauthRateLimitResponse } from "../../../lib/oauthRateLimit.server";
 import { verifyGoogleIdToken } from "../../../lib/googleToken.server";
 import { backfillGoogleProfileImageFromLogin } from "../../../lib/syncGoogleImage.server";
@@ -17,6 +17,8 @@ interface GoogleLoginDetection {
 const handler: APIRoute = async ({ request }) => {
   // Ensure trusted OAuth client exists in DB (lazy, runs once)
   await ensureTrustedClientInDB();
+  // Self-heal JWKS keys left over from a rotated auth secret (lazy, runs once)
+  await ensureAuthKeysHealthy();
   // Apply OAuth-specific rate limits before passing to better-auth
   const limited = await oauthRateLimitResponse(request);
   if (limited) return limited;
