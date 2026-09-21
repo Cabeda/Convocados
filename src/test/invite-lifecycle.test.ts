@@ -455,6 +455,26 @@ describe("acceptPlayerInvite", () => {
     expect(follow).toBeTruthy();
   });
 
+  it("is first-come-first-served when two accepts race for the same token", async () => {
+    const { invitee, ev, invite } = await seedInvite();
+    const results = await Promise.allSettled([
+      acceptPlayerInvite({ token: invite.token, userId: invitee.id, eventId: ev.id, gameId: ev.currentGameId, maxPlayers: 10 }),
+      acceptPlayerInvite({ token: invite.token, userId: invitee.id, eventId: ev.id, gameId: ev.currentGameId, maxPlayers: 10 }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason.message).toMatch(/no longer pending/i);
+
+    // The loser's transaction rolls back entirely: exactly one active entry.
+    const active = await prisma.gameParticipant.findMany({
+      where: { gameId: ev.currentGameId, archivedAt: null, status: "active" },
+    });
+    expect(active).toHaveLength(1);
+  });
+
   it("sends the invitee to the bench when the roster is full", async () => {
     const { invitee, ev, invite } = await seedInvite(true);
     const res = await acceptPlayerInvite({ token: invite.token, userId: invitee.id, eventId: ev.id, gameId: ev.currentGameId, maxPlayers: 1 });

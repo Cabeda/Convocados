@@ -518,10 +518,14 @@ export async function acceptPlayerInvite(opts: {
       });
       if (claimed.count === 0) throw new Error("This invite was already claimed by another account.");
     }
-    await tx.playerInvite.update({
-      where: { id: invite.id },
+    // First-come-first-served: claim the pending invite atomically. Two
+    // concurrent accepts both pass the pre-check above, so the transition must
+    // be guarded on the status here; the loser updates 0 rows and rolls back.
+    const accepted = await tx.playerInvite.updateMany({
+      where: { id: invite.id, status: "pending" },
       data: { status: "accepted", respondedAt: new Date() },
     });
+    if (accepted.count === 0) throw new Error("This invite is no longer pending.");
 
     await tx.gameParticipant.upsert({
       where: { gameId_eventPlayerId: { gameId, eventPlayerId: invite.eventPlayerId } },

@@ -23,6 +23,8 @@ const PRESETS = {
   oauth_authorize: { windowMs: 60_000, maxRequests: 30 },
   /** OAuth client registration: 5 req/hour per IP */
   oauth_register: { windowMs: 3_600_000, maxRequests: 5 },
+  /** Player invites: 20 per sender per 24h (anti-spam, ADR 0025) */
+  invite_sender: { windowMs: 86_400_000, maxRequests: 20 },
 } as const;
 
 export type RateLimitPreset = keyof typeof PRESETS;
@@ -85,8 +87,18 @@ export async function rateLimitResponse(
   request: Request,
   preset: RateLimitPreset = "read",
 ): Promise<Response | null> {
-  const ip = extractIp(request);
-  const { allowed, retryAfterMs } = await checkApiRateLimit(ip, preset);
+  return rateLimitResponseForKey(extractIp(request), preset);
+}
+
+/**
+ * Like rateLimitResponse but keyed on an arbitrary value (e.g. a user id)
+ * instead of the client IP. Still returns a 429 Response or null.
+ */
+export async function rateLimitResponseForKey(
+  key: string,
+  preset: RateLimitPreset = "read",
+): Promise<Response | null> {
+  const { allowed, retryAfterMs } = await checkApiRateLimit(key, preset);
 
   if (!allowed) {
     return Response.json(
