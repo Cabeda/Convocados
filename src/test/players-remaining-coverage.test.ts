@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
-import { POST, removePlayerFromTeams, resetInviteRateLimitStores } from "~/pages/api/events/[id]/players";
+import { POST, resetInviteRateLimitStores } from "~/pages/api/events/[id]/players";
+import { removePlayerFromTeams } from "~/lib/teamFormation.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
