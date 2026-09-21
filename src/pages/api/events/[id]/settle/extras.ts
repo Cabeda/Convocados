@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
-import { getSession, checkOwnership } from "../../../../../lib/auth.helpers.server";
+import { getSession } from "../../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 
 /**
@@ -52,8 +53,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const session = await getSession(request);
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event, session);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can declare extras." }, { status: 403 });
   }
   if (!session?.user) return Response.json({ error: "Authentication required." }, { status: 401 });

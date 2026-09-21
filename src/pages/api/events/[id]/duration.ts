@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -10,8 +11,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can update duration." }, { status: 403 });
   }
 

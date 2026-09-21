@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { addPlayerToTeams, validateTeams } from "./players";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 
@@ -32,8 +33,8 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Undo re-adds a player and can link an account, so it is an organizer action.
   // Ownerless events stay openly manageable while unlisted (no-account flow).
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
