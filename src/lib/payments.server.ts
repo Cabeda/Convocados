@@ -18,6 +18,7 @@
 import { prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { computeAvailableUnits, type WalletTx } from "./wallet";
+import { perPlayerShare, perPlayerShareCents } from "./gameCost";
 import {
   activeSubscriptionCoversDate,
   subscriptionWindowFor,
@@ -85,7 +86,7 @@ async function resolveShareInfo(eventId: string, totalAmount: number) {
   });
   const maxPlayers = event?.maxPlayers ?? 1;
   const gameId = event?.currentGameId ?? eventId;
-  const shareCents = Math.round((totalAmount / maxPlayers) * 100);
+  const shareCents = perPlayerShareCents(totalAmount, maxPlayers);
   return { maxPlayers, gameId, shareCents };
 }
 
@@ -131,7 +132,7 @@ export async function recordPerGameShare(
 
   // Per-game share in cents (rounded to whole cents).
   const { maxPlayers, gameId } = await resolveShareInfo(eventId, eventCost.totalAmount);
-  const baseShareCents = Math.round((eventCost.totalAmount / maxPlayers) * 100);
+  const baseShareCents = perPlayerShareCents(eventCost.totalAmount, maxPlayers);
 
   // 1. Is there an active subscription that covers this date?
   const subscription = userId
@@ -374,7 +375,7 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
     .map((m) => ({ name: m.name, userId: m.userId }));
   // Per-player share = total / required playing slots (maxPlayers), NOT the
   // current roster size — the per-player price is fixed for the event.
-  const share = event.maxPlayers > 0 ? eventCost.totalAmount / event.maxPlayers : 0;
+  const share = perPlayerShare(eventCost.totalAmount, event.maxPlayers);
 
   for (const player of activePlayers) {
     const isOwner = event.ownerId && player.userId === event.ownerId;

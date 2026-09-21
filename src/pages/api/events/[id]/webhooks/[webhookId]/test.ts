@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { signPayload } from "../../../../../../lib/webhook.server";
-import { checkOwnership } from "../../../../../../lib/auth.helpers.server";
+
+import { authorizeEventMutation } from "../../../../../../lib/eventAuthz.server";
 import { validateWebhookUrl } from "../../../../../../lib/webhookUrl";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
@@ -14,13 +15,13 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { ownerId: true, isPublic: true },
+    select: { id: true, ownerId: true, isPublic: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   // Test fires a server-side request to the stored URL, so it is organizer-only.
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 

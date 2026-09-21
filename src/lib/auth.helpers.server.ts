@@ -48,7 +48,7 @@ export async function getSession(request: Request) {
   return session;
 }
 
-type SessionResult = Awaited<ReturnType<typeof getSession>>;
+export type SessionResult = Awaited<ReturnType<typeof getSession>>;
 
 /**
  * Check if a user is an admin for a specific event.

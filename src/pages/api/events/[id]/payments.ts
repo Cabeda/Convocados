@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
+import { getSession } from "../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
@@ -62,7 +63,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  const authz = await authorizeEventMutation(request, event);
   const session = await getSession(request);
 
   // Determine if this is a player self-reporting sent
@@ -71,7 +72,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const playerName = String(body.playerName ?? "").trim();
   const status = String(body.status ?? "");
 
-  if (session?.user && !isOwner && !isAdmin) {
+  if (session?.user && !authz.isOwner && !authz.isAdmin) {
     // Check if the player is linked to this user
     const linkedPlayer = await prisma.player.findFirst({
       where: { eventId, userId: session.user.id, name: playerName },
@@ -82,7 +83,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     }
   }
 
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic) && !isSelfReport) {
+  if (!authz.allowed && !isSelfReport) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 

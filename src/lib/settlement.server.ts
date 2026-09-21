@@ -18,6 +18,9 @@ import { prisma, Prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { recordReceived } from "./payments.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
+import { shareFor } from "./gameCost";
+
+export { shareFor } from "./gameCost";
 
 export type PaymentMode = "tracked" | "untracked";
 
@@ -87,18 +90,6 @@ export async function isGameParticipant(eventId: string, gameId: string, userId:
     }),
   ]);
   return !!participant || !!payer;
-}
-
-/**
- * Per-participant share in euros (2dp), 0 when no cost or no participants.
- * The denominator is maxPlayers (the required playing slots) — the per-player
- * price is a fixed attribute of the event and does not change with how many
- * players are currently on the roster. Callers without a maxPlayers value
- * fall back to the participant count.
- */
-export function shareFor(total: number, participantsCount: number, maxPlayers = participantsCount): number {
-  if (participantsCount <= 0) return 0;
-  return Math.round((total / Math.max(1, maxPlayers)) * 100) / 100;
 }
 
 /** Minimal client shape the sync routine needs — a `prisma` instance or a tx client. */

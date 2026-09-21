@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../../../lib/db.server";
-import { checkOwnership } from "../../../../../lib/auth.helpers.server";
+
+import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
 import { validateWebhookUrl } from "../../../../../lib/webhookUrl";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
@@ -15,8 +16,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
@@ -69,8 +70,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 

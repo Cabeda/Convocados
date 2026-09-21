@@ -14,6 +14,7 @@ import {
   type SeasonMember,
 } from "./leaderboard";
 import { seasonCompetitiveWindow } from "./seasonSetup.server";
+import { parseTeamsSnapshot, toLeaderboardGame } from "./gameSnapshot";
 import {
   computeSeasonRank,
   provisionalGames,
@@ -62,40 +63,6 @@ interface SnapshotPayload {
   players: SnapshotPlayer[];
   crews: unknown[];
   winner: string | null;
-}
-
-interface SnapshotTeam {
-  team: string;
-  players: Array<{ name: string }>;
-}
-
-function parseTeamsSnapshot(value: string | null): [LeaderboardGame["teams"][0], LeaderboardGame["teams"][1]] | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as SnapshotTeam[];
-    if (!Array.isArray(parsed) || parsed.length !== 2) return null;
-    const teams = parsed.map((t) => ({
-      name: t.team,
-      players: (t.players ?? []).map((p) => p.name),
-    }));
-    if (teams.some((t) => !t.name || t.players.length === 0)) return null;
-    return teams as [LeaderboardGame["teams"][0], LeaderboardGame["teams"][1]];
-  } catch {
-    return null;
-  }
-}
-
-function toGame(row: {
-  id: string;
-  dateTime: Date;
-  status: string;
-  isFriendly: boolean;
-  scoreOne: number | null;
-  scoreTwo: number | null;
-  teamsSnapshot: string | null;
-}): LeaderboardGame | null {
-  const teams = parseTeamsSnapshot(row.teamsSnapshot);
-  return teams ? { id: row.id, dateTime: row.dateTime, status: row.status, isFriendly: row.isFriendly, scoreOne: row.scoreOne, scoreTwo: row.scoreTwo, teams } : null;
 }
 
 /**
@@ -156,7 +123,7 @@ export async function deriveSeasonRank(eventId: string, seasonId: string): Promi
 
   const { startsAt, endsAt } = seasonCompetitiveWindow(season);
   const history = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } });
-  const allGames = history.map(toGame).filter((g): g is LeaderboardGame => g !== null);
+  const allGames = history.map(toLeaderboardGame).filter((g): g is LeaderboardGame => g !== null);
   const qualifying = filterLeaderboardGames(allGames, { startsAt, endsAt });
 
   const memberNames = season.memberships.map((m) => m.eventPlayer.name);
@@ -275,7 +242,7 @@ export async function snapshotSeasonRank(eventId: string, seasonId: string): Pro
   const rank = await deriveSeasonRank(eventId, seasonId);
   const { startsAt, endsAt } = seasonCompetitiveWindow(season);
   const history = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } });
-  const allGames = history.map(toGame).filter((g): g is LeaderboardGame => g !== null);
+  const allGames = history.map(toLeaderboardGame).filter((g): g is LeaderboardGame => g !== null);
 
   const seasonMembers: SeasonMember[] = season.memberships.map((m) => ({
     membershipId: m.id,

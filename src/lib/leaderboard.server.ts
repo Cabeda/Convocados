@@ -2,6 +2,7 @@ import { prisma } from "./db.server";
 import { checkOwnership } from "./auth.helpers.server";
 import { calculateLeaderboard, filterLeaderboardGames, type LeaderboardGame, type SeasonMember } from "./leaderboard";
 import { seasonCompetitiveWindow } from "./seasonSetup.server";
+import { toLeaderboardGame } from "./gameSnapshot";
 
 export interface LeaderboardScope {
   type: "event" | "season";
@@ -17,39 +18,6 @@ export interface LeaderboardPayload {
   crews: ReturnType<typeof calculateLeaderboard>["crews"];
   gamesCount: number;
   hidden?: boolean;
-}
-
-interface SnapshotTeam {
-  team: string;
-  players: Array<{ name: string }>;
-}
-
-function parseTeamsSnapshot(value: string | null): [LeaderboardGame["teams"][0], LeaderboardGame["teams"][1]] | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as SnapshotTeam[];
-    if (!Array.isArray(parsed) || parsed.length !== 2 || !parsed.every((team) => team && typeof team.team === "string" && team.team.trim().length > 0 && Array.isArray(team.players) && team.players.length > 0 && team.players.every((player) => player && typeof player.name === "string" && player.name.trim().length > 0))) return null;
-    const teams = parsed.map((team) => ({
-      name: team.team,
-      players: team.players.map((player) => player.name),
-    }));
-    return teams as [LeaderboardGame["teams"][0], LeaderboardGame["teams"][1]];
-  } catch {
-    return null;
-  }
-}
-
-function toLeaderboardGame(row: {
-  id: string;
-  dateTime: Date;
-  status: string;
-  isFriendly: boolean;
-  scoreOne: number | null;
-  scoreTwo: number | null;
-  teamsSnapshot: string | null;
-}): LeaderboardGame | null {
-  const teams = parseTeamsSnapshot(row.teamsSnapshot);
-  return teams ? { id: row.id, dateTime: row.dateTime, status: row.status, isFriendly: row.isFriendly, scoreOne: row.scoreOne, scoreTwo: row.scoreTwo, teams } : null;
 }
 
 function toIso(value: Date | string | null): string | null {

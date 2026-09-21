@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
-import { checkOwnership } from "../../../../../../lib/auth.helpers.server";
+
+import { authorizeEventMutation } from "../../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 const VALID_EVENTS = ["player_joined", "player_left", "game_full", "game_reset"];
@@ -9,8 +10,8 @@ async function loadAuthorizedWebhook(eventId: string, webhookId: string, request
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return { ok: false as const, response: Response.json({ error: "Not found." }, { status: 404 }) };
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return { ok: false as const, response: Response.json({ error: "Only the event owner can do this." }, { status: 403 }) };
   }
 
