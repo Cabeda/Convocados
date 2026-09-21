@@ -10,7 +10,10 @@ SCRIPTS_DIR="$(dirname "$0")"
 echo "Installing git hooks..."
 
 mkdir -p "$HOOKS_DIR"
+cp "$SCRIPTS_DIR/pre-commit.sh" "$HOOKS_DIR/pre-commit"
+chmod +x "$HOOKS_DIR/pre-commit"
 cp "$SCRIPTS_DIR/pre-push.sh" "$HOOKS_DIR/pre-push"
 chmod +x "$HOOKS_DIR/pre-push"
 
+echo "✓ pre-commit hook installed (secret scan)."
 echo "✓ pre-push hook installed."

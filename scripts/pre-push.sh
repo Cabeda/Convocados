@@ -13,16 +13,13 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Secrets scan (gitleaks) — fast, checks staged changes
-if command -v gitleaks >/dev/null 2>&1; then
-  echo "→ Secrets scan (gitleaks)..."
-  gitleaks protect --staged --verbose --redact --no-banner --config .gitleaks.toml
-  if [ $? -ne 0 ]; then
-    echo "✗ Secrets detected. Push aborted. Review .gitleaks.toml allowlist or remove secret."
-    exit 1
-  fi
-else
-  echo "⚠ gitleaks not installed, skipping secrets scan (brew install gitleaks)"
+# Secrets scan (gitleaks) — scans the commits actually being pushed, read from stdin.
+# Scanning the index here would be useless: at push time it is empty.
+root="$(git rev-parse --show-toplevel)"
+sh "$root/scripts/secret-scan.sh" push
+if [ $? -ne 0 ]; then
+  echo "✗ Secrets detected. Push aborted. Review .gitleaks.toml allowlist or remove secret."
+  exit 1
 fi
 
 # SAST (semgrep) — optional, slow (~60s). Warn-only in pre-push, CI enforces.
@@ -51,7 +48,7 @@ if [ $? -ne 0 ]; then
   echo "✗ Tests failed. Push aborted."
   echo ""
   echo "Coverage detail (files below 94% line threshold):"
-  sh "$(dirname "$0")/coverage-report.sh" 94
+  sh "$root/scripts/coverage-report.sh" 94
   exit 1
 fi
 

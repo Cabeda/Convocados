@@ -85,7 +85,15 @@ After cloning, install the git hooks to catch CI failures before they reach the 
 ```bash
 npm run setup-hooks
 ```
-This installs a pre-push hook that runs `lint`, `typecheck` and `vitest --coverage` before every push.
+This installs:
+- a **pre-commit** hook that runs `gitleaks` over staged changes and blocks the commit if a
+  secret is found (`scripts/secret-scan.sh staged`), and
+- a **pre-push** hook that scans the commits actually being pushed, then runs `lint`,
+  `typecheck` and `vitest --coverage`.
+
+Never re-point the pre-push scan at the git index (`gitleaks ... --staged`): at push time the
+index is empty, so it checks nothing while reporting success. Push scanning must use the
+`--log-opts` range supplied on stdin.
 
 **NEVER use `git push --no-verify`**. If the pre-push hook fails, fix the underlying issue (lint errors, type errors, failing tests) rather than bypassing the hook. The hook exists to prevent broken code from reaching the remote.
 
