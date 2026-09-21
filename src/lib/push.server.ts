@@ -2,7 +2,7 @@ import { prisma } from "./db.server";
 import { createT, type Locale, type TranslationKey } from "./i18n";
 import { createLogger } from "./logger.server";
 import { DEFAULTS, wantsPushReminder, wantsPushWithOverrides } from "./notificationPrefs.server";
-import { getPingSuppressedUserIds } from "./inviteOptOut.server";
+import { isPingSuppressedType, resolveEventAudience, type EventNotificationDefaults } from "./eventAudience.server";
 import type { NotificationJobType } from "./notificationQueue.server";
 import type webpush from "web-push";
 import pLimit from "p-limit";
@@ -223,22 +223,9 @@ async function sendAppPushToEventUsers(
   excludeUserIds: Set<string>,
   jobType?: NotificationJobType,
   reminderType?: "24h" | "2h" | "1h",
-  opts?: { prefsMap?: Map<string, typeof DEFAULTS>; overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }>; eventDefaults?: { mutePlayerActivity?: boolean; muteReminders?: boolean; mutePostGame?: boolean; muteEventDetails?: boolean } | null; playerUserIds?: Set<string> },
+  opts?: { prefsMap?: Map<string, typeof DEFAULTS>; overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }>; eventDefaults?: EventNotificationDefaults | null; playerUserIds?: Set<string> },
 ): Promise<void> {
-  const follows = await prisma.eventFollow.findMany({
-    where: { eventId },
-    select: { userId: true },
-  });
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { ownerId: true },
-  });
-
-  const allUserIds = new Set(follows.map((f) => f.userId));
-  if (event?.ownerId) allUserIds.add(event.ownerId);
-  for (const id of excludeUserIds) allUserIds.delete(id);
-
-  const userIds = [...allUserIds];
+  const { userIds } = await resolveEventAudience(eventId, { excludeUserIds });
   if (userIds.length === 0) return;
 
   const tokens = await prisma.appPushToken.findMany({
@@ -281,19 +268,14 @@ export async function sendPushToEvent(
     (import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)
   );
 
-  // Recipients = followers + owner
-  const follows = await prisma.eventFollow.findMany({
-    where: { eventId },
-    select: { userId: true, mutePlayerActivity: true, muteReminders: true, mutePostGame: true, muteEventDetails: true },
-  });
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { ownerId: true, notificationDefaults: true },
-  });
+  // Recipients = followers + owner, minus the sender, minus ADR 0025 suppressions.
+  const senderUserIds = new Set<string>();
+  if (senderClientId) senderUserIds.add(senderClientId);
 
-  const eventDefaults = event?.notificationDefaults
-    ? JSON.parse(event.notificationDefaults) as { mutePlayerActivity?: boolean; muteReminders?: boolean; mutePostGame?: boolean; muteEventDetails?: boolean }
-    : null;
+  const { userIds, follows, notificationDefaults: eventDefaults } = await resolveEventAudience(eventId, {
+    excludeUserIds: senderUserIds,
+    suppressPingDeclines: jobType ? isPingSuppressedType(jobType) : false,
+  });
 
   const overridesMap = new Map(follows.map((f) => [f.userId, {
     mutePlayerActivity: f.mutePlayerActivity,
@@ -302,24 +284,7 @@ export async function sendPushToEvent(
     muteEventDetails: f.muteEventDetails,
   }]));
 
-  const recipientUserIds = new Set(follows.map((f) => f.userId));
-  if (event?.ownerId) recipientUserIds.add(event.ownerId);
-
-  // Exclude sender
-  const senderUserIds = new Set<string>();
-  if (senderClientId && recipientUserIds.has(senderClientId)) {
-    senderUserIds.add(senderClientId);
-  }
-  for (const id of senderUserIds) recipientUserIds.delete(id);
-
-  // ADR 0025: recruitment / spot-available pings skip users who declined the
-  // current game (rsvp=no) or opted out of invites for this event. Per-game only.
-  if (jobType === "recruitment" || jobType === "few_spots_left" || jobType === "spot_available") {
-    const suppressed = await getPingSuppressedUserIds(eventId);
-    for (const id of suppressed) recipientUserIds.delete(id);
-  }
-
-  const recipientList = [...recipientUserIds];
+  const recipientList = userIds;
   if (recipientList.length === 0) return;
 
   // Batch-load prefs
