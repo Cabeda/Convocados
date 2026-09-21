@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { getSession, checkEventAdmin } from "~/lib/auth.helpers.server";
-import { rateLimitResponse } from "~/lib/apiRateLimit.server";
+import { rateLimitResponse, rateLimitResponseForKey } from "~/lib/apiRateLimit.server";
 import { createPlayerInvite, createGuestPlayerInvite, retractPlayerInvite, expirePendingInvites, resendPlayerInvite, InviteResendCooldownError } from "~/lib/invite.server";
 import { upsertEventPlayerForRoster } from "~/lib/rosterCore.server";
 import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.server";
@@ -116,6 +116,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!(await canInviteOnEvent(eventId, session.user.id))) {
     return Response.json({ error: "Only the owner, an admin, or a player of this event can send invites." }, { status: 403 });
   }
+
+  // Anti-spam: cap each sender at 20 invites per 24h, independent of the
+  // generic per-IP write limiter (ADR 0025).
+  const senderLimited = await rateLimitResponseForKey(session.user.id, "invite_sender");
+  if (senderLimited) return senderLimited;
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
