@@ -29,7 +29,7 @@ playServicesWearable = "20.0.1"
 # references those classes; the legacy alias is retained for :app history only.
 playServicesAuth = "22.0.0"
 playServicesAuthLegacy = "22.0.0"
-googleIdIdentity = "1.2.0"
+googleIdIdentity = "1.2.1"
 workRuntime = "2.10.1"
 hiltWork = "1.4.0"
 profileinstaller = "1.4.1"
