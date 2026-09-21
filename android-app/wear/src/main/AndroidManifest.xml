@@ -55,6 +55,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Credential Manager requires the app to be associated with the
+                 origin of its server client ID, so mirror the phone's verified
+                 App Links for the shared package. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="convocados.fly.dev" />
+                <data android:host="convocados.cabeda.dev" />
+                <data android:pathPrefix="/events/" />
+                <data android:pathPrefix="/games" />
+                <data android:pathPrefix="/dashboard" />
+                <data android:pathPrefix="/profile" />
+                <data android:pathPrefix="/auth/" />
+                <data android:pathPrefix="/invite/" />
+            </intent-filter>
         </activity>
 
         <service

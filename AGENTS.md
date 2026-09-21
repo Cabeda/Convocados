@@ -28,9 +28,9 @@ Gradle multi-module project — `:app` (phone/tablet) and `:wear` (Wear OS).
 **`:wear` (Wear OS)**
 - **UI**: Wear Compose (Material 3) + Horologist
 - **Type**: Standalone app (`android.hardware.type.watch`, `wearable.standalone=true`)
-- **Auth**: Direct Google Sign-In on watch + token sync from phone via Wearable Data Layer
+- **Auth**: Sign in with Google via Credential Manager (standalone; needs Wear OS API 35+) + token sync from phone via Wearable Data Layer + on-watch email/password
 - **Offline**: Room DB + WorkManager sync queue
-- **Build**: minSdk 30 (Wear OS 3+ → Pixel Watch & Galaxy Watch 4+)
+- **Build**: minSdk 35 (Wear OS 5.1+) — Credential Manager's Google provider is unavailable below API 35
 - **Package**: `com.cabeda.Convocados` / namespace `dev.convocados.wear`
 - **Distribution**: dedicated Wear OS track in Play Console (form-factor opt-in required)
 

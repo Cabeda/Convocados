@@ -76,8 +76,10 @@ fun WearNavigation(
                         navController.navigate(WearRoutes.score(eventId))
                     },
                     onSignOut = {
-                        coroutineScope.launch { restoreCredentialCoordinator.clearCredentialState() }
-                        googleSignIn.signOut()
+                        coroutineScope.launch {
+                            googleSignIn.signOut()
+                            restoreCredentialCoordinator.clearCredentialState()
+                        }
                         tokenStore.clearTokens()
                         navController.navigate(WearRoutes.AUTH) {
                             popUpTo(WearRoutes.GAMES) { inclusive = true }

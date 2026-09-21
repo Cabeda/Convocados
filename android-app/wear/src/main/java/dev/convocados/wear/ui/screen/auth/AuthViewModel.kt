@@ -1,12 +1,13 @@
 package dev.convocados.wear.ui.screen.auth
 
-import android.content.Intent
+import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.auth.OAuthTokens
 import dev.convocados.wear.data.auth.WearGoogleSignIn
+import dev.convocados.wear.data.auth.WearGoogleSignInResult
 import dev.convocados.wear.data.auth.WearRestoreCredentialCoordinator
 import dev.convocados.wear.data.auth.WearTokenStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,11 +37,6 @@ class AuthViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
-
-    init {
-        // Zero-tap login on watches that already have a Google account.
-        trySilentSignIn()
-    }
 
     fun onEmailChanged(email: String) {
         _uiState.update { it.copy(email = email) }
@@ -82,39 +78,54 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    /** Returns the intent that launches the on-device Google account picker. */
-    fun getSignInIntent(): Intent = googleSignIn.getSignInIntent()
-
-    /** Try a zero-tap silent sign-in using the existing on-device Google account. */
-    fun trySilentSignIn() {
-        if (isAuthenticated.value) return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSigningIn = true) }
-            val success = googleSignIn.trySilentSignIn()
-            if (success) restoreCredentialCoordinator.ensureCreated()
-            _uiState.update { it.copy(isSigningIn = false) }
-        }
-    }
-
-    /** Called with the result Intent from the interactive sign-in flow. */
-    fun handleGoogleSignInResult(data: Intent?) {
+    /**
+     * Interactive Sign in with Google. Credential Manager needs an Activity to
+     * present its account sheet, so the screen supplies it.
+     */
+    fun signInWithGoogle(activity: Activity) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSigningIn = true, error = null) }
-            val success = googleSignIn.handleSignInResult(data)
-            if (success) restoreCredentialCoordinator.ensureCreated()
+            val result = googleSignIn.signIn(activity)
+            if (result is WearGoogleSignInResult.Success) {
+                restoreCredentialCoordinator.ensureCreated()
+            }
             _uiState.update {
                 it.copy(
                     isSigningIn = false,
-                    error = if (success) null else "Sign-in failed. Try again.",
+                    error = when (result) {
+                        is WearGoogleSignInResult.Success -> null
+                        // Dismissing the sheet is not a failure; stay quiet.
+                        is WearGoogleSignInResult.Cancelled -> null
+                        is WearGoogleSignInResult.NoCredential ->
+                            "No Google account on this watch. Use email sign-in."
+                        is WearGoogleSignInResult.Error -> "Sign-in failed. Try again."
+                    },
                 )
             }
         }
     }
 
+    /**
+     * Best-effort zero-tap sign-in for a watch already using this Google
+     * account. Resolves silently; on failure the caller just shows the sign-in
+     * affordance.
+     */
+    fun trySilentSignIn(activity: Activity) {
+        if (isAuthenticated.value) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSigningIn = true) }
+            val success = googleSignIn.trySilentSignIn(activity)
+            if (success) restoreCredentialCoordinator.ensureCreated()
+            _uiState.update { it.copy(isSigningIn = false) }
+        }
+    }
+
     fun signOut() {
-        googleSignIn.signOut()
         tokenStore.clearTokens()
-        viewModelScope.launch { restoreCredentialCoordinator.clearCredentialState() }
+        viewModelScope.launch {
+            googleSignIn.signOut()
+            restoreCredentialCoordinator.clearCredentialState()
+        }
     }
 
     fun getServerUrl() = tokenStore.getServerUrl()
