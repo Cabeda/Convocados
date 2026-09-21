@@ -5,7 +5,7 @@ import { McpError } from "./errors";
 import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../rosterCore.server";
 import { getActiveRosterState } from "../roster.server";
 import { syncGamePayments } from "../settlement.server";
-import { addPlayerToTeams, validateTeams } from "../../pages/api/events/[id]/players";
+import { addPlayerToTeams, validateTeams } from "../teamFormation.server";
 import { archiveAndLeave } from "../leave.server";
 import { Randomize } from "../random";
 import { balanceTeams, processGame } from "../elo.server";

@@ -4,7 +4,7 @@ import { getSession } from "../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { confirmSpot } from "../../../../../lib/priority.server";
 import { grantActiveSpot } from "../../../../../lib/game.server";
-import { addPlayerToTeams, validateTeams } from "../players";
+import { addPlayerToTeams, validateTeams } from "../../../../../lib/teamFormation.server";
 
 /** POST — player confirms their priority spot */
 export const POST: APIRoute = async ({ params, request }) => {

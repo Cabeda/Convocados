@@ -3,7 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
-import { addPlayerToTeams, validateTeams } from "./players";
+import { addPlayerToTeams, validateTeams } from "../../../../lib/teamFormation.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 
 const UNDO_WINDOW_MS = 60_000; // 60 seconds

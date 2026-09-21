@@ -3,7 +3,7 @@ import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { expirePendingInvites, acceptPlayerInvite, declinePlayerInvite } from "~/lib/invite.server";
-import { addPlayerToTeams, validateTeams } from "~/pages/api/events/[id]/players";
+import { addPlayerToTeams, validateTeams } from "~/lib/teamFormation.server";
 import { syncGamePayments } from "~/lib/settlement.server";
 
 /**

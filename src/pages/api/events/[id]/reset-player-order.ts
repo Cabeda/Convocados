@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { validateTeams } from "./players";
+import { validateTeams } from "../../../../lib/teamFormation.server";
 
 /** POST — reset player order to original signup order (createdAt). Owner-only. */
 export const POST: APIRoute = async ({ params, request }) => {
