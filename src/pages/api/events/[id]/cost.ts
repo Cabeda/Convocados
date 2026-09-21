@@ -7,6 +7,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { validatePaymentMethods, normalizePaymentMethod } from "../../../../lib/paymentMethods";
 import type { PaymentMethod } from "../../../../lib/paymentMethods";
 import { syncGamePayments } from "../../../../lib/settlement.server";
+import { perPlayerShare } from "../../../../lib/gameCost";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -79,7 +80,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const activePlayers = event.players.slice(0, event.maxPlayers);
   // Per-player share = total / required playing slots (maxPlayers), NOT the
   // current roster size — the per-player price is fixed for the event.
-  const share = event.maxPlayers > 0 ? totalAmount / event.maxPlayers : 0;
+  const share = perPlayerShare(totalAmount, event.maxPlayers);
 
   // ADR 0019: Cost change scope — "this_game" sets per-Game override, "all_future" (default) updates template
   const scope = String(body.scope ?? "all_future");

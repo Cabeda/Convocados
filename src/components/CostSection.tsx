@@ -16,6 +16,7 @@ import {
 } from "~/lib/paymentMethods";
 import { useEventCost, type EventCostData } from "~/lib/useEventCost";
 import { formatMoney } from "~/lib/money";
+import { perPlayerShare } from "~/lib/gameCost";
 import { PaymentMethodsList } from "./PaymentMethodsList";
 
 const CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
@@ -34,7 +35,7 @@ export function CostSection({ eventId, isManager, maxPlayers }: { eventId: strin
 
   // Per-player price = total / required playing slots (maxPlayers). Fixed for
   // the event — it does not change with the number of players in the list.
-  const share = cost.totalAmount > 0 && maxPlayers > 0 ? cost.totalAmount / maxPlayers : null;
+  const share = cost.totalAmount > 0 && maxPlayers > 0 ? perPlayerShare(cost.totalAmount, maxPlayers) : null;
   const methods = parsePaymentMethods(cost.effectivePaymentMethods);
 
   return (

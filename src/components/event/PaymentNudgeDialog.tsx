@@ -7,6 +7,7 @@ import {
 import PaymentsIcon from "@mui/icons-material/Payments";
 import { useT } from "~/lib/useT";
 import { parsePaymentMethods } from "~/lib/paymentMethods";
+import { perPlayerShare } from "~/lib/gameCost";
 import { PaymentMethodsList } from "~/components/PaymentMethodsList";
 
 interface BalanceData {
@@ -49,7 +50,7 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
           setCostCurrency(cost.currency ?? "EUR");
           // Per-player price = total / required playing slots (maxPlayers).
           const maxPlayers = cost.maxPlayers ?? 1;
-          setPerPlayer(maxPlayers > 0 ? cost.totalAmount / maxPlayers : 0);
+          setPerPlayer(perPlayerShare(cost.totalAmount, maxPlayers));
         }
       }
     } catch { /* ignore */ }

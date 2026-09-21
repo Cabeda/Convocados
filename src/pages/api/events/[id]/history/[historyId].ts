@@ -9,6 +9,7 @@ import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
 import { getGameSettlement, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
+import { perPlayerShare } from "../../../../../lib/gameCost";
 import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
@@ -300,7 +301,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     // Per-player share = total / required playing slots (maxPlayers), NOT the
     // roster size in the snapshot — the per-player price is fixed for the event.
-    const newShare = event.maxPlayers > 0 ? newTotal / event.maxPlayers : 0;
+    const newShare = perPlayerShare(newTotal, event.maxPlayers);
     const newShareCents = Math.round(newShare * 100);
 
     // Update Game.costTotalAmount if this is a Game-backed entry
@@ -491,7 +492,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
         const newPlayerNames = newTeams.flatMap((t) => t.players.map((p) => p.name));
         // Per-player share = total / required playing slots (maxPlayers), NOT
         // the roster size in the new teams — the per-player price is fixed.
-        const share = event.maxPlayers > 0 ? eventCost.totalAmount / event.maxPlayers : 0;
+        const share = perPlayerShare(eventCost.totalAmount, event.maxPlayers);
 
         // Upsert payments for current players
         for (const name of newPlayerNames) {
