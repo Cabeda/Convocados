@@ -44,6 +44,10 @@ val SPORT_PRESETS = listOf(
     SportPreset("tennis-singles", "Tennis (singles)", 2),
     SportPreset("tennis-doubles", "Tennis (doubles)", 4),
     SportPreset("padel", "Padel", 4),
+    SportPreset("badminton-singles", "Badminton (singles)", 2),
+    SportPreset("badminton-doubles", "Badminton (doubles)", 4),
+    SportPreset("squash", "Squash", 2),
+    SportPreset("pickleball", "Pickleball", 4),
     SportPreset("other", "Other", 10),
 )
 
