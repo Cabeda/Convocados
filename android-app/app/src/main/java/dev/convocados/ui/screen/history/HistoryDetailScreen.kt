@@ -175,6 +175,7 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
                             scorerName = it.scorerName,
                             assistName = it.assistName,
                             minute = it.minute,
+                            count = it.count,
                             ownGoal = it.ownGoal,
                             penalty = it.penalty,
                         )
@@ -196,6 +197,7 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
                         type = "goal",
                         team = draft.team,
                         minute = draft.minute,
+                        count = draft.count,
                         ownGoal = draft.ownGoal,
                         penalty = draft.penalty,
                         scorerEventPlayerId = draft.scorerEventPlayerId,
@@ -211,6 +213,7 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
                                 scorerName = it.scorerName,
                                 assistName = it.assistName,
                                 minute = it.minute,
+                            count = it.count,
                                 ownGoal = it.ownGoal,
                                 penalty = it.penalty,
                             )

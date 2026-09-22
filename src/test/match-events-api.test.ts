@@ -250,3 +250,72 @@ describe("GET match-events", () => {
     expect(body.score).toBeNull();
   });
 });
+
+describe("POST match-events — bulk count", () => {
+  it("stores a count and derives the score from it", async () => {
+    const owner = await seedUser("Owner");
+    mockAuth(owner.id, "Owner");
+    const event = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(event.id);
+    const alice = await prisma.eventPlayer.create({ data: { name: "Alice", eventId: event.id } });
+
+    const res = await createEvent(postCtx(
+      { id: event.id, historyId: history.id },
+      { type: "goal", team: "one", scorerEventPlayerId: alice.id, count: 3 },
+    ));
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.event.count).toBe(3);
+    expect(body.score).toEqual({ teamOne: 3, teamTwo: 0 });
+
+    const stored = await prisma.gameHistory.findUnique({ where: { id: history.id } });
+    expect(stored?.scoreOne).toBe(3);
+  });
+
+  it("treats an omitted count as a single goal", async () => {
+    const owner = await seedUser("Owner");
+    mockAuth(owner.id, "Owner");
+    const event = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(event.id);
+    const alice = await prisma.eventPlayer.create({ data: { name: "Alice", eventId: event.id } });
+
+    const res = await createEvent(postCtx(
+      { id: event.id, historyId: history.id },
+      { type: "goal", team: "one", scorerEventPlayerId: alice.id },
+    ));
+    const body = await res.json();
+    expect(body.event.count).toBe(1);
+    expect(body.score).toEqual({ teamOne: 1, teamTwo: 0 });
+  });
+
+  it("rejects a count below one", async () => {
+    const owner = await seedUser("Owner");
+    mockAuth(owner.id, "Owner");
+    const event = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(event.id);
+
+    const res = await createEvent(postCtx(
+      { id: event.id, historyId: history.id },
+      { type: "goal", team: "one", scorerName: "Alice", count: 0 },
+    ));
+    expect(res.status).toBe(400);
+  });
+
+  it("keeps a bulk entry as one row that the timeline reports with its count", async () => {
+    const owner = await seedUser("Owner");
+    mockAuth(owner.id, "Owner");
+    const event = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(event.id);
+    const alice = await prisma.eventPlayer.create({ data: { name: "Alice", eventId: event.id } });
+
+    await createEvent(postCtx(
+      { id: event.id, historyId: history.id },
+      { type: "goal", team: "one", scorerEventPlayerId: alice.id, count: 20 },
+    ));
+    const res = await listEvents(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.events).toHaveLength(1);
+    expect(body.events[0].count).toBe(20);
+    expect(body.score).toEqual({ teamOne: 20, teamTwo: 0 });
+  });
+});

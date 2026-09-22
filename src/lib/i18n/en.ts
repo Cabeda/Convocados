@@ -1603,6 +1603,12 @@ adminPickupsDetected: "Pickups detected",
   matchEventsRemoveGoal: "Remove goal",
   matchEventsNoPlayers: "No players on this game yet.",
   matchEventsMinuteLabel: "Minute (optional)",
+  matchEventsHowMany: "How many goals?",
+  matchEventsFewer: "One fewer goal",
+  matchEventsMore: "One more goal",
+  matchEventsShowDetails: "Add minute, assist or own goal",
+  matchEventsHideDetails: "Hide extra details",
+  matchEventsTimes: "×{count}",
 } as const;
 
 export default en;

@@ -235,6 +235,7 @@ async function attachMatchEvents<T extends { id: string }>(entries: T[]) {
       type: true,
       team: true,
       minute: true,
+      count: true,
       ownGoal: true,
       penalty: true,
       scorerName: true,

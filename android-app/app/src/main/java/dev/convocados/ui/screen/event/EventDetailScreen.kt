@@ -1307,6 +1307,7 @@ fun EventDetailScreen(
                                                     scorerName = it.scorerName,
                                                     assistName = it.assistName,
                                                     minute = it.minute,
+                            count = it.count,
                                                     ownGoal = it.ownGoal,
                                                     penalty = it.penalty,
                                                 )
@@ -1323,6 +1324,7 @@ fun EventDetailScreen(
                                                         type = "goal",
                                                         team = draft.team,
                                                         minute = draft.minute,
+                        count = draft.count,
                                                         ownGoal = draft.ownGoal,
                                                         penalty = draft.penalty,
                                                         scorerEventPlayerId = draft.scorerEventPlayerId,

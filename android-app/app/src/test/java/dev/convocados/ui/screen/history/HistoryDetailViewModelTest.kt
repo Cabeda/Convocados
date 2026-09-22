@@ -108,7 +108,7 @@ class HistoryDetailViewModelTest {
 
     @Test
     fun `addMatchEvent surfaces the server error`() = runTest {
-        val draft = MatchEventDraft("ep1", "Alice", "one", null, false, false)
+        val draft = MatchEventDraft("ep1", "Alice", "one", null, 1, false, false)
         coEvery { api.addMatchEvent("e1", "h1", any()) } throws
             ApiException(400, """{"error":"Match events can only be logged on played games."}""")
 

@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +42,8 @@ data class MatchEventItem(
     val scorerName: String,
     val assistName: String? = null,
     val minute: Int? = null,
+    /** How many goals this entry records. "X scored 3" is one row with count=3. */
+    val count: Int = 1,
     val ownGoal: Boolean = false,
     val penalty: Boolean = false,
 )
@@ -51,6 +54,7 @@ data class MatchEventDraft(
     val scorerName: String,
     val team: String,
     val minute: Int?,
+    val count: Int = 1,
     val ownGoal: Boolean,
     val penalty: Boolean,
 )
@@ -81,6 +85,7 @@ fun MatchEventsSection(
     var ownGoal by remember { mutableStateOf(false) }
     var penalty by remember { mutableStateOf(false) }
     var minute by remember { mutableStateOf("") }
+    var count by remember { mutableIntStateOf(1) }
 
     if (loadOnAppear != null) {
         LaunchedEffect(Unit) { loadOnAppear() }
@@ -97,6 +102,22 @@ fun MatchEventsSection(
                         players.forEach { p ->
                             FilterChip(selected = scorer?.id == p.id, onClick = { scorer = p }, label = { Text(p.name) })
                         }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(stringResource(R.string.match_events_how_many))
+                        OutlinedButton(
+                            onClick = { if (count > 1) count-- },
+                            enabled = count > 1,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                            modifier = Modifier.size(36.dp),
+                        ) { Text("−") }
+                        Text(count.toString(), style = MaterialTheme.typography.titleMedium)
+                        OutlinedButton(
+                            onClick = { if (count < 99) count++ },
+                            enabled = count < 99,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                            modifier = Modifier.size(36.dp),
+                        ) { Text("+") }
                     }
                     Text(stringResource(R.string.match_events_select_team))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -127,6 +148,7 @@ fun MatchEventsSection(
                                 scorerName = picked.name,
                                 team = team,
                                 minute = minute.toIntOrNull(),
+                                count = count,
                                 ownGoal = ownGoal,
                                 penalty = penalty,
                             ),
@@ -134,6 +156,7 @@ fun MatchEventsSection(
                         showDialog = false
                         scorer = null
                         minute = ""
+                        count = 1
                         ownGoal = false
                         penalty = false
                     },
@@ -183,6 +206,10 @@ private fun MatchEventRow(e: MatchEventItem) {
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.match_events_goal_by, e.scorerName), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            if (e.count > 1) {
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.match_events_times, e.count), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
             val tags = buildList {
                 if (e.ownGoal) add(stringResource(R.string.match_events_own_goal))
                 if (e.penalty) add(stringResource(R.string.match_events_penalty))

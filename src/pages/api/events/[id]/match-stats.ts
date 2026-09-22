@@ -29,6 +29,7 @@ export const GET: APIRoute = async ({ params }) => {
       type: true,
       ownGoal: true,
       penalty: true,
+      count: true,
       scorerEventPlayerId: true,
       scorerName: true,
       assistEventPlayerId: true,
@@ -51,9 +52,9 @@ export const GET: APIRoute = async ({ params }) => {
   for (const e of events) {
     if (e.type === "goal") {
       const scorer = tally(e.scorerEventPlayerId, e.scorerName);
-      scorer.goals += 1;
-      if (e.ownGoal) scorer.ownGoals += 1;
-      if (e.penalty) scorer.penalties += 1;
+      scorer.goals += e.count ?? 1;
+      if (e.ownGoal) scorer.ownGoals += e.count ?? 1;
+      if (e.penalty) scorer.penalties += e.count ?? 1;
       if (e.assistName) tally(e.assistEventPlayerId, e.assistName).assists += 1;
     }
   }

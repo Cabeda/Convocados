@@ -404,6 +404,8 @@
     <string name="match_events_own_goal">Csc</string>
     <string name="match_events_penalty">Penalty</string>
     <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_how_many">Combien de buts ?</string>
+    <string name="match_events_times">×%1$d</string>
     <string name="match_events_minute_label">Minute (facultatif)</string>
     <string name="match_events_select_scorer">Qui a marqué ?</string>
     <string name="match_events_select_team">Quelle équipe ?</string>

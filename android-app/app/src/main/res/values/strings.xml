@@ -469,6 +469,8 @@
     <string name="match_events_own_goal">Own goal</string>
     <string name="match_events_penalty">Penalty</string>
     <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_how_many">How many goals?</string>
+    <string name="match_events_times">×%1$d</string>
     <string name="match_events_minute_label">Minute (optional)</string>
     <string name="match_events_select_scorer">Who scored?</string>
     <string name="match_events_select_team">Which team?</string>

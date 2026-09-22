@@ -1544,6 +1544,12 @@ adminPickupsDetected: "Pickups erkannt",
   matchEventsRemoveGoal: "Tor entfernen",
   matchEventsNoPlayers: "Noch keine Spieler in den Teams dieses Spiels.",
   matchEventsMinuteLabel: "Minute (optional)",
+  matchEventsHowMany: "Wie viele Tore?",
+  matchEventsFewer: "Ein Tor weniger",
+  matchEventsMore: "Ein Tor mehr",
+  matchEventsShowDetails: "Minute, Vorlage oder Eigentor hinzufügen",
+  matchEventsHideDetails: "Details ausblenden",
+  matchEventsTimes: "×{count}",
 };
 
 export default de;

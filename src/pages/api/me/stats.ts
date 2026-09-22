@@ -141,6 +141,7 @@ export const GET: APIRoute = async ({ request }) => {
         where: { gameHistory: { eventId: { in: uniqueRatings.map((r) => r.eventId) } } },
         select: {
           type: true,
+          count: true,
           scorerName: true,
           assistName: true,
           gameHistory: { select: { eventId: true } },
@@ -158,8 +159,9 @@ export const GET: APIRoute = async ({ request }) => {
     if (!playerName) continue;
     const lower = playerName.toLowerCase();
     if (e.type === "goal" && e.scorerName.toLowerCase() === lower) {
-      totalGoals++;
-      goalsByEvent.set(eventId, (goalsByEvent.get(eventId) ?? 0) + 1);
+      const n = e.count ?? 1;
+      totalGoals += n;
+      goalsByEvent.set(eventId, (goalsByEvent.get(eventId) ?? 0) + n);
     }
     if (e.assistName && e.assistName.toLowerCase() === lower) {
       totalAssists++;

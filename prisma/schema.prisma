@@ -260,6 +260,9 @@ model MatchEvent {
   type                String      @default("goal") // "goal" | "assist" (extensible: "sub" | "note")
   team                String      @default("unknown") // "one" | "two" | "unknown"
   minute              Int?
+  /// How many goals this entry records. "Player X scored 3" is one row with
+  /// count=3, so a 20-goal game does not need 20 entries.
+  count               Int         @default(1)
   ownGoal             Boolean     @default(false)
   penalty             Boolean     @default(false)
   scorerEventPlayerId String?     // resolved EventPlayer, null when name-only

@@ -52,7 +52,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     where: { gameHistoryId: history.id, type: "goal" },
   });
   const derived = deriveScoreFromGoals(
-    remaining.map((g) => ({ team: g.team as MatchEventTeam, ownGoal: g.ownGoal })),
+    remaining.map((g) => ({ team: g.team as MatchEventTeam, ownGoal: g.ownGoal, count: g.count })),
   );
   const updated = derived
     ? await prisma.gameHistory.update({

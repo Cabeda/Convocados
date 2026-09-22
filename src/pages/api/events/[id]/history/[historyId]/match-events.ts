@@ -28,6 +28,15 @@ function toMinute(value: unknown): number | null | undefined {
   return value;
 }
 
+/** How many goals one entry represents. Absent means one. */
+function toCount(value: unknown): number | undefined {
+  if (value === undefined || value === null) return 1;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 99) {
+    return undefined;
+  }
+  return value;
+}
+
 async function resolveScorer(eventId: string, eventPlayerId: unknown, fallbackName: unknown) {
   if (typeof eventPlayerId === "string" && eventPlayerId) {
     const player = await prisma.eventPlayer.findFirst({ where: { id: eventPlayerId, eventId } });
@@ -64,7 +73,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const goals = events.filter((e) => e.type === "goal");
   const score = deriveScoreFromGoals(
-    goals.map((g) => ({ team: g.team as MatchEventTeam, ownGoal: g.ownGoal })),
+    goals.map((g) => ({ team: g.team as MatchEventTeam, ownGoal: g.ownGoal, count: g.count })),
   );
 
   return Response.json({
@@ -73,6 +82,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       type: e.type,
       team: e.team,
       minute: e.minute,
+      count: e.count,
       ownGoal: e.ownGoal,
       penalty: e.penalty,
       scorerEventPlayerId: e.scorerEventPlayerId,
@@ -141,6 +151,10 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (minute === undefined) {
     return Response.json({ error: "minute must be an integer between 0 and 200." }, { status: 400 });
   }
+  const count = toCount(body.count);
+  if (count === undefined) {
+    return Response.json({ error: "count must be a positive integer." }, { status: 400 });
+  }
 
   const scorer = await resolveScorer(params.id ?? "", body.scorerEventPlayerId, body.scorerName);
   if (!scorer) {
@@ -157,6 +171,8 @@ export const POST: APIRoute = async ({ params, request }) => {
       type,
       team: team ?? "unknown",
       minute: minute ?? null,
+      // "Player X scored 3" is one row with count=3 rather than three rows.
+      count: type === "goal" ? count : 1,
       ownGoal: body.ownGoal === true,
       penalty: body.penalty === true,
       scorerEventPlayerId: scorer.id,
@@ -171,7 +187,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     where: { gameHistoryId: history.id, type: "goal" },
   });
   const derived = deriveScoreFromGoals(
-    storedGoals.map((g) => ({ team: g.team as MatchEventTeam, ownGoal: g.ownGoal })),
+    storedGoals.map((g) => ({ team: g.team as MatchEventTeam, ownGoal: g.ownGoal, count: g.count })),
   );
 
   const updated = derived
@@ -196,6 +212,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       type: created.type,
       team: created.team,
       minute: created.minute,
+      count: created.count,
       ownGoal: created.ownGoal,
       penalty: created.penalty,
       scorerEventPlayerId: created.scorerEventPlayerId,

@@ -588,6 +588,7 @@ export const openApiSpec = {
       },
       post: {
         summary: "Log a match event (goal or assist) on a settled game",
+        description: "count records how many goals one entry stands for (\"X scored 3\" is a single row with count=3). Omit it for a single goal.",
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
         responses: { "201": { description: "Match event created" }, ...errorResponses },

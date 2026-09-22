@@ -48,7 +48,7 @@ A single recorded occurrence in a settled **Game**'s timeline — a **Goal**, an
 _Avoid_: incident, log entry, timeline item
 
 ## Goal
-A **Match Event** crediting a player with scoring. For goal-scoring sports a team's score is the count of its Goals; set-based sports (tennis, padel) keep a manual set score and have no Goals.
+A **Match Event** crediting a player with scoring. For goal-scoring sports a team's score is the count of its Goals; set-based sports (tennis, padel) keep a manual set score and have no Goals. One Goal row may stand for several goals via its `count` ("X scored 3" is a single row with `count: 3`).
 _Avoid_: point, goal count, score (that is the team total)
 
 ## Assist

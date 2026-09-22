@@ -404,6 +404,8 @@
     <string name="match_events_own_goal">Eigentor</string>
     <string name="match_events_penalty">Elfmeter</string>
     <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_how_many">Wie viele Tore?</string>
+    <string name="match_events_times">×%1$d</string>
     <string name="match_events_minute_label">Minute (optional)</string>
     <string name="match_events_select_scorer">Wer hat getroffen?</string>
     <string name="match_events_select_team">Welches Team?</string>

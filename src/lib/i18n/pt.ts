@@ -1592,6 +1592,12 @@ adminPickupsDetected: "Pickups detetados",
   matchEventsRemoveGoal: "Remover golo",
   matchEventsNoPlayers: "Ainda não há jogadores nas equipas deste jogo.",
   matchEventsMinuteLabel: "Minuto (opcional)",
+  matchEventsHowMany: "Quantos golos?",
+  matchEventsFewer: "Menos um golo",
+  matchEventsMore: "Mais um golo",
+  matchEventsShowDetails: "Adicionar minuto, assistência ou autogolo",
+  matchEventsHideDetails: "Ocultar detalhes",
+  matchEventsTimes: "×{count}",
 };
 
 export default pt;

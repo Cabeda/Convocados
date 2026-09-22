@@ -427,6 +427,8 @@
     <string name="match_events_own_goal">Autogolo</string>
     <string name="match_events_penalty">Penálti</string>
     <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_how_many">Quantos golos?</string>
+    <string name="match_events_times">×%1$d</string>
     <string name="match_events_minute_label">Minuto (opcional)</string>
     <string name="match_events_select_scorer">Quem marcou?</string>
     <string name="match_events_select_team">Que equipa?</string>

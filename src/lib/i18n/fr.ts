@@ -1544,6 +1544,12 @@ adminPickupsDetected: "Pickups détectés",
   matchEventsRemoveGoal: "Supprimer le but",
   matchEventsNoPlayers: "Pas encore de joueurs dans les équipes de ce match.",
   matchEventsMinuteLabel: "Minute (facultatif)",
+  matchEventsHowMany: "Combien de buts ?",
+  matchEventsFewer: "Un but de moins",
+  matchEventsMore: "Un but de plus",
+  matchEventsShowDetails: "Ajouter minute, passe ou csc",
+  matchEventsHideDetails: "Masquer les détails",
+  matchEventsTimes: "×{count}",
 };
 
 export default fr;

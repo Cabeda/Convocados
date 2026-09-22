@@ -619,6 +619,8 @@ data class MatchEvent(
     val type: String = "goal",
     val team: String = "unknown",
     val minute: Int? = null,
+    /** How many goals this entry records: "X scored 3" is one row with count=3. */
+    val count: Int = 1,
     val ownGoal: Boolean = false,
     val penalty: Boolean = false,
     val scorerEventPlayerId: String? = null,
@@ -643,6 +645,7 @@ data class MatchEventRequest(
     val type: String = "goal",
     val team: String = "unknown",
     val minute: Int? = null,
+    val count: Int = 1,
     val ownGoal: Boolean = false,
     val penalty: Boolean = false,
     val scorerEventPlayerId: String? = null,

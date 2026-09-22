@@ -8,7 +8,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { HistoryCardFull, type HistoryCardFullEntry } from "./HistoryCardFull";
-import { MatchEventsTimeline, type MatchEventSummary } from "./MatchEventsTimeline";
+import { MatchEventsTimeline, type MatchEventDraft, type MatchEventSummary } from "./MatchEventsTimeline";
 import { deriveEventPermissions } from "~/lib/eventView";
 import { isNameInTeamsSnapshot, isNameInPaymentsSnapshot } from "~/lib/snapshotParticipants";
 
@@ -104,10 +104,7 @@ export default function GameDetailPage({ eventId, historyId }: { eventId: string
     }
   }, [eventId, historyId]);
 
-  const handleAddGoal = useCallback(async (draft: {
-    scorerName: string; assistName: string | null; team: string;
-    minute: number | null; ownGoal: boolean; penalty: boolean;
-  }) => {
+  const handleAddGoal = useCallback(async (draft: MatchEventDraft) => {
     setMatchEventsSaving(true);
     setMatchEventsError(null);
     try {
