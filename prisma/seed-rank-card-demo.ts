@@ -11,8 +11,22 @@
  */
 import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
+import { faker } from "@faker-js/faker";
 
 const prisma = new PrismaClient();
+
+/** Unique faker-generated first names — no real personal data. */
+function uniqueFirstNames(count: number): string[] {
+  const used = new Set<string>();
+  const out: string[] = [];
+  while (out.length < count) {
+    let name = faker.person.firstName();
+    while (used.has(name)) name = `${faker.person.firstName()} ${faker.string.alpha({ length: 1, casing: "upper" })}.`;
+    used.add(name);
+    out.push(name);
+  }
+  return out;
+}
 
 function localBase(): string {
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
@@ -43,19 +57,22 @@ function daysFromNow(d: number): Date {
 interface P { name: string; rating: number; games: number }
 
 // Demo user leads team one; three of them share a Crew, three share another.
+// Ratings are fixed for deterministic math; names are random.
+const TEAM_ONE_NAMES = uniqueFirstNames(4);
+const TEAM_TWO_NAMES = uniqueFirstNames(5);
 const TEAM_ONE: P[] = [
   { name: DEMO_NAME, rating: 1050, games: 15 },
-  { name: "Rita", rating: 1010, games: 9 },
-  { name: "Tomás", rating: 990, games: 8 },
-  { name: "Vera", rating: 980, games: 7 },
-  { name: "Xavier", rating: 970, games: 6 },
+  { name: TEAM_ONE_NAMES[0]!, rating: 1010, games: 9 },
+  { name: TEAM_ONE_NAMES[1]!, rating: 990, games: 8 },
+  { name: TEAM_ONE_NAMES[2]!, rating: 980, games: 7 },
+  { name: TEAM_ONE_NAMES[3]!, rating: 970, games: 6 },
 ];
 const TEAM_TWO: P[] = [
-  { name: "Nuno", rating: 1130, games: 14 },
-  { name: "Sofia", rating: 1100, games: 13 },
-  { name: "Pedro", rating: 1080, games: 12 },
-  { name: "Marta", rating: 1060, games: 11 },
-  { name: "Rui", rating: 1050, games: 10 },
+  { name: TEAM_TWO_NAMES[0]!, rating: 1130, games: 14 },
+  { name: TEAM_TWO_NAMES[1]!, rating: 1100, games: 13 },
+  { name: TEAM_TWO_NAMES[2]!, rating: 1080, games: 12 },
+  { name: TEAM_TWO_NAMES[3]!, rating: 1060, games: 11 },
+  { name: TEAM_TWO_NAMES[4]!, rating: 1050, games: 10 },
 ];
 
 async function main() {
@@ -148,10 +165,10 @@ async function main() {
   // team form a Crew; the rest stay free agents.
   const crewOne = await prisma.crew.create({ data: { seasonId: season.id, name: "Vermelhos", sortOrder: 0 } });
   const crewTwo = await prisma.crew.create({ data: { seasonId: season.id, name: "Azuis", sortOrder: 1 } });
-  for (const name of ["Demo Organizer", "Rita", "Tomás"]) {
+  for (const name of [TEAM_ONE[0]!, TEAM_ONE[1]!, TEAM_ONE[2]!].map((p) => p.name)) {
     await prisma.seasonMembership.update({ where: { id: membershipByName.get(name)! }, data: { crewId: crewOne.id } });
   }
-  for (const name of ["Nuno", "Sofia", "Pedro"]) {
+  for (const name of [TEAM_TWO[0]!, TEAM_TWO[1]!, TEAM_TWO[2]!].map((p) => p.name)) {
     await prisma.seasonMembership.update({ where: { id: membershipByName.get(name)! }, data: { crewId: crewTwo.id } });
   }
 
