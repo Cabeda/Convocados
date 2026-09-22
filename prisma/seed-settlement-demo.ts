@@ -9,14 +9,32 @@
  *
  * Run: npm run db:seed:settlement
  * Sign in: demo@convocados.app / demo123
+ *
+ * All player names are faker-generated — no real personal data.
  */
 import { PrismaClient } from "@prisma/client";
+import { faker } from "@faker-js/faker";
 
 const prisma = new PrismaClient();
 
 const DEMO_PASSWORD_HASH = "e85e17b8ccf0231ecc33406b98bf41b3:ac313125f11ad360382987c4c993c93d0346878a4ae3959669711822323fb8c5ac57f53975466b90b60f38ab5e81c263bbabcd821cab003641e4342f92e9dc45";
 
-const PLAYERS = ["Ana", "Bruno", "Carla", "Diogo", "Elena", "Filipe"];
+/** Unique faker-generated first names; roles below map by index. */
+function uniqueFirstNames(count: number): string[] {
+  const used = new Set<string>();
+  const out: string[] = [];
+  while (out.length < count) {
+    let name = faker.person.firstName();
+    while (used.has(name)) name = `${faker.person.firstName()} ${faker.string.alpha({ length: 1, casing: "upper" })}.`;
+    used.add(name);
+    out.push(name);
+  }
+  return out;
+}
+
+const PLAYERS = uniqueFirstNames(6);
+// Role labels for readability; the values are random names.
+const [PAYER, PAID_A, SENT_A, DEBTOR_A, PAID_B, DEBTOR_B] = PLAYERS;
 const COST = 60;
 const SHARE = Math.round((COST / PLAYERS.length) * 100) / 100;
 
@@ -60,8 +78,8 @@ async function createEvent(opts: { title: string; dateTime: Date; ownerId: strin
       sport: "football-5v5",
       durationMinutes: 60,
       isPublic: true,
-      teamOneName: "Ninjas",
-      teamTwoName: "Gunas",
+      teamOneName: "Reds",
+      teamTwoName: "Blues",
       ownerId: opts.ownerId,
     },
   });
@@ -94,30 +112,30 @@ async function main() {
   const user = await ensureDemoUser();
   const now = Date.now();
 
-  // 1. Upcoming event — tracked, Ana is the payer, Bruno paid, Carla sent, rest pending.
+  // 1. Upcoming event — tracked, PAYER is the payer, PAID_A paid, SENT_A sent, rest pending.
   const upcoming = await createEvent({
     title: "Payment Settlement Demo (upcoming)",
     dateTime: new Date(now + 2 * 86400_000),
     ownerId: user.id,
   });
-  const upcomingAna = await prisma.eventPlayer.findFirstOrThrow({
-    where: { eventId: upcoming.event.id, name: "Ana" },
+  const upcomingPayer = await prisma.eventPlayer.findFirstOrThrow({
+    where: { eventId: upcoming.event.id, name: PAYER },
   });
   await prisma.game.update({
     where: { id: upcoming.game.id },
-    data: { paymentMode: "tracked", payerEventPlayerId: upcomingAna.id },
+    data: { paymentMode: "tracked", payerEventPlayerId: upcomingPayer.id },
   });
   const { syncGamePayments } = await import("../src/lib/settlement.server");
   await syncGamePayments(upcoming.game.id, upcoming.event.id);
-  // Mix statuses: Bruno paid, Carla sent, rest pending.
-  const bruno = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: upcoming.event.id, name: "Bruno" } });
-  const carla = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: upcoming.event.id, name: "Carla" } });
+  // Mix statuses: PAID_A paid, SENT_A sent, rest pending.
+  const paidA = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: upcoming.event.id, name: PAID_A } });
+  const sentA = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: upcoming.event.id, name: SENT_A } });
   await prisma.gamePayment.updateMany({
-    where: { gameId: upcoming.game.id, eventPlayerId: bruno.id },
+    where: { gameId: upcoming.game.id, eventPlayerId: paidA.id },
     data: { status: "paid", paidAt: new Date(), markedBy: user.id },
   });
   await prisma.gamePayment.updateMany({
-    where: { gameId: upcoming.game.id, eventPlayerId: carla.id },
+    where: { gameId: upcoming.game.id, eventPlayerId: sentA.id },
     data: { status: "sent" },
   });
 
@@ -130,12 +148,11 @@ async function main() {
   });
   await syncGamePayments(ended.game.id, ended.event.id);
 
-  // 3. Post-game wrap-up demo owned by the real user (jecabeda@gmail.com):
-  //    played game + score + a designated payer + a mix of paid/pending, so the
-  //    wrap-up banner shows the "who paid" line and settleable payment pills.
-  const realUser = await prisma.user.findUnique({ where: { email: "jecabeda@gmail.com" } });
-  if (realUser) {
-    const wrapPlayers = ["José Cabeda", "Ricardo", "Nuno", "Pedro", "Miguel", "André", "Tiago", "João"];
+  // 3. Post-game wrap-up demo (owned by the demo user): played game + score + a
+  //    designated payer + a mix of paid/pending, so the wrap-up banner shows the
+  //    "who paid" line and settleable payment pills.
+  {
+    const wrapPlayers = uniqueFirstNames(8);
     const wrap = await prisma.event.create({
       data: {
         title: "Just Ended — Post-game Demo",
@@ -145,9 +162,9 @@ async function main() {
         sport: "football-5v5",
         durationMinutes: 60,
         isPublic: true,
-        teamOneName: "Ninjas",
-        teamTwoName: "Gunas",
-        ownerId: realUser.id,
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
+        ownerId: user.id,
       },
     });
     const wrapGame = await prisma.game.create({
@@ -156,26 +173,26 @@ async function main() {
     await prisma.event.update({ where: { id: wrap.id }, data: { currentGameId: wrapGame.id } });
     for (let i = 0; i < wrapPlayers.length; i++) {
       const ep = await prisma.eventPlayer.create({
-        data: { eventId: wrap.id, name: wrapPlayers[i], userId: wrapPlayers[i] === "José Cabeda" ? realUser.id : null },
+        data: { eventId: wrap.id, name: wrapPlayers[i], userId: null },
       });
       await prisma.gameParticipant.create({ data: { gameId: wrapGame.id, eventPlayerId: ep.id, order: i } });
     }
     await prisma.eventCost.create({ data: { eventId: wrap.id, totalAmount: 80, currency: "EUR" } });
     await syncGamePayments(wrapGame.id, wrap.id);
-    const josé = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: "José Cabeda" } });
+    const wrapPayer = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: wrapPlayers[0]! } });
     await prisma.game.update({
       where: { id: wrapGame.id },
-      data: { paymentMode: "tracked", payerEventPlayerId: josé.id },
+      data: { paymentMode: "tracked", payerEventPlayerId: wrapPayer.id },
     });
-    await syncGamePayments(wrapGame.id, wrap.id); // re-sync to auto-settle José as payer
-    const richard = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: "Ricardo" } });
-    const nuno = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: "Nuno" } });
+    await syncGamePayments(wrapGame.id, wrap.id); // re-sync to auto-settle the payer
+    const wrapPaid = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: wrapPlayers[1]! } });
+    const wrapSent = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: wrapPlayers[2]! } });
     await prisma.gamePayment.updateMany({
-      where: { gameId: wrapGame.id, eventPlayerId: richard.id },
-      data: { status: "paid", paidAt: new Date(), markedBy: realUser.id },
+      where: { gameId: wrapGame.id, eventPlayerId: wrapPaid.id },
+      data: { status: "paid", paidAt: new Date(), markedBy: user.id },
     });
     await prisma.gamePayment.updateMany({
-      where: { gameId: wrapGame.id, eventPlayerId: nuno.id },
+      where: { gameId: wrapGame.id, eventPlayerId: wrapSent.id },
       data: { status: "sent" },
     });
     const half = Math.ceil(wrapPlayers.length / 2);
@@ -188,25 +205,25 @@ async function main() {
         status: "played",
         scoreOne: 5,
         scoreTwo: 3,
-        teamOneName: "Ninjas",
-        teamTwoName: "Gunas",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
         teamsSnapshot: JSON.stringify([
-          { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
-          { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
+          { team: "Reds", players: teamOne.map((name, order) => ({ name, order })) },
+          { team: "Blues", players: teamTwo.map((name, order) => ({ name, order })) },
         ]),
       },
     });
-    console.log(`\n  ** POST-GAME WRAP-UP DEMO (owned by jecabeda@gmail.com):`);
+    console.log(`\n  ** POST-GAME WRAP-UP DEMO (owned by demo user):`);
     console.log(`     ${wrap.id}  "${wrap.title}"`);
     console.log(`     URL: /events/${wrap.id}`);
   }
 
   // 4. Complex multi-game settlement demo: two played games, different payers,
-  //    overlapping debtors — Ana paid game 1 but owes game 2; Bruno paid both;
-  //    Diogo owes both. No netting, so the payments page shows gross amounts.
-  const multiOwner = realUser ?? user;
+  //    overlapping debtors — index 0 paid game 1 but owes game 2; index 1 paid
+  //    both; index 3 owes both. No netting, so the payments page shows gross amounts.
+  const multiOwner = user;
   {
-    const multiNames = ["Ana", "Bruno", "Carla", "Diogo", "Elena", "Filipe"];
+    const multiNames = PLAYERS;
     const multi = await prisma.event.create({
       data: {
         title: "Multi-game Settlement Demo",
@@ -226,34 +243,34 @@ async function main() {
     }
     await prisma.eventCost.create({ data: { eventId: multi.id, totalAmount: 60, currency: "EUR" } });
 
-    // Game 1 — 14 days ago, Ana is the payer; Diogo + Elena owe.
+    // Game 1 — 14 days ago, index 0 is the payer; indices 3 + 4 owe.
     const g1 = await prisma.game.create({ data: { eventId: multi.id, dateTime: new Date(now - 14 * 86400_000), status: "played" } });
     for (let i = 0; i < multiPlayers.length; i++) {
       await prisma.gameParticipant.create({ data: { gameId: g1.id, eventPlayerId: multiPlayers[i].id, order: i } });
     }
-    await prisma.game.update({ where: { id: g1.id }, data: { paymentMode: "tracked", payerEventPlayerId: multiPlayers[0].id } }); // Ana
+    await prisma.game.update({ where: { id: g1.id }, data: { paymentMode: "tracked", payerEventPlayerId: multiPlayers[0].id } }); // PAYER
     await syncGamePayments(g1.id, multi.id);
-    await prisma.gamePayment.updateMany({ where: { gameId: g1.id, eventPlayerId: multiPlayers[1].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // Bruno
-    await prisma.gamePayment.updateMany({ where: { gameId: g1.id, eventPlayerId: multiPlayers[2].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // Carla
+    await prisma.gamePayment.updateMany({ where: { gameId: g1.id, eventPlayerId: multiPlayers[1].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // PAID_A
+    await prisma.gamePayment.updateMany({ where: { gameId: g1.id, eventPlayerId: multiPlayers[2].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // SENT_A
 
-    // Game 2 — 7 days ago, Bruno is the payer; Ana + Diogo + Filipe owe.
+    // Game 2 — 7 days ago, index 1 is the payer; indices 0 + 3 + 5 owe.
     const g2 = await prisma.game.create({ data: { eventId: multi.id, dateTime: new Date(now - 7 * 86400_000), status: "played" } });
     for (let i = 0; i < multiPlayers.length; i++) {
       await prisma.gameParticipant.create({ data: { gameId: g2.id, eventPlayerId: multiPlayers[i].id, order: i } });
     }
-    await prisma.game.update({ where: { id: g2.id }, data: { paymentMode: "tracked", payerEventPlayerId: multiPlayers[1].id } }); // Bruno
+    await prisma.game.update({ where: { id: g2.id }, data: { paymentMode: "tracked", payerEventPlayerId: multiPlayers[1].id } }); // PAID_A
     await syncGamePayments(g2.id, multi.id);
-    await prisma.gamePayment.updateMany({ where: { gameId: g2.id, eventPlayerId: multiPlayers[2].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // Carla
-    await prisma.gamePayment.updateMany({ where: { gameId: g2.id, eventPlayerId: multiPlayers[4].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // Elena
+    await prisma.gamePayment.updateMany({ where: { gameId: g2.id, eventPlayerId: multiPlayers[2].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // SENT_A
+    await prisma.gamePayment.updateMany({ where: { gameId: g2.id, eventPlayerId: multiPlayers[4].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // PAID_B
 
     await prisma.event.update({ where: { id: multi.id }, data: { currentGameId: g2.id } });
 
-    console.log(`\n  ** MULTI-GAME SETTLEMENT DEMO (${multiOwner.id === realUser?.id ? "owned by jecabeda@gmail.com" : "owned by demo user"}):`);
+    console.log(`\n  ** MULTI-GAME SETTLEMENT DEMO (owned by demo user):`);
     console.log(`     ${multi.id}  "${multi.title}"`);
     console.log(`       URL: /events/${multi.id}/payments`);
-    console.log(`     Game 1 (14d ago) payer Ana — Diogo, Elena owe`);
-    console.log(`     Game 2 (7d ago)  payer Bruno — Ana, Diogo, Filipe owe`);
-    console.log(`     People: Ana owes game 2 (no netting vs. what she's owed); Diogo owes both`);
+    console.log(`     Game 1 (14d ago) payer ${PAYER} — ${DEBTOR_A}, ${PAID_B} owe`);
+    console.log(`     Game 2 (7d ago)  payer ${PAID_A} — ${PAYER}, ${DEBTOR_A}, ${DEBTOR_B} owe`);
+    console.log(`     People: ${PAYER} owes game 2 (no netting vs. what they're owed); ${DEBTOR_A} owes both`);
   }
 
   console.log(`\n  ** PAYMENT SETTLEMENT DEMO EVENTS:`);

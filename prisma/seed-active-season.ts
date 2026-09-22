@@ -1,9 +1,9 @@
 /**
- * Guaranteed "Ninjas da Areosa" Season scenario for the admin Season demo.
+ * Guaranteed active-Season scenario for the admin Season demo.
  *
- * Recreates the shape of the real Ninjas event: a live football-5v5 game with a
- * full roster, Ninjas/Gunas teams, past results and ratings, plus ONE Season in
- * the `active` lifecycle state.
+ * Recreates the shape of a full event: a live football-5v5 game with a full
+ * roster, two teams, past results and ratings, plus ONE Season in the `active`
+ * lifecycle state.
  *
  * The active Season's registration window is intentionally wide (a year back,
  * two years forward) so that creating any new Season for this event overlaps it
@@ -36,7 +36,7 @@ function lineupsFor(gameIndex: number, names: string[]): [string[], string[]] {
   return [teamOne, teamTwo];
 }
 
-export async function seedNinjasSeason(
+export async function seedActiveSeason(
   prisma: PrismaClient,
   demoUser: { id: string; email: string },
   now: number,
@@ -49,20 +49,26 @@ export async function seedNinjasSeason(
     return { name, rating: 1320 - i * 28 + faker.number.int({ min: -15, max: 15 }) };
   });
 
+  // Faker-generated club identity + venue so no real event/location leaks in.
+  const clubName = faker.company.name();
+  const venueName = `${faker.location.streetAddress()}, ${faker.location.city()}`;
+  const teamOneName = "Reds";
+  const teamTwoName = "Blues";
+
   // Live now: kicked off 20 minutes ago in a 60-minute game.
   const event = await prisma.event.create({
     data: {
-      title: "Ninjas da Areosa",
-      location: "Campo da Areosa, Porto",
-      latitude: 41.1579,
-      longitude: -8.6291,
+      title: clubName,
+      location: venueName,
+      latitude: faker.location.latitude(),
+      longitude: faker.location.longitude(),
       dateTime: new Date(now - 20 * 60 * 1000),
       maxPlayers: PARTICIPANT_COUNT,
       durationMinutes: 60,
       sport: "football-5v5",
       isPublic: true,
-      teamOneName: "Ninjas",
-      teamTwoName: "Gunas",
+      teamOneName,
+      teamTwoName,
       ownerId: demoUser.id,
       eloEnabled: true,
       balanced: true,
@@ -77,7 +83,7 @@ export async function seedNinjasSeason(
     const user = await prisma.user.upsert({
       where: { email },
       update: {},
-      create: { id: `demo-ninjas-${faker.string.uuid()}`, name: p.name, email, emailVerified: true },
+      create: { id: `demo-active-season-${faker.string.uuid()}`, name: p.name, email, emailVerified: true },
     });
     userByName.set(p.name, user.id);
     // Legacy roster (drives the event page player list).
@@ -104,8 +110,8 @@ export async function seedNinjasSeason(
     const scoreOne = faker.number.int({ min: 0, max: 6 });
     const scoreTwo = faker.number.int({ min: 0, max: 6 });
     const teamsSnapshot = JSON.stringify([
-      { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
-      { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
+      { team: teamOneName, players: teamOne.map((name, order) => ({ name, order })) },
+      { team: teamTwoName, players: teamTwo.map((name, order) => ({ name, order })) },
     ]);
     await prisma.gameHistory.create({
       data: {
@@ -115,8 +121,8 @@ export async function seedNinjasSeason(
         isFriendly: false,
         scoreOne,
         scoreTwo,
-        teamOneName: "Ninjas",
-        teamTwoName: "Gunas",
+        teamOneName,
+        teamTwoName,
         teamsSnapshot,
         source: "historical",
         eloProcessed: true,
@@ -124,15 +130,15 @@ export async function seedNinjasSeason(
     });
   }
 
-  // Current teams so the live event page renders Ninjas vs Gunas.
+  // Current teams so the live event page renders both sides.
   const half = Math.floor(names.length / 2);
   const teamOneNames = names.slice(0, half);
   const teamTwoNames = names.slice(half);
   await prisma.teamResult.create({
-    data: { name: "Ninjas", eventId: event.id, members: { create: teamOneNames.map((name, order) => ({ name, order })) } },
+    data: { name: teamOneName, eventId: event.id, members: { create: teamOneNames.map((name, order) => ({ name, order })) } },
   });
   await prisma.teamResult.create({
-    data: { name: "Gunas", eventId: event.id, members: { create: teamTwoNames.map((name, order) => ({ name, order })) } },
+    data: { name: teamTwoName, eventId: event.id, members: { create: teamTwoNames.map((name, order) => ({ name, order })) } },
   });
 
   // The running Season. Wide window on purpose: any new Season overlaps it, so
@@ -163,8 +169,8 @@ export async function seedNinjasSeason(
     membershipByName.set(p.name, membership.id);
   }
 
-  const crewOne = await prisma.crew.create({ data: { seasonId: season.id, name: "Ninjas", sortOrder: 0 } });
-  const crewTwo = await prisma.crew.create({ data: { seasonId: season.id, name: "Gunas", sortOrder: 1 } });
+  const crewOne = await prisma.crew.create({ data: { seasonId: season.id, name: teamOneName, sortOrder: 0 } });
+  const crewTwo = await prisma.crew.create({ data: { seasonId: season.id, name: teamTwoName, sortOrder: 1 } });
   for (const name of teamOneNames) {
     await prisma.seasonMembership.update({ where: { id: membershipByName.get(name)! }, data: { crewId: crewOne.id } });
   }
@@ -172,9 +178,9 @@ export async function seedNinjasSeason(
     await prisma.seasonMembership.update({ where: { id: membershipByName.get(name)! }, data: { crewId: crewTwo.id } });
   }
 
-  console.log(`\n  ** NINJAS SEASON DEMO (active Season / no complete action):`);
+  console.log(`\n  ** ACTIVE SEASON DEMO (active Season / no complete action):`);
   console.log(`     ${event.id}  "${event.title}"  ${PARTICIPANT_COUNT}/${PARTICIPANT_COUNT} players  (live)`);
-  console.log(`     ${GAME_COUNT} past games · crews: Ninjas (${teamOneNames.join(", ")}) / Gunas (${teamTwoNames.join(", ")})`);
+  console.log(`     ${GAME_COUNT} past games · crews: ${teamOneName} (${teamOneNames.join(", ")}) / ${teamTwoName} (${teamTwoNames.join(", ")})`);
   console.log(`     Season: "${season.name}"  status=active  window ${new Date(now - 365 * DAY).toISOString().slice(0, 10)} → ${new Date(now + 730 * DAY).toISOString().slice(0, 10)}`);
   console.log(`     Event:   /events/${event.id}`);
   console.log(`     Seasons: /events/${event.id}/seasons`);
