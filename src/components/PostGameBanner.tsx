@@ -251,7 +251,16 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
     setSaving(false);
   };
 
-  const paidCount = summarizePayments(editablePayments).paidCount;
+  // The summary must count the same roll the chips render. When durable
+  // GamePayment rows exist (settled via the settlement API), they are the live
+  // truth; the legacy GameHistory snapshot is frozen at reset time and never
+  // reflects later settlements, so counting it here reported a stale "2/10"
+  // while the chips showed 9/10 paid.
+  const paymentRoll = status.gamePayments && status.gamePayments.length > 0
+    ? status.gamePayments
+    : editablePayments;
+  const paidCount = summarizePayments(paymentRoll).paidCount;
+  const paymentTotal = paymentRoll.length;
   const hasPayments = editablePayments.length > 0;
   // Checklist items animate their check when they flip to done.
   const pop = (done: boolean) =>
@@ -492,7 +501,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
                         ? t("postGamePaymentsDone")
                         : t("postGamePaymentsSummary")
                             .replace("{paid}", String(paidCount))
-                            .replace("{total}", String(editablePayments.length))}
+                            .replace("{total}", String(paymentTotal))}
                   </Typography>
                 </Box>
                 {!status.hasCost && (

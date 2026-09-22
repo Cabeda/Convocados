@@ -299,6 +299,14 @@ data class PostGameStatus(
     // GameHistory snapshot, NOT the live (next-game) EventCost — so the banner
     // settles the last game, not the upcoming one.
     val paymentsSnapshot: List<PaymentSnapshotEntry>? = null,
+    /**
+     * Durable per-game settlement rows (payment overhaul). When present the
+     * banner renders and settles these instead of the frozen GameHistory
+     * snapshot — the server derives them from the authoritative GamePayment
+     * rows, so they never drift the way the snapshot does.
+     */
+    val gamePayments: List<SettlementRow>? = null,
+    val gameConfig: PostGamePaymentConfig? = null,
     val mvpEnabled: Boolean = false,
     val mvpComplete: Boolean = true,
     // Viewer-scoped MVP task: true once THIS user has voted (or has no task).
@@ -541,6 +549,15 @@ data class SettlementRow(
     val amount: Double = 0.0,
     val status: String = "pending",
     val isPayer: Boolean = false,
+)
+
+/** Payment config of the game the post-game banner is settling. */
+@Serializable
+data class PostGamePaymentConfig(
+    val gameId: String,
+    val mode: String = "tracked",
+    val payerName: String? = null,
+    val payerIsPlayer: Boolean = false,
 )
 
 @Serializable

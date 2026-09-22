@@ -16,7 +16,7 @@ import { PrismaClient } from "@prisma/client";
 import { computeGameUpdates } from "../src/lib/elo";
 import { getDefaultDurationMinutes } from "../src/lib/sports";
 import { seedCrewSeason } from "./seed-crew-season";
-import { seedNinjasSeason } from "./seed-ninjas-season";
+import { seedActiveSeason } from "./seed-active-season";
 import { faker } from "@faker-js/faker";
 
 const prisma = new PrismaClient();
@@ -243,8 +243,8 @@ async function main() {
         isRecurring,
         balanced,
         recurrenceRule,
-        teamOneName: "Ninjas",
-        teamTwoName: "Gunas",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
         players: {
           create: playerNames.map((name, order) => ({ name, order })),
         },
@@ -294,8 +294,8 @@ async function main() {
         const teamTwoPlayers = gamePlayers.slice(half);
 
         const teamsSnapshot = JSON.stringify([
-          { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
-          { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
+          { team: "Reds", players: teamOnePlayers.map((name, order) => ({ name, order })) },
+          { team: "Blues", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
         ]);
 
         const scoreOne = randInt(0, 8);
@@ -305,7 +305,7 @@ async function main() {
         if (g === 0) {
           await prisma.teamResult.create({
             data: {
-              name: "Ninjas",
+              name: "Reds",
               eventId: event.id,
               members: {
                 create: teamOnePlayers.map((name, order) => ({ name, order })),
@@ -314,7 +314,7 @@ async function main() {
           });
           await prisma.teamResult.create({
             data: {
-              name: "Gunas",
+              name: "Blues",
               eventId: event.id,
               members: {
                 create: teamTwoPlayers.map((name, order) => ({ name, order })),
@@ -349,8 +349,8 @@ async function main() {
             status: "played",
             scoreOne,
             scoreTwo,
-            teamOneName: "Ninjas",
-            teamTwoName: "Gunas",
+            teamOneName: "Reds",
+            teamTwoName: "Blues",
             teamsSnapshot,
             paymentsSnapshot,
             eloProcessed: true,
@@ -376,8 +376,8 @@ async function main() {
         });
 
         const teams = [
-          { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
-          { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
+          { team: "Reds", players: teamOnePlayers.map((name, order) => ({ name, order })) },
+          { team: "Blues", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
         ];
 
         const eloUpdates = computeGameUpdates(playerInfos, teams, scoreOne, scoreTwo);
@@ -521,8 +521,8 @@ async function main() {
         sport: justEndedSport,
         durationMinutes: getDefaultDurationMinutes(justEndedSport),
         isPublic: true,
-        teamOneName: "Ninjas",
-        teamTwoName: "Gunas",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
         ownerId: demoUser.id,
         players: {
           create: justEndedPlayers.map((name, order) => ({ name, order })),
@@ -533,14 +533,14 @@ async function main() {
     // Create team results so the event page shows teams
     await prisma.teamResult.create({
       data: {
-        name: "Ninjas",
+        name: "Reds",
         eventId: justEndedEvent.id,
         members: { create: teamOne.map((name, order) => ({ name, order })) },
       },
     });
     await prisma.teamResult.create({
       data: {
-        name: "Gunas",
+        name: "Blues",
         eventId: justEndedEvent.id,
         members: { create: teamTwo.map((name, order) => ({ name, order })) },
       },
@@ -550,8 +550,8 @@ async function main() {
     // needs to fill in. The post-game banner's "Add score" button links
     // to the history page where this entry will be editable.
     const teamsSnapshot = JSON.stringify([
-      { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
-      { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
+      { team: "Reds", players: teamOne.map((name, order) => ({ name, order })) },
+      { team: "Blues", players: teamTwo.map((name, order) => ({ name, order })) },
     ]);
     await prisma.gameHistory.create({
       data: {
@@ -560,8 +560,8 @@ async function main() {
         status: "played",
         scoreOne: null,
         scoreTwo: null,
-        teamOneName: "Ninjas",
-        teamTwoName: "Gunas",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
         teamsSnapshot,
       },
     });
@@ -599,11 +599,11 @@ async function main() {
     // environment that also exercises Seasons, Crews and standings.
     await seedCrewSeason(prisma, demoUser, now);
 
-    // ── Guaranteed Ninjas Season scenario (Season-completion demo) ──────────
+    // ── Guaranteed active-Season scenario (Season-completion demo) ──────────
     // A live, full-roster event with a running (active) Season whose window
     // overlaps any new Season, reproducing the "can't complete → can't create"
-    // bug. See prisma/seed-ninjas-season.ts.
-    await seedNinjasSeason(prisma, demoUser, now);
+    // bug. See prisma/seed-active-season.ts.
+    await seedActiveSeason(prisma, demoUser, now);
   }
 
   const pastCount = await prisma.gameHistory.count();

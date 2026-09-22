@@ -229,6 +229,51 @@ describe("Google social sign-in (real auth.handler e2e)", () => {
     await prisma.user.delete({ where: { id: user.id } });
   });
 
+  it("auto-links Google onto an existing verified user with the same email (ADR 0040 Q13)", async () => {
+    const sub = `e2e-autolink-sub-${Date.now()}`;
+    const email = `google-e2e-autolink-${Date.now()}@example.com`;
+
+    // Password-created user, email already verified — no Google credential yet.
+    const existing = await prisma.user.create({
+      data: {
+        id: `e2e-autolink-${Date.now()}`,
+        name: "Password User",
+        email,
+        emailVerified: true,
+        accounts: {
+          create: {
+            id: `cred-${Date.now()}`,
+            accountId: `cred-owner-${Date.now()}`,
+            providerId: "credential",
+            issuer: "local:credential",
+            password: "hashed-x",
+          },
+        },
+      },
+      include: { accounts: true },
+    });
+    expect(existing.accounts).toHaveLength(1);
+
+    stubGoogleEndpoints(signIdToken(sub, email));
+    const init = await initiateSignIn();
+    const cb = await auth.handler(
+      new Request(`http://localhost:4321/api/auth/callback/google?code=e2e-code&state=${init.url.searchParams.get("state")}`, {
+        method: "GET",
+        headers: { cookie: init.cookies },
+      }),
+    );
+    expect(cb.status).toBe(302);
+
+    // Same User row — no split; Google credential attached alongside password.
+    const users = await prisma.user.findMany({ where: { email }, include: { accounts: true } });
+    expect(users).toHaveLength(1);
+    expect(users[0].id).toBe(existing.id);
+    const providers = users[0].accounts.map((a) => a.providerId).sort();
+    expect(providers).toEqual(["credential", "google"]);
+
+    await prisma.user.delete({ where: { id: existing.id } });
+  });
+
   it("rejects an ID token signed by an unknown key", async () => {
     const sub = `e2e-badkey-sub-${Date.now()}`;
     const email = `google-e2e-badkey-${Date.now()}@example.com`;
