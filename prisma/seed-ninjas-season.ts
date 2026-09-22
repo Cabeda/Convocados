@@ -36,6 +36,59 @@ function lineupsFor(gameIndex: number, names: string[]): [string[], string[]] {
   return [teamOne, teamTwo];
 }
 
+/**
+ * Seed a goal timeline that agrees with the stored scoreline (ADR 0039), so the
+ * history page's derived score matches the seeded result.
+ *
+ * `rich` games give the demo a deeper timeline to look at: every goal gets a
+ * minute, more of them carry an assist, and one is a penalty. The demo user is
+ * guaranteed at least one goal in the latest game so the picker's default name
+ * is visibly meaningful.
+ */
+async function seedNinjasGoals(
+  prisma: PrismaClient,
+  gameHistoryId: string,
+  scoreOne: number,
+  scoreTwo: number,
+  teamOne: string[],
+  teamTwo: string[],
+  eventPlayerByName: Map<string, string>,
+  rich: boolean,
+): Promise<void> {
+  const sides: Array<"one" | "two"> = [];
+  const [more, fewer]: ["one" | "two", "one" | "two"] = scoreOne >= scoreTwo ? ["one", "two"] : ["two", "one"];
+  for (let i = 0; i < Math.min(scoreOne, scoreTwo); i++) sides.push(more, fewer);
+  for (let i = 0; i < Math.abs(scoreOne - scoreTwo); i++) sides.push(more);
+  if (sides.length === 0) return;
+
+  let minute = faker.number.int({ min: 3, max: 12 });
+  for (const team of sides) {
+    const pool = (team === "one" ? teamOne : teamTwo).filter((n) => eventPlayerByName.has(n));
+    const scorerName = pool.length ? faker.helpers.arrayElement(pool) : null;
+    if (!scorerName) continue;
+
+    const assistPool = (team === "one" ? teamOne : teamTwo).filter((n) => n !== scorerName && eventPlayerByName.has(n));
+    const wantsAssist = rich ? Math.random() < 0.7 : Math.random() < 0.45;
+    const assistName = wantsAssist && assistPool.length ? faker.helpers.arrayElement(assistPool) : null;
+
+    await prisma.matchEvent.create({
+      data: {
+        gameHistoryId,
+        type: "goal",
+        team,
+        minute,
+        ownGoal: false,
+        penalty: rich && Math.random() < 0.15,
+        scorerEventPlayerId: eventPlayerByName.get(scorerName) ?? null,
+        scorerName,
+        assistEventPlayerId: assistName ? (eventPlayerByName.get(assistName) ?? null) : null,
+        assistName,
+      },
+    });
+    minute += faker.number.int({ min: 4, max: 14 });
+  }
+}
+
 export async function seedNinjasSeason(
   prisma: PrismaClient,
   demoUser: { id: string; email: string },
@@ -48,6 +101,11 @@ export async function seedNinjasSeason(
     usedNames.add(name);
     return { name, rating: 1320 - i * 28 + faker.number.int({ min: -15, max: 15 }) };
   });
+
+  // The signed-in demo user plays too, so they can be picked as a scorer and
+  // their own stats/editing affordances are populated. Named "Demo Organizer"
+  // to match the account.
+  const demoPlayerName = "Demo Organizer";
 
   // Live now: kicked off 20 minutes ago in a 60-minute game.
   const event = await prisma.event.create({
@@ -72,6 +130,19 @@ export async function seedNinjasSeason(
 
   const eventPlayerByName = new Map<string, string>();
   const userByName = new Map<string, string>();
+
+  // Register the demo user on the roster first, so they are order 0 and appear
+  // in the scorer picker for every game.
+  await prisma.player.create({ data: { eventId: event.id, name: demoPlayerName, order: 0, userId: demoUser.id } });
+  const demoEventPlayer = await prisma.eventPlayer.create({
+    data: { eventId: event.id, name: demoPlayerName, userId: demoUser.id, rating: 1400 },
+  });
+  eventPlayerByName.set(demoPlayerName, demoEventPlayer.id);
+  userByName.set(demoPlayerName, demoUser.id);
+  await prisma.playerRating.create({
+    data: { eventId: event.id, name: demoPlayerName, userId: demoUser.id, rating: 1400, gamesPlayed: GAME_COUNT },
+  });
+
   for (const [order, p] of participants.entries()) {
     const email = faker.internet.email({ firstName: slugify(p.name) || "player", provider: "demo.convocados.test" }).toLowerCase();
     const user = await prisma.user.upsert({
@@ -98,7 +169,9 @@ export async function seedNinjasSeason(
     });
   }
 
-  const names = participants.map((p) => p.name);
+  // Everyone eligible to play, demo user included, so the latest game's lineup
+  // contains the account we sign in with.
+  const names = [demoPlayerName, ...participants.map((p) => p.name)];
   for (let i = 0; i < GAME_COUNT; i++) {
     const [teamOne, teamTwo] = lineupsFor(i, names);
     const scoreOne = faker.number.int({ min: 0, max: 6 });
@@ -107,7 +180,7 @@ export async function seedNinjasSeason(
       { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
       { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
     ]);
-    await prisma.gameHistory.create({
+    const history = await prisma.gameHistory.create({
       data: {
         eventId: event.id,
         dateTime: new Date(now - (GAME_COUNT - i) * 7 * DAY),
@@ -122,6 +195,10 @@ export async function seedNinjasSeason(
         eloProcessed: true,
       },
     });
+
+    // Goal timeline that agrees with the stored score, so the derived score and
+    // the seeded scoreline match. The most recent game gets the richest set.
+    await seedNinjasGoals(prisma, history.id, scoreOne, scoreTwo, teamOne, teamTwo, eventPlayerByName, i === GAME_COUNT - 1);
   }
 
   // Current teams so the live event page renders Ninjas vs Gunas.
@@ -150,17 +227,17 @@ export async function seedNinjasSeason(
   });
 
   const membershipByName = new Map<string, string>();
-  for (const p of participants) {
+  for (const name of names) {
     const membership = await prisma.seasonMembership.create({
       data: {
         seasonId: season.id,
-        eventPlayerId: eventPlayerByName.get(p.name)!,
-        userId: userByName.get(p.name)!,
+        eventPlayerId: eventPlayerByName.get(name)!,
+        userId: userByName.get(name)!,
         status: "active",
         joinedAt: new Date(now - 60 * DAY),
       },
     });
-    membershipByName.set(p.name, membership.id);
+    membershipByName.set(name, membership.id);
   }
 
   const crewOne = await prisma.crew.create({ data: { seasonId: season.id, name: "Ninjas", sortOrder: 0 } });
@@ -175,6 +252,7 @@ export async function seedNinjasSeason(
   console.log(`\n  ** NINJAS SEASON DEMO (active Season / no complete action):`);
   console.log(`     ${event.id}  "${event.title}"  ${PARTICIPANT_COUNT}/${PARTICIPANT_COUNT} players  (live)`);
   console.log(`     ${GAME_COUNT} past games · crews: Ninjas (${teamOneNames.join(", ")}) / Gunas (${teamTwoNames.join(", ")})`);
+  console.log(`     Demo user "${demoPlayerName}" is on the roster and the latest game's lineup — sign in to edit goals`);
   console.log(`     Season: "${season.name}"  status=active  window ${new Date(now - 365 * DAY).toISOString().slice(0, 10)} → ${new Date(now + 730 * DAY).toISOString().slice(0, 10)}`);
   console.log(`     Event:   /events/${event.id}`);
   console.log(`     Seasons: /events/${event.id}/seasons`);
