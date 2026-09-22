@@ -593,6 +593,18 @@ export const openApiSpec = {
         responses: { "201": { description: "Match event created" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/history/{historyId}/match-events/{matchEventId}": {
+      delete: {
+        summary: "Remove a match event from a settled game",
+        tags: ["History"],
+        parameters: [
+          eventIdParam,
+          { name: "historyId", in: "path", required: true, schema: { type: "string" } },
+          { name: "matchEventId", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Match event removed" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/match-stats": {
       get: {
         summary: "Get the per-player scorer table for an event, replayed from its match events",

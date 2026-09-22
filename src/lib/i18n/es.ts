@@ -1535,6 +1535,15 @@ adminPickupsDetected: "Pickups detectados",
   matchEventsAssistBy: "asistencia: {name}",
   matchEventsOwnGoal: "Autogol",
   matchEventsPenalty: "Penalti",
+  matchEventsAddGoal: "Añadir gol",
+  matchEventsAddError: "No se pudo añadir el gol",
+  matchEventsEmpty: "Aún no hay goles registrados.",
+  matchEventsScoringTeam: "Equipo que marca",
+  matchEventsAssist: "Asistencia (opcional)",
+  matchEventsNoAssist: "Sin asistencia",
+  matchEventsRemoveGoal: "Eliminar gol",
+  matchEventsNoPlayers: "Aún no hay jugadores en los equipos de este partido.",
+  matchEventsMinuteLabel: "Minuto (opcional)",
 };
 
 export default es;

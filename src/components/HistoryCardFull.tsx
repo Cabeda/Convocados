@@ -28,7 +28,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import RemoveIcon from "@mui/icons-material/Remove";
-import { MatchEventsTimeline, type MatchEventSummary } from "./MatchEventsTimeline";
+import type { MatchEventSummary } from "./MatchEventsTimeline";
 import AddIcon from "@mui/icons-material/Add";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import EventIcon from "@mui/icons-material/Event";
@@ -1490,13 +1490,6 @@ export function HistoryCardFull({
                 );
               })}
             </Box>
-          </Box>
-        )}
-
-        {/* Goal timeline (ADR 0039). Renders nothing when the game has no goals. */}
-        {!isCancelled && (
-          <Box sx={{ px: 3, pb: 2 }}>
-            <MatchEventsTimeline events={entry.matchEvents} />
           </Box>
         )}
 

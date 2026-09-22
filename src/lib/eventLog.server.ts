@@ -25,6 +25,7 @@ export type EventAction =
   | "history_status_updated"
   | "history_payments_updated"
   | "history_match_event_created"
+  | "history_match_event_deleted"
   | "history_unlocked"
   | "history_locked"
   | "history_cost_updated"

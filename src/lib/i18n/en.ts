@@ -1594,6 +1594,15 @@ adminPickupsDetected: "Pickups detected",
   matchEventsAssistBy: "assist: {name}",
   matchEventsOwnGoal: "Own goal",
   matchEventsPenalty: "Penalty",
+  matchEventsAddGoal: "Add goal",
+  matchEventsAddError: "Could not add the goal",
+  matchEventsEmpty: "No goals logged yet.",
+  matchEventsScoringTeam: "Scoring team",
+  matchEventsAssist: "Assist (optional)",
+  matchEventsNoAssist: "No assist",
+  matchEventsRemoveGoal: "Remove goal",
+  matchEventsNoPlayers: "No players on this game yet.",
+  matchEventsMinuteLabel: "Minute (optional)",
 } as const;
 
 export default en;

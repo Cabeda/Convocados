@@ -1535,6 +1535,15 @@ adminPickupsDetected: "Pickups erkannt",
   matchEventsAssistBy: "Vorlage: {name}",
   matchEventsOwnGoal: "Eigentor",
   matchEventsPenalty: "Elfmeter",
+  matchEventsAddGoal: "Tor hinzufügen",
+  matchEventsAddError: "Tor konnte nicht hinzugefügt werden",
+  matchEventsEmpty: "Noch keine Tore erfasst.",
+  matchEventsScoringTeam: "Team, das trifft",
+  matchEventsAssist: "Vorlage (optional)",
+  matchEventsNoAssist: "Keine Vorlage",
+  matchEventsRemoveGoal: "Tor entfernen",
+  matchEventsNoPlayers: "Noch keine Spieler in den Teams dieses Spiels.",
+  matchEventsMinuteLabel: "Minute (optional)",
 };
 
 export default de;

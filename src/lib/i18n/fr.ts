@@ -1535,6 +1535,15 @@ adminPickupsDetected: "Pickups détectés",
   matchEventsAssistBy: "passe : {name}",
   matchEventsOwnGoal: "Csc",
   matchEventsPenalty: "Penalty",
+  matchEventsAddGoal: "Ajouter un but",
+  matchEventsAddError: "Impossible d’ajouter le but",
+  matchEventsEmpty: "Aucun but enregistré.",
+  matchEventsScoringTeam: "Équipe qui marque",
+  matchEventsAssist: "Passe (facultatif)",
+  matchEventsNoAssist: "Sans passe",
+  matchEventsRemoveGoal: "Supprimer le but",
+  matchEventsNoPlayers: "Pas encore de joueurs dans les équipes de ce match.",
+  matchEventsMinuteLabel: "Minute (facultatif)",
 };
 
 export default fr;
