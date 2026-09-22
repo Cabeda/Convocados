@@ -43,6 +43,18 @@ A Game marked with `isFriendly: true` by the Owner/Admin. Friendly Games are exc
 Use cases: casual sessions with guests, holiday matches, unbalanced rosters, first-timer introductions.
 _Avoid_: exhibition, practice, scrimmage
 
+## Match Event
+A single recorded occurrence in a settled **Game**'s timeline — a **Goal**, an **Assist**, a substitution, or a note. Captured *after* the Game ends, never live. A Game's match timeline is the ordered list of its Match Events.
+_Avoid_: incident, log entry, timeline item
+
+## Goal
+A **Match Event** crediting a player with scoring. For goal-scoring sports a team's score is the count of its Goals; set-based sports (tennis, padel) keep a manual set score and have no Goals.
+_Avoid_: point, goal count, score (that is the team total)
+
+## Assist
+A **Match Event** crediting the player who set up a **Goal**. Optional on a Goal; the scorer or an organizer names the assister.
+_Avoid_: assist point, secondary assist
+
 ## Season
 A bounded, optional competition within an **Event**. Account-linked **EventPlayers** join explicitly during registration. **Membership is whole-window**: once enrolled, a player counts for every eligible non-friendly **Game** whose day falls inside the Season window, regardless of when they were added — enrollment has no effective date. Only withdrawal removes them, from the withdrawal moment onward; re-adding re-covers the whole window. A player absent from a Game's lineup simply earns nothing for it.
 
