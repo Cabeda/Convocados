@@ -4,9 +4,7 @@ import { getSession } from "~/lib/auth.helpers.server";
 import { authorizeEventMutation } from "~/lib/eventAuthz.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
-import { perPlayerShareCents } from "~/lib/gameCost";
-import { ledgerKey, postLedgerEntry } from "~/lib/ledger.server";
-import { resolveLinkedUserId } from "~/lib/payerIdentity.server";
+import { recordReceived } from "~/lib/payments.server";
 
 /** PUT — bulk mark all pending/sent payments as paid. Owner/Admin only. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -39,38 +37,20 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data: { status: "paid", paidAt: new Date() },
   });
 
-  // ADR 0019: Write ledger rows for each player whose payment was bulk-confirmed
+  // ADR 0019 §2: confirm each player through recordReceived — the single ledger
+  // write for a received payment — rather than hand-rolling the credit.
   if (pendingPayments.length > 0) {
     const session = await getSession(request);
     const markedById = session?.user?.id ?? event.ownerId ?? "unknown";
     const eventData = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { maxPlayers: true, currentGameId: true },
+      select: { currentGameId: true },
     });
-    const maxPlayers = eventData?.maxPlayers ?? 1;
-    const gameId = eventData?.currentGameId ?? eventId;
-    const shareCents = perPlayerShareCents(eventCost.totalAmount, maxPlayers);
+    const gameId = eventData?.currentGameId ?? undefined;
 
-    await prisma.$transaction(async (tx) => {
-      for (const p of pendingPayments) {
-        // Resolve userId
-        const userId = await resolveLinkedUserId(eventId, p.playerName, tx);
-        if (!userId) continue; // anonymous — no ledger possible
-
-        await postLedgerEntry({
-          eventId,
-          userId,
-          amountCents: shareCents,
-          currency: eventCost.currency ?? "EUR",
-          direction: "credit",
-          reason: "payment_received",
-          statusAfter: "paid",
-          eventInstanceId: gameId,
-          markedById,
-          idempotencyKey: ledgerKey("received", eventId, userId, gameId),
-        }, tx);
-      }
-    });
+    for (const p of pendingPayments) {
+      await recordReceived({ eventId, playerName: p.playerName, markedById, gameId });
+    }
   }
 
   // ADR 0017: Notify each player whose payment was confirmed (via queue, respects tier + overrides)
