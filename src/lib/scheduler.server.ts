@@ -3,6 +3,8 @@ import { createLogger } from "./logger.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { sendReminder } from "./email.server";
 import { getNotificationPrefs, wantsEmailReminder } from "./notificationPrefs.server";
+import { findSplitIdentities, collapseSplitIdentities } from "./backfillMergedIdentity.server";
+import { recalculateAllRatings } from "./elo.server";
 
 const log = createLogger("scheduler");
 
@@ -109,6 +111,8 @@ export async function processJob(jobId: string): Promise<void> {
       await _processReminderJob(job);
     } else if (job.type === "post_game") {
       await _processPostGameJob(job);
+    } else if (job.type === "backfill_merged_identity") {
+      await _processBackfillMergedIdentityJob();
     } else {
       log.warn({ jobId, type: job.type }, "Unknown scheduled job type");
     }
@@ -231,4 +235,35 @@ async function _processPostGameJob(job: { id: string; eventId: string | null }) 
     create: { eventId: event.id, type: "post-game" },
     update: {},
   });
+}
+
+/**
+ * One-shot backfill (enqueued by the `backfill_merged_player_identity`
+ * migration): collapse player identities that cross-account merges left split
+ * before `mergeUsers` learned to collapse name-keyed identity (ADR 0040), then
+ * rebuild ELO for the affected events. Idempotent — a no-op once collapsed.
+ */
+async function _processBackfillMergedIdentityJob(): Promise<void> {
+  const identities = await findSplitIdentities(prisma);
+  if (identities.length === 0) {
+    log.info("backfill_merged_identity: no split player identities found");
+    return;
+  }
+
+  await collapseSplitIdentities(prisma, identities);
+
+  const eventIds = [...new Set(identities.map((i) => i.eventId))];
+  let recalculated = 0;
+  for (const eventId of eventIds) {
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { eloEnabled: true } });
+    if (event?.eloEnabled) {
+      await recalculateAllRatings(eventId);
+      recalculated++;
+    }
+  }
+
+  log.info(
+    { groups: identities.length, events: eventIds.length, recalculated },
+    "backfill_merged_identity: collapsed split player identities",
+  );
 }
