@@ -16,6 +16,7 @@ import { MvpVotingCard } from "./MvpVotingCard";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { SeasonRankReveal } from "./rank/SeasonRankReveal";
 import type { SeasonRankMovement } from "~/lib/rankExplainer";
+import { summarizePayments } from "~/lib/paymentSummary";
 
 interface PaymentEntry {
   playerName: string;
@@ -214,7 +215,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
     setSaving(false);
   };
 
-  const paidCount = editablePayments.filter((p) => p.status === "paid").length;
+  const paidCount = summarizePayments(editablePayments).paidCount;
   const hasPayments = editablePayments.length > 0;
   // Checklist items animate their check when they flip to done.
   const pop = (done: boolean) =>
@@ -424,10 +425,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
                     <Typography variant="body2" fontWeight={600}>
                       {t("paymentsIsOwed", {
                         name: status.gameConfig.payerName,
-                        amount: status.gamePayments
-                          .filter((r) => r.status !== "paid")
-                          .reduce((s, r) => s + r.amount, 0)
-                          .toFixed(2),
+                        amount: summarizePayments(status.gamePayments).outstandingAmount.toFixed(2),
                       })}
                     </Typography>
                   ) : (
