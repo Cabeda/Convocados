@@ -248,6 +248,29 @@ model GameHistory {
   source           String   @default("live") // "live" | "historical"
   createdAt        DateTime @default(now())
   mvpVotes         MvpVote[]
+  matchEvents      MatchEvent[]
+}
+
+/// A single recorded occurrence in a settled Game's timeline (ADR 0039).
+/// Captured after the game ends — never live. `team` is the scoring side.
+model MatchEvent {
+  id                  String      @id @default(cuid())
+  gameHistoryId       String
+  gameHistory         GameHistory @relation(fields: [gameHistoryId], references: [id], onDelete: Cascade)
+  type                String      @default("goal") // "goal" | "assist" (extensible: "sub" | "note")
+  team                String      @default("unknown") // "one" | "two" | "unknown"
+  minute              Int?
+  ownGoal             Boolean     @default(false)
+  penalty             Boolean     @default(false)
+  scorerEventPlayerId String?     // resolved EventPlayer, null when name-only
+  scorerName          String      // denormalized — resilient if the player is later removed
+  assistEventPlayerId String?
+  assistName          String?
+  createdById         String?
+  createdAt           DateTime    @default(now())
+
+  @@index([gameHistoryId])
+  @@index([scorerEventPlayerId])
 }
 
 model MvpVote {
@@ -927,6 +950,7 @@ model EventAdmin {
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation("EventAdmins", fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("admin") // "admin" | "statistician" (statistician may only log Match Events)
   createdAt DateTime @default(now())
 
   @@unique([eventId, userId])
