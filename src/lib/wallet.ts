@@ -10,43 +10,52 @@
  * ADR 0008 — Game Units, end-of-following-month expiry, snapshot value.
  */
 
-export const UNIT_AFFECTING_REASONS = new Set<WalletTxReason>([
-  "missed_game_credit",
-  "credit_redeemed",
-  "credit_expired",
-]);
+/** How a ledger reason is classified (ADR 0006/0019). */
+export interface LedgerReasonSpec {
+  /** Moves Game Units (missed-game credit, redemption, expiry). */
+  unitAffecting: boolean;
+  /** Creates a money debt for the player (a debit). ADR 0019. */
+  charging: boolean;
+  /** Clears the join-gate balance — `sent` clears. ADR 0006. */
+  moneyClearing: boolean;
+  /** Clears the outstanding balance — only `paid` clears. ADR 0019. */
+  outstandingClearing: boolean;
+}
 
-export const MONEY_CLEARING_REASONS = new Set<WalletTxReason>([
-  "payment_received",
-  "payment_self_reported",
-  "credit_redeemed",
-  "game_cancelled_credit",
-]);
+/**
+ * The single registry of ledger reasons. Every classification set below is
+ * derived from it, so adding a money movement means editing one place.
+ */
+export const LEDGER_REASONS = {
+  per_game_share: { unitAffecting: false, charging: true, moneyClearing: false, outstandingClearing: false },
+  cost_adjustment: { unitAffecting: false, charging: true, moneyClearing: false, outstandingClearing: false },
+  monthly_fee: { unitAffecting: false, charging: false, moneyClearing: false, outstandingClearing: false },
+  missed_game_credit: { unitAffecting: true, charging: false, moneyClearing: false, outstandingClearing: false },
+  credit_redeemed: { unitAffecting: true, charging: false, moneyClearing: true, outstandingClearing: true },
+  credit_expired: { unitAffecting: true, charging: false, moneyClearing: false, outstandingClearing: false },
+  extras_declare: { unitAffecting: false, charging: false, moneyClearing: false, outstandingClearing: false },
+  payment_received: { unitAffecting: false, charging: false, moneyClearing: true, outstandingClearing: true },
+  payment_self_reported: { unitAffecting: false, charging: false, moneyClearing: true, outstandingClearing: false },
+  game_cancelled_credit: { unitAffecting: false, charging: false, moneyClearing: true, outstandingClearing: true },
+} as const satisfies Record<string, LedgerReasonSpec>;
+
+export type WalletTxReason = keyof typeof LEDGER_REASONS;
+
+function reasonsWhere(pred: (spec: LedgerReasonSpec) => boolean): Set<WalletTxReason> {
+  return new Set(
+    (Object.keys(LEDGER_REASONS) as WalletTxReason[]).filter((reason) => pred(LEDGER_REASONS[reason])),
+  );
+}
+
+export const UNIT_AFFECTING_REASONS = reasonsWhere((s) => s.unitAffecting);
+
+export const MONEY_CLEARING_REASONS = reasonsWhere((s) => s.moneyClearing);
 
 /** Reasons that create a money debt for the player (debits). ADR 0019. */
-export const MONEY_CHARGING_REASONS = new Set<WalletTxReason>([
-  "per_game_share",
-  "cost_adjustment",
-]);
+export const MONEY_CHARGING_REASONS = reasonsWhere((s) => s.charging);
 
 /** Clearing reasons that reduce outstanding balance (excludes self-reported). ADR 0019. */
-export const OUTSTANDING_CLEARING_REASONS = new Set<WalletTxReason>([
-  "payment_received",
-  "credit_redeemed",
-  "game_cancelled_credit",
-]);
-
-export type WalletTxReason =
-  | "per_game_share"
-  | "cost_adjustment"
-  | "monthly_fee"
-  | "missed_game_credit"
-  | "credit_redeemed"
-  | "credit_expired"
-  | "extras_declare"
-  | "payment_received"
-  | "payment_self_reported"
-  | "game_cancelled_credit";
+export const OUTSTANDING_CLEARING_REASONS = reasonsWhere((s) => s.outstandingClearing);
 
 export type WalletTxDirection = "debit" | "credit";
 
