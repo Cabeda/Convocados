@@ -38,6 +38,7 @@ import type { PostGameStatus } from "./PostGameBanner";
 import { SignInButton } from "./SignInButton";
 import { PushPromptBanner } from "./PushPromptBanner";
 import { deriveEventPermissions, canRemoveEventPlayer } from "~/lib/eventView";
+import { decidePaymentGate } from "~/lib/paymentGate";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -348,14 +349,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // routes through the payment-nudge dialog (when the user has a balance) or
   // joins directly. The dialog also re-fetches its own copy of the balance.
   const [paymentNudgeOpen, setPaymentNudgeOpen] = useState(false);
-  const [cachedBalance, setCachedBalance] = useState<{ hasDebt: boolean; enforcement: string } | null>(null);
+  const [cachedBalance, setCachedBalance] = useState<{ amount: number; enforcement: string } | null>(null);
   const refreshBalance = useCallback(async () => {
     try {
       const r = await fetch(`/api/events/${eventId}/balance`);
       if (!r.ok) return;
       const j = await r.json();
       const amt = j?.callerBalance?.amount ?? 0;
-      setCachedBalance({ hasDebt: amt > 0, enforcement: j?.enforcement ?? "off" });
+      setCachedBalance({ amount: amt, enforcement: j?.enforcement ?? "off" });
     } catch { /* ignore */ }
   }, [eventId]);
 
@@ -675,10 +676,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // Routes the Quick Join pill click: opens the payment-nudge dialog when the user
   // has a balance, otherwise joins directly. Server PAYMENT_GATE 402 falls back to the dialog.
+  // Client mirror of the server's payment gate: prompt when the shared decision
+  // is anything but "allow". The server stays authoritative (PAYMENT_GATE 402).
+  const gateWouldPrompt = (amount: number, enforcement: string) =>
+    decidePaymentGate({ enforcement, isSelfService: true, outstandingAmount: amount, gateAmount: amount, threshold: 0 }) !== "allow";
+
   const handleQuickJoinPillClick = (name: string) => {
     const openDialog = () => setPaymentNudgeOpen(true);
     if (cachedBalance) {
-      if (cachedBalance.hasDebt && cachedBalance.enforcement !== "off") {
+      if (gateWouldPrompt(cachedBalance.amount, cachedBalance.enforcement)) {
         openDialog();
       } else {
         addPlayer(name, true).catch((err: unknown) => {
@@ -697,8 +703,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
       .then((j: { callerBalance?: { amount?: number }; enforcement?: string }) => {
         const amt = j?.callerBalance?.amount ?? 0;
         const enforcement = j?.enforcement ?? "off";
-        setCachedBalance({ hasDebt: amt > 0, enforcement });
-        if (amt > 0 && enforcement !== "off") {
+        setCachedBalance({ amount: amt, enforcement });
+        if (gateWouldPrompt(amt, enforcement)) {
           openDialog();
         } else {
           return addPlayer(name, true);
