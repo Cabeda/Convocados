@@ -10,6 +10,7 @@ import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
 import { getGameSettlement, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
 import { perPlayerShare } from "../../../../../lib/gameCost";
+import { postLedgerEntry } from "../../../../../lib/ledger.server";
 import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
@@ -322,19 +323,16 @@ export const PATCH: APIRoute = async ({ params, request }) => {
           for (const debit of existingDebits) {
             const delta = newShareCents - debit.amountCents;
             if (delta === 0) continue;
-            await tx.walletTransaction.create({
-              data: {
-                eventId: params.id!,
-                userId: debit.userId,
-                amountCents: Math.abs(delta),
-                currency: costCurrency,
-                direction: delta > 0 ? "debit" : "credit",
-                gameUnits: 0,
-                reason: "cost_adjustment",
-                eventInstanceId: game.id,
-                markedById: session.user.id,
-              },
-            });
+            await postLedgerEntry({
+              eventId: params.id!,
+              userId: debit.userId,
+              amountCents: Math.abs(delta),
+              currency: costCurrency,
+              direction: delta > 0 ? "debit" : "credit",
+              reason: "cost_adjustment",
+              eventInstanceId: game.id,
+              markedById: session.user.id,
+            }, tx);
           }
         } else {
           // ADR 0019 §6: Unlinked players — resolve from GameParticipant and write corrections
@@ -346,19 +344,16 @@ export const PATCH: APIRoute = async ({ params, request }) => {
             const userId = gp.eventPlayer.userId;
             if (!userId) continue; // truly anonymous — no ledger possible
             // No original debit exists, so the full newShareCents is the adjustment
-            await tx.walletTransaction.create({
-              data: {
-                eventId: params.id!,
-                userId,
-                amountCents: newShareCents,
-                currency: costCurrency,
-                direction: "debit",
-                gameUnits: 0,
-                reason: "cost_adjustment",
-                eventInstanceId: game.id,
-                markedById: session.user.id,
-              },
-            });
+            await postLedgerEntry({
+              eventId: params.id!,
+              userId,
+              amountCents: newShareCents,
+              currency: costCurrency,
+              direction: "debit",
+              reason: "cost_adjustment",
+              eventInstanceId: game.id,
+              markedById: session.user.id,
+            }, tx);
           }
         }
 
