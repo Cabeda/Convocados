@@ -160,6 +160,9 @@ data class EventScreenState(
     val coPlaySuggestions: List<CoPlaySuggestion> = emptyList(),
     val mvp: MvpResponse? = null,
     val mvpLoading: Boolean = false,
+    val matchEvents: MatchEventsResponse? = null,
+    val matchEventsLoading: Boolean = false,
+    val matchEventsSaving: Boolean = false,
     val cost: EventCost? = null,
     val coPlayers: List<CoPlayer> = emptyList(),
 )
@@ -816,6 +819,38 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    // ── Match Events (ADR 0039) ──────────────────────────────────────────
+
+    fun loadMatchEvents(eventId: String, historyId: String) {
+        _state.value = _state.value.copy(matchEventsLoading = true)
+        viewModelScope.launch {
+            runCatching { api.fetchMatchEvents(eventId, historyId) }
+                .onSuccess { resp -> _state.value = _state.value.copy(matchEvents = resp, matchEventsLoading = false) }
+                .onFailure { _state.value = _state.value.copy(matchEventsLoading = false) }
+        }
+    }
+
+    fun addMatchEvent(eventId: String, historyId: String, body: MatchEventRequest) {
+        _state.value = _state.value.copy(matchEventsSaving = true)
+        viewModelScope.launch {
+            runCatching { api.addMatchEvent(eventId, historyId, body) }
+                .onSuccess {
+                    val resp = runCatching { api.fetchMatchEvents(eventId, historyId) }.getOrNull()
+                    _state.value = _state.value.copy(
+                        matchEvents = resp ?: _state.value.matchEvents,
+                        matchEventsSaving = false,
+                    )
+                    repository.refreshEventDetail(eventId)
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        matchEventsSaving = false,
+                        error = parseApiErrorMessage(e) ?: "Failed to log the goal",
+                    )
+                }
+        }
+    }
+
     fun savePostGamePayments(eventId: String) {
         val historyId = _state.value.postGame?.latestHistoryId ?: return
         val payments = _state.value.postGamePayments ?: return
@@ -1257,6 +1292,21 @@ fun EventDetailScreen(
                                 onScoreChange = { a, b -> scoreOne = a; scoreTwo = b },
                                 onSaveScore = { editingScoreId = null },
                                 onVoteMvp = { onHistoryClick(it) })
+                            // Match events (ADR 0039): logged only once the game is settled.
+                            val settledHistoryId = ds.postGame?.latestHistoryId
+                            if (settledHistoryId != null && ds.postGame?.gameEnded == true && !usesStructuredTennisScore(ds.event?.sport, null)) {
+                                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                                    Box(Modifier.padding(16.dp)) {
+                                        MatchEventsSection(
+                                            eventId = eventId,
+                                            historyId = settledHistoryId,
+                                            state = ds,
+                                            viewModel = viewModel,
+                                            players = ds.event?.players ?: emptyList(),
+                                        )
+                                    }
+                                }
+                            }
                             // Join / Leave (YOUR RESPONSE deprecated in favor of this)
                             if (effectiveUser?.name != null) {
                                 val callerBalance = ds.balance?.callerBalance
@@ -1814,6 +1864,143 @@ private fun HeroWrapUp(eventId: String, state: EventScreenState, viewModel: Even
                 }
             }
             Text(stringResource(R.string.post_game_progress, done, total), style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.CenterHorizontally))
+        }
+    }
+}
+
+/**
+ * Post-game Match Events (ADR 0039): log goals with a scorer and an optional
+ * assist. The team score is derived from the logged goals server-side, so this
+ * is the source of truth for goal-scoring sports.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MatchEventsSection(
+    eventId: String,
+    historyId: String,
+    state: EventScreenState,
+    viewModel: EventDetailViewModel,
+    players: List<Player>,
+) {
+    val data = state.matchEvents
+    var showDialog by remember { mutableStateOf(false) }
+    var scorer by remember { mutableStateOf<Player?>(null) }
+    var team by remember { mutableStateOf("one") }
+    var ownGoal by remember { mutableStateOf(false) }
+    var penalty by remember { mutableStateOf(false) }
+    var minute by remember { mutableStateOf("") }
+
+    LaunchedEffect(historyId) {
+        if (data == null && !state.matchEventsLoading) viewModel.loadMatchEvents(eventId, historyId)
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(stringResource(R.string.match_events_add_goal)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.match_events_select_scorer))
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        players.forEach { p ->
+                            FilterChip(
+                                selected = scorer?.id == p.id,
+                                onClick = { scorer = p },
+                                label = { Text(p.name) },
+                            )
+                        }
+                    }
+                    Text(stringResource(R.string.match_events_select_team))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = team == "one", onClick = { team = "one" }, label = { Text(stringResource(R.string.match_events_team_one)) })
+                        FilterChip(selected = team == "two", onClick = { team = "two" }, label = { Text(stringResource(R.string.match_events_team_two)) })
+                    }
+                    OutlinedTextField(
+                        value = minute,
+                        onValueChange = { minute = it.filter { c -> c.isDigit() }.take(3) },
+                        label = { Text(stringResource(R.string.match_events_minute, 0).replace("0", "").trim()) },
+                        singleLine = true,
+                        modifier = Modifier.width(120.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = ownGoal, onClick = { ownGoal = !ownGoal }, label = { Text(stringResource(R.string.match_events_own_goal)) })
+                        FilterChip(selected = penalty, onClick = { penalty = !penalty }, label = { Text(stringResource(R.string.match_events_penalty)) })
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = scorer != null && !state.matchEventsSaving,
+                    onClick = {
+                        val picked = scorer ?: return@TextButton
+                        viewModel.addMatchEvent(
+                            eventId,
+                            historyId,
+                            MatchEventRequest(
+                                type = "goal",
+                                team = team,
+                                minute = minute.toIntOrNull(),
+                                ownGoal = ownGoal,
+                                penalty = penalty,
+                                scorerEventPlayerId = picked.id,
+                                scorerName = picked.name,
+                            ),
+                        )
+                        showDialog = false
+                        scorer = null
+                        minute = ""
+                        ownGoal = false
+                        penalty = false
+                    },
+                ) { Text(stringResource(R.string.match_events_add_goal)) }
+            },
+            dismissButton = { TextButton(onClick = { showDialog = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.SportsSoccer, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.match_events_title), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            if (state.matchEventsLoading) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+        }
+
+        val events = data?.events ?: emptyList()
+        if (events.isEmpty() && !state.matchEventsLoading) {
+            Text(stringResource(R.string.match_events_no_events), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            events.forEach { e ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.match_events_goal_by, e.scorerName),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val tags = buildList {
+                        if (e.ownGoal) add(stringResource(R.string.match_events_own_goal))
+                        if (e.penalty) add(stringResource(R.string.match_events_penalty))
+                    }
+                    if (tags.isNotEmpty()) {
+                        Text(tags.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    e.minute?.let {
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.match_events_minute, it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                e.assistName?.let { assist ->
+                    Text(stringResource(R.string.match_events_assist_by, assist), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        if (players.isNotEmpty()) {
+            OutlinedButton(onClick = { showDialog = true }, enabled = !state.matchEventsSaving, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.match_events_add_goal))
+            }
         }
     }
 }

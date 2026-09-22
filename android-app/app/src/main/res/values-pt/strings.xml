@@ -406,4 +406,18 @@
     <string name="post_game_rank_dismiss">Entendi</string>
     <string name="season_rank_how_it_works">Como funciona a Classificação</string>
     <string name="rank_explainer_link_desc">Abre o cálculo da tua Classificação da Época</string>
+    <!-- Match events: post-game goals & assists -->
+    <string name="match_events_title">Golos e assistências</string>
+    <string name="match_events_add_goal">Adicionar golo</string>
+    <string name="match_events_no_events">Ainda não há golos registados.</string>
+    <string name="match_events_goal_by">Golo — %1$s</string>
+    <string name="match_events_assist_by">Assistência: %1$s</string>
+    <string name="match_events_own_goal">Autogolo</string>
+    <string name="match_events_penalty">Penálti</string>
+    <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_select_scorer">Quem marcou?</string>
+    <string name="match_events_select_team">Que equipa?</string>
+    <string name="match_events_team_one">Equipa 1</string>
+    <string name="match_events_team_two">Equipa 2</string>
+    <string name="match_events_top_scorers">Melhores marcadores</string>
 </resources>

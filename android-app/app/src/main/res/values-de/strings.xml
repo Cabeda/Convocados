@@ -383,4 +383,18 @@
     <string name="post_game_rank_dismiss">Verstanden</string>
     <string name="season_rank_how_it_works">So funktioniert der Rang</string>
     <string name="rank_explainer_link_desc">Öffnet, wie dein Saison-Rang berechnet wurde</string>
+    <!-- Match events: post-game goals & assists -->
+    <string name="match_events_title">Tore &amp; Vorlagen</string>
+    <string name="match_events_add_goal">Tor hinzufügen</string>
+    <string name="match_events_no_events">Noch keine Tore erfasst.</string>
+    <string name="match_events_goal_by">Tor — %1$s</string>
+    <string name="match_events_assist_by">Vorlage: %1$s</string>
+    <string name="match_events_own_goal">Eigentor</string>
+    <string name="match_events_penalty">Elfmeter</string>
+    <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_select_scorer">Wer hat getroffen?</string>
+    <string name="match_events_select_team">Welches Team?</string>
+    <string name="match_events_team_one">Team 1</string>
+    <string name="match_events_team_two">Team 2</string>
+    <string name="match_events_top_scorers">Torschützen</string>
 </resources>

@@ -383,4 +383,18 @@
     <string name="post_game_rank_dismiss">Capito</string>
     <string name="season_rank_how_it_works">Come funziona la Classifica</string>
     <string name="rank_explainer_link_desc">Apre come è stata calcolata la tua Classifica della Stagione</string>
+    <!-- Match events: post-game goals & assists -->
+    <string name="match_events_title">Gol e assist</string>
+    <string name="match_events_add_goal">Aggiungi gol</string>
+    <string name="match_events_no_events">Nessun gol registrato finora.</string>
+    <string name="match_events_goal_by">Gol — %1$s</string>
+    <string name="match_events_assist_by">Assist: %1$s</string>
+    <string name="match_events_own_goal">Autogol</string>
+    <string name="match_events_penalty">Rigore</string>
+    <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_select_scorer">Chi ha segnato?</string>
+    <string name="match_events_select_team">Quale squadra?</string>
+    <string name="match_events_team_one">Squadra 1</string>
+    <string name="match_events_team_two">Squadra 2</string>
+    <string name="match_events_top_scorers">Migliori marcatori</string>
 </resources>
