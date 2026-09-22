@@ -302,6 +302,19 @@ data class PostGameStatus(
     // Season Rank (ADR 0031) movement for the just-played Game. Null unless the
     // game counted and the viewer played. Mirrors the web `SeasonRankMovement`.
     val seasonRank: SeasonRankMovement? = null,
+    // The viewer's current Rank Standing — present before this Game is scored.
+    // Mirrors the web `SeasonRankStanding`.
+    val rankStanding: SeasonRankStanding? = null,
+    /**
+     * True when the viewer already paid their own share and is neither the
+     * receiver nor a settlement admin. The payment task is then hidden for them.
+     */
+    val viewerPaymentSettled: Boolean = false,
+    // Result-card fields: the score and team names shown alongside the Rank.
+    val scoreOne: Int? = null,
+    val scoreTwo: Int? = null,
+    val teamOneName: String = "",
+    val teamTwoName: String = "",
 )
 
 @Serializable
@@ -317,6 +330,41 @@ data class SeasonRankMovement(
     val provisional: Boolean = false,
     val gamesThisSeason: Int = 0,
     val edges: List<Double> = emptyList(),
+)
+
+/**
+ * The viewer's CURRENT Season Rank, as of the Games already counted —
+ * independent of whether the Game being wrapped up has a score yet. Delivered
+ * alongside `seasonRank` so the post-game card can show a Rank before the score
+ * lands instead of an empty section. Mirrors the web `SeasonRankStanding`.
+ */
+@Serializable
+data class SeasonRankStanding(
+    val seasonId: String = "",
+    val seasonName: String = "",
+    val rank: Double = 0.0,
+    val tier: Int = 0,
+    val provisional: Boolean = false,
+    val gamesThisSeason: Int = 0,
+    val edges: List<Double> = emptyList(),
+    val crew: ViewerCrewStanding? = null,
+)
+
+/**
+ * The viewer's Crew standing inside a Season. `pointsDelta` is what the Game
+ * being revealed paid the Crew; null while that Game has not counted yet, so
+ * the UI never invents a payout. Mirrors the web `ViewerCrewStanding`.
+ */
+@Serializable
+data class ViewerCrewStanding(
+    val crewId: String = "",
+    val name: String = "",
+    /** 1-based place among the Season's Crews. */
+    val place: Int = 0,
+    val placeCount: Int = 0,
+    val points: Double = 0.0,
+    /** Points this Game paid the Crew. Null while this Game is not counted. */
+    val pointsDelta: Double? = null,
 )
 
 @Serializable
