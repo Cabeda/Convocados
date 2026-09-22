@@ -71,6 +71,9 @@ import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.repository.EventRepository
 import dev.convocados.ui.components.InitialAvatar
+import dev.convocados.ui.components.MatchEventItem
+import dev.convocados.ui.components.MatchEventPlayer
+import dev.convocados.ui.components.MatchEventsSection
 import dev.convocados.ui.screen.courts.PLAYTOMIC_SPORTS
 import dev.convocados.ui.screen.history.TennisSetEditor
 import dev.convocados.ui.screen.games.formatEventDateInTz
@@ -161,6 +164,9 @@ data class EventScreenState(
     val coPlaySuggestions: List<CoPlaySuggestion> = emptyList(),
     val mvp: MvpResponse? = null,
     val mvpLoading: Boolean = false,
+    val matchEvents: MatchEventsResponse? = null,
+    val matchEventsLoading: Boolean = false,
+    val matchEventsSaving: Boolean = false,
     val cost: EventCost? = null,
     val coPlayers: List<CoPlayer> = emptyList(),
 )
@@ -838,6 +844,38 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    // ── Match Events (ADR 0039) ──────────────────────────────────────────
+
+    fun loadMatchEvents(eventId: String, historyId: String) {
+        _state.value = _state.value.copy(matchEventsLoading = true)
+        viewModelScope.launch {
+            runCatching { api.fetchMatchEvents(eventId, historyId) }
+                .onSuccess { resp -> _state.value = _state.value.copy(matchEvents = resp, matchEventsLoading = false) }
+                .onFailure { _state.value = _state.value.copy(matchEventsLoading = false) }
+        }
+    }
+
+    fun addMatchEvent(eventId: String, historyId: String, body: MatchEventRequest) {
+        _state.value = _state.value.copy(matchEventsSaving = true)
+        viewModelScope.launch {
+            runCatching { api.addMatchEvent(eventId, historyId, body) }
+                .onSuccess {
+                    val resp = runCatching { api.fetchMatchEvents(eventId, historyId) }.getOrNull()
+                    _state.value = _state.value.copy(
+                        matchEvents = resp ?: _state.value.matchEvents,
+                        matchEventsSaving = false,
+                    )
+                    repository.refreshEventDetail(eventId)
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        matchEventsSaving = false,
+                        error = parseApiErrorMessage(e) ?: "Failed to log the goal",
+                    )
+                }
+        }
+    }
+
     fun savePostGamePayments(eventId: String) {
         val historyId = _state.value.postGame?.latestHistoryId ?: return
         val payments = _state.value.postGamePayments ?: return
@@ -1279,6 +1317,46 @@ fun EventDetailScreen(
                                 onSaveScore = { editingScoreId = null },
                                 onVoteMvp = { onHistoryClick(it) },
                                 onViewSeason = onSeasonDetail)
+                            // Match events (ADR 0039): logged only once the game is settled.
+                            val settledHistoryId = ds.postGame?.latestHistoryId
+                            if (settledHistoryId != null && ds.postGame?.gameEnded == true && !usesStructuredTennisScore(ds.event?.sport, null)) {
+                                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                                    Box(Modifier.padding(16.dp)) {
+                                        MatchEventsSection(
+                                            events = ds.matchEvents?.events?.map {
+                                                MatchEventItem(
+                                                    scorerName = it.scorerName,
+                                                    assistName = it.assistName,
+                                                    minute = it.minute,
+                            count = it.count,
+                                                    ownGoal = it.ownGoal,
+                                                    penalty = it.penalty,
+                                                )
+                                            } ?: emptyList(),
+                                            players = (ds.event?.players ?: emptyList()).map { MatchEventPlayer(it.id, it.name) },
+                                            loading = ds.matchEventsLoading,
+                                            saving = ds.matchEventsSaving,
+                                            loadOnAppear = { viewModel.loadMatchEvents(eventId, settledHistoryId) },
+                                            onAdd = { draft ->
+                                                viewModel.addMatchEvent(
+                                                    eventId,
+                                                    settledHistoryId,
+                                                    MatchEventRequest(
+                                                        type = "goal",
+                                                        team = draft.team,
+                                                        minute = draft.minute,
+                        count = draft.count,
+                                                        ownGoal = draft.ownGoal,
+                                                        penalty = draft.penalty,
+                                                        scorerEventPlayerId = draft.scorerEventPlayerId,
+                                                        scorerName = draft.scorerName,
+                                                    ),
+                                                )
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                             // Join / Leave (YOUR RESPONSE deprecated in favor of this)
                             if (effectiveUser?.name != null) {
                                 val callerBalance = ds.balance?.callerBalance

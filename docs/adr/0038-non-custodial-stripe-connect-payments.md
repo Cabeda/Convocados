@@ -37,7 +37,7 @@ exactly as it does today — the tracked/untracked ledger, unchanged (same appro
 
 ## Considered options
 
-- **Custodial wallet** (the model Omby uses): Convocados holds funds, users have balances and
+- **Custodial wallet**: Convocados holds funds, users have balances and
   request withdrawals. Rejected for now — it triggers PSD2 / e-money licensing, fund
   safeguarding, KYC, and long financial-record retention. Revisit as a deliberate spike.
 - **Separate charges and transfers**: rejected — a single, known destination account per charge

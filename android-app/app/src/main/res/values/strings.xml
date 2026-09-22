@@ -459,4 +459,22 @@
     <string name="post_game_no_score_yet">No score yet</string>
     <string name="season_rank_how_it_works">How Rank works</string>
     <string name="rank_explainer_link_desc">Opens how your Season Rank was calculated</string>
+    <!-- Match events: post-game goals & assists -->
+    <string name="match_events_title">Goals &amp; assists</string>
+    <string name="match_events_add_details">Add goal details</string>
+    <string name="match_events_add_goal">Add goal</string>
+    <string name="match_events_no_events">No goals logged yet.</string>
+    <string name="match_events_goal_by">Goal — %1$s</string>
+    <string name="match_events_assist_by">Assist: %1$s</string>
+    <string name="match_events_own_goal">Own goal</string>
+    <string name="match_events_penalty">Penalty</string>
+    <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_how_many">How many goals?</string>
+    <string name="match_events_times">×%1$d</string>
+    <string name="match_events_minute_label">Minute (optional)</string>
+    <string name="match_events_select_scorer">Who scored?</string>
+    <string name="match_events_select_team">Which team?</string>
+    <string name="match_events_team_one">Team 1</string>
+    <string name="match_events_team_two">Team 2</string>
+    <string name="match_events_top_scorers">Top scorers</string>
 </resources>

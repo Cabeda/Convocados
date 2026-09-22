@@ -24,6 +24,21 @@ class StringsParityTest {
         "retry",
         "back_to_games",
         "offline_stale_banner",
+        "match_events_title",
+        "match_events_add_goal",
+        "match_events_no_events",
+        "match_events_goal_by",
+        "match_events_assist_by",
+        "match_events_own_goal",
+        "match_events_penalty",
+        "match_events_minute",
+        "match_events_minute_label",
+        "match_events_add_details",
+        "match_events_select_scorer",
+        "match_events_select_team",
+        "match_events_team_one",
+        "match_events_team_two",
+        "match_events_top_scorers",
     )
 
     @Test

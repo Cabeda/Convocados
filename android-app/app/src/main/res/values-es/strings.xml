@@ -394,4 +394,22 @@
     <string name="post_game_no_score_yet">Aún sin resultado</string>
     <string name="season_rank_how_it_works">Cómo funciona la Clasificación</string>
     <string name="rank_explainer_link_desc">Abre cómo se calculó tu Clasificación de la Temporada</string>
+    <!-- Match events: post-game goals & assists -->
+    <string name="match_events_title">Goles y asistencias</string>
+    <string name="match_events_add_details">Añadir detalles de los goles</string>
+    <string name="match_events_add_goal">Añadir gol</string>
+    <string name="match_events_no_events">Aún no hay goles registrados.</string>
+    <string name="match_events_goal_by">Gol — %1$s</string>
+    <string name="match_events_assist_by">Asistencia: %1$s</string>
+    <string name="match_events_own_goal">Autogol</string>
+    <string name="match_events_penalty">Penalti</string>
+    <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_how_many">¿Cuántos goles?</string>
+    <string name="match_events_times">×%1$d</string>
+    <string name="match_events_minute_label">Minuto (opcional)</string>
+    <string name="match_events_select_scorer">¿Quién marcó?</string>
+    <string name="match_events_select_team">¿Qué equipo?</string>
+    <string name="match_events_team_one">Equipo 1</string>
+    <string name="match_events_team_two">Equipo 2</string>
+    <string name="match_events_top_scorers">Máximos goleadores</string>
 </resources>
