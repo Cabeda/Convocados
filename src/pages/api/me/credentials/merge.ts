@@ -4,6 +4,7 @@ import { getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { getPendingMerge, clearPendingMerge } from "~/lib/mergeCapture.server";
 import { mergeUsers } from "~/lib/merge.server";
+import { recalculateAllRatings } from "~/lib/elo.server";
 import { logger } from "~/lib/logger.server";
 
 /**
@@ -38,6 +39,19 @@ export const POST: APIRoute = async ({ request }) => {
     const result = await prisma.$transaction((tx) =>
       mergeUsers(tx, survivorId, pending.absorbedUserId),
     );
+    // Player identities were collapsed post-commit; rebuild ELO from the
+    // rewritten history. Best-effort — the merge itself already succeeded.
+    for (const eventId of result.mergedPlayerEvents) {
+      try {
+        const event = await prisma.event.findUnique({
+          where: { id: eventId },
+          select: { eloEnabled: true },
+        });
+        if (event?.eloEnabled) await recalculateAllRatings(eventId);
+      } catch (err) {
+        logger.warn({ eventId, err }, "ELO recalc after merge failed");
+      }
+    }
     clearPendingMerge(survivorId);
     logger.info(
       { survivorId, absorbedId: pending.absorbedUserId, ...result },

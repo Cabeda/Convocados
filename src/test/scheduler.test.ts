@@ -422,4 +422,65 @@ describe("processJob", () => {
     const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
     expect(updated!.processedAt).not.toBeNull();
   });
+
+  it("backfill_merged_identity collapses split player identity and marks processed", async () => {
+    const user = await seedUser("user-merge-backfill");
+    const event = await seedEvent(user.id, new Date(), "evt-merge-backfill", {});
+    // Same user, two names in one event — the signature of a past merge.
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Scheduler User", userId: user.id } });
+    await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Old Name", userId: user.id, gamesPlayed: 5 },
+    });
+
+    const job = await prisma.scheduledJob.create({
+      data: { type: "backfill_merged_identity", runAt: new Date(), payload: "{}" },
+    });
+
+    await processJob(job.id);
+
+    const eps = await prisma.eventPlayer.findMany({ where: { eventId: event.id } });
+    expect(eps.map((e) => e.name)).toEqual(["Scheduler User"]);
+    expect(eps[0].userId).toBe(user.id);
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+  });
+
+  it("backfill_merged_identity is a no-op when nothing is split", async () => {
+    const user = await seedUser("user-no-split");
+    const event = await seedEvent(user.id, new Date(), "evt-no-split", {});
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Solo", userId: user.id } });
+
+    const job = await prisma.scheduledJob.create({
+      data: { type: "backfill_merged_identity", runAt: new Date(), payload: "{}" },
+    });
+
+    await processJob(job.id);
+
+    const eps = await prisma.eventPlayer.findMany({ where: { eventId: event.id } });
+    expect(eps.map((e) => e.name)).toEqual(["Solo"]);
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+  });
+
+  it("backfill_merged_identity reconciles stale payment names even without a split identity", async () => {
+    const user = await seedUser("user-pay-drift");
+    const event = await seedEvent(user.id, new Date(), "evt-pay-drift", {});
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Cabeda", userId: user.id } });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(), status: "played" },
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Old Name", amount: 5, status: "pending" },
+    });
+
+    const job = await prisma.scheduledJob.create({
+      data: { type: "backfill_merged_identity", runAt: new Date(), payload: "{}" },
+    });
+
+    await processJob(job.id);
+
+    const pays = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(pays.map((p) => p.playerName)).toEqual(["Cabeda"]);
+  });
 });
