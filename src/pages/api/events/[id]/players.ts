@@ -19,11 +19,11 @@ import { isGameEnded } from "../../../../lib/gameStatus";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { Randomize } from "../../../../lib/random";
-import { nextGameParticipantOrder } from "../../../../lib/game.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import { getActiveRosterState } from "../../../../lib/roster.server";
 import { acceptPendingAccountInviteForDirectJoin } from "../../../../lib/invite.server";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../../../../lib/rosterCore.server";
+import { movePlayerToEndOfList, rejoinPlayerToCurrentGame } from "../../../../lib/rosterChange.server";
 import {
   IDEMPOTENCY_HEADER,
   getCachedResponse,
@@ -402,34 +402,19 @@ export const POST: APIRoute = async ({ params, request }) => {
         // ── Re-add: un-archive + place at end of list + reset Rsvp=yes ─
         // New joiners go to the end of the list (the "Queue" mental model).
         // A re-add follows the same rule — the player loses their prior slot.
-        const maxOrder = await prisma.player.aggregate({
-          where: { eventId, archivedAt: null },
-          _max: { order: true },
-        });
-        const newOrder = (maxOrder._max.order ?? -1) + 1;
         const reactivatedUserId = resolvedUser?.id ?? existing.userId;
-        await prisma.player.update({
-          where: { id: existing.id },
-          data: {
-            archivedAt: null,
-            order: newOrder,
-            ...(resolvedUser && !existing.userId ? { userId: resolvedUser.id } : {}),
-          },
+        await movePlayerToEndOfList(eventId, existing.id, {
+          reactivate: true,
+          linkUserId: resolvedUser && !existing.userId ? resolvedUser.id : null,
         });
         if (event.currentGameId) {
           const ep = await upsertEventPlayerForRoster(
             eventId,
             { name: trimmed, userId: reactivatedUserId, user: reactivatedUserId ? { id: reactivatedUserId, name: trimmed } : null },
           );
-          await prisma.rsvp.upsert({
-            where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
-            create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
-            update: { status: "yes", respondedAt: new Date() },
-          });
           // Restore the GameParticipant too — a previous leave archived it, and
           // without this the re-added player stays invisible on the game list.
-          const gpOrder = await nextGameParticipantOrder(event.currentGameId);
-          await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: ep.id, status: "active", order: gpOrder });
+          await rejoinPlayerToCurrentGame(event.currentGameId, ep.id);
         }
         // Bug fix: re-activated players must be added to teams if within active range
         const readdIsOnBench = activeBefore >= event.maxPlayers;
@@ -483,44 +468,19 @@ export const POST: APIRoute = async ({ params, request }) => {
           // Re-join after a leave: the GameParticipant was soft-archived by the
           // leave flow. Un-archive it (at the end of the list) instead of
           // falling through to the 409 "already in the list" error.
-          const gpOrder = await nextGameParticipantOrder(event.currentGameId);
-          await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: eventPlayer.id, status: "active", order: gpOrder });
+          await rejoinPlayerToCurrentGame(event.currentGameId, eventPlayer.id);
           // Move player to end of list — same rule as a fresh re-join
-          const maxOrder = await prisma.player.aggregate({
-            where: { eventId, archivedAt: null },
-            _max: { order: true },
-          });
-          const newOrder = (maxOrder._max.order ?? -1) + 1;
-          await prisma.player.update({
-            where: { id: existing.id },
-            data: { order: newOrder, ...(linkedUserId && !existing.userId ? { userId: linkedUserId } : {}) },
-          });
-          // Reset stale RSVP — the leave wrote "no", the re-join means "yes"
-          await prisma.rsvp.upsert({
-            where: { eventPlayerId_gameId: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId } },
-            create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
-            update: { status: "yes", respondedAt: new Date() },
+          await movePlayerToEndOfList(eventId, existing.id, {
+            linkUserId: linkedUserId && !existing.userId ? linkedUserId : null,
           });
           notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null });
         }
         if (!alreadyInGame) {
-          await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: eventPlayer.id, status: "active" });
+          await rejoinPlayerToCurrentGame(event.currentGameId, eventPlayer.id);
           // Move player to end of list — their old order is stale from the previous game
-          const maxOrder = await prisma.player.aggregate({
-            where: { eventId, archivedAt: null },
-            _max: { order: true },
-          });
-          const newOrder = (maxOrder._max.order ?? -1) + 1;
-          await prisma.player.update({
-            where: { id: existing.id },
-            data: { order: newOrder, ...(linkedUserId && !existing.userId ? { userId: linkedUserId } : {}) },
-          });
-          // Reset stale RSVP from previous game occurrence — write "yes" on the new game
-          await prisma.rsvp.upsert({
-            where: { eventPlayerId_gameId: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId } },
-            create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
-            update: { status: "yes", respondedAt: new Date() },
+          await movePlayerToEndOfList(eventId, existing.id, {
+            linkUserId: linkedUserId && !existing.userId ? linkedUserId : null,
           });
           // Bug fix: re-joining players must be added to teams if within active range
           const rejoinIsOnBench = activeBefore >= event.maxPlayers;
