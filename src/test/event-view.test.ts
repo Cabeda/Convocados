@@ -51,7 +51,11 @@ describe("canRemoveEventPlayer", () => {
     expect(canRemoveEventPlayer("player-1", owned, { userId: "player-1" })).toBe(true);
   });
 
-  it("does not let a non-owner remove an anonymous player", () => {
-    expect(canRemoveEventPlayer("player-1", owned, { userId: null })).toBe(false);
+  it("lets a non-owner remove an anonymous player (server skips the check)", () => {
+    expect(canRemoveEventPlayer("player-1", owned, { userId: null })).toBe(true);
+  });
+
+  it("does not let a non-owner remove another account-linked player", () => {
+    expect(canRemoveEventPlayer("player-1", owned, { userId: "someone-else" })).toBe(false);
   });
 });

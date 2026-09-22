@@ -61,7 +61,8 @@ export function deriveEventPermissions(
 /**
  * Whether the viewer may remove a specific player from the list. Mirrors
  * `DELETE /api/events/:id/players`: Owner/Admin may remove anyone; a player may
- * remove only themselves.
+ * remove only themselves; and an anonymous player (no linked account) is
+ * unprotected — the server skips the authorization check for them entirely.
  */
 export function canRemoveEventPlayer(
   viewerUserId: string | null | undefined,
@@ -70,5 +71,7 @@ export function canRemoveEventPlayer(
 ): boolean {
   const { isOwner, isAdmin } = deriveEventPermissions(viewerUserId, event);
   if (isOwner || isAdmin) return true;
-  return !!viewerUserId && player.userId === viewerUserId;
+  if (viewerUserId && player.userId === viewerUserId) return true;
+  if (!player.userId) return true;
+  return false;
 }
