@@ -18,6 +18,7 @@
 import { prisma } from "./db.server";
 import { endOfExpiryMonth } from "./monthly";
 import { createLogger } from "./logger.server";
+import { postLedgerEntry } from "./ledger.server";
 
 const log = createLogger("creditExpiry");
 
@@ -80,28 +81,19 @@ export async function expireOldCredits(
       if (netUnits <= 0) continue;
 
       // 4. Idempotently write the credit_expired row.
-      const idempotencyKey = `expire:${event.id}:${m.userId}:${m.id}`;
-      try {
-        await prisma.walletTransaction.create({
-          data: {
-            eventId: event.id,
-            userId: m.userId,
-            amountCents: m.amountCents,
-            currency: m.currency,
-            direction: "credit",
-            gameUnits: -1,
-            reason: "credit_expired",
-            eventInstanceId: m.eventInstanceId,
-            idempotencyKey,
-          },
-        });
-      } catch (err: unknown) {
-        // Unique constraint on idempotencyKey — already expired by a prior run.
-        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
-          continue;
-        }
-        throw err;
-      }
+      const result = await postLedgerEntry({
+        eventId: event.id,
+        userId: m.userId,
+        amountCents: m.amountCents,
+        currency: m.currency,
+        direction: "credit",
+        gameUnits: -1,
+        reason: "credit_expired",
+        eventInstanceId: m.eventInstanceId,
+        idempotencyKey: `expire:${event.id}:${m.userId}:${m.id}`,
+      });
+      // Already expired by a prior run — do not touch the Extras Pot again.
+      if (result.deduped) continue;
 
       // 5. Increment the Extras Pot in a transaction with the wallet write
       // would be ideal, but we already wrote the row. Use a follow-up update
