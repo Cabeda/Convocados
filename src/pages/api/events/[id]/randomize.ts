@@ -9,6 +9,7 @@ import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 import { applyFormationLayout } from "../../../../lib/teams";
+import { syncGamePayments } from "../../../../lib/settlement.server";
 
 const log = createLogger("randomize");
 
@@ -97,6 +98,11 @@ export const POST: APIRoute = async ({ params, url, request }) => {
 
 
   logEvent(eventId, "teams_randomized", null, null, { balanced, playerCount: players.length }).catch(() => {});
+
+  // Keep payment rows aligned with the new lineup: only lineup players owe.
+  if (event.currentGameId) {
+    await syncGamePayments(event.currentGameId, eventId);
+  }
 
   return Response.json({ ok: true, balanced });
 };
