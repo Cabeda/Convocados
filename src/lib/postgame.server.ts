@@ -6,6 +6,7 @@ import { isSettledGameParticipant } from "./participants.server";
 import { isHistoryParticipant } from "./snapshotParticipants";
 import { getWrapUpGameSettlement } from "./settlement.server";
 import { getViewerGameRank, type ViewerGameRank } from "./seasonRank.server";
+import { summarizePayments } from "./paymentSummary";
 
 /**
  * Shared post-game wrap-up status computation.
@@ -112,21 +113,13 @@ export async function computePostGameStatus(
     hasCost = true;
     try {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
-      if (snapshot.length > 0) {
-        allPaid = snapshot.every(
-          (p) => p.status === "paid",
-        );
-      }
+      allPaid = summarizePayments(snapshot).allPaid;
     } catch { /* ignore parse errors */ }
   } else if (eventCost && eventCost.totalAmount > 0 && !hasResetOccurred) {
     // No snapshot AND game hasn't reset yet — live payments are the past game's
     pastGameSource = "live";
     hasCost = true;
-    if (eventCost.payments.length > 0) {
-      allPaid = eventCost.payments.every(
-        (p) => p.status === "paid",
-      );
-    }
+    allPaid = summarizePayments(eventCost.payments).allPaid;
   } else {
     // Either: no cost at all, OR history exists post-reset with no snapshot
     // (past game had no cost). Live payments belong to the NEW game — don't use.
@@ -307,21 +300,14 @@ export async function computePostGameStatus(
   // (Computed before the MVP block; kept here as the canonical definition.)
 
   // Compute aggregate payment info for social proof
-  let paidAggregate = { paidCount: 0, totalCount: 0 };
-  if (paymentsSnapshot && paymentsSnapshot.length > 0) {
-    paidAggregate = {
-      paidCount: paymentsSnapshot.filter((p) => p.status === "paid").length,
-      totalCount: paymentsSnapshot.length,
-    };
-  }
+  const snapshotAggregate = summarizePayments(paymentsSnapshot ?? []);
+  let paidAggregate = { paidCount: snapshotAggregate.paidCount, totalCount: snapshotAggregate.totalCount };
 
   if (wrapUpSettlement) {
     hasCost = true;
-    allPaid = wrapUpSettlement.rows.length === 0 || wrapUpSettlement.rows.every((r) => r.status === "paid");
-    paidAggregate = {
-      paidCount: wrapUpSettlement.rows.filter((r) => r.status === "paid").length,
-      totalCount: wrapUpSettlement.rows.length,
-    };
+    const wrapUpAggregate = summarizePayments(wrapUpSettlement.rows);
+    allPaid = wrapUpAggregate.allPaid;
+    paidAggregate = { paidCount: wrapUpAggregate.paidCount, totalCount: wrapUpAggregate.totalCount };
     // Recompute the wrap-up completion gate — allPaid may have flipped.
     allComplete = hasScore && allPaid && myMvpComplete;
   }
