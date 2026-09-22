@@ -579,6 +579,28 @@ export const openApiSpec = {
         responses: { "200": { description: "MVP results" } },
       },
     },
+    "/api/events/{id}/history/{historyId}/match-events": {
+      get: {
+        summary: "List a game's match events and the score derived from its goals",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Match event timeline and derived score" } },
+      },
+      post: {
+        summary: "Log a match event (goal or assist) on a settled game",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "201": { description: "Match event created" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/match-stats": {
+      get: {
+        summary: "Get the per-player scorer table for an event, replayed from its match events",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Top scorers" }, "404": { description: "Event not found" } },
+      },
+    },
     "/api/users/{id}/stats": {
       get: {
         summary: "Get a user's game statistics (respects profile visibility)",
