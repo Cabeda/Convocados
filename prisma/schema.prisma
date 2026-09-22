@@ -721,16 +721,15 @@ model WalletTransaction {
   // Game Units (only for missed_game_credit, credit_redeemed, credit_expired)
   gameUnits       Int      @default(0)
   // Categorisation
-  reason          String   // "per_game_share" | "monthly_fee" | "missed_game_credit"
-                           // | "credit_redeemed" | "credit_expired" | "extras_declare"
-                           // | "payment_received" | "payment_self_reported"
+  reason          String   // see src/lib/wallet.ts LEDGER_REASONS
   statusAfter     String?  // for payment_* rows: "sent" | "paid"
   // References
-  eventInstanceId String?  // Event.id of the instance this row is about
+  eventInstanceId String?  // Game.id of the instance this row is about
   subscriptionId  String?  // MonthlySubscription.id
   extrasId        String?  // ExtrasDeclaration.id
-  // Idempotency / authorship
+  // Idempotency / authorship / external reference
   idempotencyKey  String?  // unique key for system-generated rows (expiry, etc.)
+  externalId      String?  // provider reference (e.g. a Stripe event or charge id)
   markedById      String?  // who recorded this
   note            String?
   createdAt       DateTime @default(now())
@@ -739,6 +738,7 @@ model WalletTransaction {
   @@index([eventId, userId, createdAt])
   @@index([eventId, createdAt])
   @@index([eventInstanceId])
+  @@index([eventId, externalId])
 }
 
 model ExtrasDeclaration {

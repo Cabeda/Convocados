@@ -19,6 +19,7 @@ import { prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { computeAvailableUnits, type WalletTx } from "./wallet";
 import { perPlayerShare, perPlayerShareCents } from "./gameCost";
+import { ledgerKey, postLedgerEntry } from "./ledger.server";
 import {
   activeSubscriptionCoversDate,
   subscriptionWindowFor,
@@ -188,32 +189,28 @@ export async function recordPerGameShare(
   const netPlayerPaymentCents = canRedeem ? 0 : amountCents;
 
   // 4. Write the per_game_share debit (always — this is the gross).
-  const debit = await prisma.walletTransaction.create({
-    data: {
-      eventId,
-      userId: userId ?? (await ensureSystemUserId(eventId, playerName, player?.userId ?? null)),
-      amountCents,
-      currency: eventCost.currency,
-      direction: "debit",
-      gameUnits: 0,
-      reason: "per_game_share",
-      eventInstanceId: gameId,
-    },
+  const ledgerUserId = userId ?? (await ensureSystemUserId(eventId, playerName, player?.userId ?? null));
+  await postLedgerEntry({
+    eventId,
+    userId: ledgerUserId,
+    amountCents,
+    currency: eventCost.currency,
+    direction: "debit",
+    reason: "per_game_share",
+    eventInstanceId: gameId,
   });
 
   // 5. If credit was redeemed, write the credit_redeemed row.
   if (canRedeem) {
-    await prisma.walletTransaction.create({
-      data: {
-        eventId,
-        userId: debit.userId,
-        amountCents: 0,
-        currency: eventCost.currency,
-        direction: "credit",
-        gameUnits: -1,
-        reason: "credit_redeemed",
-        eventInstanceId: gameId,
-      },
+    await postLedgerEntry({
+      eventId,
+      userId: ledgerUserId,
+      amountCents: 0,
+      currency: eventCost.currency,
+      direction: "credit",
+      gameUnits: -1,
+      reason: "credit_redeemed",
+      eventInstanceId: gameId,
     });
   }
 
@@ -288,18 +285,16 @@ export async function recordSelfReported(args: RecordSelfReportedArgs): Promise<
 
   const { gameId, shareCents } = await resolveShareInfo(eventId, eventCost.totalAmount);
 
-  await prisma.walletTransaction.create({
-    data: {
-      eventId,
-      userId,
-      amountCents: shareCents,
-      currency: eventCost.currency,
-      direction: "credit",
-      gameUnits: 0,
-      reason: "payment_self_reported",
-      statusAfter: "sent",
-      eventInstanceId: gameId,
-    },
+  await postLedgerEntry({
+    eventId,
+    userId,
+    amountCents: shareCents,
+    currency: eventCost.currency,
+    direction: "credit",
+    reason: "payment_self_reported",
+    statusAfter: "sent",
+    eventInstanceId: gameId,
+    idempotencyKey: ledgerKey("selfreported", eventId, userId, gameId),
   });
 }
 
@@ -312,6 +307,8 @@ export interface RecordReceivedArgs {
   amount?: number;
   /** Optional game id the money movement applies to (eventInstanceId). Defaults to current game. */
   gameId?: string;
+  /** Optional provider reference (e.g. a Stripe event/charge id) for reconciliation. */
+  externalId?: string;
 }
 
 export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
@@ -325,19 +322,18 @@ export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
   const gameId = args.gameId ?? resolvedGameId;
   const shareCents = args.amount !== undefined ? Math.round(args.amount * 100) : derivedShareCents;
 
-  await prisma.walletTransaction.create({
-    data: {
-      eventId,
-      userId,
-      amountCents: shareCents,
-      currency: eventCost.currency,
-      direction: "credit",
-      gameUnits: 0,
-      reason: "payment_received",
-      statusAfter: "paid",
-      eventInstanceId: gameId,
-      markedById,
-    },
+  await postLedgerEntry({
+    eventId,
+    userId,
+    amountCents: shareCents,
+    currency: eventCost.currency,
+    direction: "credit",
+    reason: "payment_received",
+    statusAfter: "paid",
+    eventInstanceId: gameId,
+    markedById,
+    externalId: args.externalId,
+    idempotencyKey: ledgerKey("received", eventId, userId, gameId),
   });
 }
 
