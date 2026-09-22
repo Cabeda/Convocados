@@ -20,7 +20,7 @@ import { getActiveRosterState } from "./roster.server";
 import { computeAvailableUnits, type WalletTx } from "./wallet";
 import { perPlayerShare, perPlayerShareCents } from "./gameCost";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
-import { ensureSystemUserId } from "./payerIdentity.server";
+import { ensureSystemUserId, resolvePayerUserId } from "./payerIdentity.server";
 import {
   activeSubscriptionCoversDate,
   subscriptionWindowFor,
@@ -287,8 +287,9 @@ export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
   const eventCost = await findEventCost(eventId);
   if (!eventCost) throw new Error(`No EventCost for event ${eventId}`);
 
-  const player = await findPlayerByName(eventId, playerName);
-  const userId = player?.userId ?? (await ensureSystemUserId(eventId, playerName));
+  // The credit must land on the same payer the charge was posted for: the
+  // linked EventPlayer/Player account, else the synthetic system user.
+  const userId = await resolvePayerUserId(eventId, playerName);
   const { gameId: resolvedGameId, shareCents: derivedShareCents } = await resolveShareInfo(eventId, eventCost.totalAmount);
   const gameId = args.gameId ?? resolvedGameId;
   const shareCents = args.amount !== undefined ? Math.round(args.amount * 100) : derivedShareCents;
