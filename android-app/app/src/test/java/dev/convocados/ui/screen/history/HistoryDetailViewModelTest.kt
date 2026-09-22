@@ -2,6 +2,7 @@ package dev.convocados.ui.screen.history
 
 import app.cash.turbine.test
 import dev.convocados.data.api.*
+import dev.convocados.ui.components.MatchEventDraft
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -60,5 +61,62 @@ class HistoryDetailViewModelTest {
         coVerify { api.updateScore("e1", "h1", 5, 3) }
         assertEquals(5, vm.history.value?.scoreOne)
         assertEquals(3, vm.history.value?.scoreTwo)
+    }
+
+    @Test
+    fun `loadMatchEvents maps the timeline and marks it loaded`() = runTest {
+        coEvery { api.fetchMatchEvents("e1", "h1") } returns MatchEventsResponse(
+            events = listOf(
+                MatchEvent(id = "m1", type = "goal", team = "one", scorerName = "Alice", assistName = "Bob", minute = 12),
+            ),
+        )
+
+        val vm = HistoryDetailViewModel(api)
+        vm.loadMatchEvents("e1", "h1")
+        advanceUntilIdle()
+
+        assertEquals(1, vm.matchEvents.value.size)
+        assertEquals("Alice", vm.matchEvents.value[0].scorerName)
+        assertEquals("Bob", vm.matchEvents.value[0].assistName)
+        assertEquals(12, vm.matchEvents.value[0].minute)
+        assertTrue(vm.matchEventsLoaded.value)
+    }
+
+    @Test
+    fun `addMatchEvent posts the draft and refreshes the timeline`() = runTest {
+        val draft = MatchEventDraft(
+            scorerEventPlayerId = "ep1",
+            scorerName = "Alice",
+            team = "one",
+            minute = 20,
+            ownGoal = false,
+            penalty = true,
+        )
+        coEvery { api.addMatchEvent("e1", "h1", any()) } returns MatchEventResponse(ok = true)
+        coEvery { api.fetchMatchEvents("e1", "h1") } returns MatchEventsResponse(
+            events = listOf(MatchEvent(id = "m1", scorerName = "Alice", penalty = true)),
+        )
+
+        val vm = HistoryDetailViewModel(api)
+        vm.addMatchEvent("e1", "h1", draft)
+        advanceUntilIdle()
+
+        coVerify { api.addMatchEvent("e1", "h1", any()) }
+        assertEquals(1, vm.matchEvents.value.size)
+        assertFalse(vm.matchEventsSaving.value)
+    }
+
+    @Test
+    fun `addMatchEvent surfaces the server error`() = runTest {
+        val draft = MatchEventDraft("ep1", "Alice", "one", null, false, false)
+        coEvery { api.addMatchEvent("e1", "h1", any()) } throws
+            ApiException(400, """{"error":"Match events can only be logged on played games."}""")
+
+        val vm = HistoryDetailViewModel(api)
+        vm.addMatchEvent("e1", "h1", draft)
+        advanceUntilIdle()
+
+        assertEquals("Match events can only be logged on played games.", vm.error.value)
+        assertFalse(vm.matchEventsSaving.value)
     }
 }

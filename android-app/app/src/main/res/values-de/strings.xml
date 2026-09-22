@@ -396,6 +396,7 @@
     <string name="rank_explainer_link_desc">Öffnet, wie dein Saison-Rang berechnet wurde</string>
     <!-- Match events: post-game goals & assists -->
     <string name="match_events_title">Tore &amp; Vorlagen</string>
+    <string name="match_events_add_details">Tor-Details hinzufügen</string>
     <string name="match_events_add_goal">Tor hinzufügen</string>
     <string name="match_events_no_events">Noch keine Tore erfasst.</string>
     <string name="match_events_goal_by">Tor — %1$s</string>
@@ -403,6 +404,7 @@
     <string name="match_events_own_goal">Eigentor</string>
     <string name="match_events_penalty">Elfmeter</string>
     <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_minute_label">Minute (optional)</string>
     <string name="match_events_select_scorer">Wer hat getroffen?</string>
     <string name="match_events_select_team">Welches Team?</string>
     <string name="match_events_team_one">Team 1</string>

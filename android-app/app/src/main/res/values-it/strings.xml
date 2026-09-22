@@ -396,6 +396,7 @@
     <string name="rank_explainer_link_desc">Apre come è stata calcolata la tua Classifica della Stagione</string>
     <!-- Match events: post-game goals & assists -->
     <string name="match_events_title">Gol e assist</string>
+    <string name="match_events_add_details">Aggiungi dettagli dei gol</string>
     <string name="match_events_add_goal">Aggiungi gol</string>
     <string name="match_events_no_events">Nessun gol registrato finora.</string>
     <string name="match_events_goal_by">Gol — %1$s</string>
@@ -403,6 +404,7 @@
     <string name="match_events_own_goal">Autogol</string>
     <string name="match_events_penalty">Rigore</string>
     <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_minute_label">Minuto (facoltativo)</string>
     <string name="match_events_select_scorer">Chi ha segnato?</string>
     <string name="match_events_select_team">Quale squadra?</string>
     <string name="match_events_team_one">Squadra 1</string>

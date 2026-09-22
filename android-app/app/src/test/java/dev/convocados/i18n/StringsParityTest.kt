@@ -32,6 +32,8 @@ class StringsParityTest {
         "match_events_own_goal",
         "match_events_penalty",
         "match_events_minute",
+        "match_events_minute_label",
+        "match_events_add_details",
         "match_events_select_scorer",
         "match_events_select_team",
         "match_events_team_one",

@@ -396,6 +396,7 @@
     <string name="rank_explainer_link_desc">Ouvre le calcul de ton Classement de la Saison</string>
     <!-- Match events: post-game goals & assists -->
     <string name="match_events_title">Buts et passes décisives</string>
+    <string name="match_events_add_details">Ajouter les détails des buts</string>
     <string name="match_events_add_goal">Ajouter un but</string>
     <string name="match_events_no_events">Aucun but enregistré pour l\'instant.</string>
     <string name="match_events_goal_by">But — %1$s</string>
@@ -403,6 +404,7 @@
     <string name="match_events_own_goal">Csc</string>
     <string name="match_events_penalty">Penalty</string>
     <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_minute_label">Minute (facultatif)</string>
     <string name="match_events_select_scorer">Qui a marqué ?</string>
     <string name="match_events_select_team">Quelle équipe ?</string>
     <string name="match_events_team_one">Équipe 1</string>
