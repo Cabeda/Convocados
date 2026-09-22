@@ -462,4 +462,25 @@ describe("processJob", () => {
     const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
     expect(updated!.processedAt).not.toBeNull();
   });
+
+  it("backfill_merged_identity reconciles stale payment names even without a split identity", async () => {
+    const user = await seedUser("user-pay-drift");
+    const event = await seedEvent(user.id, new Date(), "evt-pay-drift", {});
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Cabeda", userId: user.id } });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(), status: "played" },
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Old Name", amount: 5, status: "pending" },
+    });
+
+    const job = await prisma.scheduledJob.create({
+      data: { type: "backfill_merged_identity", runAt: new Date(), payload: "{}" },
+    });
+
+    await processJob(job.id);
+
+    const pays = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(pays.map((p) => p.playerName)).toEqual(["Cabeda"]);
+  });
 });

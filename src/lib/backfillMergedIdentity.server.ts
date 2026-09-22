@@ -72,3 +72,68 @@ export async function collapseSplitIdentities(db: Db, identities: SplitIdentity[
   }
   return processed;
 }
+
+/**
+ * Repair denormalized payment names that drifted from the linked player.
+ *
+ * `GamePayment.playerName` and the frozen `GameHistory.paymentsSnapshot` JSON
+ * both duplicate the player name. A merge that repointed `userId` (or an early
+ * collapse that only rewrote team snapshots) leaves them stale, so the history
+ * and balance views still show the old name. `GamePayment` links to
+ * `EventPlayer`, so the orphaned names can be recovered exactly.
+ *
+ * Returns the number of GamePayment rows corrected.
+ */
+export async function reconcilePaymentNames(db: Db): Promise<number> {
+  const rows = await db.gamePayment.findMany({
+    select: {
+      id: true,
+      playerName: true,
+      game: { select: { eventId: true } },
+      eventPlayer: { select: { name: true } },
+    },
+  });
+
+  const fixesByEvent = new Map<string, Map<string, string>>();
+  let corrected = 0;
+  for (const row of rows) {
+    const canonical = row.eventPlayer.name;
+    if (row.playerName === canonical) continue;
+    await db.gamePayment.update({ where: { id: row.id }, data: { playerName: canonical } });
+    corrected++;
+    let map = fixesByEvent.get(row.game.eventId);
+    if (!map) {
+      map = new Map();
+      fixesByEvent.set(row.game.eventId, map);
+    }
+    map.set(row.playerName, canonical);
+  }
+
+  for (const [eventId, renames] of fixesByEvent) {
+    const histories = await db.gameHistory.findMany({
+      where: { eventId, paymentsSnapshot: { not: null } },
+      select: { id: true, paymentsSnapshot: true },
+    });
+    for (const h of histories) {
+      if (!h.paymentsSnapshot) continue;
+      try {
+        const entries = JSON.parse(h.paymentsSnapshot) as { playerName: string }[];
+        let changed = false;
+        for (const e of entries) {
+          const to = renames.get(e.playerName);
+          if (to) {
+            e.playerName = to;
+            changed = true;
+          }
+        }
+        if (changed) {
+          await db.gameHistory.update({ where: { id: h.id }, data: { paymentsSnapshot: JSON.stringify(entries) } });
+        }
+      } catch {
+        // Malformed snapshot — leave it untouched.
+      }
+    }
+  }
+
+  return corrected;
+}

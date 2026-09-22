@@ -3,7 +3,7 @@ import { createLogger } from "./logger.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { sendReminder } from "./email.server";
 import { getNotificationPrefs, wantsEmailReminder } from "./notificationPrefs.server";
-import { findSplitIdentities, collapseSplitIdentities } from "./backfillMergedIdentity.server";
+import { findSplitIdentities, collapseSplitIdentities, reconcilePaymentNames } from "./backfillMergedIdentity.server";
 import { recalculateAllRatings } from "./elo.server";
 
 const log = createLogger("scheduler");
@@ -245,14 +245,17 @@ async function _processPostGameJob(job: { id: string; eventId: string | null }) 
  */
 async function _processBackfillMergedIdentityJob(): Promise<void> {
   const identities = await findSplitIdentities(prisma);
-  if (identities.length === 0) {
-    log.info("backfill_merged_identity: no split player identities found");
-    return;
+  const eventIds = new Set<string>();
+  if (identities.length > 0) {
+    await collapseSplitIdentities(prisma, identities);
+    for (const i of identities) eventIds.add(i.eventId);
   }
 
-  await collapseSplitIdentities(prisma, identities);
+  // Payment names are denormalized on GamePayment + the frozen paymentsSnapshot
+  // JSON, so they can still be stale even when the identity is already
+  // collapsed (an earlier run rewrote team snapshots only).
+  const correctedPayments = await reconcilePaymentNames(prisma);
 
-  const eventIds = [...new Set(identities.map((i) => i.eventId))];
   let recalculated = 0;
   for (const eventId of eventIds) {
     const event = await prisma.event.findUnique({ where: { id: eventId }, select: { eloEnabled: true } });
@@ -263,7 +266,7 @@ async function _processBackfillMergedIdentityJob(): Promise<void> {
   }
 
   log.info(
-    { groups: identities.length, events: eventIds.length, recalculated },
-    "backfill_merged_identity: collapsed split player identities",
+    { groups: identities.length, events: eventIds.size, correctedPayments, recalculated },
+    "backfill_merged_identity: done",
   );
 }
