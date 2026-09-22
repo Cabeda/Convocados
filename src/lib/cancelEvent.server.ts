@@ -4,6 +4,7 @@ import { fireWebhooks } from "./webhook.server";
 import { autoPriorityEnroll } from "./priority.server";
 import { cancelEventJobs, scheduleEventReminders } from "./scheduler.server";
 import { logEvent } from "./eventLog.server";
+import { postLedgerEntry } from "./ledger.server";
 
 export interface CancelActor {
   id: string | null;
@@ -65,17 +66,15 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
     select: { userId: true, amountCents: true, currency: true },
   });
   for (const d of chargeDebits) {
-    await prisma.walletTransaction.create({
-      data: {
-        eventId: event.id,
-        userId: d.userId,
-        amountCents: d.amountCents,
-        currency: d.currency,
-        direction: "credit",
-        gameUnits: 0,
-        reason: "game_cancelled_credit",
-        eventInstanceId: game.id,
-      },
+    await postLedgerEntry({
+      eventId: event.id,
+      userId: d.userId,
+      amountCents: d.amountCents,
+      currency: d.currency,
+      direction: "credit",
+      reason: "game_cancelled_credit",
+      eventInstanceId: game.id,
+      idempotencyKey: `gamecancelled:${event.id}:${d.userId}:${game.id}`,
     });
   }
 

@@ -3,6 +3,7 @@ import { prisma } from "../../../../../lib/db.server";
 import { getSession } from "../../../../../lib/auth.helpers.server";
 import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
+import { postLedgerEntry } from "../../../../../lib/ledger.server";
 
 /**
  * GET /api/events/[id]/settle/extras — public
@@ -90,18 +91,16 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
 
   // Audit row in the wallet ledger for the organizer.
-  await prisma.walletTransaction.create({
-    data: {
-      eventId,
-      userId: session.user.id,
-      amountCents,
-      currency: event.eventCost.currency,
-      direction: "debit",
-      gameUnits: 0,
-      reason: "extras_declare",
-      extrasId: declaration.id,
-      markedById: session.user.id,
-    },
+  await postLedgerEntry({
+    eventId,
+    userId: session.user.id,
+    amountCents,
+    currency: event.eventCost.currency,
+    direction: "debit",
+    reason: "extras_declare",
+    extrasId: declaration.id,
+    markedById: session.user.id,
+    idempotencyKey: `extras:${eventId}:${declaration.id}`,
   });
 
   return Response.json({

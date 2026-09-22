@@ -67,4 +67,44 @@ class ModelsTest {
         val status = json.decodeFromString<PostGameStatus>("""{"gameEnded":true}""")
         assertNull(status.seasonRank)
     }
+
+    @Test
+    fun `decodes rankStanding crew pointsDelta and result-card fields`() {
+        val status = json.decodeFromString<PostGameStatus>(
+            """
+            {"scoreOne":3,"scoreTwo":1,"teamOneName":"Demo Team","teamTwoName":"Rivals",
+             "viewerPaymentSettled":true,
+             "rankStanding":{"seasonId":"s1","seasonName":"Spring","rank":1168,"tier":4,
+               "provisional":false,"gamesThisSeason":5,"edges":[0,900,1300],
+               "crew":{"crewId":"c1","name":"Vermelhos","place":1,"placeCount":2,
+                       "points":10,"pointsDelta":3}}}
+            """.trimIndent()
+        )
+        assertEquals(3, status.scoreOne)
+        assertEquals(1, status.scoreTwo)
+        assertEquals("Demo Team", status.teamOneName)
+        assertEquals("Rivals", status.teamTwoName)
+        assertEquals(true, status.viewerPaymentSettled)
+        val standing = status.rankStanding!!
+        assertEquals("s1", standing.seasonId)
+        assertEquals(1168.0, standing.rank, 0.0)
+        assertEquals(4, standing.tier)
+        val crew = standing.crew!!
+        assertEquals("Vermelhos", crew.name)
+        assertEquals(1, crew.place)
+        assertEquals(2, crew.placeCount)
+        assertEquals(10.0, crew.points, 0.0)
+        assertEquals(3.0, crew.pointsDelta!!, 0.0)
+    }
+
+    @Test
+    fun `defaults rankStanding viewerPaymentSettled and score fields when absent`() {
+        val status = json.decodeFromString<PostGameStatus>("""{"gameEnded":true}""")
+        assertNull(status.rankStanding)
+        assertEquals(false, status.viewerPaymentSettled)
+        assertNull(status.scoreOne)
+        assertNull(status.scoreTwo)
+        assertEquals("", status.teamOneName)
+        assertEquals("", status.teamTwoName)
+    }
 }

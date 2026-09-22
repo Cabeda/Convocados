@@ -20,6 +20,7 @@ import {
   type WalletTx,
 } from "./wallet";
 import { summarizePayments } from "./paymentSummary";
+import { resolveLinkedUserId } from "./payerIdentity.server";
 
 export interface PlayerBalance {
   playerName: string;
@@ -38,19 +39,7 @@ export interface BalanceSummary {
 
 /** Resolve a playerName to a userId for ledger queries. Returns null if unlinked. */
 async function resolveUserId(eventId: string, playerName: string): Promise<string | null> {
-  // Try EventPlayer first (ADR 0016 model)
-  const ep = await prisma.eventPlayer.findUnique({
-    where: { eventId_name: { eventId, name: playerName } },
-    select: { userId: true },
-  });
-  if (ep?.userId) return ep.userId;
-
-  // Fallback to legacy Player model
-  const player = await prisma.player.findFirst({
-    where: { eventId, name: playerName },
-    select: { userId: true },
-  });
-  return player?.userId ?? null;
+  return resolveLinkedUserId(eventId, playerName);
 }
 
 /** Fetch ledger rows for a (eventId, userId) pair, projected to WalletTx shape. */

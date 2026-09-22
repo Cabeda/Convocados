@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { getLedgerForUser } from "../../../../lib/payments.server";
-import { computeAvailableUnits, computeAvailableUnitsDetailed } from "../../../../lib/wallet";
+import { computeAvailableUnits, computeAvailableUnitsDetailed, type WalletTxReason } from "../../../../lib/wallet";
 import { subscriptionWindowFor } from "../../../../lib/monthly";
 import {
   getOutstandingBalance,
@@ -90,7 +90,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       const detail = computeAvailableUnitsDetailed(
         txs.map((t) => ({
           direction: t.direction as "debit" | "credit",
-          reason: t.reason as "per_game_share" | "monthly_fee" | "missed_game_credit" | "credit_redeemed" | "credit_expired" | "extras_declare" | "payment_received" | "payment_self_reported",
+          reason: t.reason as WalletTxReason,
           gameUnits: t.gameUnits,
           amountCents: t.amountCents,
           createdAt: t.createdAt,
@@ -106,7 +106,7 @@ export const GET: APIRoute = async ({ params, request }) => {
         availableGameUnits: computeAvailableUnits(
           txs.map((t) => ({
             direction: t.direction as "debit" | "credit",
-            reason: t.reason as "per_game_share" | "monthly_fee" | "missed_game_credit" | "credit_redeemed" | "credit_expired" | "extras_declare" | "payment_received" | "payment_self_reported",
+            reason: t.reason as WalletTxReason,
             gameUnits: t.gameUnits,
             amountCents: t.amountCents,
             createdAt: t.createdAt,

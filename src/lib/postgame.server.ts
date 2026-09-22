@@ -5,7 +5,7 @@ import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
 import { isSettledGameParticipant } from "./participants.server";
 import { isHistoryParticipant } from "./snapshotParticipants";
 import { getWrapUpGameSettlement } from "./settlement.server";
-import { getViewerGameRank, type ViewerGameRank } from "./seasonRank.server";
+import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
 import { summarizePayments } from "./paymentSummary";
 
 /**
@@ -43,6 +43,18 @@ export interface PostGameStatusPayload {
   gameConfig: { gameId: string; mode: "tracked" | "untracked"; payerName: string | null; payerIsPlayer: boolean } | null;
   /** The viewer's Season Rank movement from this Game, when it counted. */
   seasonRank: ViewerGameRank | null;
+  /**
+   * The viewer's current Rank Standing in the Season covering this Game —
+   * present even before the score is entered, so the banner can show the Rank
+   * (and invite the score) instead of an empty section.
+   */
+  rankStanding: ViewerRankStanding | null;
+  /**
+   * True when the viewer is a debtor whose own share is already settled and who
+   * is neither the receiver nor a settlement admin — the payment task is then
+   * hidden for them, while the receiver/admin keep it open until everyone paid.
+   */
+  viewerPaymentSettled: boolean;
 }
 
 export async function computePostGameStatus(
@@ -77,6 +89,7 @@ export async function computePostGameStatus(
       scoreOne: null, scoreTwo: null,
       teamOneName: event.teamOneName, teamTwoName: event.teamTwoName,
       gamePayments: null, gameConfig: null, seasonRank: null,
+      rankStanding: null, viewerPaymentSettled: false,
     };
   }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
@@ -276,10 +289,15 @@ export async function computePostGameStatus(
   // Owner/Admin always count (settlement role: confirm payments, set score).
   // Otherwise use the shared settled-game participant check.
   let isParticipant = false;
+  // Settlement admins (owner/admin) stay responsible for the payment task even
+  // after their own share shows paid — the card must stay open until everyone
+  // has paid, so their own settlement never hides it.
+  let isSettlementAdmin = false;
   if (session?.user) {
     const ownership = await checkOwnership(request, event.ownerId, session, event.id);
     if (ownership?.isOwner || ownership?.isAdmin) {
       isParticipant = true;
+      isSettlementAdmin = true;
     } else {
       isParticipant = await isSettledGameParticipant({
         sessionUser: session.user,
@@ -328,6 +346,34 @@ export async function computePostGameStatus(
     );
   }
 
+  // The viewer's current Rank Standing. Unlike the movement above it does not
+  // need a score, so the card can show where the player stands — and say that
+  // this game is what moves it — while the score task is still pending.
+  let rankStanding: ViewerRankStanding | null = null;
+  if (session?.user && isPlayer && latestHistory) {
+    rankStanding = await getViewerRankStanding(
+      event.id,
+      {
+        dateTime: latestHistory.dateTime,
+        isFriendly: latestHistory.isFriendly,
+        teamsSnapshot: latestHistory.teamsSnapshot,
+      },
+      session.user.name,
+    );
+  }
+
+  // Viewer-scoped payment closure: a debtor who already paid their own share
+  // has nothing left to act on. The receiver of the money and the settlement
+  // admins keep the task open until every share is in.
+  let viewerPaymentSettled = false;
+  if (session?.user && !isSettlementAdmin) {
+    const viewerName = session.user.name;
+    const rows = wrapUpSettlement?.rows ?? [];
+    const mine = rows.find((r) => r.name === viewerName);
+    const isReceiver = (wrapUpSettlement?.payerName ?? null) === viewerName;
+    viewerPaymentSettled = !isReceiver && !!mine && !mine.isPayer && mine.status === "paid";
+  }
+
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
@@ -343,5 +389,7 @@ export async function computePostGameStatus(
       ? { gameId: wrapUpSettlement.gameId, mode: wrapUpSettlement.mode, payerName: wrapUpSettlement.payerName, payerIsPlayer: wrapUpSettlement.payerIsPlayer }
       : null,
     seasonRank,
+    rankStanding,
+    viewerPaymentSettled,
   };
 }
