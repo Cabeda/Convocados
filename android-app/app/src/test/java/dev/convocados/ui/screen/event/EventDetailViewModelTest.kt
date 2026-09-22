@@ -711,6 +711,8 @@ class EventDetailViewModelTest {
             assertEquals(false, state.postGameSaving)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
     @Test
     fun `togglePostGameShare settles via the settlement API, not the snapshot`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
