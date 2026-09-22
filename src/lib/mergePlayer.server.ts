@@ -71,6 +71,35 @@ export async function mergePlayerIdentity(
     data: { name: targetName },
   });
 
+  // 2b. Denormalized payment names (GamePayment rows + the frozen
+  // paymentsSnapshot JSON) — mirrors what purge-player scrubs.
+  await tx.gamePayment.updateMany({
+    where: { playerName: sourceName, game: { eventId } },
+    data: { playerName: targetName },
+  });
+  const payHistories = await tx.gameHistory.findMany({
+    where: { eventId, paymentsSnapshot: { contains: sourceName } },
+    select: { id: true, paymentsSnapshot: true },
+  });
+  for (const h of payHistories) {
+    if (!h.paymentsSnapshot) continue;
+    try {
+      const entries = JSON.parse(h.paymentsSnapshot) as { playerName: string }[];
+      let changed = false;
+      for (const e of entries) {
+        if (e.playerName === sourceName) {
+          e.playerName = targetName;
+          changed = true;
+        }
+      }
+      if (changed) {
+        await tx.gameHistory.update({ where: { id: h.id }, data: { paymentsSnapshot: JSON.stringify(entries) } });
+      }
+    } catch {
+      // Malformed snapshot — leave it untouched.
+    }
+  }
+
   // 3. Drop source legacy rows; ensure the target rating carries the user id.
   await tx.playerRating.deleteMany({ where: { eventId, name: sourceName } });
   await tx.player.deleteMany({ where: { eventId, name: sourceName } });
