@@ -64,6 +64,69 @@ export async function activeParticipants(gameId: string) {
   });
 }
 
+/** Minimal client shape the sync routine needs — a `prisma` instance or a tx client. */
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
+/** Player names embedded in a `GameHistory.teamsSnapshot` JSON blob. */
+export function lineupNamesFromSnapshot(snapshot: string | null): Set<string> {
+  const names = new Set<string>();
+  if (!snapshot) return names;
+  try {
+    const teams = JSON.parse(snapshot) as Array<{ players?: Array<{ name?: string }> }>;
+    for (const team of teams) {
+      for (const player of team.players ?? []) {
+        if (player?.name) names.add(player.name);
+      }
+    }
+  } catch {
+    /* malformed snapshot — treat as no lineup */
+  }
+  return names;
+}
+
+/**
+ * The players who actually formed each game's lineup — the authoritative "who
+ * played" signal for payments (bench players never owe).
+ *
+ * - The event's current game reads its live `teamResults` (its lineup has not
+ *   been snapshotted yet).
+ * - Past games read the frozen `GameHistory.teamsSnapshot` for their dateTime.
+ *
+ * A game with no resolvable lineup is simply absent from the map; callers fall
+ * back to the ordered starters (order < maxPlayers), matching team generation.
+ */
+export async function resolveGameLineups(
+  db: DbClient,
+  event: { id: string; currentGameId: string | null },
+  games: Array<{ id: string; dateTime: Date }>,
+): Promise<Map<string, Set<string>>> {
+  const lineups = new Map<string, Set<string>>();
+
+  if (event.currentGameId) {
+    const members = await db.teamMember.findMany({
+      where: { team: { eventId: event.id } },
+      select: { name: true },
+    });
+    if (members.length) lineups.set(event.currentGameId, new Set(members.map((m) => m.name)));
+  }
+
+  const remaining = games.filter((g) => !lineups.has(g.id));
+  if (remaining.length) {
+    const histories = await db.gameHistory.findMany({
+      where: { eventId: event.id, teamsSnapshot: { not: null } },
+      select: { dateTime: true, teamsSnapshot: true },
+    });
+    const byTime = new Map<number, string | null>();
+    for (const h of histories) byTime.set(h.dateTime.getTime(), h.teamsSnapshot);
+    for (const g of remaining) {
+      const names = lineupNamesFromSnapshot(byTime.get(g.dateTime.getTime()) ?? null);
+      if (names.size) lineups.set(g.id, names);
+    }
+  }
+
+  return lineups;
+}
+
 /** Whether a user is an event player (has an EventPlayer linked to the event). */
 export async function isEventParticipant(eventId: string, userId: string): Promise<boolean> {
   const ep = await prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true } });
@@ -92,26 +155,25 @@ export async function isGameParticipant(eventId: string, gameId: string, userId:
   return !!participant || !!payer;
 }
 
-/** Minimal client shape the sync routine needs — a `prisma` instance or a tx client. */
-type DbClient = Prisma.TransactionClient | typeof prisma;
-
 /**
- * Reconcile GamePayment rows for a game against its active participants.
- * - Creates/revives a pending row for each participant at the current share.
- * - Archives rows for participants no longer active (soft, keeps history).
+ * Reconcile GamePayment rows for a game against the players who actually played.
+ * - Charges only lineup players; falls back to the ordered starters before teams exist.
+ * - Creates/revives a pending row for each charged player at the current share.
+ * - Archives rows for players no longer charged (soft, keeps history).
  * - Untracked games get no rows.
  * - Re-applies payer auto-settlement when the payer is an active participant.
  * - Played games: amounts/rows are frozen — only payer auto-settle/revert applies.
  */
 async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: string): Promise<void> {
-  const [effective, game, participants] = await Promise.all([
+  const [effective, game, participants, event] = await Promise.all([
     effectiveGameCost(gameId, eventId),
-    db.game.findUnique({ where: { id: gameId }, select: { payerEventPlayerId: true, status: true } }),
+    db.game.findUnique({ where: { id: gameId }, select: { payerEventPlayerId: true, status: true, dateTime: true } }),
     db.gameParticipant.findMany({
       where: activeParticipantsWhere(gameId),
       include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
       orderBy: { order: "asc" },
     }),
+    db.event.findUnique({ where: { id: eventId }, select: { id: true, currentGameId: true } }),
   ]);
   const { total, mode, maxPlayers } = effective;
   const share = shareFor(total, participants.length, maxPlayers);
@@ -140,7 +202,18 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     return;
   }
 
-  const activeIds = participants.map((p) => p.eventPlayer.id);
+  // Charge only the players who actually formed the lineup; a bench player never
+  // owes. Before teams are drawn there is no lineup yet, so fall back to the
+  // ordered starters (order < maxPlayers) — exactly the slice team generation uses.
+  const lineups = event && game
+    ? await resolveGameLineups(db, event, [{ id: gameId, dateTime: game.dateTime }])
+    : new Map<string, Set<string>>();
+  const lineup = lineups.get(gameId);
+  const charged = lineup
+    ? participants.filter((p) => lineup.has(p.eventPlayer.name))
+    : participants.filter((p) => p.order < maxPlayers);
+
+  const activeIds = charged.map((p) => p.eventPlayer.id);
   await db.gamePayment.updateMany({
     where: { gameId, eventPlayerId: { notIn: activeIds } },
     data: { archivedAt: new Date() },
@@ -150,7 +223,7 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
   // are created/revived at the frozen share but amounts never change, so a
   // post-game roster mutation can't rewrite what the group already settled.
   const amountUpdate = game?.status === "played" ? {} : { amount: share };
-  for (const p of participants) {
+  for (const p of charged) {
     await db.gamePayment.upsert({
       where: { gameId_eventPlayerId: { gameId, eventPlayerId: p.eventPlayer.id } },
       create: {
@@ -440,8 +513,15 @@ export async function getSettlementSummary(
     return p;
   }
 
+  // Only lineup players owe; a bench player's row is never surfaced. Falls back
+  // to the persisted rows when no lineup can be resolved (e.g. teams never drawn).
+  const lineups = await resolveGameLineups(prisma, event, games.map((g) => ({ id: g.id, dateTime: g.dateTime })));
+
   for (const game of games) {
-    const activeRows = game.payments;
+    const lineup = lineups.get(game.id);
+    const activeRows = lineup
+      ? game.payments.filter((r) => lineup.has(r.eventPlayer.name))
+      : game.payments;
     if (activeRows.length === 0) continue; // no tracked payments → nothing to settle
 
     const payerName = game.payerEventPlayer?.name ?? game.payerExternalName;
@@ -594,13 +674,25 @@ export async function getGameSettlement(eventId: string, gameId: string): Promis
     orderBy: { order: "asc" },
   });
 
+  // Only lineup players owe; fall back to the ordered starters before teams exist.
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, currentGameId: true },
+  });
+  const lineup = event
+    ? (await resolveGameLineups(prisma, event, [{ id: game.id, dateTime: game.dateTime }])).get(game.id)
+    : undefined;
+  const charged = lineup
+    ? participants.filter((p) => lineup.has(p.eventPlayer.name))
+    : participants.filter((p) => p.order < maxPlayers);
+
   return {
     gameId: game.id,
     mode: (game.paymentMode as PaymentMode | null) ?? "tracked",
     payerName: game.payerEventPlayer?.name ?? game.payerExternalName,
     payerIsPlayer: !!game.payerEventPlayer,
     hasCost: total > 0,
-    rows: buildSettlementRows(game, participants, total, maxPlayers),
+    rows: buildSettlementRows(game, charged, total, maxPlayers),
   };
 }
 
@@ -638,7 +730,7 @@ export interface WrapUpGameSettlement {
 export async function getWrapUpGameSettlement(eventId: string): Promise<WrapUpGameSettlement | null> {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { currentGameId: true, dateTime: true },
+    select: { id: true, currentGameId: true, dateTime: true },
   });
   if (!event) return null;
 
@@ -669,7 +761,11 @@ export async function getWrapUpGameSettlement(eventId: string): Promise<WrapUpGa
   }
 
   const payerId = game.payerEventPlayerId;
-  const activeRows = game.payments.filter((p) => !p.archivedAt);
+  // Only lineup players owe — a bench player's row (if any) is never shown.
+  const lineup = (await resolveGameLineups(prisma, event, [{ id: game.id, dateTime: game.dateTime }])).get(game.id);
+  const activeRows = game.payments.filter(
+    (p) => !p.archivedAt && (!lineup || lineup.has(p.eventPlayer.name)),
+  );
   if (activeRows.length === 0) return null;
 
   return {

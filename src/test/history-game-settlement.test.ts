@@ -56,6 +56,12 @@ async function seedEventWithGame(opts: {
   await prisma.teamMember.create({
     data: { teamResultId: teamB.id, name: names[1] ?? names[0], order: 0 },
   });
+  // Every participant is on a team: only lineup players owe.
+  if (names[2]) {
+    await prisma.teamMember.create({
+      data: { teamResultId: teamB.id, name: names[2], order: 1 },
+    });
+  }
   await prisma.eventCost.create({
     data: { eventId: event.id, totalAmount: cost, currency: "EUR" },
   });
