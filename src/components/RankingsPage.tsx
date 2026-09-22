@@ -18,6 +18,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
+import { deriveEventPermissions } from "~/lib/eventView";
 
 interface PlayerRating {
   name: string;
@@ -102,8 +103,12 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     setNextCursor(rat.nextCursor);
     setHasMore(rat.hasMore);
     setPlayers((ev.players ?? []).map((p: { id: string; name: string; userId?: string | null }) => ({ id: p.id, name: p.name, userId: p.userId ?? null })));
-    const isOwner = !!(session?.user && ev.ownerId && session.user.id === ev.ownerId);
-    const hasEditPermission = isOwner || ev.isAdmin || !ev.ownerId;
+    const perms = deriveEventPermissions(session?.user?.id ?? null, {
+      ownerId: ev.ownerId ?? null,
+      isPublic: !!ev.isPublic,
+      isAdmin: !!ev.isAdmin,
+    });
+    const hasEditPermission = perms.isOwner || perms.isAdmin || perms.isOwnerless;
     setCanEdit(hasEditPermission && !!ev.allowManualRating);
     setCanManage(hasEditPermission);
     setLoading(false);
