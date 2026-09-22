@@ -787,6 +787,27 @@ class EventDetailViewModel @Inject constructor(
     }
 
     /**
+     * Settle / revert a durable GamePayment share (new-model games) through the
+     * settlement API, then refresh the post-game status. Mirrors the web
+     * PostGameBanner's handleToggleShare — the frozen snapshot is never touched.
+     */
+    fun togglePostGameShare(eventId: String, gameId: String, eventPlayerId: String, currentStatus: String) {
+        viewModelScope.launch {
+            runCatching {
+                if (currentStatus == "paid") api.unsettleShare(eventId, gameId, eventPlayerId)
+                else api.settleShare(eventId, gameId, eventPlayerId)
+            }
+                .onSuccess {
+                    val pg = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
+                    if (pg != null) _state.value = _state.value.copy(postGame = pg)
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(error = parseApiErrorMessage(e) ?: "Failed to settle payment")
+                }
+        }
+    }
+
+    /**
      * Persist the edited past-game payment snapshot to the GameHistory entry.
      * Mirrors the web PostGameBanner save (PATCH .../history/{id} with
      * paymentsSnapshot). Settled-game participants and admins may edit.
@@ -1908,6 +1929,10 @@ private fun HeroWrapUp(
                 // a debtor who has paid has nothing to act on, while the receiver
                 // of the money and the settlement admins keep it open.
                 if (!pg.viewerPaymentSettled) {
+                    // Prefer the durable per-game settlement rows over the frozen
+                    // GameHistory snapshot (mirrors web PostGameBanner). Fall back
+                    // to the snapshot only for legacy games that have no rows.
+                    val durableRows = pg.gamePayments
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(if (paymentTaskDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp), tint = when {
                             paymentTaskDone -> MaterialTheme.colorScheme.primary
@@ -1917,12 +1942,29 @@ private fun HeroWrapUp(
                         val label = when {
                             !pg.hasCost -> stringResource(R.string.post_game_no_cost)
                             paymentTaskDone -> stringResource(R.string.post_game_payments_done)
+                            durableRows != null && durableRows.isNotEmpty() -> stringResource(R.string.post_game_payments_summary, durableRows.count { it.status == "paid" }, durableRows.size)
                             state.postGamePayments != null -> stringResource(R.string.post_game_payments_summary, state.postGamePayments.count { it.status == "paid" }, state.postGamePayments.size)
                             else -> stringResource(R.string.post_game_payments_label)
                         }
                         Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     }
-                    if (pg.hasCost && !paymentTaskDone && !state.postGamePayments.isNullOrEmpty()) {
+                    if (pg.hasCost && !paymentTaskDone && durableRows != null && durableRows.isNotEmpty()) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            durableRows.forEach { r ->
+                                FilterChip(
+                                    selected = r.status == "paid",
+                                    onClick = {
+                                        val gameId = pg.gameConfig?.gameId
+                                        if (gameId != null && !r.isPayer) {
+                                            viewModel.togglePostGameShare(eventId, gameId, r.eventPlayerId, r.status)
+                                        }
+                                    },
+                                    label = { Text("${r.name} %.2f".format(r.amount)) },
+                                    leadingIcon = if (r.status == "paid") {{ Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) }} else null,
+                                )
+                            }
+                        }
+                    } else if (pg.hasCost && !paymentTaskDone && !state.postGamePayments.isNullOrEmpty()) {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             state.postGamePayments.forEach { p ->
                                 FilterChip(
