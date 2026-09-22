@@ -33,6 +33,40 @@ export interface SeasonRankMovement {
   edges: number[];
 }
 
+/**
+ * The viewer's Crew standing inside a Season. `pointsDelta` is what the Game
+ * being revealed paid the Crew; it stays null while that Game has not counted
+ * yet (no score), so the UI never invents a payout. Place movement is shown by
+ * `place` itself — a Crew can gain points without climbing.
+ */
+export interface ViewerCrewStanding {
+  crewId: string;
+  name: string;
+  /** 1-based place among the Season's Crews. */
+  place: number;
+  placeCount: number;
+  points: number;
+  /** Points this Game paid the Crew. Null while this Game is not counted. */
+  pointsDelta: number | null;
+}
+
+/**
+ * The viewer's CURRENT Season Rank, as of the Games already counted —
+ * independent of whether the Game being wrapped up has a score yet. Delivered
+ * alongside `seasonRank` so the post-game card can show a Rank before the score
+ * lands instead of an empty section.
+ */
+export interface SeasonRankStanding {
+  seasonId: string;
+  seasonName: string;
+  rank: number;
+  tier: number;
+  provisional: boolean;
+  gamesThisSeason: number;
+  edges: number[];
+  crew: ViewerCrewStanding | null;
+}
+
 export interface RankExplainerHrefParams {
   seasonId?: string | null;
   /** The viewer's Rank after the game. Sent as `rank`; `after` is accepted too. */

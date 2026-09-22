@@ -97,6 +97,14 @@ _Avoid_: rank, division, league, medal
 A player's first three **Season Rounds**, during which no **Tier** is shown because the **Season Rank** is still calibrating.
 _Avoid_: placement, calibration, unranked
 
+## Rank Standing
+Where a player sits in a **Season**'s **Rank** right now — the value shown before a Game's score lands, and what the **Season Rank** settles to after that Game counts. Rendered on the post-game card as "Rank Standing" whenever the wrap-up Game has no score yet, with a cue that scoring is what moves it.
+_Avoid_: current rank, leaderboard position, MMR
+
+## Rank Movement
+The before → after change in **Season Rank** caused by one counted Game: the RP delta pill, the tier-bar movement, and the count-up on the post-game card. Rendered as "Rank Updated" only once the Game has a score. Absent while the Game is unscored — then only **Rank Standing** shows.
+_Avoid_: rank change, Elo swing, MMR delta
+
 ## Open Pickup
 An un-adopted one-off Event+Game sourced from a Playtomic booking (`source=playtomic`), created automatically by the sweep when a court slot is detected as booked. Public (`isPublic=true`), no Owner (`ownerId=null`), no players yet. A notice that people play here at this court and time — a lead for organizing, not a real game. Rendered distinctly in the public listing (badge + no roster/join UI). Joining is blocked until someone Adopts.
 _Avoid_: synthetic game, beacon, phantom game

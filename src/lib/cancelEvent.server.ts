@@ -78,9 +78,25 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
     });
   }
 
-  await prisma.walletTransaction.deleteMany({
+  // Reverse redeemed Game Units with a compensating `credit_restored` entry
+  // (the ledger is append-only; a redeemed credit is returned, not deleted).
+  const redeemed = await prisma.walletTransaction.findMany({
     where: { eventId: event.id, eventInstanceId: game.id, reason: "credit_redeemed" },
+    select: { userId: true, currency: true, gameUnits: true },
   });
+  for (const r of redeemed) {
+    await postLedgerEntry({
+      eventId: event.id,
+      userId: r.userId,
+      amountCents: 0,
+      currency: r.currency,
+      direction: "credit",
+      gameUnits: -r.gameUnits, // credit_redeemed is -1; restore +1
+      reason: "credit_restored",
+      eventInstanceId: game.id,
+      idempotencyKey: `creditrestored:${event.id}:${r.userId}:${game.id}`,
+    });
+  }
 
   await prisma.gameHistory.create({
     data: {

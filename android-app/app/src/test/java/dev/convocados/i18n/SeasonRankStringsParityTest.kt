@@ -10,7 +10,8 @@ import org.junit.Test
  */
 class SeasonRankStringsParityTest {
     private val rankKeys = listOf(
-        "post_game_rank_title",
+        "post_game_rank_standing_title",
+        "post_game_rank_updated_title",
         "post_game_rank_delta",
         "post_game_rank_unlock",
         "post_game_rank_tier_up",
@@ -18,6 +19,17 @@ class SeasonRankStringsParityTest {
         "post_game_rank_why",
         "post_game_rank_why_aria",
         "post_game_rank_dismiss",
+        "post_game_rank_cue",
+        "post_game_rank_view_season",
+        "post_game_rank_view_season_aria",
+        "post_game_rank_crew_label",
+        "post_game_rank_crew_place",
+        "post_game_rank_crew_points",
+        "post_game_rank_crew_points_delta",
+        "post_game_result_eyebrow",
+        "post_game_show_tasks",
+        "post_game_no_score_yet",
+        "season_rank_top_tier",
         "season_rank_how_it_works",
         "rank_explainer_link_desc",
     )

@@ -20,7 +20,8 @@ import { recordReceived } from "./payments.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
 import { shareFor } from "./gameCost";
 import { summarizePayments } from "./paymentSummary";
-import { systemUserId } from "./payerIdentity.server";
+import { systemUserId, ensureSystemUserId } from "./payerIdentity.server";
+import { ledgerKey, postLedgerEntry } from "./ledger.server";
 
 export { shareFor } from "./gameCost";
 
@@ -239,7 +240,69 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     });
   }
 
+  // ADR 0007/0019: the ledger is the source of truth for money. Charge each
+  // lineup player a `per_game_share` debit so the outstanding balance is real
+  // (previously only `payment_received` credits existed, clamping the balance
+  // to zero). Frozen for played games, and reversed when a player is uncharged.
+  if (game?.status !== "played") {
+    await syncChargeDebits(db, gameId, eventId, charged, share, effective.currency);
+  }
+
   await applyPayer();
+}
+
+/**
+ * Keep the ledger's `per_game_share` charge side in step with the game's
+ * charged players: a debit per charged player, removed for anyone no longer
+ * charged (soft-archived GamePayment rows).
+ */
+async function syncChargeDebits(
+  db: DbClient,
+  gameId: string,
+  eventId: string,
+  charged: Array<{ eventPlayer: { id: string; name: string; userId: string | null } }>,
+  share: number,
+  currency: string,
+): Promise<void> {
+  const shareCents = Math.round(share * 100);
+  const activeIds = new Set(charged.map((p) => p.eventPlayer.id));
+
+  for (const p of charged) {
+    const userId = p.eventPlayer.userId ?? (await ensureSystemUserId(eventId, p.eventPlayer.name, db));
+    await postLedgerEntry(
+      {
+        eventId,
+        userId,
+        amountCents: shareCents,
+        currency,
+        direction: "debit",
+        reason: "per_game_share",
+        eventInstanceId: gameId,
+        idempotencyKey: ledgerKey("share", eventId, userId, gameId),
+      },
+      db,
+    );
+  }
+
+  // Reverse charges for players who are no longer charged (archived rows).
+  const archived = await db.gamePayment.findMany({
+    where: { gameId, archivedAt: { not: null } },
+    include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
+  });
+  for (const row of archived) {
+    if (activeIds.has(row.eventPlayerId)) continue;
+    const userId = row.eventPlayer.userId ?? systemUserId(eventId, row.eventPlayer.name);
+    await db.walletTransaction.deleteMany({
+      where: {
+        eventId,
+        eventInstanceId: gameId,
+        reason: "per_game_share",
+        direction: "debit",
+        userId,
+        idempotencyKey: ledgerKey("share", eventId, userId, gameId),
+      },
+    });
+  }
 }
 
 export async function syncGamePayments(gameId: string, eventId: string): Promise<void> {
@@ -397,7 +460,7 @@ export async function bulkSettleGame(eventId: string, gameId: string, markedBy: 
   return payments.length;
 }
 
-/** Debtor self-report: pending → sent for their own share. */
+/** Debtor self-report: pending → sent for their own share. Mirrors the ledger. */
 export async function selfReportSent(gameId: string, eventPlayerId: string): Promise<void> {
   const payment = await prisma.gamePayment.findUnique({
     where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
@@ -406,9 +469,38 @@ export async function selfReportSent(gameId: string, eventPlayerId: string): Pro
   if (payment.status !== "pending") {
     throw new Error("Can only mark as sent when status is pending.");
   }
-  await prisma.gamePayment.update({
-    where: { id: payment.id },
-    data: { status: "sent" },
+
+  const [game, ep] = await Promise.all([
+    prisma.game.findUnique({ where: { id: gameId }, select: { eventId: true } }),
+    prisma.eventPlayer.findUnique({ where: { id: eventPlayerId }, select: { name: true, userId: true } }),
+  ]);
+  const currency = game ? (await effectiveGameCost(gameId, game.eventId)).currency : "EUR";
+
+  await prisma.$transaction(async (tx) => {
+    await tx.gamePayment.update({
+      where: { id: payment.id },
+      data: { status: "sent" },
+    });
+
+    // ADR 0006: `sent` clears the gate, not the balance — so the ledger must
+    // see it, or the two self-report paths disagree.
+    if (game && ep) {
+      const userId = ep.userId ?? (await ensureSystemUserId(game.eventId, ep.name, tx));
+      await postLedgerEntry(
+        {
+          eventId: game.eventId,
+          userId,
+          amountCents: Math.round(payment.amount * 100),
+          currency,
+          direction: "credit",
+          reason: "payment_self_reported",
+          statusAfter: "sent",
+          eventInstanceId: gameId,
+          idempotencyKey: ledgerKey("selfreported", game.eventId, userId, gameId),
+        },
+        tx,
+      );
+    }
   });
 }
 

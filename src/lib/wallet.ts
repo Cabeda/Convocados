@@ -32,6 +32,7 @@ export const LEDGER_REASONS = {
   monthly_fee: { unitAffecting: false, charging: false, moneyClearing: false, outstandingClearing: false },
   missed_game_credit: { unitAffecting: true, charging: false, moneyClearing: false, outstandingClearing: false },
   credit_redeemed: { unitAffecting: true, charging: false, moneyClearing: true, outstandingClearing: true },
+  credit_restored: { unitAffecting: true, charging: false, moneyClearing: false, outstandingClearing: false },
   credit_expired: { unitAffecting: true, charging: false, moneyClearing: false, outstandingClearing: false },
   extras_declare: { unitAffecting: false, charging: false, moneyClearing: false, outstandingClearing: false },
   payment_received: { unitAffecting: false, charging: false, moneyClearing: true, outstandingClearing: true },
