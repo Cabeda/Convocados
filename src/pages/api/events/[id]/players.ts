@@ -11,6 +11,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { syncPaymentsForEvent } from "../../../../lib/payments.server";
 import { syncGamePayments } from "../../../../lib/settlement.server";
 import { getOutstandingBalance, getGateBalance } from "../../../../lib/balance.server";
+import { decidePaymentGate } from "../../../../lib/paymentGate";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { applyFormationLayout } from "../../../../lib/teams";
 import { createLogger } from "../../../../lib/logger.server";
@@ -356,19 +357,25 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (isSelfServiceJoin && event.paymentEnforcementLevel !== "off") {
     const balance = await getOutstandingBalance(eventId, trimmed);
     const threshold = event.paymentGateThreshold ?? 0;
+    const gateAmount = event.paymentEnforcementLevel === "hard_gate"
+      ? await getGateBalance(eventId, trimmed)
+      : balance.amount;
 
-    if (event.paymentEnforcementLevel === "hard_gate") {
-      const gateAmount = await getGateBalance(eventId, trimmed);
-      if (gateAmount > threshold) {
-        return Response.json({
-          error: "You must settle your outstanding balance before joining.",
-          code: "PAYMENT_GATE",
-          balance,
-          gateAmount,
-          enforcement: "hard_gate",
-          threshold,
-        }, { status: 402 });
-      }
+    if (decidePaymentGate({
+      enforcement: event.paymentEnforcementLevel,
+      isSelfService: true,
+      outstandingAmount: balance.amount,
+      gateAmount,
+      threshold,
+    }) === "block") {
+      return Response.json({
+        error: "You must settle your outstanding balance before joining.",
+        code: "PAYMENT_GATE",
+        balance,
+        gateAmount,
+        enforcement: "hard_gate",
+        threshold,
+      }, { status: 402 });
     }
   }
 
