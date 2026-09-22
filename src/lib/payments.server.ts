@@ -20,13 +20,11 @@ import { getActiveRosterState } from "./roster.server";
 import { computeAvailableUnits, type WalletTx } from "./wallet";
 import { perPlayerShare, perPlayerShareCents } from "./gameCost";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
+import { ensureSystemUserId } from "./payerIdentity.server";
 import {
   activeSubscriptionCoversDate,
   subscriptionWindowFor,
 } from "./monthly";
-import { createLogger } from "./logger.server";
-
-const log = createLogger("payments");
 
 export type PlayerPaymentMode = "monthly" | "per_game";
 
@@ -189,7 +187,7 @@ export async function recordPerGameShare(
   const netPlayerPaymentCents = canRedeem ? 0 : amountCents;
 
   // 4. Write the per_game_share debit (always — this is the gross).
-  const ledgerUserId = userId ?? (await ensureSystemUserId(eventId, playerName, player?.userId ?? null));
+  const ledgerUserId = userId ?? player?.userId ?? (await ensureSystemUserId(eventId, playerName));
   await postLedgerEntry({
     eventId,
     userId: ledgerUserId,
@@ -243,33 +241,6 @@ export async function recordPerGameShare(
   };
 }
 
-/**
- * When a PlayerPayment row exists but the player has no linked User, we
- * still need *some* userId on the WalletTransaction (the schema requires it
- * for the relation). For unlinked players we create a system placeholder
- * user per (event, playerName) so the ledger stays consistent.
- */
-async function ensureSystemUserId(
-  eventId: string,
-  playerName: string,
-  existingUserId: string | null,
-): Promise<string> {
-  if (existingUserId) return existingUserId;
-  const systemId = `system:${eventId}:${playerName}`;
-  const existing = await prisma.user.findUnique({ where: { id: systemId } });
-  if (existing) return systemId;
-  await prisma.user.create({
-    data: {
-      id: systemId,
-      name: playerName,
-      email: `${systemId}@system.local`,
-      emailVerified: false,
-    },
-  });
-  log.info({ systemId }, "Created system user for unlinked player's ledger entry");
-  return systemId;
-}
-
 // ─── recordSelfReported / recordReceived ───────────────────────────────────
 
 export interface RecordSelfReportedArgs {
@@ -317,7 +288,7 @@ export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
   if (!eventCost) throw new Error(`No EventCost for event ${eventId}`);
 
   const player = await findPlayerByName(eventId, playerName);
-  const userId = player?.userId ?? (await ensureSystemUserId(eventId, playerName, null));
+  const userId = player?.userId ?? (await ensureSystemUserId(eventId, playerName));
   const { gameId: resolvedGameId, shareCents: derivedShareCents } = await resolveShareInfo(eventId, eventCost.totalAmount);
   const gameId = args.gameId ?? resolvedGameId;
   const shareCents = args.amount !== undefined ? Math.round(args.amount * 100) : derivedShareCents;

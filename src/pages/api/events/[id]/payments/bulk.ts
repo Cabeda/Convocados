@@ -6,6 +6,7 @@ import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { perPlayerShareCents } from "~/lib/gameCost";
 import { ledgerKey, postLedgerEntry } from "~/lib/ledger.server";
+import { resolveLinkedUserId } from "~/lib/payerIdentity.server";
 
 /** PUT — bulk mark all pending/sent payments as paid. Owner/Admin only. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -53,14 +54,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     await prisma.$transaction(async (tx) => {
       for (const p of pendingPayments) {
         // Resolve userId
-        const ep = await tx.eventPlayer.findUnique({
-          where: { eventId_name: { eventId, name: p.playerName } },
-          select: { userId: true },
-        });
-        const player = !ep?.userId
-          ? await tx.player.findFirst({ where: { eventId, name: p.playerName }, select: { userId: true } })
-          : null;
-        const userId = ep?.userId ?? player?.userId;
+        const userId = await resolveLinkedUserId(eventId, p.playerName, tx);
         if (!userId) continue; // anonymous — no ledger possible
 
         await postLedgerEntry({
