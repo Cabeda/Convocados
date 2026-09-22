@@ -1576,6 +1576,13 @@ adminPickupsDetected: "Pickups detetados",
   inviteShareDesc: "Partilha este link com {name}. Vai permitir aceitar ou recusar diretamente — mesmo que o evento seja privado ou tenha password.",
   inviteShareHint: "Qualquer pessoa com o link pode ver o convite. Só a conta convidada pode aceitar.",
   inviteShareWebShareHint: "Também podes partilhar via WhatsApp, SMS, etc.",
+  matchEventsTitle: "Golos e assistências",
+  matchEventsCount: "{count} golo(s)",
+  matchEventsMinute: "{minute}'",
+  matchEventsScorer: "Marcador",
+  matchEventsAssistBy: "assistência: {name}",
+  matchEventsOwnGoal: "Autogolo",
+  matchEventsPenalty: "Penálti",
 };
 
 export default pt;

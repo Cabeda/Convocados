@@ -63,6 +63,9 @@ const TITLE_TEMPLATES = [
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+/** Sports scored by sets, not goals — they never carry Match Events. */
+const SET_BASED_SPORTS = new Set(["tennis", "tennis-singles", "tennis-doubles", "padel"]);
+
 const SPORT_LABELS: Record<string, string> = {
   "football-5v5": "Football 5v5",
   "football-7v7": "Football 7v7",
@@ -120,6 +123,68 @@ function uniqueNames(count: number): string[] {
     names.add(`${faker.person.firstName()} ${faker.string.alpha({ length: 1, casing: "upper" })}.`);
   }
   return [...names].slice(0, count);
+}
+
+/**
+ * Seed a plausible goal timeline for a played game (ADR 0039).
+ *
+ * Goals always agree with the stored score, so the derived score matches what
+ * the history row already shows. Some goals have an assister, and the odd one
+ * is a penalty — enough variety to exercise the timeline UI without noise.
+ *
+ * Prefer team-1 scorers when team one scored more, so the top of the scorer
+ * table follows the scoreline.
+ */
+async function seedMatchEvents(
+  gameHistoryId: string,
+  scoreOne: number,
+  scoreTwo: number,
+  teamOnePlayers: string[],
+  teamTwoPlayers: string[],
+  kickoff: Date,
+): Promise<void> {
+  const total = scoreOne + scoreTwo;
+  if (total === 0) return;
+
+  const pickScorer = (team: "one" | "two") => {
+    const pool = team === "one" ? teamOnePlayers : teamTwoPlayers;
+    return pick(pool.length ? pool : teamOnePlayers);
+  };
+  const pickAssister = (team: "one" | "two", scorer: string) => {
+    const pool = (team === "one" ? teamOnePlayers : teamTwoPlayers).filter((n) => n !== scorer);
+    return pool.length ? pick(pool) : null;
+  };
+
+  // Alternate sides so the timeline interleaves; extra goals go to the
+  // higher-scoring side.
+  const sides: Array<"one" | "two"> = [];
+  const [more, fewer]: ["one" | "two", "one" | "two"] = scoreOne >= scoreTwo ? ["one", "two"] : ["two", "one"];
+  const minSide = Math.min(scoreOne, scoreTwo);
+  for (let i = 0; i < minSide; i++) {
+    sides.push(more, fewer);
+  }
+  const diff = Math.abs(scoreOne - scoreTwo);
+  for (let i = 0; i < diff; i++) sides.push(more);
+
+  let minute = randInt(3, 12);
+  for (const team of sides) {
+    const scorerName = pickScorer(team);
+    const assistName = Math.random() < 0.55 ? pickAssister(team, scorerName) : null;
+    await prisma.matchEvent.create({
+      data: {
+        gameHistoryId,
+        type: "goal",
+        team,
+        minute,
+        ownGoal: false,
+        penalty: Math.random() < 0.1,
+        scorerName,
+        assistName,
+        createdAt: kickoff,
+      },
+    });
+    minute += randInt(4, 14);
+  }
 }
 
 async function main() {
@@ -277,7 +342,7 @@ async function main() {
         }
 
         // Game history
-        await prisma.gameHistory.create({
+        const history = await prisma.gameHistory.create({
           data: {
             eventId: event.id,
             dateTime: gameDateTime,
@@ -291,6 +356,14 @@ async function main() {
             eloProcessed: true,
           },
         });
+
+        // Match events (ADR 0039) — the goal timeline the derived score comes
+        // from. Seed the two most recent games so the timeline and top-scorer
+        // views have something to show out of the box. Set-based sports keep a
+        // manual set score and have no goals.
+        if (g <= 1 && !SET_BASED_SPORTS.has(sport)) {
+          await seedMatchEvents(history.id, scoreOne, scoreTwo, teamOnePlayers, teamTwoPlayers, gameDateTime);
+        }
 
         // Build player info for elo computation
         const playerInfos = gamePlayers.map((name) => {

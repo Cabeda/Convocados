@@ -1528,6 +1528,13 @@ adminPickupsDetected: "Pickups erkannt",
   inviteShareDesc: "Teile diesen Link mit {name}. Damit kann direkt angenommen oder abgelehnt werden — auch wenn das Event privat ist oder ein Passwort hat.",
   inviteShareHint: "Jeder mit dem Link kann die Einladung ansehen. Nur das eingeladene Konto kann annehmen.",
   inviteShareWebShareHint: "Du kannst auch direkt via WhatsApp, SMS, etc. teilen.",
+  matchEventsTitle: "Tore & Vorlagen",
+  matchEventsCount: "{count} Tor(e)",
+  matchEventsMinute: "{minute}'",
+  matchEventsScorer: "Torschütze",
+  matchEventsAssistBy: "Vorlage: {name}",
+  matchEventsOwnGoal: "Eigentor",
+  matchEventsPenalty: "Elfmeter",
 };
 
 export default de;

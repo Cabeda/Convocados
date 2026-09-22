@@ -1586,6 +1586,14 @@ adminPickupsDetected: "Pickups detected",
   inviteShareDesc: "Share this link with {name}. It will let them accept or decline directly — even if the event is private or has a password.",
   inviteShareHint: "Anyone with the link can view the invite. Only the invited account can accept it.",
   inviteShareWebShareHint: "You can also share directly via WhatsApp, SMS, etc.",
+  // Match events — goal timeline (ADR 0039)
+  matchEventsTitle: "Goals & assists",
+  matchEventsCount: "{count} goal(s)",
+  matchEventsMinute: "{minute}'",
+  matchEventsScorer: "Scorer",
+  matchEventsAssistBy: "assist: {name}",
+  matchEventsOwnGoal: "Own goal",
+  matchEventsPenalty: "Penalty",
 } as const;
 
 export default en;
