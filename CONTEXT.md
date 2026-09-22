@@ -516,3 +516,17 @@ _Avoid_: hotfix (a code fix, not the release operation), rollback (Play cannot d
 A Wear OS concept: a long-running task surfaced with an ongoing notification paired with an `OngoingActivity`, so the watch face shows a tappable indicator and the recent-apps chip references it. In Convocados a live score session — a **Game** being scored, or a **Quick Game** — is an Ongoing Activity. If the app ever gains a tile, the tile must reference the Ongoing Activity.
 _Avoid_: foreground service (a different mechanism), Live Update (a distinct Wear surface)
 
+## Identity & credentials
+
+**User**:
+The person record — one per human, holding name, **Primary email**, profile settings, and ownership of everything they created or joined.
+_Avoid_: account (overloaded: OAuth client, Player account, billing), member
+
+**Credential**:
+One way of proving you are a given **User**: a password, a Google identity, or a magic-link trip to the Primary email. Multiple Credentials may attach to one User; each is independently revocable while at least one remains.
+_Avoid_: login method, auth provider (too technical for product talk), account
+
+**Primary email**:
+The single address on a **User** used for invites, notifications, and account recovery. Changes only through the verified change-email flow — never overwritten by linking a Credential.
+_Avoid_: username (not used for login), contact email
+
