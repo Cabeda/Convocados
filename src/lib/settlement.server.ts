@@ -460,7 +460,7 @@ export async function bulkSettleGame(eventId: string, gameId: string, markedBy: 
   return payments.length;
 }
 
-/** Debtor self-report: pending → sent for their own share. */
+/** Debtor self-report: pending → sent for their own share. Mirrors the ledger. */
 export async function selfReportSent(gameId: string, eventPlayerId: string): Promise<void> {
   const payment = await prisma.gamePayment.findUnique({
     where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
@@ -469,9 +469,38 @@ export async function selfReportSent(gameId: string, eventPlayerId: string): Pro
   if (payment.status !== "pending") {
     throw new Error("Can only mark as sent when status is pending.");
   }
-  await prisma.gamePayment.update({
-    where: { id: payment.id },
-    data: { status: "sent" },
+
+  const [game, ep] = await Promise.all([
+    prisma.game.findUnique({ where: { id: gameId }, select: { eventId: true } }),
+    prisma.eventPlayer.findUnique({ where: { id: eventPlayerId }, select: { name: true, userId: true } }),
+  ]);
+  const currency = game ? (await effectiveGameCost(gameId, game.eventId)).currency : "EUR";
+
+  await prisma.$transaction(async (tx) => {
+    await tx.gamePayment.update({
+      where: { id: payment.id },
+      data: { status: "sent" },
+    });
+
+    // ADR 0006: `sent` clears the gate, not the balance — so the ledger must
+    // see it, or the two self-report paths disagree.
+    if (game && ep) {
+      const userId = ep.userId ?? (await ensureSystemUserId(game.eventId, ep.name, tx));
+      await postLedgerEntry(
+        {
+          eventId: game.eventId,
+          userId,
+          amountCents: Math.round(payment.amount * 100),
+          currency,
+          direction: "credit",
+          reason: "payment_self_reported",
+          statusAfter: "sent",
+          eventInstanceId: gameId,
+          idempotencyKey: ledgerKey("selfreported", game.eventId, userId, gameId),
+        },
+        tx,
+      );
+    }
   });
 }
 
