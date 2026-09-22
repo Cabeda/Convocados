@@ -84,6 +84,11 @@ async function seedEvent(opts: { players?: string[]; cost?: number; ownerId?: st
 }
 
 async function linkUser(name: string, userId: string) {
+  await prisma.user.upsert({
+    where: { id: userId },
+    create: { id: userId, name, email: `${userId}@test.com`, emailVerified: false },
+    update: {},
+  });
   const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { name } });
   await prisma.eventPlayer.update({ where: { id: ep.id }, data: { userId } });
 }
