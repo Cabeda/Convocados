@@ -1,17 +1,29 @@
 /**
- * The single write seam for the money ledger (ADR 0007).
+ * The write seam for money-ledger rows (ADR 0007).
  *
- * Every `WalletTransaction` row is posted here. The seam:
- * - classifies the entry through the reason registry (`src/lib/wallet.ts`),
+ * Payment-driven writers post here (currently `recordReceived`,
+ * `recordSelfReported`, `recordPerGameShare` and the bulk-confirm route; the
+ * remaining direct writers are being migrated). The seam:
+ * - carries an external provider reference (`externalId`) for reconciliation,
  * - enforces idempotency when a key is supplied, so a payment provider's
- *   at-least-once webhook cannot double-post a charge (ADR 0038), and
- * - carries an external provider reference (`externalId`) for reconciliation.
+ *   at-least-once webhook cannot double-post a charge (ADR 0038).
+ *
+ * The key is optional: a few writers (e.g. `per_game_share`) legitimately post
+ * more than once for the same (event, user, game), so dedupe is opt-in.
  *
  * Callers still own the surrounding transaction/status projection; this module
- * only guarantees the ledger row is written once and is traceable.
+ * only guarantees the ledger row is traceable and, with a key, written once.
  */
 import { prisma, Prisma } from "./db.server";
 import type { WalletTxDirection, WalletTxReason } from "./wallet";
+
+/**
+ * Build the stable dedupe key for a money movement. Owned here so callers
+ * cannot drift on the shape.
+ */
+export function ledgerKey(kind: string, eventId: string, userId: string, gameId: string): string {
+  return `${kind}:${eventId}:${userId}:${gameId}`;
+}
 
 export interface LedgerEntry {
   eventId: string;
@@ -45,7 +57,7 @@ export async function postLedgerEntry(entry: LedgerEntry, client: DbClient = pri
   const data = {
     eventId: entry.eventId,
     userId: entry.userId,
-    amountCents: Math.abs(Math.round(entry.amountCents)),
+    amountCents: Math.round(entry.amountCents),
     currency: entry.currency,
     direction: entry.direction,
     gameUnits: entry.gameUnits ?? 0,

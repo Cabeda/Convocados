@@ -5,7 +5,7 @@ import { authorizeEventMutation } from "~/lib/eventAuthz.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { perPlayerShareCents } from "~/lib/gameCost";
-import { postLedgerEntry } from "~/lib/ledger.server";
+import { ledgerKey, postLedgerEntry } from "~/lib/ledger.server";
 
 /** PUT — bulk mark all pending/sent payments as paid. Owner/Admin only. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -73,7 +73,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
           statusAfter: "paid",
           eventInstanceId: gameId,
           markedById,
-          idempotencyKey: `received:${eventId}:${userId}:${gameId}`,
+          idempotencyKey: ledgerKey("received", eventId, userId, gameId),
         }, tx);
       }
     });

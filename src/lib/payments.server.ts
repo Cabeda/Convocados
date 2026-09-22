@@ -19,7 +19,7 @@ import { prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { computeAvailableUnits, type WalletTx } from "./wallet";
 import { perPlayerShare, perPlayerShareCents } from "./gameCost";
-import { postLedgerEntry } from "./ledger.server";
+import { ledgerKey, postLedgerEntry } from "./ledger.server";
 import {
   activeSubscriptionCoversDate,
   subscriptionWindowFor,
@@ -294,7 +294,7 @@ export async function recordSelfReported(args: RecordSelfReportedArgs): Promise<
     reason: "payment_self_reported",
     statusAfter: "sent",
     eventInstanceId: gameId,
-    idempotencyKey: `selfreported:${eventId}:${userId}:${gameId}`,
+    idempotencyKey: ledgerKey("selfreported", eventId, userId, gameId),
   });
 }
 
@@ -333,7 +333,7 @@ export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
     eventInstanceId: gameId,
     markedById,
     externalId: args.externalId,
-    idempotencyKey: `received:${eventId}:${userId}:${gameId}`,
+    idempotencyKey: ledgerKey("received", eventId, userId, gameId),
   });
 }
 
