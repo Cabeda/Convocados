@@ -6,7 +6,7 @@ accepted
 
 ## Context
 
-We want per-player goals and assists (parity with Omby's Match Center), but Convocados has no
+We want per-player goals and assists, but Convocados has no
 live match capture, and the canonical score already lives in the immutable `GameHistory`
 snapshot — the live `Game` does not persist team assignments or scores.
 
