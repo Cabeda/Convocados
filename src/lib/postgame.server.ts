@@ -238,9 +238,7 @@ export async function computePostGameStatus(
     try {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
       if (snapshot.length > 0) {
-        hasPendingPastPayments = !snapshot.every(
-          (p) => p.status === "paid",
-        );
+        hasPendingPastPayments = !summarizePayments(snapshot).allPaid;
       }
     } catch { /* ignore */ }
   }
