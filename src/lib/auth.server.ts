@@ -123,6 +123,19 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
   },
+  // ADR 0040: multi-credential linking. Google may attach to a User whose
+  // Primary email is non-Google (e.g. Proton); match/merge is by Account
+  // (issuer, accountId), never by email string. Same-email sign-in still
+  // auto-links via better-auth's implicit linking (Q13).
+  account: {
+    accountLinking: {
+      allowDifferentEmails: true,
+      trustedProviders: ["google"],
+      // Unlink last credential is blocked by our /api/me/credentials DELETE
+      // and better-auth's default (allowUnlinkingAll unset → false).
+      allowUnlinkingAll: false,
+    },
+  },
   socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
     ? {
         google: {

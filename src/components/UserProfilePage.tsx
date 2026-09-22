@@ -20,6 +20,7 @@ import AddAPhotoIcon from "@mui/icons-material/AddAPhoto";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
+import { LinkedCredentialsSection } from "./LinkedCredentialsSection";
 import ProfilePhotoDialog from "./ProfilePhotoDialog";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
@@ -910,6 +911,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
                 <ProfileVisibilitySection userId={user.id} userName={user.name} initialValue={data.profileVisibility ?? "public"} />
                 <NotificationSettingsSection />
                 <ChangePasswordSection hasPassword={hasPassword ?? false} />
+                <LinkedCredentialsSection profilePath={`/users/${user.id}`} />
                 <ExportDataSection />
                 <DeleteAccountSection />
               </>
