@@ -272,6 +272,147 @@ export async function clearSeasonRankSnapshot(seasonId: string): Promise<void> {
 }
 
 /**
+ * The viewer's CURRENT Rank Standing in the Season covering this Game —
+ * available whether or not the Game has been scored, so the post-game card can
+ * show the Rank while wrap-up is still pending instead of showing nothing.
+ *
+ * Eligibility matches the movement rule (the viewer must have been in this
+ * Game's lineup and the Game must be non-friendly), plus two guards that keep
+ * the card honest:
+ *  - the Season must be `active`: outside an active Season this score cannot
+ *    move Rank, so we must not tell the player it will;
+ *  - the viewer must be a Season member: only members carry a Standing.
+ */
+export interface ViewerRankStanding {
+  seasonId: string;
+  seasonName: string;
+  rank: number;
+  tier: number;
+  provisional: boolean;
+  gamesThisSeason: number;
+  edges: number[];
+  crew: ViewerCrewStandingServer | null;
+}
+
+export async function getViewerRankStanding(
+  eventId: string,
+  game: { dateTime: Date; isFriendly: boolean; teamsSnapshot: string | null },
+  playerName: string,
+): Promise<ViewerRankStanding | null> {
+  if (game.isFriendly) return null;
+
+  const teams = parseTeamsSnapshot(game.teamsSnapshot);
+  if (!teams || !teams.some((team) => team.players.includes(playerName))) return null;
+
+  const season = await prisma.season.findFirst({
+    where: {
+      eventId,
+      status: "active",
+      registrationOpensAt: { lte: game.dateTime },
+      registrationClosesAt: { gte: game.dateTime },
+    },
+    orderBy: { registrationOpensAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      registrationOpensAt: true,
+      registrationClosesAt: true,
+      completedAt: true,
+      cancelledAt: true,
+      memberships: { include: { eventPlayer: true, crew: true } },
+    },
+  });
+  if (!season) return null;
+
+  const membership = season.memberships.find((m) => m.eventPlayer.name === playerName);
+  if (!membership) return null;
+
+  const payload = await deriveSeasonRank(eventId, season.id);
+  const me = payload?.players.find((p) => p.name === playerName);
+  if (!payload || !me) return null;
+
+  return {
+    seasonId: season.id,
+    seasonName: season.name,
+    rank: me.display,
+    tier: me.tier,
+    provisional: me.provisional,
+    gamesThisSeason: me.games,
+    edges: payload.edges,
+    crew: await viewerCrewStanding(eventId, season, membership.crewId ?? null, game.dateTime),
+  };
+}
+
+/** The viewer's Crew placement inside a Season, plus what this Game paid it. */
+export interface ViewerCrewStandingServer {
+  crewId: string;
+  name: string;
+  place: number;
+  placeCount: number;
+  points: number;
+  /** Points this Game paid the Crew. Null while this Game is not counted. */
+  pointsDelta: number | null;
+}
+
+/**
+ * Crew placement is a pure replay of the Season's qualifying Games, so the
+ * payout of one Game is the difference between the table with it and the table
+ * without it. Place rarely moves; points almost always do, which is why the
+ * card reports points.
+ */
+async function viewerCrewStanding(
+  eventId: string,
+  season: {
+    registrationOpensAt: Date;
+    registrationClosesAt: Date;
+    completedAt: Date | null;
+    cancelledAt: Date | null;
+    memberships: Array<{ id: string; eventPlayer: { name: string }; crewId: string | null; crew: { id: string; name: string } | null; withdrawnAt: Date | null }>;
+  },
+  crewId: string | null,
+  gameDateTime: Date,
+): Promise<ViewerCrewStandingServer | null> {
+  if (!crewId) return null;
+
+  const { startsAt, endsAt } = seasonCompetitiveWindow(season);
+  const history = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } });
+  const allGames = history.map(toLeaderboardGame).filter((g): g is LeaderboardGame => g !== null);
+  const members: SeasonMember[] = season.memberships.map((m) => ({
+    membershipId: m.id,
+    name: m.eventPlayer.name,
+    crewId: m.crewId,
+    crewName: m.crew?.name ?? null,
+    withdrawnAt: m.withdrawnAt,
+  }));
+
+  const crews = calculateLeaderboard(allGames, members, { startsAt, endsAt }).crews;
+  const mine = crews.find((c) => c.crewId === crewId);
+  if (!mine) return null;
+
+  const counted = allGames.some(
+    (g) => g.dateTime instanceof Date && g.dateTime.getTime() === gameDateTime.getTime() && g.scoreOne !== null,
+  );
+  let pointsDelta: number | null = null;
+  if (counted) {
+    const before = calculateLeaderboard(
+      allGames.filter((g) => !(g.dateTime instanceof Date && g.dateTime.getTime() === gameDateTime.getTime())),
+      members,
+      { startsAt, endsAt },
+    ).crews.find((c) => c.crewId === crewId);
+    pointsDelta = Math.round((mine.points - (before?.points ?? 0)) * 100) / 100;
+  }
+
+  return {
+    crewId,
+    name: mine.name,
+    place: mine.rank,
+    placeCount: crews.length,
+    points: Math.round(mine.points * 100) / 100,
+    pointsDelta,
+  };
+}
+
+/**
  * The viewer's Season Rank movement from one specific Game, for the post-game
  * reveal. Returns null unless the game actually counted toward the ladder and
  * the viewer played in it, so the UI never shows a fake "+0".

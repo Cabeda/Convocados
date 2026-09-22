@@ -12,6 +12,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -997,6 +998,7 @@ fun EventDetailScreen(
     onSettings: () -> Unit,
     onRankings: () -> Unit,
     onSeasons: () -> Unit = {},
+    onSeasonDetail: (String) -> Unit = {},
     onPayments: () -> Unit,
     onLog: () -> Unit,
     onAttendance: () -> Unit,
@@ -1247,16 +1249,15 @@ fun EventDetailScreen(
                                     Text(stringResource(R.string.removed_tap_undo, undo.name), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.padding(12.dp).fillMaxWidth())
                                 }
                             }
-                            // Post-game Season Rank reveal — standalone card that
-                            // persists until explicitly dismissed, independent of
-                            // the wrap-up checklist completion (matches web).
-                            PostGameSeasonRankReveal(eventId, ds, viewModel)
-                            // Wrap-up
+                            // Wrap-up: merged result card (score + Season Rank)
+                            // over the checklist. The Rank outlives the checklist;
+                            // dismissing it is per GameHistory.
                             HeroWrapUp(eventId, ds, viewModel, effectiveUser, editingScoreId, scoreOne, scoreTwo,
                                 onEditScore = { id, s1, s2 -> editingScoreId = id; scoreOne = s1; scoreTwo = s2 },
                                 onScoreChange = { a, b -> scoreOne = a; scoreTwo = b },
                                 onSaveScore = { editingScoreId = null },
-                                onVoteMvp = { onHistoryClick(it) })
+                                onVoteMvp = { onHistoryClick(it) },
+                                onViewSeason = onSeasonDetail)
                             // Join / Leave (YOUR RESPONSE deprecated in favor of this)
                             if (effectiveUser?.name != null) {
                                 val callerBalance = ds.balance?.callerBalance
@@ -1680,140 +1681,312 @@ internal fun usesStructuredTennisScore(eventSport: String?, history: GameHistory
 }
 
 /**
- * Standalone post-game Season Rank reveal. Rendered outside [HeroWrapUp]'s
- * completion gate so it survives the wrap-up checklist finishing, and only
- * hides once the viewer dismisses it (persisted per GameHistory id) — matching
- * the web banner behaviour. Renders nothing when the game did not count for the
- * viewer or the reveal was already dismissed.
+ * Post-game wrap-up: a merged result card (score + Season Rank) over the
+ * collapse-able checklist. The Rank outlives the checklist — once every task is
+ * done the card collapses to "Final result" + Show tasks and keeps showing the
+ * Rank until the viewer dismisses it (persisted per GameHistory id). Mirrors
+ * the web `PostGameBanner`.
  */
 @Composable
-private fun PostGameSeasonRankReveal(eventId: String, state: EventScreenState, viewModel: EventDetailViewModel) {
+private fun HeroWrapUp(
+    eventId: String,
+    state: EventScreenState,
+    viewModel: EventDetailViewModel,
+    user: UserProfile?,
+    editingScoreId: String?,
+    scoreOne: String,
+    scoreTwo: String,
+    onEditScore: (String, String, String) -> Unit,
+    onScoreChange: (String, String) -> Unit,
+    onSaveScore: () -> Unit,
+    onVoteMvp: (String) -> Unit,
+    onViewSeason: (String) -> Unit,
+) {
     val pg = state.postGame ?: return
     if (!pg.isParticipant) return
-    val rank = pg.seasonRank?.takeIf { it.counted } ?: return
-    val dismissKey = pg.latestHistoryId ?: rank.seasonId
-    val dismissed by viewModel.dismissedRankReveals.collectAsStateWithLifecycle()
-    if (dismissKey in dismissed) return
-    val pastHistory = state.history.firstOrNull { it.id == pg.latestHistoryId }
-    val context = LocalContext.current
-    val serverUrl = remember { viewModel.serverUrl() }
-    SeasonRankReveal(
-        rank = rank,
-        onWhyClick = {
-            context.openInCustomTab(
-                buildRankExplainerUrl(
-                    serverUrl = serverUrl,
-                    eventId = eventId,
-                    seasonId = rank.seasonId,
-                    rank = rank.after,
-                    delta = rank.delta,
-                    outcome = outcomeFromScore(pastHistory?.scoreOne, pastHistory?.scoreTwo),
-                )
-            )
-        },
-        onDismiss = { viewModel.dismissRankReveal(dismissKey) },
-    )
-}
 
-@Composable
-private fun HeroWrapUp(eventId: String, state: EventScreenState, viewModel: EventDetailViewModel, user: UserProfile?, editingScoreId: String?, scoreOne: String, scoreTwo: String, onEditScore: (String,String,String)->Unit, onScoreChange: (String,String)->Unit, onSaveScore: ()->Unit, onVoteMvp: (String)->Unit) {
-    val pg = state.postGame ?: return
-    if (!(pg.isParticipant && !pg.allComplete && (pg.gameEnded || pg.hasPendingPastPayments || (pg.mvpEnabled && !pg.mvpComplete)))) return
+    val dismissKey = pg.latestHistoryId ?: pg.rankStanding?.seasonId ?: pg.seasonRank?.seasonId ?: ""
+    val dismissed by viewModel.dismissedRankReveals.collectAsStateWithLifecycle()
+    val rankVisible = dismissKey.isNotEmpty() && dismissKey !in dismissed &&
+        (pg.seasonRank?.counted == true || pg.rankStanding != null)
+
+    // Wrap-up completion choreography: hold the finished checklist briefly so
+    // the todo-list visibly finishes instead of vanishing mid-click, then
+    // collapse it. A new pending task (score edited back out, payment reverted)
+    // revives it. The Rank section stays either way. An already-complete
+    // wrap-up starts collapsed — the celebration is for mid-session completions.
+    var gone by remember(pg.latestHistoryId) { mutableStateOf(pg.allComplete) }
+    LaunchedEffect(pg.allComplete, pg.latestHistoryId) {
+        if (!pg.allComplete) {
+            gone = false
+        } else if (!gone) {
+            delay(1600)
+            gone = true
+        }
+    }
+    val checklistOpen = !(pg.allComplete && gone)
+
+    val mvpTaskDone = pg.myMvpComplete
+    val nothingToDo = !pg.gameEnded && !pg.hasPendingPastPayments &&
+        (mvpTaskDone || !pg.mvpEnabled || !pg.isPlayer)
+    if (nothingToDo) return
+    if (pg.allComplete && gone && !rankVisible) return
+
     val pastHistory = state.history.firstOrNull { it.id == pg.latestHistoryId }
     val hasStructuredScore = usesStructuredTennisScore(state.event?.sport, pastHistory)
     var scoreSets by remember(pg.latestHistoryId, pastHistory?.scoreSets) { mutableStateOf(pastHistory?.scoreSets ?: emptyList()) }
-    val scoreDone = pg.hasScore; val paysDone = pg.allPaid || !pg.hasCost; val mvpDone = !pg.mvpEnabled || pg.mvpComplete
-    val done = (if (scoreDone) 1 else 0) + (if (paysDone) 1 else 0) + (if (mvpDone) 1 else 0); val total = 2 + (if (pg.mvpEnabled) 1 else 0)
+    val context = LocalContext.current
+    val serverUrl = remember { viewModel.serverUrl() }
+
+    val scoreDone = pg.hasScore
+    // Payments are only a task when a cost exists. With no cost there is
+    // nothing to settle, so ticking it green (and counting it toward progress)
+    // would claim work that was never configured.
+    val paymentTaskDone = pg.hasCost && pg.allPaid
+    val taskTotal = 1 + if (pg.hasCost) 1 else 0
+    val completedCount = (if (scoreDone) 1 else 0) + (if (paymentTaskDone) 1 else 0)
+    val mvpDone = !pg.mvpEnabled || pg.mvpComplete
+    val seasonId = pg.seasonRank?.seasonId ?: pg.rankStanding?.seasonId ?: ""
+    val rank = pg.seasonRank?.takeIf { it.counted }
+    val teamOne = pg.teamOneName.ifEmpty { state.event?.teamOneName.orEmpty() }
+    val teamTwo = pg.teamTwoName.ifEmpty { state.event?.teamTwoName.orEmpty() }
+    val heroScoreOne = pg.scoreOne ?: pastHistory?.scoreOne
+    val heroScoreTwo = pg.scoreTwo ?: pastHistory?.scoreTwo
+
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.Celebration, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                Text("Game over! Wrap it up", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            LinearProgressIndicator(
+                progress = { completedCount.toFloat() / taskTotal },
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surface,
+            )
+
+            if (checklistOpen) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Celebration, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Text(stringResource(R.string.post_game_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            } else if (rankVisible) {
+                // Collapsed state — the Rank outlives the checklist, so the card
+                // needs an anchor and a way back to the tasks hiding underneath.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Celebration, null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        stringResource(R.string.post_game_result_eyebrow).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedButton(onClick = { gone = false }) {
+                        Text(stringResource(R.string.post_game_show_tasks), fontWeight = FontWeight.Bold)
+                    }
+                }
             }
-            LinearProgressIndicator(progress = { done.toFloat()/total }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surface)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Icon(if (scoreDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp)); Text(if (scoreDone) stringResource(R.string.post_game_score_done) else stringResource(R.string.record_final_score), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)) }
-            if (!scoreDone && pg.latestHistoryId != null) {
-                if (editingScoreId == pg.latestHistoryId) {
-                    if (hasStructuredScore) {
-                        TennisSetEditor(scoreSets) { scoreSets = it }
-                        Button(
-                            onClick = {
-                                if (scoreSets.isNotEmpty()) {
-                                    viewModel.saveScore(eventId, pg.latestHistoryId, scoreSets = scoreSets)
-                                    onSaveScore()
-                                }
-                            },
-                            enabled = scoreSets.isNotEmpty(),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
+
+            // Result card — score and Rank share one card. The score leads; the
+            // Rank sits under it as context. Pre-score the hero collapses to a
+            // single line rather than three dashes pretending to be a result.
+            if (scoreDone || rankVisible) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (scoreDone) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
                     } else {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(value = scoreOne, onValueChange = { onScoreChange(it.filter { c -> c.isDigit() }, scoreTwo) }, modifier = Modifier.width(64.dp), singleLine = true, placeholder = { Text("0") })
-                        Text("\u2013", style = MaterialTheme.typography.titleLarge)
-                        OutlinedTextField(value = scoreTwo, onValueChange = { onScoreChange(scoreOne, it.filter { c -> c.isDigit() }) }, modifier = Modifier.width(64.dp), singleLine = true, placeholder = { Text("0") })
-                        Button(onClick = { val s1=scoreOne.toIntOrNull()?:return@Button; val s2=scoreTwo.toIntOrNull()?:return@Button; viewModel.saveScore(eventId, pg.latestHistoryId, s1, s2); onSaveScore() }) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
-                        }
-                    }
-                } else Button(
-                    onClick = {
-                        onEditScore(
-                            pg.latestHistoryId,
-                            pastHistory?.scoreOne?.toString().orEmpty(),
-                            pastHistory?.scoreTwo?.toString().orEmpty(),
-                        )
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.35f)
                     },
+                    border = BorderStroke(
+                        1.dp,
+                        if (scoreDone) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant
+                        },
+                    ),
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(stringResource(R.string.record_score)) }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Icon(if (paysDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp)); val label = when { !pg.hasCost -> stringResource(R.string.post_game_no_cost); paysDone -> stringResource(R.string.post_game_payments_done); state.postGamePayments != null -> stringResource(R.string.post_game_payments_summary, state.postGamePayments.count { it.status=="paid" }, state.postGamePayments.size); else -> stringResource(R.string.post_game_payments_label) }; Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)) }
-            if (pg.hasCost && !paysDone && !state.postGamePayments.isNullOrEmpty()) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    state.postGamePayments.forEach { p -> FilterChip(selected = p.status=="paid", onClick = { viewModel.togglePostGamePayment(p.playerName) }, label = { Text("${p.playerName} %.2f".format(p.amount)) }, leadingIcon = if (p.status=="paid") {{ Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) }} else null) }
-                }
-                if (state.postGamePaymentsDirty) Button(onClick = { viewModel.savePostGamePayments(eventId) }, enabled = !state.postGameSaving, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
-            }
-            if (pg.mvpEnabled) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Icon(if (mvpDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp)); Text(if (pg.mvpComplete) stringResource(R.string.post_game_mvp_done) else stringResource(R.string.post_game_mvp_pending), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)) }
-                val mvpData = state.mvp
-                LaunchedEffect(pg.latestHistoryId) {
-                    if (pg.latestHistoryId != null && mvpData == null && !state.mvpLoading) viewModel.loadMvp(eventId, pg.latestHistoryId)
-                }
-                if (state.mvpLoading) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) }
-                } else if (mvpData != null && mvpData.mvp != null && !mvpData.isVotingOpen) {
-                    // Result badge
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.tertiaryContainer).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Default.EmojiEvents, null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(20.dp))
-                        Text("MVP:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                        mvpData.mvp.forEach { cand -> AssistChip(onClick = {}, label = { Text("${cand.playerName} (${cand.voteCount})") }, leadingIcon = { Icon(Icons.Default.EmojiEvents, null, Modifier.size(14.dp)) }) }
-                    }
-                } else if (mvpData?.isVotingOpen == true) {
-                    val myName = user?.name?.lowercase()
-                    val myVote = mvpData.votes.find { it.voterName.lowercase() == myName }?.votedForName
-                    // Candidate list from current players (fallback) — web uses history participants, we use roster
-                    val candidates = state.event?.players?.filter { it.name.lowercase() != myName }?.take(8) ?: emptyList()
-                    if (candidates.isNotEmpty()) {
-                        Text("Tap to vote (you can change your vote)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            candidates.forEach { p ->
-                                val pid = p.id
-                                val isMyPick = p.name == myVote
-                                FilterChip(selected = isMyPick, onClick = { if (pg.latestHistoryId != null) viewModel.voteMvp(eventId, pg.latestHistoryId, pid) }, label = { Text(p.name) }, leadingIcon = if (isMyPick) {{ Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) }} else null)
+                ) {
+                    Column {
+                        if (scoreDone) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(teamOne, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${heroScoreOne ?: ""}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                                }
+                                Text("–", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.outline)
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(teamTwo, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${heroScoreTwo ?: ""}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                                }
+                            }
+                        } else {
+                            Column(
+                                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text("$teamOne · $teamTwo", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(stringResource(R.string.post_game_no_score_yet), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                             }
                         }
-                        // Show current tally if votes exist
-                        if (mvpData.votes.isNotEmpty()) {
-                            val tally = mvpData.votes.groupBy { it.votedForName }.mapValues { it.value.size }
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                tally.forEach { (name, count) -> AssistChip(onClick = {}, label = { Text("$name: $count") }) }
-                            }
+                        if (rankVisible) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+                            )
+                            SeasonRankReveal(
+                                rank = rank,
+                                standing = pg.rankStanding,
+                                inline = true,
+                                onWhyClick = {
+                                    context.openInCustomTab(
+                                        buildRankExplainerUrl(
+                                            serverUrl = serverUrl,
+                                            eventId = eventId,
+                                            seasonId = rank?.seasonId ?: seasonId,
+                                            rank = rank?.after,
+                                            delta = rank?.delta,
+                                            outcome = outcomeFromScore(heroScoreOne, heroScoreTwo),
+                                        )
+                                    )
+                                },
+                                onViewSeason = { if (seasonId.isNotEmpty()) onViewSeason(seasonId) },
+                                onDismiss = { viewModel.dismissRankReveal(dismissKey) },
+                            )
                         }
                     }
-                } else if (pg.isPlayer && !pg.mvpComplete && pg.latestHistoryId != null) {
-                    Button(onClick = { onVoteMvp(pg.latestHistoryId) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.post_game_vote_mvp_button)) }
                 }
             }
-            Text(stringResource(R.string.post_game_progress, done, total), style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.CenterHorizontally))
+
+            if (checklistOpen) {
+                if (!scoreDone) {
+                    Text(stringResource(R.string.post_game_subtitle), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+                // Score task
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(if (scoreDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp), tint = if (scoreDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (scoreDone) stringResource(R.string.post_game_score_done) else stringResource(R.string.record_final_score), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                }
+                if (!scoreDone && pg.latestHistoryId != null) {
+                    if (editingScoreId == pg.latestHistoryId) {
+                        if (hasStructuredScore) {
+                            TennisSetEditor(scoreSets) { scoreSets = it }
+                            Button(
+                                onClick = {
+                                    if (scoreSets.isNotEmpty()) {
+                                        viewModel.saveScore(eventId, pg.latestHistoryId, scoreSets = scoreSets)
+                                        onSaveScore()
+                                    }
+                                },
+                                enabled = scoreSets.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedTextField(value = scoreOne, onValueChange = { onScoreChange(it.filter { c -> c.isDigit() }, scoreTwo) }, modifier = Modifier.width(64.dp), singleLine = true, placeholder = { Text("0") })
+                                Text("–", style = MaterialTheme.typography.titleLarge)
+                                OutlinedTextField(value = scoreTwo, onValueChange = { onScoreChange(scoreOne, it.filter { c -> c.isDigit() }) }, modifier = Modifier.width(64.dp), singleLine = true, placeholder = { Text("0") })
+                                Button(onClick = { val s1 = scoreOne.toIntOrNull() ?: return@Button; val s2 = scoreTwo.toIntOrNull() ?: return@Button; viewModel.saveScore(eventId, pg.latestHistoryId, s1, s2); onSaveScore() }) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
+                            }
+                        }
+                    } else Button(
+                        onClick = {
+                            onEditScore(
+                                pg.latestHistoryId,
+                                pastHistory?.scoreOne?.toString().orEmpty(),
+                                pastHistory?.scoreTwo?.toString().orEmpty(),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.record_score)) }
+                }
+
+                // Payment task — hidden once the viewer's own share is settled:
+                // a debtor who has paid has nothing to act on, while the receiver
+                // of the money and the settlement admins keep it open.
+                if (!pg.viewerPaymentSettled) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(if (paymentTaskDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp), tint = when {
+                            paymentTaskDone -> MaterialTheme.colorScheme.primary
+                            !pg.hasCost -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        })
+                        val label = when {
+                            !pg.hasCost -> stringResource(R.string.post_game_no_cost)
+                            paymentTaskDone -> stringResource(R.string.post_game_payments_done)
+                            state.postGamePayments != null -> stringResource(R.string.post_game_payments_summary, state.postGamePayments.count { it.status == "paid" }, state.postGamePayments.size)
+                            else -> stringResource(R.string.post_game_payments_label)
+                        }
+                        Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    }
+                    if (pg.hasCost && !paymentTaskDone && !state.postGamePayments.isNullOrEmpty()) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            state.postGamePayments.forEach { p ->
+                                FilterChip(
+                                    selected = p.status == "paid",
+                                    onClick = { viewModel.togglePostGamePayment(p.playerName) },
+                                    label = { Text("${p.playerName} %.2f".format(p.amount)) },
+                                    leadingIcon = if (p.status == "paid") {{ Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) }} else null,
+                                )
+                            }
+                        }
+                        if (state.postGamePaymentsDirty) Button(onClick = { viewModel.savePostGamePayments(eventId) }, enabled = !state.postGameSaving, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
+                    }
+                }
+
+                // MVP voting task — players-only and score-gated (matches web):
+                // owners/admins who did not play can't vote, and there is no MVP
+                // before a score exists.
+                if (pg.isPlayer && pg.mvpEnabled && pg.latestHistoryId != null && scoreDone) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(if (mvpDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp), tint = if (mvpDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (pg.mvpComplete) stringResource(R.string.post_game_mvp_done) else stringResource(R.string.post_game_mvp_pending), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    }
+                    val mvpData = state.mvp
+                    LaunchedEffect(pg.latestHistoryId) {
+                        if (pg.latestHistoryId != null && mvpData == null && !state.mvpLoading) viewModel.loadMvp(eventId, pg.latestHistoryId)
+                    }
+                    if (state.mvpLoading) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) }
+                    } else if (mvpData != null && mvpData.mvp != null && !mvpData.isVotingOpen) {
+                        // Result badge
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.tertiaryContainer).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.EmojiEvents, null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(20.dp))
+                            Text("MVP:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                            mvpData.mvp.forEach { cand -> AssistChip(onClick = {}, label = { Text("${cand.playerName} (${cand.voteCount})") }, leadingIcon = { Icon(Icons.Default.EmojiEvents, null, Modifier.size(14.dp)) }) }
+                        }
+                    } else if (mvpData?.isVotingOpen == true) {
+                        val myName = user?.name?.lowercase()
+                        val myVote = mvpData.votes.find { it.voterName.lowercase() == myName }?.votedForName
+                        // Candidate list from current players (fallback) — web uses history participants, we use roster
+                        val candidates = state.event?.players?.filter { it.name.lowercase() != myName }?.take(8) ?: emptyList()
+                        if (candidates.isNotEmpty()) {
+                            Text("Tap to vote (you can change your vote)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                candidates.forEach { p ->
+                                    val pid = p.id
+                                    val isMyPick = p.name == myVote
+                                    FilterChip(selected = isMyPick, onClick = { if (pg.latestHistoryId != null) viewModel.voteMvp(eventId, pg.latestHistoryId, pid) }, label = { Text(p.name) }, leadingIcon = if (isMyPick) {{ Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) }} else null)
+                                }
+                            }
+                            // Show current tally if votes exist
+                            if (mvpData.votes.isNotEmpty()) {
+                                val tally = mvpData.votes.groupBy { it.votedForName }.mapValues { it.value.size }
+                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    tally.forEach { (name, count) -> AssistChip(onClick = {}, label = { Text("$name: $count") }) }
+                                }
+                            }
+                        }
+                    } else if (!pg.mvpComplete) {
+                        Button(onClick = { onVoteMvp(pg.latestHistoryId) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.post_game_vote_mvp_button)) }
+                    }
+                }
+
+                Text(stringResource(R.string.post_game_progress, completedCount, taskTotal), style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.CenterHorizontally))
+            }
         }
     }
 }
