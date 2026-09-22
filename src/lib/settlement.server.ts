@@ -20,6 +20,7 @@ import { recordReceived } from "./payments.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
 import { shareFor } from "./gameCost";
 import { summarizePayments } from "./paymentSummary";
+import { systemUserId } from "./payerIdentity.server";
 
 export { shareFor } from "./gameCost";
 
@@ -356,7 +357,7 @@ export async function unsettleShare(
 
   // Resolve the ledger userId the same way recordReceived does: the player's
   // linked user, else the per-(event,player) system user.
-  const ledgerUserId = ep?.userId ?? (payment.playerName ? `system:${eventId}:${payment.playerName}` : null);
+  const ledgerUserId = ep?.userId ?? (payment.playerName ? systemUserId(eventId, payment.playerName) : null);
 
   await prisma.$transaction(async (tx) => {
     await tx.gamePayment.update({
