@@ -3,7 +3,7 @@
 **Organize pickup sports games in seconds** — create events, find courts, randomize fair teams, track scores, and notify players.
 
 [![CI](https://github.com/Cabeda/Convocados/actions/workflows/ci.yml/badge.svg)](https://github.com/Cabeda/Convocados/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: FSL-1.1-ALv2](https://img.shields.io/badge/License-FSL--1.1--ALv2-blue.svg)](LICENSE)
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Cabeda)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-00A9E0?logo=kofi&logoColor=white)](https://ko-fi.com/cabeda)
 [![Android on Google Play](https://img.shields.io/badge/Google%20Play-3DDC84?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.cabeda.Convocados)
@@ -153,4 +153,8 @@ Full docs at [`/docs`](https://convocados.cabeda.dev/docs):
 
 ## License
 
-MIT
+**Functional Source License 1.1, ALv2 Future License (FSL-1.1-ALv2)** — see [LICENSE](LICENSE).
+
+The source is public and free to use, modify, and self-host — including for your own club or organization. The one thing the license forbids is **competing use**: shipping Convocados (or a fork) as a commercial product or service that substitutes for it. That requires a commercial license. Every version automatically becomes Apache-2.0 two years after release.
+
+FSL is *source-available*, not OSI-approved open source. A commercial license is available on request.
