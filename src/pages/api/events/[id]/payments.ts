@@ -6,6 +6,7 @@ import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 import { recordSelfReported, recordReceived } from "../../../../lib/payments.server";
+import { summarizePayments } from "../../../../lib/paymentSummary";
 
 const VALID_STATUSES = ["pending", "sent", "paid"];
 
@@ -32,11 +33,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   }
 
   const payments = eventCost.payments;
-  const paidCount = payments.filter((p) => p.status === "paid").length;
-  const pendingCount = payments.filter((p) => p.status === "pending").length;
-  const paidAmount = payments
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.amount, 0);
+  const { paidCount, pendingCount, totalCount, paidAmount } = summarizePayments(payments);
 
   return Response.json({
     payments: payments.map((p) => ({
@@ -48,7 +45,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     summary: {
       paidCount,
       pendingCount,
-      totalCount: payments.length,
+      totalCount,
       paidAmount,
     },
   });

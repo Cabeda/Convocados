@@ -19,6 +19,7 @@ import {
   OUTSTANDING_CLEARING_REASONS,
   type WalletTx,
 } from "./wallet";
+import { summarizePayments } from "./paymentSummary";
 
 export interface PlayerBalance {
   playerName: string;
@@ -174,6 +175,17 @@ async function legacyGetGateBalance(eventId: string, playerName: string): Promis
 // ─── Public API ────────────────────────────────────────────────────────────
 
 /**
+ * Load a player's ledger rows, or null when the player is unlinked or has no
+ * ledger rows — the signal to fall back to the legacy PlayerPayment reads.
+ */
+async function loadLedger(eventId: string, playerName: string): Promise<WalletTx[] | null> {
+  const userId = await resolveUserId(eventId, playerName);
+  if (!userId) return null;
+  const txs = await fetchLedger(eventId, userId);
+  return txs.length === 0 ? null : txs;
+}
+
+/**
  * Compute the outstanding balance for a single player within an event.
  * "Sent" does NOT clear — player still owes until organizer confirms.
  * Returns amount in euros (2dp).
@@ -182,14 +194,8 @@ export async function getOutstandingBalance(
   eventId: string,
   playerName: string,
 ): Promise<PlayerBalance> {
-  const userId = await resolveUserId(eventId, playerName);
-  if (!userId) return legacyGetOutstandingBalance(eventId, playerName);
-
-  const txs = await fetchLedger(eventId, userId);
-  if (txs.length === 0) {
-    // No ledger rows — might be a legacy player. Fall back.
-    return legacyGetOutstandingBalance(eventId, playerName);
-  }
+  const txs = await loadLedger(eventId, playerName);
+  if (!txs) return legacyGetOutstandingBalance(eventId, playerName);
 
   const balanceCents = computeMoneyBalance(txs, OUTSTANDING_CLEARING_REASONS);
   // ADR 0019 §3: exclude legacy rows where eventInstanceId = eventId from per-game aggregates
@@ -215,11 +221,8 @@ export async function getGateBalance(
   eventId: string,
   playerName: string,
 ): Promise<number> {
-  const userId = await resolveUserId(eventId, playerName);
-  if (!userId) return legacyGetGateBalance(eventId, playerName);
-
-  const txs = await fetchLedger(eventId, userId);
-  if (txs.length === 0) return legacyGetGateBalance(eventId, playerName);
+  const txs = await loadLedger(eventId, playerName);
+  if (!txs) return legacyGetGateBalance(eventId, playerName);
 
   const balanceCents = computeMoneyBalance(txs, MONEY_CLEARING_REASONS);
   return Math.round(Math.max(0, balanceCents)) / 100;
@@ -381,8 +384,9 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
       include: { payments: true },
     });
     if (eventCost && eventCost.payments.length > 0) {
-      totalCount = eventCost.payments.length;
-      paidCount = eventCost.payments.filter((p) => p.status === "paid").length;
+      const agg = summarizePayments(eventCost.payments);
+      totalCount = agg.totalCount;
+      paidCount = agg.paidCount;
     }
   }
 
@@ -396,8 +400,9 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
     if (latest?.paymentsSnapshot) {
       try {
         const entries: SnapshotEntry[] = JSON.parse(latest.paymentsSnapshot);
-        totalCount = entries.length;
-        paidCount = entries.filter((e) => e.status === "paid").length;
+        const agg = summarizePayments(entries);
+        totalCount = agg.totalCount;
+        paidCount = agg.paidCount;
       } catch { /* skip malformed */ }
     }
   }

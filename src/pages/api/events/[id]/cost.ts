@@ -8,6 +8,7 @@ import { validatePaymentMethods, normalizePaymentMethod } from "../../../../lib/
 import type { PaymentMethod } from "../../../../lib/paymentMethods";
 import { syncGamePayments } from "../../../../lib/settlement.server";
 import { perPlayerShare } from "../../../../lib/gameCost";
+import { summarizePayments } from "../../../../lib/paymentSummary";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -262,10 +263,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   if (!eventCost) return Response.json(null);
 
-  const paidCount = eventCost.payments.filter((p) => p.status === "paid").length;
-  const paidAmount = eventCost.payments
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.amount, 0);
+  const { paidCount, paidAmount } = summarizePayments(eventCost.payments);
 
   const hasOverride = !!(eventCost.tempPaymentMethods || eventCost.tempPaymentDetails);
 
