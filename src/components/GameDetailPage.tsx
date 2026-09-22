@@ -8,6 +8,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { HistoryCardFull, type HistoryCardFullEntry } from "./HistoryCardFull";
+import { deriveEventPermissions } from "~/lib/eventView";
 
 export default function GameDetailPage({ eventId, historyId }: { eventId: string; historyId: string }) {
   const t = useT();
@@ -18,6 +19,7 @@ export default function GameDetailPage({ eventId, historyId }: { eventId: string
   const [title, setTitle] = useState("");
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
   const [timezone, setTimezone] = useState("UTC");
   const [eventLocation, setEventLocation] = useState("");
   const [eventLat, setEventLat] = useState<number | null>(null);
@@ -28,7 +30,7 @@ export default function GameDetailPage({ eventId, historyId }: { eventId: string
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
+  const isOwner = deriveEventPermissions(session?.user?.id ?? null, { ownerId, isPublic, isAdmin }).isOwner;
 
   const load = useCallback(async () => {
     const [evRes, entryRes, costRes] = await Promise.all([
@@ -46,6 +48,7 @@ export default function GameDetailPage({ eventId, historyId }: { eventId: string
     setTitle(ev.title);
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
+    setIsPublic(!!ev.isPublic);
     setTimezone(ev.timezone || "UTC");
     setEventLocation(ev.location ?? "");
     setEventLat(ev.latitude ?? null);

@@ -21,6 +21,7 @@ import { hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scor
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 import { HistoryCardFull, TennisScoreBand, type HistoryCardFullEntry } from "./HistoryCardFull";
+import { deriveEventPermissions } from "~/lib/eventView";
 
 type HistoryEntry = HistoryCardFullEntry;
 
@@ -353,6 +354,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
   const [timezone, setTimezone] = useState("UTC");
   const [showAddHistorical, setShowAddHistorical] = useState(false);
   const [eventPlayers, setEventPlayers] = useState<{ id: string; name: string }[]>([]);
@@ -360,7 +362,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [eventLat, setEventLat] = useState<number | null>(null);
   const [eventLng, setEventLng] = useState<number | null>(null);
   const [cost, setCost] = useState<{ totalAmount: number; currency: string; payments: Array<{ playerName: string; amount: number; status: "paid" | "pending" }> } | null>(null);
-  const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
+  const isOwner = deriveEventPermissions(session?.user?.id ?? null, { ownerId, isPublic, isAdmin }).isOwner;
 
   const load = useCallback(async () => {
     const [evRes, histRes, costRes] = await Promise.all([
@@ -377,6 +379,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setSport(ev.sport ?? "");
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
+    setIsPublic(!!ev.isPublic);
     setTimezone(ev.timezone || "UTC");
     setEventLocation(ev.location ?? "");
     setEventLat(ev.latitude ?? null);
