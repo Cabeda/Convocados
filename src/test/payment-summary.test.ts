@@ -8,6 +8,7 @@ describe("summarizePayments", () => {
       pendingCount: 0,
       totalCount: 0,
       paidAmount: 0,
+      outstandingAmount: 0,
       allPaid: true,
     });
   });
@@ -24,6 +25,7 @@ describe("summarizePayments", () => {
       pendingCount: 1,
       totalCount: 4,
       paidAmount: 12.5,
+      outstandingAmount: 10,
       allPaid: false,
     });
   });

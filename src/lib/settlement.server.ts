@@ -19,6 +19,7 @@ import { getActiveRosterState } from "./roster.server";
 import { recordReceived } from "./payments.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
 import { shareFor } from "./gameCost";
+import { summarizePayments } from "./paymentSummary";
 
 export { shareFor } from "./gameCost";
 
@@ -542,7 +543,7 @@ export async function getSettlementSummary(
       payerName,
       payerIsPlayer,
       total: totalDebt,
-      paidCount: activeRows.filter((r) => r.status === "paid").length,
+      paidCount: summarizePayments(activeRows).paidCount,
       debtorCount: debtors.length,
       debtorNames: isManager ? debtorNames : [],
       // Privacy: a non-manager never sees other debtors' names/amounts — only

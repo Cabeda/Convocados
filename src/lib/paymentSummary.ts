@@ -18,6 +18,8 @@ export interface PaymentAggregate {
   pendingCount: number;
   totalCount: number;
   paidAmount: number;
+  /** Total still owed: the sum of amounts on every row that is not `paid`. */
+  outstandingAmount: number;
   /** True when nothing is owed: empty roll, or every row is `paid`. */
   allPaid: boolean;
 }
@@ -26,13 +28,15 @@ export function summarizePayments(entries: readonly PaymentStatusLike[]): Paymen
   let paidCount = 0;
   let pendingCount = 0;
   let paidAmount = 0;
+  let outstandingAmount = 0;
 
   for (const entry of entries) {
     if (entry.status === "paid") {
       paidCount++;
       paidAmount += entry.amount ?? 0;
-    } else if (entry.status === "pending") {
-      pendingCount++;
+    } else {
+      outstandingAmount += entry.amount ?? 0;
+      if (entry.status === "pending") pendingCount++;
     }
   }
 
@@ -42,6 +46,7 @@ export function summarizePayments(entries: readonly PaymentStatusLike[]): Paymen
     pendingCount,
     totalCount,
     paidAmount,
+    outstandingAmount,
     allPaid: totalCount === 0 || paidCount === totalCount,
   };
 }
