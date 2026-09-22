@@ -577,3 +577,41 @@ describe("PostGameBanner initial payload gating (banner flash on load)", () => {
     expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
   });
 });
+
+describe("PostGameBanner payment summary counts the live settlement, not the stale snapshot", () => {
+  // Regression: managers settle shares through the GamePayment model (settlement
+  // API). The GameHistory.paymentsSnapshot is frozen at reset time and never
+  // updated, so it can read 2/10 paid while the live roll is 9/10 paid. The
+  // banner must report the same rows it renders as chips.
+  const snapshot = Array.from({ length: 10 }, (_, i) => ({
+    playerName: `P${i}`,
+    amount: 5,
+    status: i < 2 ? "paid" : "pending",
+  }));
+  const gamePayments = Array.from({ length: 10 }, (_, i) => ({
+    eventPlayerId: `ep${i}`,
+    name: `P${i}`,
+    amount: 5,
+    status: i < 9 ? "paid" : "pending",
+    isPayer: false,
+  }));
+
+  beforeEach(() => {
+    mockFetchStatus({
+      ...baseStatus,
+      hasScore: true,
+      allPaid: false,
+      allComplete: false,
+      paymentsSnapshot: snapshot,
+      gamePayments,
+      gameConfig: { gameId: "g1", mode: "tracked", payerName: "P9", payerIsPlayer: true },
+    });
+  });
+
+  it("shows the live paid count even when the history snapshot is stale", async () => {
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+    expect(await screen.findByText("9/10 paid")).toBeInTheDocument();
+    expect(screen.queryByText("2/10 paid")).not.toBeInTheDocument();
+  });
+});

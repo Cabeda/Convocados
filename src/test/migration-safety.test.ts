@@ -451,3 +451,70 @@ describe("DateTime storage normalization", () => {
     expect((await prisma.event.findUnique({ where: { id: event.id } }))!.dateTime.toISOString()).toBe("2026-09-08T10:00:00.000Z");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Unified Game model — expand phase (snapshot deprecation)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Unified Game model schema (snapshot deprecation, expand phase)", () => {
+  async function makeEvent() {
+    return prisma.event.create({
+      data: {
+        title: "Unified", location: "P",
+        dateTime: new Date(Date.now() + 86400_000),
+        teamOneName: "A", teamTwoName: "B",
+      },
+    });
+  }
+
+  it("Game defaults source to 'live' and exposes per-team formations", async () => {
+    const event = await makeEvent();
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B" },
+    });
+    expect(game.source).toBe("live");
+    expect(game.teamOneFormation).toBeNull();
+    expect(game.teamTwoFormation).toBeNull();
+
+    const updated = await prisma.game.update({
+      where: { id: game.id },
+      data: { source: "historical", teamOneFormation: "4-4-2", teamTwoFormation: "4-3-3" },
+    });
+    expect(updated.source).toBe("historical");
+    expect(updated.teamOneFormation).toBe("4-4-2");
+  });
+
+  it("GameParticipant carries a durable team name and slot", async () => {
+    const event = await makeEvent();
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B" },
+    });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Rui" } });
+    const participant = await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, order: 0, team: "A", slot: 3 },
+    });
+    expect(participant.team).toBe("A");
+    expect(participant.slot).toBe(3);
+  });
+
+  it("MvpVote can be linked to its Game, nullable during migration", async () => {
+    const event = await makeEvent();
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B" },
+    });
+    const history = await prisma.gameHistory.create({
+      data: { eventId: event.id, dateTime: game.dateTime, status: "played", teamOneName: "A", teamTwoName: "B" },
+    });
+    const vote = await prisma.mvpVote.create({
+      data: {
+        gameHistoryId: history.id,
+        voterPlayerId: "p1", voterName: "Rui",
+        votedForPlayerId: "p2", votedForName: "Sofia",
+      },
+    });
+    expect(vote.gameId).toBeNull();
+
+    const linked = await prisma.mvpVote.update({ where: { id: vote.id }, data: { gameId: game.id } });
+    expect(linked.gameId).toBe(game.id);
+  });
+});

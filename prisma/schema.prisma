@@ -254,6 +254,10 @@ model MvpVote {
   id               String      @id @default(cuid())
   gameHistoryId    String
   gameHistory      GameHistory  @relation(fields: [gameHistoryId], references: [id], onDelete: Cascade)
+  // Unified-model link: the Game this vote belongs to. Nullable during the
+  // migration; backfilled from the Game matching (eventId, gameHistory.dateTime).
+  gameId           String?
+  game             Game?       @relation(fields: [gameId], references: [id], onDelete: Cascade)
   voterPlayerId    String      // Player.id at time of vote
   voterName        String      // denormalized — resilient if Player record is later removed
   votedForPlayerId String      // Player.id at time of vote
@@ -263,6 +267,7 @@ model MvpVote {
   @@unique([gameHistoryId, voterPlayerId])
   @@index([gameHistoryId])
   @@index([votedForPlayerId])
+  @@index([gameId])
 }
 
 model Player {
@@ -318,6 +323,12 @@ model Game {
   scoreSets       String? // JSON: [{teamOne, teamTwo, tiebreakTeamOne?, tiebreakTeamTwo?}]
   teamOneName     String?
   teamTwoName     String?
+  // Team formations, durably per occurrence (previously only in GameHistory.teamsSnapshot).
+  teamOneFormation String?
+  teamTwoFormation String?
+  // Provenance of this occurrence: "live" (played through the app) or
+  // "historical" (backfilled). GameHistory.source migrated here.
+  source          String    @default("live") // "live" | "historical"
   eloProcessed    Boolean   @default(false)
   rsvpCutoffSent  Boolean   @default(false)
   // ADR 0019: per-Game cost override (null = inherit from EventCost template)
@@ -335,6 +346,7 @@ model Game {
   payments        GamePayment[]
   rsvps           Rsvp[]
   playerInvites   PlayerInvite[]
+  mvpVotes        MvpVote[]
 
   @@index([eventId, dateTime])
   @@index([eventId, status])
@@ -498,6 +510,10 @@ model GameParticipant {
   order         Int         @default(0)
   archivedAt    DateTime?
   noShow        Boolean     @default(false) // ADR 0018: marked by organizer post-game
+  // Durable team assignment for the played occurrence (previously only in
+  // GameHistory.teamsSnapshot). Null until teams are drawn for this occurrence.
+  team          String?
+  slot          Int?
   // ADR 0025: "pending" = invited-but-not-yet-accepted. Pending entries are
   // excluded from roster/bench counts, payments, team draws and gamesPlayed.
   status        String      @default("active") // "pending" | "active"
