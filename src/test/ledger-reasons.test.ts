@@ -18,6 +18,7 @@ describe("ledger reason registry", () => {
     expect(LEDGER_REASONS.monthly_fee).toEqual({ unitAffecting: false, charging: false, moneyClearing: false, outstandingClearing: false });
     expect(LEDGER_REASONS.missed_game_credit).toEqual({ unitAffecting: true, charging: false, moneyClearing: false, outstandingClearing: false });
     expect(LEDGER_REASONS.credit_redeemed).toEqual({ unitAffecting: true, charging: false, moneyClearing: true, outstandingClearing: true });
+    expect(LEDGER_REASONS.credit_restored).toEqual({ unitAffecting: true, charging: false, moneyClearing: false, outstandingClearing: false });
     expect(LEDGER_REASONS.credit_expired).toEqual({ unitAffecting: true, charging: false, moneyClearing: false, outstandingClearing: false });
     expect(LEDGER_REASONS.extras_declare).toEqual({ unitAffecting: false, charging: false, moneyClearing: false, outstandingClearing: false });
     expect(LEDGER_REASONS.payment_received).toEqual({ unitAffecting: false, charging: false, moneyClearing: true, outstandingClearing: true });
@@ -26,7 +27,7 @@ describe("ledger reason registry", () => {
   });
 
   it("derives the classification sets from the registry", () => {
-    expect([...UNIT_AFFECTING_REASONS].sort()).toEqual(["credit_expired", "credit_redeemed", "missed_game_credit"]);
+    expect([...UNIT_AFFECTING_REASONS].sort()).toEqual(["credit_expired", "credit_redeemed", "credit_restored", "missed_game_credit"]);
     expect([...MONEY_CHARGING_REASONS].sort()).toEqual(["cost_adjustment", "per_game_share"]);
     expect([...MONEY_CLEARING_REASONS].sort()).toEqual(["credit_redeemed", "game_cancelled_credit", "payment_received", "payment_self_reported"]);
     expect([...OUTSTANDING_CLEARING_REASONS].sort()).toEqual(["credit_redeemed", "game_cancelled_credit", "payment_received"]);
