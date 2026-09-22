@@ -37,6 +37,7 @@ import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
 import { SignInButton } from "./SignInButton";
 import { PushPromptBanner } from "./PushPromptBanner";
+import { deriveEventPermissions, canRemoveEventPlayer } from "~/lib/eventView";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -212,8 +213,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── ADR 0025: co-play suggestions (owner/admin only) ───────────────────────
   interface CoPlaySuggestion { userId: string; name: string; image?: string | null; gamesPlayed?: number; score?: number; reason?: string }
   const [coPlaySuggestions, setCoPlaySuggestions] = useState<CoPlaySuggestion[]>([]);
-  const isOwnerFlag = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
-  const isAdminFlag = !!event?.isAdmin;
+  const perms = deriveEventPermissions(
+    session?.user?.id ?? null,
+    { ownerId: event?.ownerId ?? null, isPublic: !!event?.isPublic, isAdmin: !!event?.isAdmin },
+    { isParticipant: !!session?.user && !!event?.players.some((p) => p.userId === session.user!.id) },
+  );
+  const isOwnerFlag = perms.isOwner;
+  const isAdminFlag = perms.isAdmin;
   useEffect(() => {
     if (!(isOwnerFlag || isAdminFlag) || !event?.gameId) {
       setCoPlaySuggestions([]);
@@ -908,16 +914,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const countdown = useCountdown(gameDate, t("gameTime"));
 
   const isAuthenticated = !!session?.user;
-  const isOwner = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
-  const isOwnerless = !event?.ownerId;
-  const isAdmin = !!event?.isAdmin;
-  const canEditSettings = isOwnerless || isOwner || isAdmin;
-  const canManageInvites = isOwner || isAdmin;
-  // Mirrors the PUT /api/events/:id/teams authorization: signed-in owner, admin,
-  // or an active participant. Everyone else gets a read-only field.
-  const isParticipant = !!session?.user
-    && !!event?.players.some((p) => p.userId === session.user!.id);
-  const canEditTeams = isAuthenticated && (isOwner || isAdmin || isParticipant);
+  const { isOwner, isAdmin, isOwnerless, canEditSettings, canManageInvites, canEditTeams } = perms;
 
   // #463 high-intent: fetch the signed-in user's RSVP for this event so the
   // PushPromptBanner can render as a modal when the user has a pending RSVP
@@ -970,12 +967,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
   }, [eventId, myRsvpStatus, t, fetchEvent]);
 
-  const canRemovePlayer = (player: Player) => {
-    if (isOwner || isAdmin) return true;
-    if (session?.user && player.userId === session.user.id) return true;
-    if (!player.userId) return true;
-    return false;
-  };
+  const canRemovePlayer = (player: Player) =>
+    canRemoveEventPlayer(
+      session?.user?.id ?? null,
+      { ownerId: event?.ownerId ?? null, isPublic: !!event?.isPublic, isAdmin: !!event?.isAdmin },
+      player,
+    );
 
   // ── Loading / locked / not found states ─────────────────────────────────────
 
