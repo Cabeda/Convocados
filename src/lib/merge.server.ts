@@ -10,8 +10,13 @@
  *   Account kept only if survivor has none; else discarded.
  * - Absorbed User hard-deleted → leftover cascade rows die; Primary email freed.
  * - Absorbed sessions deleted first (hard logout; no session transfer).
+ * - Player identity is name-keyed (ADR 0016): the absorbed user's per-event
+ *   player rows are collapsed into the survivor's player name for that event
+ *   (or the survivor's account name when they have no player row there), so
+ *   game history / ratings / rankings show one person.
  */
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { mergePlayerIdentity } from "./mergePlayer.server";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -20,6 +25,81 @@ export interface MergeResult {
   absorbedUserId: string;
   transferredAccounts: number;
   discardedAccounts: number;
+  /** Events whose player identity was collapsed (callers recalc ELO after commit). */
+  mergedPlayerEvents: string[];
+}
+
+/**
+ * Resolve the name the survivor's player identity should end up under in an
+ * event: their existing per-event player name, else rating/legacy name, else
+ * their account name.
+ */
+async function resolveSurvivorPlayerName(
+  tx: Tx,
+  eventId: string,
+  survivorId: string,
+  accountName: string,
+): Promise<string> {
+  const ep = await tx.eventPlayer.findFirst({
+    where: { eventId, userId: survivorId },
+    orderBy: { createdAt: "asc" },
+    select: { name: true },
+  });
+  if (ep) return ep.name;
+  const rating = await tx.playerRating.findFirst({
+    where: { eventId, userId: survivorId },
+    select: { name: true },
+  });
+  if (rating) return rating.name;
+  const legacy = await tx.player.findFirst({
+    where: { eventId, userId: survivorId },
+    select: { name: true },
+  });
+  if (legacy) return legacy.name;
+  return accountName;
+}
+
+/**
+ * Collapse every name the absorbed user played under into the survivor's name,
+ * per event. Must run before the generic `userId` repoints, which would
+ * otherwise erase the evidence of which names belonged to the absorbed user.
+ * Returns the affected event ids.
+ */
+async function mergeUserPlayerIdentities(
+  tx: Tx,
+  survivorId: string,
+  absorbedId: string,
+  survivorAccountName: string,
+): Promise<string[]> {
+  const [absorbedEps, absorbedRatings, absorbedPlayers] = await Promise.all([
+    tx.eventPlayer.findMany({ where: { userId: absorbedId }, select: { eventId: true, name: true } }),
+    tx.playerRating.findMany({ where: { userId: absorbedId }, select: { eventId: true, name: true } }),
+    tx.player.findMany({ where: { userId: absorbedId }, select: { eventId: true, name: true } }),
+  ]);
+
+  const namesByEvent = new Map<string, Set<string>>();
+  const add = (eventId: string, name: string) => {
+    let set = namesByEvent.get(eventId);
+    if (!set) {
+      set = new Set();
+      namesByEvent.set(eventId, set);
+    }
+    set.add(name);
+  };
+  for (const r of absorbedEps) add(r.eventId, r.name);
+  for (const r of absorbedRatings) add(r.eventId, r.name);
+  for (const r of absorbedPlayers) add(r.eventId, r.name);
+
+  const mergedEvents: string[] = [];
+  for (const [eventId, names] of namesByEvent) {
+    const targetName = await resolveSurvivorPlayerName(tx, eventId, survivorId, survivorAccountName);
+    for (const sourceName of names) {
+      if (sourceName === targetName) continue;
+      await mergePlayerIdentity(tx, eventId, sourceName, targetName, survivorId);
+    }
+    mergedEvents.push(eventId);
+  }
+  return mergedEvents;
 }
 
 async function transferAccounts(tx: Tx, absorbedId: string, survivorId: string) {
@@ -104,6 +184,11 @@ export async function mergeUsers(tx: Tx, survivorId: string, absorbedId: string)
   // ── Accounts ──────────────────────────────────────────────────────────────
   const { transferred, discarded } = await transferAccounts(tx, absorbedId, survivorId);
 
+  // ── Player identity (name-keyed, ADR 0016) ────────────────────────────────
+  // Collapse the absorbed user's per-event player names into the survivor's
+  // before the generic userId repoints erase which names were theirs.
+  const mergedPlayerEvents = await mergeUserPlayerIdentities(tx, survivorId, absorbedId, survivor.name);
+
   // ── Simple userId repoints (no cross-user unique) ─────────────────────────
   await tx.event.updateMany({ where: { ownerId: absorbedId }, data: { ownerId: survivorId } });
   await tx.season.updateMany({ where: { createdByUserId: absorbedId }, data: { createdByUserId: survivorId } });
@@ -150,5 +235,6 @@ export async function mergeUsers(tx: Tx, survivorId: string, absorbedId: string)
     absorbedUserId: absorbedId,
     transferredAccounts: transferred,
     discardedAccounts: discarded,
+    mergedPlayerEvents,
   };
 }
