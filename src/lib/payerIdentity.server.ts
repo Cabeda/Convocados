@@ -15,7 +15,7 @@ export function systemUserId(eventId: string, playerName: string): string {
   return `system:${eventId}:${playerName}`;
 }
 
-type DbClient = Pick<typeof prisma, "eventPlayer" | "player">;
+type DbClient = Pick<typeof prisma, "eventPlayer" | "player" | "user">;
 
 /**
  * Resolve the User id a player's money belongs to, or null when unlinked.
@@ -43,11 +43,11 @@ export async function resolveLinkedUserId(
  * Ensure the synthetic system user exists for an unlinked player, returning its
  * id. Idempotent — the id is deterministic, so a repeat call is a no-op.
  */
-export async function ensureSystemUserId(eventId: string, playerName: string): Promise<string> {
+export async function ensureSystemUserId(eventId: string, playerName: string, client: DbClient = prisma): Promise<string> {
   const id = systemUserId(eventId, playerName);
-  const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+  const existing = await client.user.findUnique({ where: { id }, select: { id: true } });
   if (existing) return id;
-  await prisma.user.create({
+  await client.user.create({
     data: { id, name: playerName, email: `${id}@system.local`, emailVerified: false },
   });
   log.info({ systemId: id }, "Created system user for unlinked player's ledger entry");
