@@ -42,7 +42,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
   const eventCosts = await prisma.eventCost.findMany({
     where: {
       payments: { some: { status: { in: ["pending", "sent"] } } },
-      event: { dateTime: { lt: now } },
+      event: { dateTime: { lt: now }, archivedAt: null },
     },
     include: {
       event: { select: { id: true, title: true, dateTime: true, durationMinutes: true, ownerId: true, maxPlayers: true } },

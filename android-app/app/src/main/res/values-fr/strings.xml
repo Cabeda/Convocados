@@ -50,8 +50,6 @@
     <string name="server_url">URL du serveur</string>
     <string name="language">Langue</string>
     <string name="notifications_title">Notifications</string>
-    <string name="enable_notifications">Activer les notifications</string>
-    <string name="enable_notifications_desc">Choisissez quand Convocados peut envoyer des rappels et des mises à jour de matchs.</string>
     <string name="notifications_subtitle">Gérer les préférences push et e-mail</string>
     <string name="sign_out">Se déconnecter</string>
     <string name="edit_name">Modifier le nom</string>
@@ -216,6 +214,11 @@
     <string name="push_notifications">Notifications push</string>
     <string name="enable_push">Activer le push</string>
     <string name="enable_push_desc">Interrupteur général de toutes les notifications push</string>
+    <string name="this_device_title">Cet appareil</string>
+    <string name="device_push_on">Les notifications sont activées sur cet appareil</string>
+    <string name="device_push_off">Les notifications sont désactivées sur cet appareil</string>
+    <string name="device_push_blocked">Les notifications sont bloquées dans les réglages du système</string>
+    <string name="open_notification_settings">Ouvrir les réglages</string>
     <string name="player_activity_desc">Quand des joueurs rejoignent ou partent</string>
     <string name="game_reminders_desc">Avant le début de votre match</string>
     <string name="event_updates">Mises à jour de l\'événement</string>

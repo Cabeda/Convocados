@@ -39,6 +39,21 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     This is tracked via a client ID stored in localStorage.
   </div>
 
+  <h2>On native apps</h2>
+  <ul>
+    <li>
+      <strong>Android app</strong> — push is delivered via Firebase (a separate channel from browser
+      push). The <em>Notifications</em> settings screen shows a <strong>This device</strong> card with
+      the same states as the web dialog (on / off / blocked) and offers <strong>Enable push</strong>
+      or <strong>Open settings</strong> accordingly.
+    </li>
+    <li>
+      <strong>Wear OS</strong> — no server push channel: the watch only shows local notifications
+      (the live-score ongoing notification and game alarms), gated by the standard Android
+      notification permission requested at launch. There is no per-device push toggle to display.
+    </li>
+  </ul>
+
   <h2>Browser support</h2>
   <p>
     Push notifications work in Chrome, Edge, Firefox, and Safari 16.4+.

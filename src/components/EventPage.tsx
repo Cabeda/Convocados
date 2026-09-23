@@ -349,14 +349,21 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // routes through the payment-nudge dialog (when the user has a balance) or
   // joins directly. The dialog also re-fetches its own copy of the balance.
   const [paymentNudgeOpen, setPaymentNudgeOpen] = useState(false);
-  const [cachedBalance, setCachedBalance] = useState<{ amount: number; enforcement: string } | null>(null);
+  // Full decidePaymentGate inputs from GET /balance — keeps the Quick Join
+  // client mirror on exactly the same threshold/gate-balance the server uses.
+  const [cachedBalance, setCachedBalance] = useState<{ amount: number; gateAmount: number; enforcement: string; threshold: number } | null>(null);
   const refreshBalance = useCallback(async () => {
     try {
       const r = await fetch(`/api/events/${eventId}/balance`);
       if (!r.ok) return;
       const j = await r.json();
       const amt = j?.callerBalance?.amount ?? 0;
-      setCachedBalance({ amount: amt, enforcement: j?.enforcement ?? "off" });
+      setCachedBalance({
+        amount: amt,
+        gateAmount: j?.gateAmount ?? amt,
+        enforcement: j?.enforcement ?? "off",
+        threshold: j?.threshold ?? 0,
+      });
     } catch { /* ignore */ }
   }, [eventId]);
 
@@ -677,14 +684,22 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // Routes the Quick Join pill click: opens the payment-nudge dialog when the user
   // has a balance, otherwise joins directly. Server PAYMENT_GATE 402 falls back to the dialog.
   // Client mirror of the server's payment gate: prompt when the shared decision
-  // is anything but "allow". The server stays authoritative (PAYMENT_GATE 402).
-  const gateWouldPrompt = (amount: number, enforcement: string) =>
-    decidePaymentGate({ enforcement, isSelfService: true, outstandingAmount: amount, gateAmount: amount, threshold: 0 }) !== "allow";
+  // is anything but "allow". Uses the same gateAmount/threshold inputs the join
+  // path feeds decidePaymentGate (GET /balance). The server stays authoritative
+  // (PAYMENT_GATE 402).
+  const gateWouldPrompt = (b: { amount: number; gateAmount: number; enforcement: string; threshold: number }) =>
+    decidePaymentGate({
+      enforcement: b.enforcement,
+      isSelfService: true,
+      outstandingAmount: b.amount,
+      gateAmount: b.gateAmount,
+      threshold: b.threshold,
+    }) !== "allow";
 
   const handleQuickJoinPillClick = (name: string) => {
     const openDialog = () => setPaymentNudgeOpen(true);
     if (cachedBalance) {
-      if (gateWouldPrompt(cachedBalance.amount, cachedBalance.enforcement)) {
+      if (gateWouldPrompt(cachedBalance)) {
         openDialog();
       } else {
         addPlayer(name, true).catch((err: unknown) => {
@@ -700,11 +715,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
     // No cached balance yet — fetch, then decide.
     fetch(`/api/events/${eventId}/balance`)
       .then((r) => r.json())
-      .then((j: { callerBalance?: { amount?: number }; enforcement?: string }) => {
+      .then((j: { callerBalance?: { amount?: number }; gateAmount?: number; enforcement?: string; threshold?: number }) => {
         const amt = j?.callerBalance?.amount ?? 0;
-        const enforcement = j?.enforcement ?? "off";
-        setCachedBalance({ amount: amt, enforcement });
-        if (gateWouldPrompt(amt, enforcement)) {
+        const balance = {
+          amount: amt,
+          gateAmount: j?.gateAmount ?? amt,
+          enforcement: j?.enforcement ?? "off",
+          threshold: j?.threshold ?? 0,
+        };
+        setCachedBalance(balance);
+        if (gateWouldPrompt(balance)) {
           openDialog();
         } else {
           return addPlayer(name, true);
