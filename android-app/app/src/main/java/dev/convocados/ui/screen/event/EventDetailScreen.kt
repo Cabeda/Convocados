@@ -142,6 +142,8 @@ data class EventScreenState(
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
+    /** ADR 0025: per-event invite opt-out (EventPlayer.invitationOptOutAt). */
+    val inviteOptedOut: Boolean = false,
     val showNotificationSheet: Boolean = false,
     // Payment nudge
     val balance: BalanceResponse? = null,
@@ -364,6 +366,7 @@ class EventDetailViewModel @Inject constructor(
                 muteReminders = following?.muteReminders,
                 mutePostGame = following?.mutePostGame,
                 muteEventDetails = following?.muteEventDetails,
+                inviteOptedOut = following?.inviteOptedOut ?: false,
                 balance = balance,
                 coPlaySuggestions = coPlay,
                 teamRatings = teamRatings,
@@ -388,6 +391,7 @@ class EventDetailViewModel @Inject constructor(
                 muteReminders = f.muteReminders,
                 mutePostGame = f.mutePostGame,
                 muteEventDetails = f.muteEventDetails,
+                inviteOptedOut = f.inviteOptedOut ?: false,
             )
         }
     }
@@ -437,6 +441,16 @@ class EventDetailViewModel @Inject constructor(
                         muteEventDetails = res.muteEventDetails,
                     )
                 }
+        }
+    }
+
+    /** ADR 0025: per-event invite opt-out — optimistic flip with rollback, matching
+     *  the web MyNotificationsDialog toggle (endpoint 404s for non-players). */
+    fun updateInviteOptOut(eventId: String, optOut: Boolean) {
+        _state.value = _state.value.copy(inviteOptedOut = optOut)
+        viewModelScope.launch {
+            runCatching { api.setInvitationOptOut(eventId, optOut) }
+                .onFailure { _state.value = _state.value.copy(inviteOptedOut = !optOut) }
         }
     }
 
@@ -1157,6 +1171,13 @@ fun EventDetailScreen(
                 NotificationToggleRow(stringResource(R.string.game_reminders), state.muteReminders) { v -> viewModel.updateNotificationOverride(eventId, "muteReminders", v) }
                 NotificationToggleRow(stringResource(R.string.post_game_results), state.mutePostGame) { v -> viewModel.updateNotificationOverride(eventId, "mutePostGame", v) }
                 NotificationToggleRow(stringResource(R.string.event_changes), state.muteEventDetails) { v -> viewModel.updateNotificationOverride(eventId, "muteEventDetails", v) }
+                // ADR 0025: per-event invite opt-out — endpoint semantics: opted out
+                // while true, so the switch reads as "invites on" (checked = !optedOut).
+                NotificationToggleRow(
+                    stringResource(R.string.invite_opt_out_label),
+                    muted = if (state.inviteOptedOut) true else null,
+                    description = stringResource(R.string.invite_opt_out_desc),
+                ) { viewModel.updateInviteOptOut(eventId, it != true) }
                 if (state.isAdmin) {
                     Spacer(Modifier.height(16.dp)); HorizontalDivider(); Spacer(Modifier.height(12.dp))
                     Text(stringResource(R.string.notify_admin_section_title), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
@@ -2316,10 +2337,16 @@ private fun AddPlayerHeroSection(eventId: String, state: EventScreenState, viewM
     }
 
 @Composable
-private fun NotificationToggleRow(label: String, muted: Boolean?, onToggle: (Boolean?) -> Unit) {
+private fun NotificationToggleRow(label: String, muted: Boolean?, description: String? = null, onToggle: (Boolean?) -> Unit) {
     val enabled = muted != true
     Row(Modifier.fillMaxWidth().padding(vertical=4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodyLarge); Switch(checked = enabled, onCheckedChange = { c -> onToggle(if (c) null else true) })
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            if (description != null) {
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Switch(checked = enabled, onCheckedChange = { c -> onToggle(if (c) null else true) })
     }
 }
 

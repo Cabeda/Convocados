@@ -222,6 +222,8 @@
     <string name="event_updates_desc">Quando os detalhes do evento mudam</string>
     <string name="payment_reminders">Lembretes de pagamento</string>
     <string name="post_game_results_desc">Resultados e resumo após o jogo terminar</string>
+    <string name="invite_opt_out_label">Não me convides para este jogo</string>
+    <string name="invite_opt_out_desc">Pausa convites, sugestões e lembretes para este jogo. Continuas na lista de jogadores.</string>
     <string name="notification_tiers_title">Como funcionam as notificações</string>
     <string name="notification_tiers_desc">Recebes atualizações do evento (cancelamentos, convites, vagas) para todos os jogos que segues. Detalhes do jogo (atividade de jogadores, lembretes, resultados) só são enviados quando estás a jogar — ou podes ativar \"Todas as atualizações\" por evento.</string>
 

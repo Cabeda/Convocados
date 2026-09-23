@@ -39,6 +39,8 @@ class StringsParityTest {
         "match_events_team_one",
         "match_events_team_two",
         "match_events_top_scorers",
+        "invite_opt_out_label",
+        "invite_opt_out_desc",
     )
 
     @Test
