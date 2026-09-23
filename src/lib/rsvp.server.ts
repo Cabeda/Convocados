@@ -363,6 +363,7 @@ export async function getEventsNeedingRsvpPing(now: Date = new Date()) {
   const windowEnd = new Date(now.getTime() + (RSVP_WINDOW_HOURS + 1) * 3600_000);
   return prisma.event.findMany({
     where: {
+      archivedAt: null,
       rsvpCutoffSent: false,
       dateTime: { gte: windowStart, lte: windowEnd },
     },
@@ -376,6 +377,7 @@ export async function getEventsNeedingRsvpSummary(now: Date = new Date()) {
   const windowEnd = new Date(now.getTime() + (RSVP_SUMMARY_HOURS + 1) * 3600_000);
   return prisma.event.findMany({
     where: {
+      archivedAt: null,
       dateTime: { gte: windowStart, lte: windowEnd },
       rsvpCutoffSent: true, // only after the 48h fanout actually fired
     },
@@ -405,6 +407,7 @@ export async function getEventsNeedingRecruitment48h(now: Date = new Date()) {
   const windowEnd = new Date(now.getTime() + (RSVP_WINDOW_HOURS + 1) * 3600_000);
   return prisma.event.findMany({
     where: {
+      archivedAt: null,
       rsvpCutoffSent: true, // precondition: T-48h fanout has already fired
       recruitment48hSent: false,
       dateTime: { gte: windowStart, lte: windowEnd },
@@ -419,6 +422,7 @@ export async function getEventsNeedingRecruitment24h(now: Date = new Date()) {
   const windowEnd = new Date(now.getTime() + (RSVP_SUMMARY_HOURS + 1) * 3600_000);
   return prisma.event.findMany({
     where: {
+      archivedAt: null,
       rsvpCutoffSent: true,
       recruitment24hSent: false,
       dateTime: { gte: windowStart, lte: windowEnd },
