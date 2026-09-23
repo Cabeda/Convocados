@@ -167,6 +167,9 @@ data class StatsSummary(
     val avgRating: Int = 0,
     val bestRating: Int = 0,
     val eventsPlayed: Int = 0,
+    val totalMvpAwards: Int = 0,
+    val totalGoals: Int = 0,
+    val totalAssists: Int = 0,
 )
 
 @Serializable
@@ -189,6 +192,8 @@ data class EventStats(
     val losses: Int = 0,
     val winRate: Double = 0.0,
     val attendance: AttendanceInfo? = null,
+    val goals: Int = 0,
+    val assists: Int = 0,
 )
 
 @Serializable
@@ -623,6 +628,72 @@ data class MvpResponse(
 @Serializable
 data class CreateEventResponse(val id: String)
 
+// ── Match Events (post-game goals & assists) ────────────────────────────────
+
+@Serializable
+data class MatchEvent(
+    val id: String,
+    val type: String = "goal",
+    val team: String = "unknown",
+    val minute: Int? = null,
+    /** How many goals this entry records: "X scored 3" is one row with count=3. */
+    val count: Int = 1,
+    val ownGoal: Boolean = false,
+    val penalty: Boolean = false,
+    val scorerEventPlayerId: String? = null,
+    val scorerName: String = "",
+    val assistEventPlayerId: String? = null,
+    val assistName: String? = null,
+    val createdAt: String = "",
+)
+
+@Serializable
+data class MatchEventScore(val teamOne: Int = 0, val teamTwo: Int = 0)
+
+@Serializable
+data class MatchEventsResponse(
+    val events: List<MatchEvent> = emptyList(),
+    val score: MatchEventScore? = null,
+    val scoringType: String = "standard",
+)
+
+@Serializable
+data class MatchEventRequest(
+    val type: String = "goal",
+    val team: String = "unknown",
+    val minute: Int? = null,
+    val count: Int = 1,
+    val ownGoal: Boolean = false,
+    val penalty: Boolean = false,
+    val scorerEventPlayerId: String? = null,
+    val scorerName: String? = null,
+    val assistEventPlayerId: String? = null,
+    val assistName: String? = null,
+)
+
+@Serializable
+data class MatchEventResponse(
+    val ok: Boolean = true,
+    val event: MatchEvent? = null,
+    val score: MatchEventScore? = null,
+)
+
+@Serializable
+data class MatchScorer(
+    val name: String,
+    val eventPlayerId: String? = null,
+    val goals: Int = 0,
+    val assists: Int = 0,
+    val ownGoals: Int = 0,
+    val penalties: Int = 0,
+)
+
+@Serializable
+data class MatchStatsResponse(
+    val scorers: List<MatchScorer> = emptyList(),
+    val scoringType: String = "standard",
+)
+
 @Serializable
 data class RemovePlayerResponse(
     val ok: Boolean = true,
@@ -647,6 +718,8 @@ data class FollowStateResponse(
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
+    /** ADR 0025: per-event invite opt-out (EventPlayer.invitationOptOutAt). */
+    val inviteOptedOut: Boolean? = null,
 )
 
 // ── Court Finder ────────────────────────────────────────────────────────────

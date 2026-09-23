@@ -6,7 +6,7 @@ accepted
 
 ## Context
 
-We want per-player goals and assists (parity with Omby's Match Center), but Convocados has no
+We want per-player goals and assists, but Convocados has no
 live match capture, and the canonical score already lives in the immutable `GameHistory`
 snapshot — the live `Game` does not persist team assignments or scores.
 
@@ -20,6 +20,10 @@ keyed on **`GameHistory`** (the same home as `MvpVote` and the score):
 - Each Goal carries an optional assister, optional minute, a team side, and `ownGoal` /
   `penalty` flags. Attribution is to the persistent **EventPlayer** (`scorerEventPlayerId`),
   with a free-text name fallback for unlinked guests.
+- A Goal may record **several goals at once** via `count` (default 1). "Player X scored 3"
+  is a single row with `count: 3` rather than three rows, so a high-scoring game does not
+  need one entry per goal. Bulk entries leave `minute` null; a Goal's `count` contributes
+  that many to the derived team score and to per-player totals.
 - Match Events are recorded **after** the Game ends — there is no live capture.
 - For goal-scoring sports, a team's score is **derived** by counting its Goals once at least
   one Match Event exists; if none exist, the manually entered score stands. Own goals credit

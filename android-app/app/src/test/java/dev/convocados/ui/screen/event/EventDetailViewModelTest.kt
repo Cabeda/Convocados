@@ -362,6 +362,49 @@ class EventDetailViewModelTest {
     }
 
     @Test
+    fun `invite opt-out flips state optimistically and calls the endpoint`() = runTest {
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.updateInviteOptOut(eventId, true)
+            advanceUntilIdle()
+            assertTrue(expectMostRecentItem().inviteOptedOut)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify { api.setInvitationOptOut(eventId, true) }
+    }
+
+    @Test
+    fun `invite opt-out failure rolls back the optimistic state`() = runTest {
+        coEvery { api.setInvitationOptOut(eventId, true) } throws ApiException(404, "You are not a player in this event.")
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.updateInviteOptOut(eventId, true)
+            advanceUntilIdle()
+            assertFalse(expectMostRecentItem().inviteOptedOut)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify { api.setInvitationOptOut(eventId, true) }
+    }
+
+    @Test
+    fun `load maps inviteOptedOut from follow state`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.getFollowState(eventId) } returns FollowStateResponse(following = true, inviteOptedOut = true)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            assertTrue(expectMostRecentItem().inviteOptedOut)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `resend invite calls api and surfaces success notice`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())

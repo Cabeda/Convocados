@@ -50,8 +50,6 @@
     <string name="server_url">URL del servidor</string>
     <string name="language">Idioma</string>
     <string name="notifications_title">Notificaciones</string>
-    <string name="enable_notifications">Activar notificaciones</string>
-    <string name="enable_notifications_desc">Elige cuándo Convocados puede enviar recordatorios y actualizaciones de partidos.</string>
     <string name="notifications_subtitle">Gestionar preferencias de push y correo</string>
     <string name="sign_out">Cerrar sesión</string>
     <string name="edit_name">Editar nombre</string>
@@ -216,12 +214,19 @@
     <string name="push_notifications">Notificaciones push</string>
     <string name="enable_push">Activar push</string>
     <string name="enable_push_desc">Interruptor general de todas las notificaciones push</string>
+    <string name="this_device_title">Este dispositivo</string>
+    <string name="device_push_on">Las notificaciones están activadas en este dispositivo</string>
+    <string name="device_push_off">Las notificaciones están desactivadas en este dispositivo</string>
+    <string name="device_push_blocked">Las notificaciones están bloqueadas en la configuración del sistema</string>
+    <string name="open_notification_settings">Abrir ajustes</string>
     <string name="player_activity_desc">Cuando los jugadores se unen o salen</string>
     <string name="game_reminders_desc">Antes de que empiece tu partido</string>
     <string name="event_updates">Actualizaciones del evento</string>
     <string name="event_updates_desc">Cuando cambian los detalles del evento</string>
     <string name="payment_reminders">Recordatorios de pago</string>
     <string name="post_game_results_desc">Resultados y resumen tras el partido</string>
+    <string name="invite_opt_out_label">No me invites a este partido</string>
+    <string name="invite_opt_out_desc">Pausa invitaciones, sugerencias y avisos para este partido. Seguirás en la lista de jugadores.</string>
     <string name="notification_tiers_title">Cómo funcionan las notificaciones</string>
     <string name="notification_tiers_desc">Recibes actualizaciones del evento (cancelaciones, invitaciones, plazas) de todos los partidos que sigues. Los detalles del juego (actividad de jugadores, recordatorios, resultados) solo se envían cuando juegas — o puedes activar \"Todas las actualizaciones\" por evento.</string>
 
@@ -394,4 +399,22 @@
     <string name="post_game_no_score_yet">Aún sin resultado</string>
     <string name="season_rank_how_it_works">Cómo funciona la Clasificación</string>
     <string name="rank_explainer_link_desc">Abre cómo se calculó tu Clasificación de la Temporada</string>
+    <!-- Match events: post-game goals & assists -->
+    <string name="match_events_title">Goles y asistencias</string>
+    <string name="match_events_add_details">Añadir detalles de los goles</string>
+    <string name="match_events_add_goal">Añadir gol</string>
+    <string name="match_events_no_events">Aún no hay goles registrados.</string>
+    <string name="match_events_goal_by">Gol — %1$s</string>
+    <string name="match_events_assist_by">Asistencia: %1$s</string>
+    <string name="match_events_own_goal">Autogol</string>
+    <string name="match_events_penalty">Penalti</string>
+    <string name="match_events_minute">"%1$d'"</string>
+    <string name="match_events_how_many">¿Cuántos goles?</string>
+    <string name="match_events_times">×%1$d</string>
+    <string name="match_events_minute_label">Minuto (opcional)</string>
+    <string name="match_events_select_scorer">¿Quién marcó?</string>
+    <string name="match_events_select_team">¿Qué equipo?</string>
+    <string name="match_events_team_one">Equipo 1</string>
+    <string name="match_events_team_two">Equipo 2</string>
+    <string name="match_events_top_scorers">Máximos goleadores</string>
 </resources>

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { mergeUsers } from "~/lib/merge.server";
-import { findSplitIdentities, collapseSplitIdentities } from "~/lib/backfillMergedIdentity.server";
+import { findSplitIdentities, collapseSplitIdentities, reconcilePaymentNames } from "~/lib/backfillMergedIdentity.server";
 
 const testPrisma = new PrismaClient();
 
@@ -70,7 +70,14 @@ describe("mergeUsers collapses name-keyed player identity", () => {
           { team: "Reds", players: [{ name: "José Cabeda", order: 0 }, { name: "Other", order: 1 }] },
           { team: "Blues", players: [{ name: "Another", order: 0 }] },
         ]),
+        paymentsSnapshot: JSON.stringify([
+          { playerName: "José Cabeda", amount: 5, status: "pending" },
+          { playerName: "Other", amount: 5, status: "paid" },
+        ]),
       },
+    });
+    await testPrisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: absorbedEp.id, playerName: "José Cabeda", amount: 5, status: "pending" },
     });
     await testPrisma.mvpVote.create({
       data: {
@@ -114,6 +121,11 @@ describe("mergeUsers collapses name-keyed player identity", () => {
     const h = await testPrisma.gameHistory.findUnique({ where: { id: hist.id } });
     expect(h!.teamsSnapshot).toContain("Cabeda");
     expect(h!.teamsSnapshot).not.toContain("José Cabeda");
+    expect(h!.paymentsSnapshot).toContain("Cabeda");
+    expect(h!.paymentsSnapshot).not.toContain("José Cabeda");
+
+    const pays = await testPrisma.gamePayment.findMany();
+    expect(pays.map((p) => p.playerName)).toEqual(["Cabeda"]);
 
     const vote = await testPrisma.mvpVote.findFirst();
     expect(vote!.voterName).toBe("Cabeda");
@@ -191,5 +203,34 @@ describe("collapseSplitIdentities (backfill for already-merged accounts)", () =>
 
     const found = await findSplitIdentities(testPrisma);
     expect(found).toHaveLength(0);
+  });
+
+  it("reconciles denormalized payment names that drifted from the linked player", async () => {
+    const user = await seedUser("Cabeda", "cabeda@proton.me");
+    const event = await seedEvent("ev-reconcile", user.id);
+    const ep = await testPrisma.eventPlayer.create({ data: { eventId: event.id, name: "Cabeda", userId: user.id } });
+    const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: new Date(), status: "played" } });
+    await testPrisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "José Cabeda", amount: 5, status: "pending" },
+    });
+    const hist = await testPrisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(),
+        status: "played",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
+        paymentsSnapshot: JSON.stringify([{ playerName: "José Cabeda", amount: 5, status: "pending" }]),
+      },
+    });
+
+    const corrected = await reconcilePaymentNames(testPrisma);
+    expect(corrected).toBe(1);
+
+    const pays = await testPrisma.gamePayment.findMany();
+    expect(pays.map((p) => p.playerName)).toEqual(["Cabeda"]);
+    const h = await testPrisma.gameHistory.findUnique({ where: { id: hist.id } });
+    expect(h!.paymentsSnapshot).toContain("Cabeda");
+    expect(h!.paymentsSnapshot).not.toContain("José Cabeda");
   });
 });

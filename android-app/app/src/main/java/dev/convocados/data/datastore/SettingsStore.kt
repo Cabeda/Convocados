@@ -28,6 +28,10 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
     // GameHistory id of the game the reveal described. A Set so dismissing one
     // game's reveal never suppresses another's.
     private val DISMISSED_RANK_REVEALS_KEY = stringSetPreferencesKey("dismissed_rank_reveals")
+    // Whether the POST_NOTIFICATIONS runtime dialog was already attempted —
+    // needed to tell "never asked" (OFF) from "permanently denied" (BLOCKED),
+    // since shouldShowRationale is false in both cases before the first ask.
+    private val NOTIF_PERM_REQUESTED_KEY = booleanPreferencesKey("notification_permission_requested")
 
     val locale: Flow<String> = context.dataStore.data.map { it[LOCALE_KEY] ?: "en" }
 
@@ -76,5 +80,13 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
         context.dataStore.edit { prefs ->
             prefs[DISMISSED_RANK_REVEALS_KEY] = (prefs[DISMISSED_RANK_REVEALS_KEY] ?: emptySet()) + historyId
         }
+    }
+
+    /** True once the notification permission dialog has been attempted at least once. */
+    val notificationPermissionRequested: Flow<Boolean> =
+        context.dataStore.data.map { it[NOTIF_PERM_REQUESTED_KEY] ?: false }
+
+    suspend fun markNotificationPermissionRequested() {
+        context.dataStore.edit { it[NOTIF_PERM_REQUESTED_KEY] = true }
     }
 }

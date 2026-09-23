@@ -71,6 +71,9 @@ import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.repository.EventRepository
 import dev.convocados.ui.components.InitialAvatar
+import dev.convocados.ui.components.MatchEventItem
+import dev.convocados.ui.components.MatchEventPlayer
+import dev.convocados.ui.components.MatchEventsSection
 import dev.convocados.ui.screen.courts.PLAYTOMIC_SPORTS
 import dev.convocados.ui.screen.history.TennisSetEditor
 import dev.convocados.ui.screen.games.formatEventDateInTz
@@ -139,6 +142,8 @@ data class EventScreenState(
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
+    /** ADR 0025: per-event invite opt-out (EventPlayer.invitationOptOutAt). */
+    val inviteOptedOut: Boolean = false,
     val showNotificationSheet: Boolean = false,
     // Payment nudge
     val balance: BalanceResponse? = null,
@@ -161,6 +166,9 @@ data class EventScreenState(
     val coPlaySuggestions: List<CoPlaySuggestion> = emptyList(),
     val mvp: MvpResponse? = null,
     val mvpLoading: Boolean = false,
+    val matchEvents: MatchEventsResponse? = null,
+    val matchEventsLoading: Boolean = false,
+    val matchEventsSaving: Boolean = false,
     val cost: EventCost? = null,
     val coPlayers: List<CoPlayer> = emptyList(),
 )
@@ -358,6 +366,7 @@ class EventDetailViewModel @Inject constructor(
                 muteReminders = following?.muteReminders,
                 mutePostGame = following?.mutePostGame,
                 muteEventDetails = following?.muteEventDetails,
+                inviteOptedOut = following?.inviteOptedOut ?: false,
                 balance = balance,
                 coPlaySuggestions = coPlay,
                 teamRatings = teamRatings,
@@ -382,6 +391,7 @@ class EventDetailViewModel @Inject constructor(
                 muteReminders = f.muteReminders,
                 mutePostGame = f.mutePostGame,
                 muteEventDetails = f.muteEventDetails,
+                inviteOptedOut = f.inviteOptedOut ?: false,
             )
         }
     }
@@ -431,6 +441,16 @@ class EventDetailViewModel @Inject constructor(
                         muteEventDetails = res.muteEventDetails,
                     )
                 }
+        }
+    }
+
+    /** ADR 0025: per-event invite opt-out — optimistic flip with rollback, matching
+     *  the web MyNotificationsDialog toggle (endpoint 404s for non-players). */
+    fun updateInviteOptOut(eventId: String, optOut: Boolean) {
+        _state.value = _state.value.copy(inviteOptedOut = optOut)
+        viewModelScope.launch {
+            runCatching { api.setInvitationOptOut(eventId, optOut) }
+                .onFailure { _state.value = _state.value.copy(inviteOptedOut = !optOut) }
         }
     }
 
@@ -838,6 +858,38 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    // ── Match Events (ADR 0039) ──────────────────────────────────────────
+
+    fun loadMatchEvents(eventId: String, historyId: String) {
+        _state.value = _state.value.copy(matchEventsLoading = true)
+        viewModelScope.launch {
+            runCatching { api.fetchMatchEvents(eventId, historyId) }
+                .onSuccess { resp -> _state.value = _state.value.copy(matchEvents = resp, matchEventsLoading = false) }
+                .onFailure { _state.value = _state.value.copy(matchEventsLoading = false) }
+        }
+    }
+
+    fun addMatchEvent(eventId: String, historyId: String, body: MatchEventRequest) {
+        _state.value = _state.value.copy(matchEventsSaving = true)
+        viewModelScope.launch {
+            runCatching { api.addMatchEvent(eventId, historyId, body) }
+                .onSuccess {
+                    val resp = runCatching { api.fetchMatchEvents(eventId, historyId) }.getOrNull()
+                    _state.value = _state.value.copy(
+                        matchEvents = resp ?: _state.value.matchEvents,
+                        matchEventsSaving = false,
+                    )
+                    repository.refreshEventDetail(eventId)
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        matchEventsSaving = false,
+                        error = parseApiErrorMessage(e) ?: "Failed to log the goal",
+                    )
+                }
+        }
+    }
+
     fun savePostGamePayments(eventId: String) {
         val historyId = _state.value.postGame?.latestHistoryId ?: return
         val payments = _state.value.postGamePayments ?: return
@@ -1119,6 +1171,13 @@ fun EventDetailScreen(
                 NotificationToggleRow(stringResource(R.string.game_reminders), state.muteReminders) { v -> viewModel.updateNotificationOverride(eventId, "muteReminders", v) }
                 NotificationToggleRow(stringResource(R.string.post_game_results), state.mutePostGame) { v -> viewModel.updateNotificationOverride(eventId, "mutePostGame", v) }
                 NotificationToggleRow(stringResource(R.string.event_changes), state.muteEventDetails) { v -> viewModel.updateNotificationOverride(eventId, "muteEventDetails", v) }
+                // ADR 0025: per-event invite opt-out — endpoint semantics: opted out
+                // while true, so the switch reads as "invites on" (checked = !optedOut).
+                NotificationToggleRow(
+                    stringResource(R.string.invite_opt_out_label),
+                    muted = if (state.inviteOptedOut) true else null,
+                    description = stringResource(R.string.invite_opt_out_desc),
+                ) { viewModel.updateInviteOptOut(eventId, it != true) }
                 if (state.isAdmin) {
                     Spacer(Modifier.height(16.dp)); HorizontalDivider(); Spacer(Modifier.height(12.dp))
                     Text(stringResource(R.string.notify_admin_section_title), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
@@ -1279,6 +1338,46 @@ fun EventDetailScreen(
                                 onSaveScore = { editingScoreId = null },
                                 onVoteMvp = { onHistoryClick(it) },
                                 onViewSeason = onSeasonDetail)
+                            // Match events (ADR 0039): logged only once the game is settled.
+                            val settledHistoryId = ds.postGame?.latestHistoryId
+                            if (settledHistoryId != null && ds.postGame?.gameEnded == true && !usesStructuredTennisScore(ds.event?.sport, null)) {
+                                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                                    Box(Modifier.padding(16.dp)) {
+                                        MatchEventsSection(
+                                            events = ds.matchEvents?.events?.map {
+                                                MatchEventItem(
+                                                    scorerName = it.scorerName,
+                                                    assistName = it.assistName,
+                                                    minute = it.minute,
+                            count = it.count,
+                                                    ownGoal = it.ownGoal,
+                                                    penalty = it.penalty,
+                                                )
+                                            } ?: emptyList(),
+                                            players = (ds.event?.players ?: emptyList()).map { MatchEventPlayer(it.id, it.name) },
+                                            loading = ds.matchEventsLoading,
+                                            saving = ds.matchEventsSaving,
+                                            loadOnAppear = { viewModel.loadMatchEvents(eventId, settledHistoryId) },
+                                            onAdd = { draft ->
+                                                viewModel.addMatchEvent(
+                                                    eventId,
+                                                    settledHistoryId,
+                                                    MatchEventRequest(
+                                                        type = "goal",
+                                                        team = draft.team,
+                                                        minute = draft.minute,
+                        count = draft.count,
+                                                        ownGoal = draft.ownGoal,
+                                                        penalty = draft.penalty,
+                                                        scorerEventPlayerId = draft.scorerEventPlayerId,
+                                                        scorerName = draft.scorerName,
+                                                    ),
+                                                )
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                             // Join / Leave (YOUR RESPONSE deprecated in favor of this)
                             if (effectiveUser?.name != null) {
                                 val callerBalance = ds.balance?.callerBalance
@@ -2238,10 +2337,16 @@ private fun AddPlayerHeroSection(eventId: String, state: EventScreenState, viewM
     }
 
 @Composable
-private fun NotificationToggleRow(label: String, muted: Boolean?, onToggle: (Boolean?) -> Unit) {
+private fun NotificationToggleRow(label: String, muted: Boolean?, description: String? = null, onToggle: (Boolean?) -> Unit) {
     val enabled = muted != true
     Row(Modifier.fillMaxWidth().padding(vertical=4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodyLarge); Switch(checked = enabled, onCheckedChange = { c -> onToggle(if (c) null else true) })
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            if (description != null) {
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Switch(checked = enabled, onCheckedChange = { c -> onToggle(if (c) null else true) })
     }
 }
 
