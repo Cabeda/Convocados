@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
-import { getOutstandingBalance, getEventBalanceSummary } from "../../../../lib/balance.server";
+import { getOutstandingBalance, getGateBalance, getEventBalanceSummary } from "../../../../lib/balance.server";
 
 /**
  * GET /api/events/[id]/balance
@@ -29,6 +29,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   // Find the caller's player name in this event
   let callerBalance = null;
+  let callerGateAmount: number | null = null;
   if (session?.user) {
     const player = await prisma.player.findFirst({
       where: { eventId, userId: session.user.id },
@@ -36,6 +37,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     });
     if (player) {
       callerBalance = await getOutstandingBalance(eventId, player.name);
+      // Same gate-balance input the join path feeds decidePaymentGate — lets
+      // the client's Quick Join mirror share the server's decision exactly.
+      callerGateAmount = await getGateBalance(eventId, player.name);
     }
   }
 
@@ -52,6 +56,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     enforcement: event.paymentEnforcementLevel,
     threshold: event.paymentGateThreshold,
     callerBalance,
+    gateAmount: callerGateAmount,
     aggregate: { paidCount: summary.paidCount, totalCount: summary.totalCount },
     balances,
   });
