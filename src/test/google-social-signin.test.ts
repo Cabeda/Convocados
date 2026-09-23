@@ -274,6 +274,63 @@ describe("Google social sign-in (real auth.handler e2e)", () => {
     await prisma.user.delete({ where: { id: existing.id } });
   });
 
+  it("creates a second account on Google no-match and leaves a pre-existing different-email user untouched (ADR 0040 Q3-B)", async () => {
+    const now = Date.now();
+    const survivorEmail = `google-e2e-survivor-${now}@example.com`;
+    const survivor = await prisma.user.create({
+      data: {
+        id: `e2e-survivor-${now}`,
+        name: "Pre-existing Password User",
+        email: survivorEmail,
+        emailVerified: true,
+        accounts: {
+          create: {
+            id: `cred-survivor-${now}`,
+            accountId: `cred-owner-${now}`,
+            providerId: "credential",
+            issuer: "local:credential",
+            password: "hashed-x",
+          },
+        },
+      },
+      include: { accounts: true },
+    });
+
+    // Google's primary Gmail differs from the existing account → no match.
+    const sub = `e2e-split-sub-${now}`;
+    const email = `google-e2e-split-${now}@example.com`;
+    stubGoogleEndpoints(signIdToken(sub, email));
+
+    const init = await initiateSignIn();
+    const cb = await auth.handler(
+      new Request(`http://localhost:4321/api/auth/callback/google?code=e2e-code&state=${init.url.searchParams.get("state")}`, {
+        method: "GET",
+        headers: { cookie: init.cookies },
+      }),
+    );
+    expect(cb.status).toBe(302);
+    expect(cb.headers.get("location")).toBe("/");
+
+    // A brand-new User is created for the unmatched Google identity (by design).
+    const created = await prisma.user.findUnique({ where: { email }, include: { accounts: true } });
+    expect(created).not.toBeNull();
+    expect(created!.id).not.toBe(survivor.id);
+    const googleAccount = created!.accounts.find((a) => a.providerId === "google");
+    expect(googleAccount?.issuer).toBe(GOOGLE_ISSUER);
+    expect(googleAccount?.accountId).toBe(sub);
+
+    // The pre-existing different-email user is untouched: same row, still password-only.
+    const reloaded = await prisma.user.findUniqueOrThrow({
+      where: { id: survivor.id },
+      include: { accounts: true },
+    });
+    expect(reloaded.email).toBe(survivorEmail);
+    expect(reloaded.accounts.map((a) => a.providerId)).toEqual(["credential"]);
+
+    await prisma.user.delete({ where: { id: created!.id } });
+    await prisma.user.delete({ where: { id: survivor.id } });
+  });
+
   it("rejects an ID token signed by an unknown key", async () => {
     const sub = `e2e-badkey-sub-${Date.now()}`;
     const email = `google-e2e-badkey-${Date.now()}@example.com`;
