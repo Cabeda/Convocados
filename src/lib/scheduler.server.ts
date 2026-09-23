@@ -3,6 +3,8 @@ import { createLogger } from "./logger.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { sendReminder } from "./email.server";
 import { getNotificationPrefs, wantsEmailReminder } from "./notificationPrefs.server";
+import { findSplitIdentities, collapseSplitIdentities, reconcilePaymentNames } from "./backfillMergedIdentity.server";
+import { recalculateAllRatings } from "./elo.server";
 
 const log = createLogger("scheduler");
 
@@ -109,6 +111,8 @@ export async function processJob(jobId: string): Promise<void> {
       await _processReminderJob(job);
     } else if (job.type === "post_game") {
       await _processPostGameJob(job);
+    } else if (job.type === "backfill_merged_identity") {
+      await _processBackfillMergedIdentityJob();
     } else {
       log.warn({ jobId, type: job.type }, "Unknown scheduled job type");
     }
@@ -147,6 +151,9 @@ async function _processReminderJob(job: { id: string; eventId: string | null; ty
     },
   });
   if (!event) return;
+  // Archived events never notify — jobs may still be queued from before the
+  // archive. Mark processed (the caller does) without sending anything.
+  if (event.archivedAt) return;
 
   const activePlayers = event.players.filter((p) => !p.archivedAt);
   const spotsLeft = Math.max(0, event.maxPlayers - activePlayers.length);
@@ -213,6 +220,8 @@ async function _processPostGameJob(job: { id: string; eventId: string | null }) 
     },
   });
   if (!event) return;
+  // Archived events never notify (see _processReminderJob).
+  if (event.archivedAt) return;
 
   const activePlayers = event.players.filter((p) => !p.archivedAt);
   const spotsLeft = Math.max(0, event.maxPlayers - activePlayers.length);
@@ -231,4 +240,38 @@ async function _processPostGameJob(job: { id: string; eventId: string | null }) 
     create: { eventId: event.id, type: "post-game" },
     update: {},
   });
+}
+
+/**
+ * One-shot backfill (enqueued by the `backfill_merged_player_identity`
+ * migration): collapse player identities that cross-account merges left split
+ * before `mergeUsers` learned to collapse name-keyed identity (ADR 0040), then
+ * rebuild ELO for the affected events. Idempotent — a no-op once collapsed.
+ */
+async function _processBackfillMergedIdentityJob(): Promise<void> {
+  const identities = await findSplitIdentities(prisma);
+  const eventIds = new Set<string>();
+  if (identities.length > 0) {
+    await collapseSplitIdentities(prisma, identities);
+    for (const i of identities) eventIds.add(i.eventId);
+  }
+
+  // Payment names are denormalized on GamePayment + the frozen paymentsSnapshot
+  // JSON, so they can still be stale even when the identity is already
+  // collapsed (an earlier run rewrote team snapshots only).
+  const correctedPayments = await reconcilePaymentNames(prisma);
+
+  let recalculated = 0;
+  for (const eventId of eventIds) {
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { eloEnabled: true } });
+    if (event?.eloEnabled) {
+      await recalculateAllRatings(eventId);
+      recalculated++;
+    }
+  }
+
+  log.info(
+    { groups: identities.length, events: eventIds.size, correctedPayments, recalculated },
+    "backfill_merged_identity: done",
+  );
 }

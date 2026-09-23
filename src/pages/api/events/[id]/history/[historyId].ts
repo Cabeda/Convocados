@@ -9,6 +9,8 @@ import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
 import { getGameSettlement, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
+import { perPlayerShare } from "../../../../../lib/gameCost";
+import { postLedgerEntry } from "../../../../../lib/ledger.server";
 import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
@@ -105,6 +107,26 @@ export const GET: APIRoute = async ({ params, request }) => {
     const paymentsSnapshot = paymentConfig
       ? settlementPaymentsSnapshot(paymentConfig)
       : gh.paymentsSnapshot;
+
+    // Goal timeline (ADR 0039). Set-based sports have no goals.
+    const matchEvents = getScoringType(event.sport) === "tennis"
+      ? []
+      : await prisma.matchEvent.findMany({
+          where: { gameHistoryId: gh.id },
+          select: {
+            id: true,
+            type: true,
+            team: true,
+            minute: true,
+            count: true,
+            ownGoal: true,
+            penalty: true,
+            scorerName: true,
+            assistName: true,
+          },
+          orderBy: [{ minute: "asc" }, { createdAt: "asc" }],
+        });
+
     return Response.json({
       id: gh.id,
       eventId: gh.eventId,
@@ -121,8 +143,14 @@ export const GET: APIRoute = async ({ params, request }) => {
       paymentConfig,
       createdAt: gh.createdAt.toISOString(),
       source: gh.source,
+      // Kept in sync with the list endpoint: the card needs this to decide
+      // between the "Approve ELO" button and the approved state. Omitting it
+      // made every historical game look unapproved, so the button appeared to
+      // do nothing.
+      eloProcessed: gh.eloProcessed,
       eloUpdates,
       isFriendly: gh.isFriendly,
+      matchEvents,
     });
   }
 
@@ -300,7 +328,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     // Per-player share = total / required playing slots (maxPlayers), NOT the
     // roster size in the snapshot — the per-player price is fixed for the event.
-    const newShare = event.maxPlayers > 0 ? newTotal / event.maxPlayers : 0;
+    const newShare = perPlayerShare(newTotal, event.maxPlayers);
     const newShareCents = Math.round(newShare * 100);
 
     // Update Game.costTotalAmount if this is a Game-backed entry
@@ -321,19 +349,16 @@ export const PATCH: APIRoute = async ({ params, request }) => {
           for (const debit of existingDebits) {
             const delta = newShareCents - debit.amountCents;
             if (delta === 0) continue;
-            await tx.walletTransaction.create({
-              data: {
-                eventId: params.id!,
-                userId: debit.userId,
-                amountCents: Math.abs(delta),
-                currency: costCurrency,
-                direction: delta > 0 ? "debit" : "credit",
-                gameUnits: 0,
-                reason: "cost_adjustment",
-                eventInstanceId: game.id,
-                markedById: session.user.id,
-              },
-            });
+            await postLedgerEntry({
+              eventId: params.id!,
+              userId: debit.userId,
+              amountCents: Math.abs(delta),
+              currency: costCurrency,
+              direction: delta > 0 ? "debit" : "credit",
+              reason: "cost_adjustment",
+              eventInstanceId: game.id,
+              markedById: session.user.id,
+            }, tx);
           }
         } else {
           // ADR 0019 §6: Unlinked players — resolve from GameParticipant and write corrections
@@ -345,19 +370,16 @@ export const PATCH: APIRoute = async ({ params, request }) => {
             const userId = gp.eventPlayer.userId;
             if (!userId) continue; // truly anonymous — no ledger possible
             // No original debit exists, so the full newShareCents is the adjustment
-            await tx.walletTransaction.create({
-              data: {
-                eventId: params.id!,
-                userId,
-                amountCents: newShareCents,
-                currency: costCurrency,
-                direction: "debit",
-                gameUnits: 0,
-                reason: "cost_adjustment",
-                eventInstanceId: game.id,
-                markedById: session.user.id,
-              },
-            });
+            await postLedgerEntry({
+              eventId: params.id!,
+              userId,
+              amountCents: newShareCents,
+              currency: costCurrency,
+              direction: "debit",
+              reason: "cost_adjustment",
+              eventInstanceId: game.id,
+              markedById: session.user.id,
+            }, tx);
           }
         }
 
@@ -491,7 +513,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
         const newPlayerNames = newTeams.flatMap((t) => t.players.map((p) => p.name));
         // Per-player share = total / required playing slots (maxPlayers), NOT
         // the roster size in the new teams — the per-player price is fixed.
-        const share = event.maxPlayers > 0 ? eventCost.totalAmount / event.maxPlayers : 0;
+        const share = perPlayerShare(eventCost.totalAmount, event.maxPlayers);
 
         // Upsert payments for current players
         for (const name of newPlayerNames) {

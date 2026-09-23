@@ -431,6 +431,12 @@ jobs:
         working-directory: android-app
         run: ./gradlew :app:assembleDebug --no-daemon
 
+      # assembleDebug does not compile test sources, so a broken unit test only
+      # surfaced later in the release job's publish path. Compile them here too.
+      - name: Compile phone unit tests
+        working-directory: android-app
+        run: ./gradlew :app:compileDebugUnitTestKotlin --no-daemon
+
   android-wear:
     name: Wear OS Build
     runs-on: ubuntu-latest

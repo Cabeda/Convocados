@@ -7,9 +7,9 @@
  * Creates:
  *   - 1 Organizer (demo-settle-organizer@convocados.app / demo123)
  *   - 1 Event with monthly subscriptions enabled, drop-in surcharge, cost €50
- *   - 10 Players, each linked to a User:
- *       3 monthly subscribers (Alice, Bruno, Carlos)
- *       7 per-game payers (Diana, Elena, Fábio, Gonçalo, Helena, Igor, Joana)
+ *   - 10 Players, each linked to a User (faker-generated names):
+ *       3 monthly subscribers (indices 0-2)
+ *       7 per-game payers (indices 3-9)
  *   - 4 "played" June games: per-game payers all attended, monthly
  *     subscribers miss some games → wallet credits are issued.
  *   - 1 "today" game: just before kickoff, ready to test the live settle flow.
@@ -28,6 +28,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { faker } from "@faker-js/faker";
 import { computeGameUpdates } from "../src/lib/elo";
 import { getDefaultDurationMinutes } from "../src/lib/sports";
 import { recordPerGameShare } from "../src/lib/payments.server";
@@ -49,18 +50,27 @@ interface PlayerSpec {
   monthly: boolean;
 }
 
-const PLAYERS: PlayerSpec[] = [
-  { id: "demo-alice",   name: "Alice",   email: "alice@demo.test",   monthly: true  },
-  { id: "demo-bruno",   name: "Bruno",   email: "bruno@demo.test",   monthly: true  },
-  { id: "demo-carlos",  name: "Carlos",  email: "carlos@demo.test",  monthly: true  },
-  { id: "demo-diana",   name: "Diana",   email: "diana@demo.test",   monthly: false },
-  { id: "demo-elena",   name: "Elena",   email: "elena@demo.test",   monthly: false },
-  { id: "demo-fabio",   name: "Fábio",   email: "fabio@demo.test",   monthly: false },
-  { id: "demo-goncalo", name: "Gonçalo", email: "goncalo@demo.test", monthly: false },
-  { id: "demo-helena",  name: "Helena",  email: "helena@demo.test",  monthly: false },
-  { id: "demo-igor",    name: "Igor",    email: "igor@demo.test",    monthly: false },
-  { id: "demo-joana",   name: "Joana",   email: "joana@demo.test",   monthly: false },
-];
+/** Unique faker-generated first names — no real personal data. */
+function uniqueFirstNames(count: number): string[] {
+  const used = new Set<string>();
+  const out: string[] = [];
+  while (out.length < count) {
+    let name = faker.person.firstName();
+    while (used.has(name)) name = `${faker.person.firstName()} ${faker.string.alpha({ length: 1, casing: "upper" })}.`;
+    used.add(name);
+    out.push(name);
+  }
+  return out;
+}
+
+const PLAYER_IDS = Array.from({ length: 10 }, (_, i) => `demo-p${i + 1}`);
+const PLAYER_NAMES = uniqueFirstNames(PLAYER_IDS.length);
+const PLAYERS: PlayerSpec[] = PLAYER_IDS.map((id, i) => ({
+  id,
+  name: PLAYER_NAMES[i]!,
+  email: `${id}@demo.test`,
+  monthly: i < 3, // first three are monthly subscribers
+}));
 
 async function wipePrevious() {
   // Wipe in dependency order.
@@ -141,8 +151,8 @@ async function createEventAndCost(orgId: string) {
       sport: "football-5v5",
       durationMinutes: getDefaultDurationMinutes("football-5v5"),
       isPublic: false,
-      teamOneName: "Ninjas",
-      teamTwoName: "Gunas",
+      teamOneName: "Reds",
+      teamTwoName: "Blues",
       ownerId: orgId,
       priorityEnabled: true,
       priorityThreshold: 2,
@@ -259,26 +269,27 @@ async function main() {
   ];
   const perGameShareCents = Math.round((cost.totalAmount / 10) * 100); // 500 cents
 
-  // June attendance matrix — monthly players miss some to earn credits
-  const attendanceMatrix: Record<string, boolean[]> = {
-    Alice:   [true,  false, true,  false],  // 2 missed → 2 credits
-    Bruno:   [true,  true,  false, true ],  // 1 missed → 1 credit
-    Carlos:  [true,  true,  true,  true ],  // perfect attendance
-    Diana:   [true,  true,  true,  true ],
-    Elena:   [true,  true,  true,  true ],
-    Fábio:   [true,  true,  true,  true ],
-    Gonçalo: [true,  true,  true,  true ],
-    Helena:  [true,  true,  true,  true ],
-    Igor:    [true,  true,  true,  true ],
-    Joana:   [true,  true,  true,  true ],
-  };
+  // June attendance matrix (indexed by PLAYERS order) — the monthly players
+  // (indices 0-2) miss some games to earn credits; the rest attend all.
+  const attendanceMatrix: boolean[][] = [
+    [true, false, true, false], // index 0 — 2 missed → 2 credits
+    [true, true, false, true],  // index 1 — 1 missed → 1 credit
+    [true, true, true, true],   // index 2 — perfect attendance
+    [true, true, true, true],
+    [true, true, true, true],
+    [true, true, true, true],
+    [true, true, true, true],
+    [true, true, true, true],
+    [true, true, true, true],
+    [true, true, true, true],
+  ];
 
   for (let g = 0; g < juneGames.length; g++) {
     await recordPlayedGame(
       event.id,
       PLAYERS.map((p) => ({ name: p.name, userId: p.id, monthly: p.monthly })),
       juneGames[g],
-      Object.fromEntries(PLAYERS.map((p) => [p.name, attendanceMatrix[p.name][g]])),
+      Object.fromEntries(PLAYERS.map((p, i) => [p.name, attendanceMatrix[i]![g]!])),
       perGameShareCents,
     );
   }
@@ -288,7 +299,7 @@ async function main() {
   for (let g = 0; g < juneGames.length; g++) {
     const date = juneGames[g];
     const attendedNames = PLAYERS
-      .filter((p) => attendanceMatrix[p.name][g])
+      .filter((_, i) => attendanceMatrix[i]![g])
       .map((p) => p.name);
     const half = Math.floor(attendedNames.length / 2);
     const teamOne = attendedNames.slice(0, half);
@@ -301,11 +312,11 @@ async function main() {
         status: "played",
         scoreOne: g % 2 === 0 ? 5 : 3,
         scoreTwo: g % 2 === 0 ? 4 : 5,
-        teamOneName: "Ninjas",
-        teamTwoName: "Gunas",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
         teamsSnapshot: JSON.stringify([
-          { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
-          { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
+          { team: "Reds", players: teamOne.map((name, order) => ({ name, order })) },
+          { team: "Blues", players: teamTwo.map((name, order) => ({ name, order })) },
         ]),
         paymentsSnapshot: JSON.stringify(
           attendedNames.map((name) => ({
@@ -322,8 +333,8 @@ async function main() {
     // Build ELO accumulators per game
     const playerInfos = attendedNames.map((name) => ({ name, rating: 1000, gamesPlayed: 0 }));
     const teams = [
-      { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
-      { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
+      { team: "Reds", players: teamOne.map((name, order) => ({ name, order })) },
+      { team: "Blues", players: teamTwo.map((name, order) => ({ name, order })) },
     ];
     const scoreOne = g % 2 === 0 ? 5 : 3;
     const scoreTwo = g % 2 === 0 ? 4 : 5;

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 
@@ -11,8 +11,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin, session } = await checkOwnership(request, event.ownerId, undefined, params.id);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
@@ -24,8 +24,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data: { allowManualRating },
   });
 
-  const actorName = session?.user?.name ?? null;
-  const actorId = session?.user?.id ?? null;
+  const actorName = authz.session?.user?.name ?? null;
+  const actorId = authz.session?.user?.id ?? null;
   logEvent(
     params.id ?? "",
     allowManualRating ? "rating_manual_enabled" : "rating_manual_disabled",

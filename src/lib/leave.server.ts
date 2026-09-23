@@ -15,7 +15,7 @@ import { syncPaymentsForEvent } from "./payments.server";
 import { syncGamePayments } from "./settlement.server";
 import { logEvent } from "./eventLog.server";
 import { createLogger } from "./logger.server";
-import { removePlayerFromTeams, validateTeams } from "../pages/api/events/[id]/players";
+import { removePlayerFromTeams, validateTeams } from "./teamFormation.server";
 import { RSVP_WINDOW_HOURS } from "./rsvp.server";
 
 const log = createLogger("leave");

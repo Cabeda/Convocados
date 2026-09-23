@@ -43,6 +43,18 @@ A Game marked with `isFriendly: true` by the Owner/Admin. Friendly Games are exc
 Use cases: casual sessions with guests, holiday matches, unbalanced rosters, first-timer introductions.
 _Avoid_: exhibition, practice, scrimmage
 
+## Match Event
+A single recorded occurrence in a settled **Game**'s timeline — a **Goal**, an **Assist**, a substitution, or a note. Captured *after* the Game ends, never live. A Game's match timeline is the ordered list of its Match Events.
+_Avoid_: incident, log entry, timeline item
+
+## Goal
+A **Match Event** crediting a player with scoring. For goal-scoring sports a team's score is the count of its Goals; set-based sports (tennis, padel) keep a manual set score and have no Goals. One Goal row may stand for several goals via its `count` ("X scored 3" is a single row with `count: 3`).
+_Avoid_: point, goal count, score (that is the team total)
+
+## Assist
+A **Match Event** crediting the player who set up a **Goal**. Optional on a Goal; the scorer or an organizer names the assister.
+_Avoid_: assist point, secondary assist
+
 ## Season
 A bounded, optional competition within an **Event**. Account-linked **EventPlayers** join explicitly during registration. **Membership is whole-window**: once enrolled, a player counts for every eligible non-friendly **Game** whose day falls inside the Season window, regardless of when they were added — enrollment has no effective date. Only withdrawal removes them, from the withdrawal moment onward; re-adding re-covers the whole window. A player absent from a Game's lineup simply earns nothing for it.
 
@@ -84,6 +96,14 @@ _Avoid_: rank, division, league, medal
 ## Provisional
 A player's first three **Season Rounds**, during which no **Tier** is shown because the **Season Rank** is still calibrating.
 _Avoid_: placement, calibration, unranked
+
+## Rank Standing
+Where a player sits in a **Season**'s **Rank** right now — the value shown before a Game's score lands, and what the **Season Rank** settles to after that Game counts. Rendered on the post-game card as "Rank Standing" whenever the wrap-up Game has no score yet, with a cue that scoring is what moves it.
+_Avoid_: current rank, leaderboard position, MMR
+
+## Rank Movement
+The before → after change in **Season Rank** caused by one counted Game: the RP delta pill, the tier-bar movement, and the count-up on the post-game card. Rendered as "Rank Updated" only once the Game has a score. Absent while the Game is unscored — then only **Rank Standing** shows.
+_Avoid_: rank change, Elo swing, MMR delta
 
 ## Open Pickup
 An un-adopted one-off Event+Game sourced from a Playtomic booking (`source=playtomic`), created automatically by the sweep when a court slot is detected as booked. Public (`isPublic=true`), no Owner (`ownerId=null`), no players yet. A notice that people play here at this court and time — a lead for organizing, not a real game. Rendered distinctly in the public listing (badge + no roster/join UI). Joining is blocked until someone Adopts.
@@ -503,4 +523,18 @@ _Avoid_: hotfix (a code fix, not the release operation), rollback (Play cannot d
 ## Ongoing Activity
 A Wear OS concept: a long-running task surfaced with an ongoing notification paired with an `OngoingActivity`, so the watch face shows a tappable indicator and the recent-apps chip references it. In Convocados a live score session — a **Game** being scored, or a **Quick Game** — is an Ongoing Activity. If the app ever gains a tile, the tile must reference the Ongoing Activity.
 _Avoid_: foreground service (a different mechanism), Live Update (a distinct Wear surface)
+
+## Identity & credentials
+
+**User**:
+The person record — one per human, holding name, **Primary email**, profile settings, and ownership of everything they created or joined.
+_Avoid_: account (overloaded: OAuth client, Player account, billing), member
+
+**Credential**:
+One way of proving you are a given **User**: a password, a Google identity, or a magic-link trip to the Primary email. Multiple Credentials may attach to one User; each is independently revocable while at least one remains.
+_Avoid_: login method, auth provider (too technical for product talk), account
+
+**Primary email**:
+The single address on a **User** used for invites, notifications, and account recovery. Changes only through the verified change-email flow — never overwritten by linking a Credential.
+_Avoid_: username (not used for login), contact email
 

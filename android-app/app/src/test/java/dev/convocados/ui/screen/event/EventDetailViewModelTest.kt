@@ -362,6 +362,49 @@ class EventDetailViewModelTest {
     }
 
     @Test
+    fun `invite opt-out flips state optimistically and calls the endpoint`() = runTest {
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.updateInviteOptOut(eventId, true)
+            advanceUntilIdle()
+            assertTrue(expectMostRecentItem().inviteOptedOut)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify { api.setInvitationOptOut(eventId, true) }
+    }
+
+    @Test
+    fun `invite opt-out failure rolls back the optimistic state`() = runTest {
+        coEvery { api.setInvitationOptOut(eventId, true) } throws ApiException(404, "You are not a player in this event.")
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.updateInviteOptOut(eventId, true)
+            advanceUntilIdle()
+            assertFalse(expectMostRecentItem().inviteOptedOut)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify { api.setInvitationOptOut(eventId, true) }
+    }
+
+    @Test
+    fun `load maps inviteOptedOut from follow state`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.getFollowState(eventId) } returns FollowStateResponse(following = true, inviteOptedOut = true)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            assertTrue(expectMostRecentItem().inviteOptedOut)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `resend invite calls api and surfaces success notice`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
@@ -711,6 +754,41 @@ class EventDetailViewModelTest {
             assertEquals(false, state.postGameSaving)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `togglePostGameShare settles via the settlement API, not the snapshot`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        val pending = PostGameStatus(
+            gameEnded = true, hasScore = true, hasCost = true, allPaid = false,
+            latestHistoryId = "hist-1",
+            gamePayments = listOf(SettlementRow("ep-1", "Rui", 5.0, "pending")),
+            gameConfig = PostGamePaymentConfig(gameId = "game-1", mode = "tracked", payerName = "Payer"),
+        )
+        val settled = pending.copy(
+            allPaid = true,
+            gamePayments = listOf(SettlementRow("ep-1", "Rui", 5.0, "paid")),
+        )
+        coEvery { api.fetchPostGameStatus(eventId) } returnsMany listOf(pending, settled)
+        coEvery { api.settleShare(eventId, "game-1", "ep-1") } returns OkResponse()
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            assertEquals("pending", expectMostRecentItem().postGame?.gamePayments?.first()?.status)
+
+            viewModel.togglePostGameShare(eventId, "game-1", "ep-1", "pending")
+            advanceUntilIdle()
+
+            val state = expectMostRecentItem()
+            assertEquals("paid", state.postGame?.gamePayments?.first()?.status)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify { api.settleShare(eventId, "game-1", "ep-1") }
+        coVerify(exactly = 0) { api.updateHistoryPayments(any(), any(), any()) }
     }
 
 }

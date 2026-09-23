@@ -2,9 +2,10 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { parsePaginationParams, buildPaginatedResponse } from "../../../../../lib/pagination";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
-import { buildSettlementRows, type PaymentMode } from "../../../../../lib/settlement.server";
+import { buildSettlementRows, resolveGameLineups, type PaymentMode } from "../../../../../lib/settlement.server";
 import { buildMvpSummaries } from "../../../../../lib/mvp.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
@@ -171,15 +172,21 @@ export const GET: APIRoute = async ({ params, request }) => {
   // source Game share a dateTime, so the Game is in the page window whenever
   // the GameHistory is.
   const totalFor = (g: (typeof playedGames)[number]) => g.costTotalAmount ?? eventCost?.totalAmount ?? 0;
+  // Only lineup players owe; fall back to the ordered starters when no lineup.
+  const lineups = await resolveGameLineups(prisma, event, playedGames.map((g) => ({ id: g.id, dateTime: g.dateTime })));
   const paymentConfigByDate = new Map<string, unknown>();
   for (const g of playedGames) {
+    const lineup = lineups.get(g.id);
+    const participants = lineup
+      ? g.participants.filter((p) => lineup.has(p.eventPlayer.name))
+      : g.participants.filter((p) => p.order < event.maxPlayers);
     paymentConfigByDate.set(g.dateTime.toISOString(), {
       gameId: g.id,
       mode: (g.paymentMode as PaymentMode | null) ?? "tracked",
       payerName: g.payerEventPlayer?.name ?? g.payerExternalName,
       payerIsPlayer: !!g.payerEventPlayer,
       hasCost: totalFor(g) > 0,
-      rows: buildSettlementRows(g, g.participants, totalFor(g), event.maxPlayers),
+      rows: buildSettlementRows(g, participants, totalFor(g), event.maxPlayers),
     });
   }
   const pageWithConfig = page.map((entry) => ({
@@ -205,8 +212,47 @@ export const GET: APIRoute = async ({ params, request }) => {
     mvp: gameHistoryIds.has(entry.id) ? (mvpMap.get(entry.id) ?? null) : null,
   }));
 
-  return Response.json(buildPaginatedResponse(withMvp, limit));
+  // Ship each page entry's goal timeline with the list response, same reason as
+  // MVP above: one batched query instead of a fetch per card. Set-based sports
+  // have no goals, so skip the query entirely for them.
+  const withMatchEvents = getScoringType(event.sport) === "tennis"
+    ? withMvp.map((entry) => ({ ...entry, matchEvents: [] }))
+    : await attachMatchEvents(withMvp);
+
+  return Response.json(buildPaginatedResponse(withMatchEvents, limit));
 };
+
+/** Batch-attach each history entry's goal timeline to the list page. */
+async function attachMatchEvents<T extends { id: string }>(entries: T[]) {
+  const historyIds = entries.map((e) => e.id);
+  if (historyIds.length === 0) return entries.map((e) => ({ ...e, matchEvents: [] }));
+
+  const events = await prisma.matchEvent.findMany({
+    where: { gameHistoryId: { in: historyIds } },
+    select: {
+      id: true,
+      gameHistoryId: true,
+      type: true,
+      team: true,
+      minute: true,
+      count: true,
+      ownGoal: true,
+      penalty: true,
+      scorerName: true,
+      assistName: true,
+    },
+    orderBy: [{ minute: "asc" }, { createdAt: "asc" }],
+  });
+
+  const byHistory = new Map<string, typeof events>();
+  for (const e of events) {
+    const arr = byHistory.get(e.gameHistoryId) ?? [];
+    arr.push(e);
+    byHistory.set(e.gameHistoryId, arr);
+  }
+
+  return entries.map((entry) => ({ ...entry, matchEvents: byHistory.get(entry.id) ?? [] }));
+}
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */
 export function computeHistoryDeltas(
@@ -272,8 +318,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event, session);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner or admin can add historical games." }, { status: 403 });
   }
 

@@ -77,7 +77,10 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Lazy recurrence reset — optimistic lock via compare-and-swap on nextResetAt.
   // Only the request that wins the updateMany (count=1) proceeds; concurrent
   // requests get count=0 and skip, preventing double-snapshots.
-  if (event.isRecurring && event.nextResetAt && event.nextResetAt <= new Date()) {
+  // Archived events are frozen: never advance their recurrence, never re-arm
+  // reminders. Without this guard an archived recurring event keeps rolling
+  // forward on each visit and re-sends its notification cycle forever.
+  if (!event.archivedAt && event.isRecurring && event.nextResetAt && event.nextResetAt <= new Date()) {
     const rule = parseRecurrenceRule(event.recurrenceRule);
     if (rule) {
       const currentNextResetAt = event.nextResetAt;

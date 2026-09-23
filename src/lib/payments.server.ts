@@ -18,13 +18,13 @@
 import { prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { computeAvailableUnits, type WalletTx } from "./wallet";
+import { perPlayerShare, perPlayerShareCents } from "./gameCost";
+import { ledgerKey, postLedgerEntry } from "./ledger.server";
+import { ensureSystemUserId, resolvePayerUserId } from "./payerIdentity.server";
 import {
   activeSubscriptionCoversDate,
   subscriptionWindowFor,
 } from "./monthly";
-import { createLogger } from "./logger.server";
-
-const log = createLogger("payments");
 
 export type PlayerPaymentMode = "monthly" | "per_game";
 
@@ -85,7 +85,7 @@ async function resolveShareInfo(eventId: string, totalAmount: number) {
   });
   const maxPlayers = event?.maxPlayers ?? 1;
   const gameId = event?.currentGameId ?? eventId;
-  const shareCents = Math.round((totalAmount / maxPlayers) * 100);
+  const shareCents = perPlayerShareCents(totalAmount, maxPlayers);
   return { maxPlayers, gameId, shareCents };
 }
 
@@ -131,7 +131,7 @@ export async function recordPerGameShare(
 
   // Per-game share in cents (rounded to whole cents).
   const { maxPlayers, gameId } = await resolveShareInfo(eventId, eventCost.totalAmount);
-  const baseShareCents = Math.round((eventCost.totalAmount / maxPlayers) * 100);
+  const baseShareCents = perPlayerShareCents(eventCost.totalAmount, maxPlayers);
 
   // 1. Is there an active subscription that covers this date?
   const subscription = userId
@@ -187,32 +187,28 @@ export async function recordPerGameShare(
   const netPlayerPaymentCents = canRedeem ? 0 : amountCents;
 
   // 4. Write the per_game_share debit (always — this is the gross).
-  const debit = await prisma.walletTransaction.create({
-    data: {
-      eventId,
-      userId: userId ?? (await ensureSystemUserId(eventId, playerName, player?.userId ?? null)),
-      amountCents,
-      currency: eventCost.currency,
-      direction: "debit",
-      gameUnits: 0,
-      reason: "per_game_share",
-      eventInstanceId: gameId,
-    },
+  const ledgerUserId = userId ?? player?.userId ?? (await ensureSystemUserId(eventId, playerName));
+  await postLedgerEntry({
+    eventId,
+    userId: ledgerUserId,
+    amountCents,
+    currency: eventCost.currency,
+    direction: "debit",
+    reason: "per_game_share",
+    eventInstanceId: gameId,
   });
 
   // 5. If credit was redeemed, write the credit_redeemed row.
   if (canRedeem) {
-    await prisma.walletTransaction.create({
-      data: {
-        eventId,
-        userId: debit.userId,
-        amountCents: 0,
-        currency: eventCost.currency,
-        direction: "credit",
-        gameUnits: -1,
-        reason: "credit_redeemed",
-        eventInstanceId: gameId,
-      },
+    await postLedgerEntry({
+      eventId,
+      userId: ledgerUserId,
+      amountCents: 0,
+      currency: eventCost.currency,
+      direction: "credit",
+      gameUnits: -1,
+      reason: "credit_redeemed",
+      eventInstanceId: gameId,
     });
   }
 
@@ -245,33 +241,6 @@ export async function recordPerGameShare(
   };
 }
 
-/**
- * When a PlayerPayment row exists but the player has no linked User, we
- * still need *some* userId on the WalletTransaction (the schema requires it
- * for the relation). For unlinked players we create a system placeholder
- * user per (event, playerName) so the ledger stays consistent.
- */
-async function ensureSystemUserId(
-  eventId: string,
-  playerName: string,
-  existingUserId: string | null,
-): Promise<string> {
-  if (existingUserId) return existingUserId;
-  const systemId = `system:${eventId}:${playerName}`;
-  const existing = await prisma.user.findUnique({ where: { id: systemId } });
-  if (existing) return systemId;
-  await prisma.user.create({
-    data: {
-      id: systemId,
-      name: playerName,
-      email: `${systemId}@system.local`,
-      emailVerified: false,
-    },
-  });
-  log.info({ systemId }, "Created system user for unlinked player's ledger entry");
-  return systemId;
-}
-
 // ─── recordSelfReported / recordReceived ───────────────────────────────────
 
 export interface RecordSelfReportedArgs {
@@ -287,18 +256,16 @@ export async function recordSelfReported(args: RecordSelfReportedArgs): Promise<
 
   const { gameId, shareCents } = await resolveShareInfo(eventId, eventCost.totalAmount);
 
-  await prisma.walletTransaction.create({
-    data: {
-      eventId,
-      userId,
-      amountCents: shareCents,
-      currency: eventCost.currency,
-      direction: "credit",
-      gameUnits: 0,
-      reason: "payment_self_reported",
-      statusAfter: "sent",
-      eventInstanceId: gameId,
-    },
+  await postLedgerEntry({
+    eventId,
+    userId,
+    amountCents: shareCents,
+    currency: eventCost.currency,
+    direction: "credit",
+    reason: "payment_self_reported",
+    statusAfter: "sent",
+    eventInstanceId: gameId,
+    idempotencyKey: ledgerKey("selfreported", eventId, userId, gameId),
   });
 }
 
@@ -311,6 +278,8 @@ export interface RecordReceivedArgs {
   amount?: number;
   /** Optional game id the money movement applies to (eventInstanceId). Defaults to current game. */
   gameId?: string;
+  /** Optional provider reference (e.g. a Stripe event/charge id) for reconciliation. */
+  externalId?: string;
 }
 
 export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
@@ -318,25 +287,25 @@ export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
   const eventCost = await findEventCost(eventId);
   if (!eventCost) throw new Error(`No EventCost for event ${eventId}`);
 
-  const player = await findPlayerByName(eventId, playerName);
-  const userId = player?.userId ?? (await ensureSystemUserId(eventId, playerName, null));
+  // The credit must land on the same payer the charge was posted for: the
+  // linked EventPlayer/Player account, else the synthetic system user.
+  const userId = await resolvePayerUserId(eventId, playerName);
   const { gameId: resolvedGameId, shareCents: derivedShareCents } = await resolveShareInfo(eventId, eventCost.totalAmount);
   const gameId = args.gameId ?? resolvedGameId;
   const shareCents = args.amount !== undefined ? Math.round(args.amount * 100) : derivedShareCents;
 
-  await prisma.walletTransaction.create({
-    data: {
-      eventId,
-      userId,
-      amountCents: shareCents,
-      currency: eventCost.currency,
-      direction: "credit",
-      gameUnits: 0,
-      reason: "payment_received",
-      statusAfter: "paid",
-      eventInstanceId: gameId,
-      markedById,
-    },
+  await postLedgerEntry({
+    eventId,
+    userId,
+    amountCents: shareCents,
+    currency: eventCost.currency,
+    direction: "credit",
+    reason: "payment_received",
+    statusAfter: "paid",
+    eventInstanceId: gameId,
+    markedById,
+    externalId: args.externalId,
+    idempotencyKey: ledgerKey("received", eventId, userId, gameId),
   });
 }
 
@@ -374,7 +343,7 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
     .map((m) => ({ name: m.name, userId: m.userId }));
   // Per-player share = total / required playing slots (maxPlayers), NOT the
   // current roster size — the per-player price is fixed for the event.
-  const share = event.maxPlayers > 0 ? eventCost.totalAmount / event.maxPlayers : 0;
+  const share = perPlayerShare(eventCost.totalAmount, event.maxPlayers);
 
   for (const player of activePlayers) {
     const isOwner = event.ownerId && player.userId === event.ownerId;

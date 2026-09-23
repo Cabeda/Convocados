@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "../lib/db.server";
 import { resetApiRateLimitStore } from "../lib/apiRateLimit.server";
-import { validateTeams, removePlayerFromTeams, addPlayerToTeams } from "../pages/api/events/[id]/players";
+import { validateTeams, removePlayerFromTeams, addPlayerToTeams } from "~/lib/teamFormation.server";
 
 // Helper to create test user
 async function seedUser(email: string, name: string) {

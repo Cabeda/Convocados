@@ -6,6 +6,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 import { applyFormationLayout } from "../../../../lib/teams";
 import { getDefaultFormation } from "../../../../lib/formations";
+import { syncGamePayments } from "../../../../lib/settlement.server";
 
 /** Resolve the active player list for an event.
  * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
@@ -197,6 +198,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
 		});
 	}
 
+	// Keep payment rows aligned with the new lineup: only lineup players owe.
+	if (event.currentGameId) {
+		await syncGamePayments(event.currentGameId, eventId);
+	}
+
 	return Response.json({ ok: true });
 };
 
@@ -328,6 +334,11 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
 	if (memberCreates.length > 0) {
 		await prisma.teamMember.createMany({ data: memberCreates });
+	}
+
+	// Keep payment rows aligned with the new lineup: only lineup players owe.
+	if (event.currentGameId) {
+		await syncGamePayments(event.currentGameId, event.id);
 	}
 
 	// Return updated teams

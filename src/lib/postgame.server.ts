@@ -5,7 +5,8 @@ import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
 import { isSettledGameParticipant } from "./participants.server";
 import { isHistoryParticipant } from "./snapshotParticipants";
 import { getWrapUpGameSettlement } from "./settlement.server";
-import { getViewerGameRank, type ViewerGameRank } from "./seasonRank.server";
+import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
+import { summarizePayments } from "./paymentSummary";
 
 /**
  * Shared post-game wrap-up status computation.
@@ -42,6 +43,18 @@ export interface PostGameStatusPayload {
   gameConfig: { gameId: string; mode: "tracked" | "untracked"; payerName: string | null; payerIsPlayer: boolean } | null;
   /** The viewer's Season Rank movement from this Game, when it counted. */
   seasonRank: ViewerGameRank | null;
+  /**
+   * The viewer's current Rank Standing in the Season covering this Game —
+   * present even before the score is entered, so the banner can show the Rank
+   * (and invite the score) instead of an empty section.
+   */
+  rankStanding: ViewerRankStanding | null;
+  /**
+   * True when the viewer is a debtor whose own share is already settled and who
+   * is neither the receiver nor a settlement admin — the payment task is then
+   * hidden for them, while the receiver/admin keep it open until everyone paid.
+   */
+  viewerPaymentSettled: boolean;
 }
 
 export async function computePostGameStatus(
@@ -76,6 +89,7 @@ export async function computePostGameStatus(
       scoreOne: null, scoreTwo: null,
       teamOneName: event.teamOneName, teamTwoName: event.teamTwoName,
       gamePayments: null, gameConfig: null, seasonRank: null,
+      rankStanding: null, viewerPaymentSettled: false,
     };
   }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
@@ -112,21 +126,13 @@ export async function computePostGameStatus(
     hasCost = true;
     try {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
-      if (snapshot.length > 0) {
-        allPaid = snapshot.every(
-          (p) => p.status === "paid",
-        );
-      }
+      allPaid = summarizePayments(snapshot).allPaid;
     } catch { /* ignore parse errors */ }
   } else if (eventCost && eventCost.totalAmount > 0 && !hasResetOccurred) {
     // No snapshot AND game hasn't reset yet — live payments are the past game's
     pastGameSource = "live";
     hasCost = true;
-    if (eventCost.payments.length > 0) {
-      allPaid = eventCost.payments.every(
-        (p) => p.status === "paid",
-      );
-    }
+    allPaid = summarizePayments(eventCost.payments).allPaid;
   } else {
     // Either: no cost at all, OR history exists post-reset with no snapshot
     // (past game had no cost). Live payments belong to the NEW game — don't use.
@@ -245,9 +251,7 @@ export async function computePostGameStatus(
     try {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
       if (snapshot.length > 0) {
-        hasPendingPastPayments = !snapshot.every(
-          (p) => p.status === "paid",
-        );
+        hasPendingPastPayments = !summarizePayments(snapshot).allPaid;
       }
     } catch { /* ignore */ }
   }
@@ -285,10 +289,15 @@ export async function computePostGameStatus(
   // Owner/Admin always count (settlement role: confirm payments, set score).
   // Otherwise use the shared settled-game participant check.
   let isParticipant = false;
+  // Settlement admins (owner/admin) stay responsible for the payment task even
+  // after their own share shows paid — the card must stay open until everyone
+  // has paid, so their own settlement never hides it.
+  let isSettlementAdmin = false;
   if (session?.user) {
     const ownership = await checkOwnership(request, event.ownerId, session, event.id);
     if (ownership?.isOwner || ownership?.isAdmin) {
       isParticipant = true;
+      isSettlementAdmin = true;
     } else {
       isParticipant = await isSettledGameParticipant({
         sessionUser: session.user,
@@ -307,21 +316,14 @@ export async function computePostGameStatus(
   // (Computed before the MVP block; kept here as the canonical definition.)
 
   // Compute aggregate payment info for social proof
-  let paidAggregate = { paidCount: 0, totalCount: 0 };
-  if (paymentsSnapshot && paymentsSnapshot.length > 0) {
-    paidAggregate = {
-      paidCount: paymentsSnapshot.filter((p) => p.status === "paid").length,
-      totalCount: paymentsSnapshot.length,
-    };
-  }
+  const snapshotAggregate = summarizePayments(paymentsSnapshot ?? []);
+  let paidAggregate = { paidCount: snapshotAggregate.paidCount, totalCount: snapshotAggregate.totalCount };
 
   if (wrapUpSettlement) {
     hasCost = true;
-    allPaid = wrapUpSettlement.rows.length === 0 || wrapUpSettlement.rows.every((r) => r.status === "paid");
-    paidAggregate = {
-      paidCount: wrapUpSettlement.rows.filter((r) => r.status === "paid").length,
-      totalCount: wrapUpSettlement.rows.length,
-    };
+    const wrapUpAggregate = summarizePayments(wrapUpSettlement.rows);
+    allPaid = wrapUpAggregate.allPaid;
+    paidAggregate = { paidCount: wrapUpAggregate.paidCount, totalCount: wrapUpAggregate.totalCount };
     // Recompute the wrap-up completion gate — allPaid may have flipped.
     allComplete = hasScore && allPaid && myMvpComplete;
   }
@@ -344,6 +346,34 @@ export async function computePostGameStatus(
     );
   }
 
+  // The viewer's current Rank Standing. Unlike the movement above it does not
+  // need a score, so the card can show where the player stands — and say that
+  // this game is what moves it — while the score task is still pending.
+  let rankStanding: ViewerRankStanding | null = null;
+  if (session?.user && isPlayer && latestHistory) {
+    rankStanding = await getViewerRankStanding(
+      event.id,
+      {
+        dateTime: latestHistory.dateTime,
+        isFriendly: latestHistory.isFriendly,
+        teamsSnapshot: latestHistory.teamsSnapshot,
+      },
+      session.user.name,
+    );
+  }
+
+  // Viewer-scoped payment closure: a debtor who already paid their own share
+  // has nothing left to act on. The receiver of the money and the settlement
+  // admins keep the task open until every share is in.
+  let viewerPaymentSettled = false;
+  if (session?.user && !isSettlementAdmin) {
+    const viewerName = session.user.name;
+    const rows = wrapUpSettlement?.rows ?? [];
+    const mine = rows.find((r) => r.name === viewerName);
+    const isReceiver = (wrapUpSettlement?.payerName ?? null) === viewerName;
+    viewerPaymentSettled = !isReceiver && !!mine && !mine.isPayer && mine.status === "paid";
+  }
+
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
@@ -359,5 +389,7 @@ export async function computePostGameStatus(
       ? { gameId: wrapUpSettlement.gameId, mode: wrapUpSettlement.mode, payerName: wrapUpSettlement.payerName, payerIsPlayer: wrapUpSettlement.payerIsPlayer }
       : null,
     seasonRank,
+    rankStanding,
+    viewerPaymentSettled,
   };
 }

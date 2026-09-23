@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck -- component test type suppression for @testing-library/react screen exports
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { screen, cleanup, waitFor, fireEvent, act } from "@testing-library/react";
+import { screen, cleanup, waitFor, fireEvent, act, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import { PostGameBanner, type PostGameStatus } from "~/components/PostGameBanner";
-import type { SeasonRankMovement } from "~/lib/rankExplainer";
+import type { SeasonRankMovement, SeasonRankStanding } from "~/lib/rankExplainer";
 
 vi.mock("~/components/MvpVotingCard", () => ({
   MvpVotingCard: () => null,
@@ -341,7 +341,7 @@ describe("PostGameBanner Season Rank reveal (rank transparency)", () => {
     expect(screen.queryByText(/RP to /)).not.toBeInTheDocument();
   });
 
-  it("links the Why? affordance to the explainer pre-filled with this game's numbers", async () => {
+  it("links the explainer affordance pre-filled with this game's numbers", async () => {
     mockFetchStatus({
       ...baseStatus,
       isParticipant: true,
@@ -351,13 +351,170 @@ describe("PostGameBanner Season Rank reveal (rank transparency)", () => {
     });
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
-    const link = screen.getByRole("link", { name: /why did my rank change/i });
+    const link = screen.getByRole("link", { name: /how season rank works/i });
     const href = link.getAttribute("href") ?? "";
     expect(href).toContain("/events/evt1/rank-explainer");
     expect(href).toContain("seasonId=s1");
     expect(href).toContain("rank=1532");
     expect(href).toContain("delta=32");
     expect(href).toContain("outcome=1");
+  });
+
+  it("labels the section by state: Rank Updated once scored, Rank Standing before", async () => {
+    mockFetchStatus({ ...baseStatus, isParticipant: true, seasonRank: rank, hasScore: true, scoreOne: 3, scoreTwo: 1 });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
+    expect(screen.getByText("Rank Updated")).toBeInTheDocument();
+    expect(screen.queryByText("Rank Standing")).not.toBeInTheDocument();
+  });
+});
+
+describe("PostGameBanner pre-score standing state", () => {
+  const standing: SeasonRankStanding = {
+    seasonId: "s1",
+    seasonName: "Spring Season",
+    rank: 1168,
+    tier: 3,
+    provisional: false,
+    gamesThisSeason: 5,
+    edges: [0, 1000, 1600, 2000, 2300, 2600],
+    crew: { crewId: "c1", name: "Vermelhos", place: 1, placeCount: 2, points: 7, pointsDelta: null },
+  };
+
+  it("shows the standing and explains the delay with a single Add score control", async () => {
+    mockFetchStatus({ ...baseStatus, seasonRank: null, rankStanding: standing, hasScore: false });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
+
+    expect(screen.getByText("Rank Standing")).toBeInTheDocument();
+    // The cue is a notice, not a second CTA — the checklist owns the button.
+    expect(screen.getByTestId("season-rank-needs-score")).toBeInTheDocument();
+    expect(within(screen.getByTestId("season-rank-needs-score")).queryByRole("button")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /^add score$/i })).toHaveLength(1);
+    // The score hero collapses instead of rendering three placeholder dashes.
+    expect(screen.getByText("No score yet")).toBeInTheDocument();
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+    expect(screen.getByText(/Vermelhos/)).toBeInTheDocument();
+  });
+
+  it("reports the points this game paid the crew, not only whether it climbed", async () => {
+    mockFetchStatus({
+      ...baseStatus,
+      seasonRank: null,
+      rankStanding: { ...standing, crew: { ...standing.crew!, points: 10, pointsDelta: 3 } },
+      hasScore: false,
+    });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("season-rank-crew-delta")).toBeInTheDocument());
+    expect(screen.getByTestId("season-rank-crew-delta")).toHaveTextContent("+3 pts");
+    expect(screen.getByText(/10 pts/)).toBeInTheDocument();
+  });
+});
+
+describe("PostGameBanner collapsed card (rank outlives the checklist)", () => {
+  const rank: SeasonRankMovement = {
+    seasonId: "s1",
+    seasonName: "Spring Season",
+    counted: true,
+    delta: 32,
+    before: 1500,
+    after: 1532,
+    tierBefore: 1,
+    tierAfter: 1,
+    provisional: false,
+    gamesThisSeason: 5,
+    edges: [0, 1000, 1600, 2000, 2300, 2600],
+  };
+
+  it("anchors the collapsed card and lets the player reopen the checklist", async () => {
+    const settled: PostGameStatus = {
+      ...baseStatus,
+      hasScore: true,
+      allPaid: true,
+      allComplete: true,
+      scoreOne: 3,
+      scoreTwo: 1,
+      seasonRank: rank,
+    };
+    mockFetchStatus(settled);
+    renderWithTheme(<PostGameBanner eventId="evt1" initialStatus={settled} />);
+    await waitFor(() => expect(screen.getByTestId("post-game-show-tasks")).toBeInTheDocument());
+
+    expect(screen.getByText("Final result")).toBeInTheDocument();
+    expect(screen.queryByText("Enter the game score")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("post-game-show-tasks"));
+    expect(screen.getByText("Enter the game score")).toBeInTheDocument();
+  });
+});
+
+describe("PostGameBanner payment task honesty", () => {
+  it("never claims payments settled when no cost is configured, and drops the task from progress", async () => {
+    mockFetchStatus({
+      ...baseStatus,
+      hasCost: false,
+      allPaid: true,
+      hasScore: true,
+      allComplete: false,
+      scoreOne: 3,
+      scoreTwo: 1,
+      paymentsSnapshot: null,
+      costAmount: null,
+      costCurrency: null,
+    });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+
+    expect(screen.getByText(/Cost not set yet/)).toBeInTheDocument();
+    expect(screen.queryByText("All payments settled")).not.toBeInTheDocument();
+    expect(screen.getByText("1 of 1 tasks complete")).toBeInTheDocument();
+  });
+
+  it("keeps counting the payment task once a cost exists", async () => {
+    mockFetchStatus({ ...baseStatus, hasCost: true, allPaid: true, hasScore: true, allComplete: false, scoreOne: 3, scoreTwo: 1 });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+    expect(screen.getByText("All payments settled")).toBeInTheDocument();
+    expect(screen.getByText("2 of 2 tasks complete")).toBeInTheDocument();
+  });
+});
+
+describe("PostGameBanner tier progress bar", () => {
+  const rank: SeasonRankMovement = {
+    seasonId: "s1",
+    seasonName: "Spring Season",
+    counted: true,
+    delta: 32,
+    before: 1500,
+    after: 1532,
+    tierBefore: 1,
+    tierAfter: 1,
+    provisional: false,
+    gamesThisSeason: 5,
+    edges: [0, 1000, 1600, 2000, 2300, 2600],
+  };
+
+  it("drops the bar at the top tier instead of pinning it at 100% forever", async () => {
+    mockFetchStatus({
+      ...baseStatus,
+      isParticipant: true,
+      hasScore: true,
+      scoreOne: 3,
+      scoreTwo: 1,
+      seasonRank: { ...rank, tierBefore: 5, tierAfter: 5, before: 2618, after: 2650 },
+    });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
+    expect(screen.getByText("Top tier")).toBeInTheDocument();
+    expect(within(screen.getByTestId("season-rank-reveal")).queryByRole("progressbar")).toBeNull();
+  });
+
+  it("keeps the bar while a tier is still ahead", async () => {
+    mockFetchStatus({ ...baseStatus, isParticipant: true, seasonRank: rank });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
+    expect(within(screen.getByTestId("season-rank-reveal")).getByRole("progressbar")).toBeInTheDocument();
+    expect(screen.getByText(/RP to /)).toBeInTheDocument();
   });
 });
 
@@ -418,5 +575,43 @@ describe("PostGameBanner initial payload gating (banner flash on load)", () => {
     expect(screen.getByTestId("post-game-banner")).toBeInTheDocument();
     await act(async () => { vi.advanceTimersByTime(1700); });
     expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
+  });
+});
+
+describe("PostGameBanner payment summary counts the live settlement, not the stale snapshot", () => {
+  // Regression: managers settle shares through the GamePayment model (settlement
+  // API). The GameHistory.paymentsSnapshot is frozen at reset time and never
+  // updated, so it can read 2/10 paid while the live roll is 9/10 paid. The
+  // banner must report the same rows it renders as chips.
+  const snapshot = Array.from({ length: 10 }, (_, i) => ({
+    playerName: `P${i}`,
+    amount: 5,
+    status: i < 2 ? "paid" : "pending",
+  }));
+  const gamePayments = Array.from({ length: 10 }, (_, i) => ({
+    eventPlayerId: `ep${i}`,
+    name: `P${i}`,
+    amount: 5,
+    status: i < 9 ? "paid" : "pending",
+    isPayer: false,
+  }));
+
+  beforeEach(() => {
+    mockFetchStatus({
+      ...baseStatus,
+      hasScore: true,
+      allPaid: false,
+      allComplete: false,
+      paymentsSnapshot: snapshot,
+      gamePayments,
+      gameConfig: { gameId: "g1", mode: "tracked", payerName: "P9", payerIsPlayer: true },
+    });
+  });
+
+  it("shows the live paid count even when the history snapshot is stale", async () => {
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+    expect(await screen.findByText("9/10 paid")).toBeInTheDocument();
+    expect(screen.queryByText("2/10 paid")).not.toBeInTheDocument();
   });
 });

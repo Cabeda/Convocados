@@ -14,6 +14,7 @@ import {
   type SeasonMember,
 } from "./leaderboard";
 import { seasonCompetitiveWindow } from "./seasonSetup.server";
+import { parseTeamsSnapshot, toLeaderboardGame } from "./gameSnapshot";
 import {
   computeSeasonRank,
   provisionalGames,
@@ -62,40 +63,6 @@ interface SnapshotPayload {
   players: SnapshotPlayer[];
   crews: unknown[];
   winner: string | null;
-}
-
-interface SnapshotTeam {
-  team: string;
-  players: Array<{ name: string }>;
-}
-
-function parseTeamsSnapshot(value: string | null): [LeaderboardGame["teams"][0], LeaderboardGame["teams"][1]] | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as SnapshotTeam[];
-    if (!Array.isArray(parsed) || parsed.length !== 2) return null;
-    const teams = parsed.map((t) => ({
-      name: t.team,
-      players: (t.players ?? []).map((p) => p.name),
-    }));
-    if (teams.some((t) => !t.name || t.players.length === 0)) return null;
-    return teams as [LeaderboardGame["teams"][0], LeaderboardGame["teams"][1]];
-  } catch {
-    return null;
-  }
-}
-
-function toGame(row: {
-  id: string;
-  dateTime: Date;
-  status: string;
-  isFriendly: boolean;
-  scoreOne: number | null;
-  scoreTwo: number | null;
-  teamsSnapshot: string | null;
-}): LeaderboardGame | null {
-  const teams = parseTeamsSnapshot(row.teamsSnapshot);
-  return teams ? { id: row.id, dateTime: row.dateTime, status: row.status, isFriendly: row.isFriendly, scoreOne: row.scoreOne, scoreTwo: row.scoreTwo, teams } : null;
 }
 
 /**
@@ -156,7 +123,7 @@ export async function deriveSeasonRank(eventId: string, seasonId: string): Promi
 
   const { startsAt, endsAt } = seasonCompetitiveWindow(season);
   const history = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } });
-  const allGames = history.map(toGame).filter((g): g is LeaderboardGame => g !== null);
+  const allGames = history.map(toLeaderboardGame).filter((g): g is LeaderboardGame => g !== null);
   const qualifying = filterLeaderboardGames(allGames, { startsAt, endsAt });
 
   const memberNames = season.memberships.map((m) => m.eventPlayer.name);
@@ -275,7 +242,7 @@ export async function snapshotSeasonRank(eventId: string, seasonId: string): Pro
   const rank = await deriveSeasonRank(eventId, seasonId);
   const { startsAt, endsAt } = seasonCompetitiveWindow(season);
   const history = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } });
-  const allGames = history.map(toGame).filter((g): g is LeaderboardGame => g !== null);
+  const allGames = history.map(toLeaderboardGame).filter((g): g is LeaderboardGame => g !== null);
 
   const seasonMembers: SeasonMember[] = season.memberships.map((m) => ({
     membershipId: m.id,
@@ -302,6 +269,147 @@ export async function snapshotSeasonRank(eventId: string, seasonId: string): Pro
 /** Remove a snapshot (cancellation). */
 export async function clearSeasonRankSnapshot(seasonId: string): Promise<void> {
   await prisma.seasonRankSnapshot.deleteMany({ where: { seasonId } });
+}
+
+/**
+ * The viewer's CURRENT Rank Standing in the Season covering this Game —
+ * available whether or not the Game has been scored, so the post-game card can
+ * show the Rank while wrap-up is still pending instead of showing nothing.
+ *
+ * Eligibility matches the movement rule (the viewer must have been in this
+ * Game's lineup and the Game must be non-friendly), plus two guards that keep
+ * the card honest:
+ *  - the Season must be `active`: outside an active Season this score cannot
+ *    move Rank, so we must not tell the player it will;
+ *  - the viewer must be a Season member: only members carry a Standing.
+ */
+export interface ViewerRankStanding {
+  seasonId: string;
+  seasonName: string;
+  rank: number;
+  tier: number;
+  provisional: boolean;
+  gamesThisSeason: number;
+  edges: number[];
+  crew: ViewerCrewStandingServer | null;
+}
+
+export async function getViewerRankStanding(
+  eventId: string,
+  game: { dateTime: Date; isFriendly: boolean; teamsSnapshot: string | null },
+  playerName: string,
+): Promise<ViewerRankStanding | null> {
+  if (game.isFriendly) return null;
+
+  const teams = parseTeamsSnapshot(game.teamsSnapshot);
+  if (!teams || !teams.some((team) => team.players.includes(playerName))) return null;
+
+  const season = await prisma.season.findFirst({
+    where: {
+      eventId,
+      status: "active",
+      registrationOpensAt: { lte: game.dateTime },
+      registrationClosesAt: { gte: game.dateTime },
+    },
+    orderBy: { registrationOpensAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      registrationOpensAt: true,
+      registrationClosesAt: true,
+      completedAt: true,
+      cancelledAt: true,
+      memberships: { include: { eventPlayer: true, crew: true } },
+    },
+  });
+  if (!season) return null;
+
+  const membership = season.memberships.find((m) => m.eventPlayer.name === playerName);
+  if (!membership) return null;
+
+  const payload = await deriveSeasonRank(eventId, season.id);
+  const me = payload?.players.find((p) => p.name === playerName);
+  if (!payload || !me) return null;
+
+  return {
+    seasonId: season.id,
+    seasonName: season.name,
+    rank: me.display,
+    tier: me.tier,
+    provisional: me.provisional,
+    gamesThisSeason: me.games,
+    edges: payload.edges,
+    crew: await viewerCrewStanding(eventId, season, membership.crewId ?? null, game.dateTime),
+  };
+}
+
+/** The viewer's Crew placement inside a Season, plus what this Game paid it. */
+export interface ViewerCrewStandingServer {
+  crewId: string;
+  name: string;
+  place: number;
+  placeCount: number;
+  points: number;
+  /** Points this Game paid the Crew. Null while this Game is not counted. */
+  pointsDelta: number | null;
+}
+
+/**
+ * Crew placement is a pure replay of the Season's qualifying Games, so the
+ * payout of one Game is the difference between the table with it and the table
+ * without it. Place rarely moves; points almost always do, which is why the
+ * card reports points.
+ */
+async function viewerCrewStanding(
+  eventId: string,
+  season: {
+    registrationOpensAt: Date;
+    registrationClosesAt: Date;
+    completedAt: Date | null;
+    cancelledAt: Date | null;
+    memberships: Array<{ id: string; eventPlayer: { name: string }; crewId: string | null; crew: { id: string; name: string } | null; withdrawnAt: Date | null }>;
+  },
+  crewId: string | null,
+  gameDateTime: Date,
+): Promise<ViewerCrewStandingServer | null> {
+  if (!crewId) return null;
+
+  const { startsAt, endsAt } = seasonCompetitiveWindow(season);
+  const history = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } });
+  const allGames = history.map(toLeaderboardGame).filter((g): g is LeaderboardGame => g !== null);
+  const members: SeasonMember[] = season.memberships.map((m) => ({
+    membershipId: m.id,
+    name: m.eventPlayer.name,
+    crewId: m.crewId,
+    crewName: m.crew?.name ?? null,
+    withdrawnAt: m.withdrawnAt,
+  }));
+
+  const crews = calculateLeaderboard(allGames, members, { startsAt, endsAt }).crews;
+  const mine = crews.find((c) => c.crewId === crewId);
+  if (!mine) return null;
+
+  const counted = allGames.some(
+    (g) => g.dateTime instanceof Date && g.dateTime.getTime() === gameDateTime.getTime() && g.scoreOne !== null,
+  );
+  let pointsDelta: number | null = null;
+  if (counted) {
+    const before = calculateLeaderboard(
+      allGames.filter((g) => !(g.dateTime instanceof Date && g.dateTime.getTime() === gameDateTime.getTime())),
+      members,
+      { startsAt, endsAt },
+    ).crews.find((c) => c.crewId === crewId);
+    pointsDelta = Math.round((mine.points - (before?.points ?? 0)) * 100) / 100;
+  }
+
+  return {
+    crewId,
+    name: mine.name,
+    place: mine.rank,
+    placeCount: crews.length,
+    points: Math.round(mine.points * 100) / 100,
+    pointsDelta,
+  };
 }
 
 /**

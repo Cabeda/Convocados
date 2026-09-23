@@ -3,11 +3,13 @@ import { prisma } from "../../../../lib/db.server";
 import { Randomize } from "../../../../lib/random";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 import { applyFormationLayout } from "../../../../lib/teams";
+import { syncGamePayments } from "../../../../lib/settlement.server";
 
 const log = createLogger("randomize");
 
@@ -22,8 +24,8 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   // Owner or admin only. Ownerless events are openly manageable while unlisted
   // (the link is the secret), but a public ownerless event is discoverable and
   // must be adopted/claimed first.
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
@@ -96,6 +98,11 @@ export const POST: APIRoute = async ({ params, url, request }) => {
 
 
   logEvent(eventId, "teams_randomized", null, null, { balanced, playerCount: players.length }).catch(() => {});
+
+  // Keep payment rows aligned with the new lineup: only lineup players owe.
+  if (event.currentGameId) {
+    await syncGamePayments(event.currentGameId, eventId);
+  }
 
   return Response.json({ ok: true, balanced });
 };

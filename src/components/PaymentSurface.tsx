@@ -7,6 +7,7 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useT } from "~/lib/useT";
 import { useEventCost } from "~/lib/useEventCost";
 import { formatMoney, formatShortDate, type PaymentStatus } from "~/lib/money";
+import { perPlayerShare } from "~/lib/gameCost";
 
 interface DebtorLine {
   gameId: string;
@@ -66,7 +67,7 @@ export function PaymentSurface({
   const hasCost = !!cost && cost.totalAmount > 0;
   // Per-player price = total / required playing slots (maxPlayers). Fixed for
   // the event — it does not change with the number of players in the list.
-  const share = hasCost && maxPlayers > 0 ? cost.totalAmount / maxPlayers : null;
+  const share = hasCost && maxPlayers > 0 ? perPlayerShare(cost.totalAmount, maxPlayers) : null;
 
   // The viewer's own debtor person (summary is role-trimmed for players).
   const myDebt = !canEdit

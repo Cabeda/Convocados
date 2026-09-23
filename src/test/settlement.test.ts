@@ -27,6 +27,7 @@ import {
   getWrapUpGameSettlement,
   shareFor,
   isGameParticipant,
+  lineupNamesFromSnapshot,
 } from "~/lib/settlement.server";
 import { PATCH as setConfig } from "~/pages/api/events/[id]/payments/config";
 import { GET as getSummary, PUT as settle, DELETE as unsettle } from "~/pages/api/events/[id]/payments/settlement";
@@ -83,6 +84,11 @@ async function seedEvent(opts: { players?: string[]; cost?: number; ownerId?: st
 }
 
 async function linkUser(name: string, userId: string) {
+  await prisma.user.upsert({
+    where: { id: userId },
+    create: { id: userId, name, email: `${userId}@test.com`, emailVerified: false },
+    update: {},
+  });
   const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { name } });
   await prisma.eventPlayer.update({ where: { id: ep.id }, data: { userId } });
 }
@@ -461,7 +467,7 @@ describe("spec alignment", () => {
     await prisma.event.update({ where: { id: event.id }, data: { maxPlayers: 2 } });
     await syncGamePayments(game.id, event.id);
     const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
-    expect(rows).toHaveLength(3); // 3 participants, share uses maxPlayers(2)
+    expect(rows).toHaveLength(2); // only the 2 starting slots are charged
     expect(rows.every((r) => r.amount === 30)).toBe(true); // 60 / maxPlayers(2)
   });
 
@@ -653,6 +659,82 @@ describe("settlement API routes", () => {
     expect(json.hasCost).toBe(false);
     expect(json.rows.map((r: { name: string }) => r.name)).toEqual(["Ana", "Bruno"]);
     expect(json.rows.every((r: { status: string }) => r.status === "pending")).toBe(true);
+  });
+});
+
+describe("lineup-only charging", () => {
+  it("ignores a bench player who is absent from the lineup", async () => {
+    const { event, game } = await seedEvent({ cost: 60 }); // Ana, Bruno, Carla (order 0..2)
+    const bench = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bench Guy" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: bench.id, order: 10 } });
+
+    await syncGamePayments(game.id, event.id);
+
+    const names = (await prisma.gamePayment.findMany({ where: { gameId: game.id } })).map((r) => r.playerName);
+    expect(names).not.toContain("Bench Guy");
+    expect(names.sort()).toEqual(["Ana", "Bruno", "Carla"]);
+  });
+
+  it("charges a lineup player even when their queue order is on the bench", async () => {
+    const { event, game } = await seedEvent({ cost: 60, players: ["Ana", "Bruno", "Carla", "Dina"] });
+    await prisma.event.update({ where: { id: event.id }, data: { maxPlayers: 2 } });
+    // Dina is order 3 (bench by order) but was assigned to a team — she played.
+    const teamA = await prisma.teamResult.create({ data: { eventId: event.id, name: "A" } });
+    const teamB = await prisma.teamResult.create({ data: { eventId: event.id, name: "B" } });
+    await prisma.teamMember.createMany({
+      data: [
+        { teamResultId: teamA.id, name: "Ana", order: 0 },
+        { teamResultId: teamB.id, name: "Dina", order: 0 },
+      ],
+    });
+
+    await syncGamePayments(game.id, event.id);
+
+    const names = (await prisma.gamePayment.findMany({ where: { gameId: game.id, archivedAt: null } }))
+      .map((r) => r.playerName)
+      .sort();
+    expect(names).toEqual(["Ana", "Dina"]);
+  });
+
+  it("excludes a stale bench row from the wrap-up banner (frozen lineup is authoritative)", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    const bench = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bench Guy" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: bench.id, order: 10 } });
+    await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
+    await syncGamePayments(game.id, event.id);
+    // Simulate a row created before the fix: revive a pending bench row.
+    await prisma.gamePayment.upsert({
+      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: bench.id } },
+      create: { gameId: game.id, eventPlayerId: bench.id, playerName: "Bench Guy", amount: 6, status: "pending" },
+      update: { status: "pending", archivedAt: null },
+    });
+    // The frozen lineup for the played game does not include the bench player.
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: game.dateTime,
+        status: "played",
+        teamOneName: "A",
+        teamTwoName: "B",
+        source: "live",
+        teamsSnapshot: JSON.stringify([
+          { team: "A", players: [{ name: "Ana", order: 0 }] },
+          { team: "B", players: [{ name: "Bruno", order: 0 }, { name: "Carla", order: 1 }] },
+        ]),
+      },
+    });
+
+    const wrap = await getWrapUpGameSettlement(event.id);
+    expect(wrap?.rows.map((r) => r.name)).not.toContain("Bench Guy");
+  });
+});
+
+describe("lineupNamesFromSnapshot", () => {
+  it("reads player names and tolerates malformed input", () => {
+    expect([...lineupNamesFromSnapshot(JSON.stringify([{ team: "A", players: [{ name: "Ana" }] }]))]).toEqual(["Ana"]);
+    expect(lineupNamesFromSnapshot(null).size).toBe(0);
+    expect(lineupNamesFromSnapshot("not json").size).toBe(0);
+    expect(lineupNamesFromSnapshot("[]").size).toBe(0);
   });
 });
 

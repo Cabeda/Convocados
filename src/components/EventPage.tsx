@@ -37,6 +37,8 @@ import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
 import { SignInButton } from "./SignInButton";
 import { PushPromptBanner } from "./PushPromptBanner";
+import { deriveEventPermissions, canRemoveEventPlayer } from "~/lib/eventView";
+import { decidePaymentGate } from "~/lib/paymentGate";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -212,8 +214,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── ADR 0025: co-play suggestions (owner/admin only) ───────────────────────
   interface CoPlaySuggestion { userId: string; name: string; image?: string | null; gamesPlayed?: number; score?: number; reason?: string }
   const [coPlaySuggestions, setCoPlaySuggestions] = useState<CoPlaySuggestion[]>([]);
-  const isOwnerFlag = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
-  const isAdminFlag = !!event?.isAdmin;
+  const perms = deriveEventPermissions(
+    session?.user?.id ?? null,
+    { ownerId: event?.ownerId ?? null, isPublic: !!event?.isPublic, isAdmin: !!event?.isAdmin },
+    { isParticipant: !!session?.user && !!event?.players.some((p) => p.userId === session.user!.id) },
+  );
+  const isOwnerFlag = perms.isOwner;
+  const isAdminFlag = perms.isAdmin;
   useEffect(() => {
     if (!(isOwnerFlag || isAdminFlag) || !event?.gameId) {
       setCoPlaySuggestions([]);
@@ -342,14 +349,21 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // routes through the payment-nudge dialog (when the user has a balance) or
   // joins directly. The dialog also re-fetches its own copy of the balance.
   const [paymentNudgeOpen, setPaymentNudgeOpen] = useState(false);
-  const [cachedBalance, setCachedBalance] = useState<{ hasDebt: boolean; enforcement: string } | null>(null);
+  // Full decidePaymentGate inputs from GET /balance — keeps the Quick Join
+  // client mirror on exactly the same threshold/gate-balance the server uses.
+  const [cachedBalance, setCachedBalance] = useState<{ amount: number; gateAmount: number; enforcement: string; threshold: number } | null>(null);
   const refreshBalance = useCallback(async () => {
     try {
       const r = await fetch(`/api/events/${eventId}/balance`);
       if (!r.ok) return;
       const j = await r.json();
       const amt = j?.callerBalance?.amount ?? 0;
-      setCachedBalance({ hasDebt: amt > 0, enforcement: j?.enforcement ?? "off" });
+      setCachedBalance({
+        amount: amt,
+        gateAmount: j?.gateAmount ?? amt,
+        enforcement: j?.enforcement ?? "off",
+        threshold: j?.threshold ?? 0,
+      });
     } catch { /* ignore */ }
   }, [eventId]);
 
@@ -669,10 +683,23 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // Routes the Quick Join pill click: opens the payment-nudge dialog when the user
   // has a balance, otherwise joins directly. Server PAYMENT_GATE 402 falls back to the dialog.
+  // Client mirror of the server's payment gate: prompt when the shared decision
+  // is anything but "allow". Uses the same gateAmount/threshold inputs the join
+  // path feeds decidePaymentGate (GET /balance). The server stays authoritative
+  // (PAYMENT_GATE 402).
+  const gateWouldPrompt = (b: { amount: number; gateAmount: number; enforcement: string; threshold: number }) =>
+    decidePaymentGate({
+      enforcement: b.enforcement,
+      isSelfService: true,
+      outstandingAmount: b.amount,
+      gateAmount: b.gateAmount,
+      threshold: b.threshold,
+    }) !== "allow";
+
   const handleQuickJoinPillClick = (name: string) => {
     const openDialog = () => setPaymentNudgeOpen(true);
     if (cachedBalance) {
-      if (cachedBalance.hasDebt && cachedBalance.enforcement !== "off") {
+      if (gateWouldPrompt(cachedBalance)) {
         openDialog();
       } else {
         addPlayer(name, true).catch((err: unknown) => {
@@ -688,11 +715,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
     // No cached balance yet — fetch, then decide.
     fetch(`/api/events/${eventId}/balance`)
       .then((r) => r.json())
-      .then((j: { callerBalance?: { amount?: number }; enforcement?: string }) => {
+      .then((j: { callerBalance?: { amount?: number }; gateAmount?: number; enforcement?: string; threshold?: number }) => {
         const amt = j?.callerBalance?.amount ?? 0;
-        const enforcement = j?.enforcement ?? "off";
-        setCachedBalance({ hasDebt: amt > 0, enforcement });
-        if (amt > 0 && enforcement !== "off") {
+        const balance = {
+          amount: amt,
+          gateAmount: j?.gateAmount ?? amt,
+          enforcement: j?.enforcement ?? "off",
+          threshold: j?.threshold ?? 0,
+        };
+        setCachedBalance(balance);
+        if (gateWouldPrompt(balance)) {
           openDialog();
         } else {
           return addPlayer(name, true);
@@ -908,16 +940,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const countdown = useCountdown(gameDate, t("gameTime"));
 
   const isAuthenticated = !!session?.user;
-  const isOwner = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
-  const isOwnerless = !event?.ownerId;
-  const isAdmin = !!event?.isAdmin;
-  const canEditSettings = isOwnerless || isOwner || isAdmin;
-  const canManageInvites = isOwner || isAdmin;
-  // Mirrors the PUT /api/events/:id/teams authorization: signed-in owner, admin,
-  // or an active participant. Everyone else gets a read-only field.
-  const isParticipant = !!session?.user
-    && !!event?.players.some((p) => p.userId === session.user!.id);
-  const canEditTeams = isAuthenticated && (isOwner || isAdmin || isParticipant);
+  const { isOwner, isAdmin, isOwnerless, canEditSettings, canManageInvites, canEditTeams } = perms;
 
   // #463 high-intent: fetch the signed-in user's RSVP for this event so the
   // PushPromptBanner can render as a modal when the user has a pending RSVP
@@ -970,12 +993,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
   }, [eventId, myRsvpStatus, t, fetchEvent]);
 
-  const canRemovePlayer = (player: Player) => {
-    if (isOwner || isAdmin) return true;
-    if (session?.user && player.userId === session.user.id) return true;
-    if (!player.userId) return true;
-    return false;
-  };
+  const canRemovePlayer = (player: Player) =>
+    canRemoveEventPlayer(
+      session?.user?.id ?? null,
+      { ownerId: event?.ownerId ?? null, isPublic: !!event?.isPublic, isAdmin: !!event?.isAdmin },
+      player,
+    );
 
   // ── Loading / locked / not found states ─────────────────────────────────────
 

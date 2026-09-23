@@ -12,8 +12,22 @@
  */
 import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
+import { faker } from "@faker-js/faker";
 
 const prisma = new PrismaClient();
+
+/** Unique faker-generated first names — no real personal data. */
+function uniqueFirstNames(count: number): string[] {
+  const used = new Set<string>();
+  const out: string[] = [];
+  while (out.length < count) {
+    let name = faker.person.firstName();
+    while (used.has(name)) name = `${faker.person.firstName()} ${faker.string.alpha({ length: 1, casing: "upper" })}.`;
+    used.add(name);
+    out.push(name);
+  }
+  return out;
+}
 
 /** The dev server's actual port, so printed URLs aren't wrong (scripts/dev.sh writes .dev-port). */
 function localBase(): string {
@@ -44,20 +58,22 @@ interface P { name: string; rating: number; games: number; }
 
 // The demo user is the strongest on their (winning) team, but the team average
 // is the underdog, so the win pays a healthy positive delta rather than the
-// clamp floor.
+// clamp floor. Ratings are fixed for deterministic math; names are random.
+const WINNER_NAMES = uniqueFirstNames(4);
+const LOSER_NAMES = uniqueFirstNames(5);
 const WINNERS: P[] = [
   { name: DEMO_NAME, rating: 1050, games: 15 },
-  { name: "Rita", rating: 1010, games: 9 },
-  { name: "Tomás", rating: 990, games: 8 },
-  { name: "Vera", rating: 980, games: 7 },
-  { name: "Xavier", rating: 970, games: 6 },
+  { name: WINNER_NAMES[0]!, rating: 1010, games: 9 },
+  { name: WINNER_NAMES[1]!, rating: 990, games: 8 },
+  { name: WINNER_NAMES[2]!, rating: 980, games: 7 },
+  { name: WINNER_NAMES[3]!, rating: 970, games: 6 },
 ];
 const LOSERS: P[] = [
-  { name: "Nuno", rating: 1130, games: 14 },
-  { name: "Sofia", rating: 1100, games: 13 },
-  { name: "Pedro", rating: 1080, games: 12 },
-  { name: "Marta", rating: 1060, games: 11 },
-  { name: "Rui", rating: 1050, games: 10 },
+  { name: LOSER_NAMES[0]!, rating: 1130, games: 14 },
+  { name: LOSER_NAMES[1]!, rating: 1100, games: 13 },
+  { name: LOSER_NAMES[2]!, rating: 1080, games: 12 },
+  { name: LOSER_NAMES[3]!, rating: 1060, games: 11 },
+  { name: LOSER_NAMES[4]!, rating: 1050, games: 10 },
 ];
 
 async function main() {

@@ -1,11 +1,14 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { validatePaymentMethods, normalizePaymentMethod } from "../../../../lib/paymentMethods";
 import type { PaymentMethod } from "../../../../lib/paymentMethods";
 import { syncGamePayments } from "../../../../lib/settlement.server";
+import { perPlayerShare } from "../../../../lib/gameCost";
+import { summarizePayments } from "../../../../lib/paymentSummary";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -19,8 +22,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
@@ -78,7 +81,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const activePlayers = event.players.slice(0, event.maxPlayers);
   // Per-player share = total / required playing slots (maxPlayers), NOT the
   // current roster size — the per-player price is fixed for the event.
-  const share = event.maxPlayers > 0 ? totalAmount / event.maxPlayers : 0;
+  const share = perPlayerShare(totalAmount, event.maxPlayers);
 
   // ADR 0019: Cost change scope — "this_game" sets per-Game override, "all_future" (default) updates template
   const scope = String(body.scope ?? "all_future");
@@ -260,10 +263,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   if (!eventCost) return Response.json(null);
 
-  const paidCount = eventCost.payments.filter((p) => p.status === "paid").length;
-  const paidAmount = eventCost.payments
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.amount, 0);
+  const { paidCount, paidAmount } = summarizePayments(eventCost.payments);
 
   const hasOverride = !!(eventCost.tempPaymentMethods || eventCost.tempPaymentDetails);
 
@@ -298,8 +298,8 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 

@@ -387,6 +387,28 @@ export const openApiSpec = {
         responses: { "200": { description: "Unfollowed" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/invitation-opt-out": {
+      post: {
+        summary: "Toggle per-event invite opt-out (ADR 0025)",
+        description:
+          "While set, RSVP pings, recruitment pings, suggestions and PlayerInvite creation are suppressed for this event. Reversible; cleared automatically when the caller rejoins the player list.",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["optOut"],
+                properties: { optOut: { type: "boolean" } },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Opt-out state updated" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/rsvp": {
       post: {
         summary: "Submit RSVP (yes/no/maybe) for an event",
@@ -577,6 +599,41 @@ export const openApiSpec = {
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "MVP results" } },
+      },
+    },
+    "/api/events/{id}/history/{historyId}/match-events": {
+      get: {
+        summary: "List a game's match events and the score derived from its goals",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Match event timeline and derived score" } },
+      },
+      post: {
+        summary: "Log a match event (goal or assist) on a settled game",
+        description: "count records how many goals one entry stands for (\"X scored 3\" is a single row with count=3). Omit it for a single goal.",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "201": { description: "Match event created" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/history/{historyId}/match-events/{matchEventId}": {
+      delete: {
+        summary: "Remove a match event from a settled game",
+        tags: ["History"],
+        parameters: [
+          eventIdParam,
+          { name: "historyId", in: "path", required: true, schema: { type: "string" } },
+          { name: "matchEventId", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Match event removed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/match-stats": {
+      get: {
+        summary: "Get the per-player scorer table for an event, replayed from its match events",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Top scorers" }, "404": { description: "Event not found" } },
       },
     },
     "/api/users/{id}/stats": {

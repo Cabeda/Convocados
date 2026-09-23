@@ -11,6 +11,7 @@
  * Idempotent: re-running wipes the previous "Rank Demo" event and recreates it.
  */
 import { PrismaClient } from "@prisma/client";
+import { faker } from "@faker-js/faker";
 
 const prisma = new PrismaClient();
 
@@ -20,21 +21,37 @@ const OWNER_EMAIL = "demo-rank-organizer@convocados.app";
 
 interface P { name: string; rating: number; games: number; crew: number; }
 
+/** Unique faker-generated first names — no real personal data. */
+function uniqueFirstNames(count: number): string[] {
+  const used = new Set<string>();
+  const out: string[] = [];
+  while (out.length < count) {
+    let name = faker.person.firstName();
+    while (used.has(name)) name = `${faker.person.firstName()} ${faker.string.alpha({ length: 1, casing: "upper" })}.`;
+    used.add(name);
+    out.push(name);
+  }
+  return out;
+}
+
 // Ratings spread so tiers populate; a couple of provisional (<3 game) players.
-const PLAYERS: P[] = [
-  { name: "Ana", rating: 1150, games: 15, crew: 0 },
-  { name: "Bruno", rating: 1110, games: 14, crew: 0 },
-  { name: "Carla", rating: 1060, games: 12, crew: 0 },
-  { name: "Diogo", rating: 1020, games: 11, crew: 0 },
-  { name: "Eva", rating: 990, games: 10, crew: 1 },
-  { name: "Filipe", rating: 960, games: 9, crew: 1 },
-  { name: "Gonçalo", rating: 930, games: 8, crew: 1 },
-  { name: "Helena", rating: 900, games: 7, crew: 1 },
-  { name: "Ivo", rating: 1010, games: 6, crew: 2 },
-  { name: "Joana", rating: 985, games: 4, crew: 2 },
-  { name: "Luís", rating: 1000, games: 1, crew: 2 },
-  { name: "Marta", rating: 1000, games: 0, crew: 2 },
+// Ratings/crew/games are fixed for deterministic output; names are random.
+const PLAYER_NAMES = uniqueFirstNames(12);
+const PLAYER_SPECS: Omit<P, "name">[] = [
+  { rating: 1150, games: 15, crew: 0 },
+  { rating: 1110, games: 14, crew: 0 },
+  { rating: 1060, games: 12, crew: 0 },
+  { rating: 1020, games: 11, crew: 0 },
+  { rating: 990, games: 10, crew: 1 },
+  { rating: 960, games: 9, crew: 1 },
+  { rating: 930, games: 8, crew: 1 },
+  { rating: 900, games: 7, crew: 1 },
+  { rating: 1010, games: 6, crew: 2 },
+  { rating: 985, games: 4, crew: 2 },
+  { rating: 1000, games: 1, crew: 2 },
+  { rating: 1000, games: 0, crew: 2 },
 ];
+const PLAYERS: P[] = PLAYER_SPECS.map((spec, i) => ({ name: PLAYER_NAMES[i]!, ...spec }));
 
 const CREWS = ["Brothers", "Rockets", "Titans"];
 const WEEKS = 8;
@@ -47,11 +64,11 @@ function daysAgo(n: number): Date {
 }
 
 async function main() {
-  // 1. Owner: reuse the real account that owns the existing event, so the
-  //    signed-in user owns the demo; fall back to a placeholder user.
-  const ninjas = await prisma.event.findFirst({ where: { title: { contains: "Ninjas" } }, select: { ownerId: true } });
-  const ownerId = ninjas?.ownerId ?? "rank-demo-owner";
-  if (!ninjas?.ownerId) {
+  // 1. Owner: reuse an existing event's owner so a signed-in user owns the demo;
+  //    fall back to a placeholder user.
+  const anyEvent = await prisma.event.findFirst({ select: { ownerId: true } });
+  const ownerId = anyEvent?.ownerId ?? "rank-demo-owner";
+  if (!anyEvent?.ownerId) {
     await prisma.user.upsert({
       where: { id: ownerId },
       update: {},

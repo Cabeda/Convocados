@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { processGame } from "../../../../../../lib/elo.server";
-import { checkOwnership, getSession } from "../../../../../../lib/auth.helpers.server";
+import { getSession } from "../../../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../../lib/eventLog.server";
 
@@ -20,8 +21,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event, session);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner or admin can approve ELO." }, { status: 403 });
   }
 

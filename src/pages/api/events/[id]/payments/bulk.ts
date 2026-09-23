@@ -1,8 +1,10 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { checkOwnership, getSession } from "~/lib/auth.helpers.server";
+import { getSession } from "~/lib/auth.helpers.server";
+import { authorizeEventMutation } from "~/lib/eventAuthz.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
+import { recordReceived } from "~/lib/payments.server";
 
 /** PUT — bulk mark all pending/sent payments as paid. Owner/Admin only. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -13,8 +15,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
@@ -35,47 +37,20 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data: { status: "paid", paidAt: new Date() },
   });
 
-  // ADR 0019: Write ledger rows for each player whose payment was bulk-confirmed
+  // ADR 0019 §2: confirm each player through recordReceived — the single ledger
+  // write for a received payment — rather than hand-rolling the credit.
   if (pendingPayments.length > 0) {
     const session = await getSession(request);
     const markedById = session?.user?.id ?? event.ownerId ?? "unknown";
     const eventData = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { maxPlayers: true, currentGameId: true },
+      select: { currentGameId: true },
     });
-    const maxPlayers = eventData?.maxPlayers ?? 1;
-    const gameId = eventData?.currentGameId ?? eventId;
-    const shareCents = Math.round((eventCost.totalAmount / maxPlayers) * 100);
+    const gameId = eventData?.currentGameId ?? undefined;
 
-    await prisma.$transaction(async (tx) => {
-      for (const p of pendingPayments) {
-        // Resolve userId
-        const ep = await tx.eventPlayer.findUnique({
-          where: { eventId_name: { eventId, name: p.playerName } },
-          select: { userId: true },
-        });
-        const player = !ep?.userId
-          ? await tx.player.findFirst({ where: { eventId, name: p.playerName }, select: { userId: true } })
-          : null;
-        const userId = ep?.userId ?? player?.userId;
-        if (!userId) continue; // anonymous — no ledger possible
-
-        await tx.walletTransaction.create({
-          data: {
-            eventId,
-            userId,
-            amountCents: shareCents,
-            currency: eventCost.currency ?? "EUR",
-            direction: "credit",
-            gameUnits: 0,
-            reason: "payment_received",
-            statusAfter: "paid",
-            eventInstanceId: gameId,
-            markedById,
-          },
-        });
-      }
-    });
+    for (const p of pendingPayments) {
+      await recordReceived({ eventId, playerName: p.playerName, markedById, gameId });
+    }
   }
 
   // ADR 0017: Notify each player whose payment was confirmed (via queue, respects tier + overrides)

@@ -19,6 +19,8 @@ import {
   OUTSTANDING_CLEARING_REASONS,
   type WalletTx,
 } from "./wallet";
+import { summarizePayments } from "./paymentSummary";
+import { resolveLinkedUserId } from "./payerIdentity.server";
 
 export interface PlayerBalance {
   playerName: string;
@@ -37,37 +39,21 @@ export interface BalanceSummary {
 
 /** Resolve a playerName to a userId for ledger queries. Returns null if unlinked. */
 async function resolveUserId(eventId: string, playerName: string): Promise<string | null> {
-  // Try EventPlayer first (ADR 0016 model)
-  const ep = await prisma.eventPlayer.findUnique({
-    where: { eventId_name: { eventId, name: playerName } },
-    select: { userId: true },
-  });
-  if (ep?.userId) return ep.userId;
-
-  // Fallback to legacy Player model
-  const player = await prisma.player.findFirst({
-    where: { eventId, name: playerName },
-    select: { userId: true },
-  });
-  return player?.userId ?? null;
+  return resolveLinkedUserId(eventId, playerName);
 }
 
-/** Fetch ledger rows for a (eventId, userId) pair, projected to WalletTx shape. */
-async function fetchLedger(eventId: string, userId: string): Promise<WalletTx[]> {
-  const rows = await prisma.walletTransaction.findMany({
-    where: { eventId, userId },
-    select: {
-      direction: true,
-      reason: true,
-      gameUnits: true,
-      amountCents: true,
-      createdAt: true,
-      eventInstanceId: true,
-      idempotencyKey: true,
-    },
-    orderBy: { createdAt: "asc" },
-  });
-  return rows.map((r) => ({
+/** Project a raw WalletTransaction row to the WalletTx shape — the single
+ * row→domain mapping used by every ledger read (per-player and event-wide). */
+function projectLedgerRow(r: {
+  direction: string;
+  reason: string;
+  gameUnits: number;
+  amountCents: number;
+  createdAt: Date;
+  eventInstanceId: string | null;
+  idempotencyKey: string | null;
+}): WalletTx {
+  return {
     direction: r.direction as WalletTx["direction"],
     reason: r.reason as WalletTx["reason"],
     gameUnits: r.gameUnits,
@@ -75,7 +61,44 @@ async function fetchLedger(eventId: string, userId: string): Promise<WalletTx[]>
     createdAt: r.createdAt,
     eventInstanceId: r.eventInstanceId,
     idempotencyKey: r.idempotencyKey,
-  }));
+  };
+}
+
+const LEDGER_SELECT = {
+  direction: true,
+  reason: true,
+  gameUnits: true,
+  amountCents: true,
+  createdAt: true,
+  eventInstanceId: true,
+  idempotencyKey: true,
+} as const;
+
+/** Fetch ledger rows for a (eventId, userId) pair, projected to WalletTx shape. */
+async function fetchLedger(eventId: string, userId: string): Promise<WalletTx[]> {
+  const rows = await prisma.walletTransaction.findMany({
+    where: { eventId, userId },
+    select: LEDGER_SELECT,
+    orderBy: { createdAt: "asc" },
+  });
+  return rows.map(projectLedgerRow);
+}
+
+/** Event-wide ledger read — the one interface getEventBalanceSummary consumes
+ * (userId → rows), instead of re-running its own row mapping. */
+async function fetchEventLedger(eventId: string): Promise<Map<string, WalletTx[]>> {
+  const rows = await prisma.walletTransaction.findMany({
+    where: { eventId },
+    select: { userId: true, ...LEDGER_SELECT },
+    orderBy: { createdAt: "asc" },
+  });
+  const byUser = new Map<string, WalletTx[]>();
+  for (const r of rows) {
+    const list = byUser.get(r.userId) ?? [];
+    list.push(projectLedgerRow(r));
+    byUser.set(r.userId, list);
+  }
+  return byUser;
 }
 
 // ─── Legacy fallback for anonymous players ─────────────────────────────────
@@ -86,7 +109,15 @@ interface SnapshotEntry {
   status: string;
 }
 
-async function legacyGetOutstandingBalance(eventId: string, playerName: string): Promise<PlayerBalance> {
+/**
+ * The one legacy read: live PlayerPayment rows plus every non-cancelled
+ * GameHistory.paymentsSnapshot (newest game first). Every legacy projection
+ * below derives from this instead of re-querying and re-parsing snapshots.
+ */
+async function loadLegacyPayments(eventId: string): Promise<{
+  live: SnapshotEntry[];
+  histories: SnapshotEntry[][];
+}> {
   const [histories, eventCost] = await Promise.all([
     prisma.gameHistory.findMany({
       where: { eventId, status: { not: "cancelled" } },
@@ -95,9 +126,29 @@ async function legacyGetOutstandingBalance(eventId: string, playerName: string):
     }),
     prisma.eventCost.findUnique({
       where: { eventId },
-      include: { payments: { where: { playerName } } },
+      include: { payments: true },
     }),
   ]);
+
+  const live: SnapshotEntry[] = (eventCost?.payments ?? []).map((p) => ({
+    playerName: p.playerName,
+    amount: p.amount,
+    status: p.status,
+  }));
+
+  const parsedHistories: SnapshotEntry[][] = [];
+  for (const h of histories) {
+    if (!h.paymentsSnapshot) continue;
+    try {
+      parsedHistories.push(JSON.parse(h.paymentsSnapshot) as SnapshotEntry[]);
+    } catch { /* skip malformed */ }
+  }
+
+  return { live, histories: parsedHistories };
+}
+
+async function legacyGetOutstandingBalance(eventId: string, playerName: string): Promise<PlayerBalance> {
+  const { live, histories } = await loadLegacyPayments(eventId);
 
   let amount = 0;
   let gamesOwed = 0;
@@ -107,18 +158,14 @@ async function legacyGetOutstandingBalance(eventId: string, playerName: string):
   type GameEntry = { status: string; amt: number };
   const timeline: GameEntry[] = [];
 
-  if (eventCost?.payments.length) {
-    const live = eventCost.payments[0];
-    timeline.push({ status: live.status, amt: live.amount });
+  const liveEntry = live.find((p) => p.playerName === playerName);
+  if (liveEntry) {
+    timeline.push({ status: liveEntry.status, amt: liveEntry.amount });
   }
 
-  for (const h of histories) {
-    if (!h.paymentsSnapshot) continue;
-    try {
-      const entries: SnapshotEntry[] = JSON.parse(h.paymentsSnapshot);
-      const entry = entries.find((e) => e.playerName === playerName);
-      if (entry) timeline.push({ status: entry.status, amt: entry.amount });
-    } catch { /* skip malformed */ }
+  for (const entries of histories) {
+    const entry = entries.find((e) => e.playerName === playerName);
+    if (entry) timeline.push({ status: entry.status, amt: entry.amount });
   }
 
   for (const g of timeline) {
@@ -137,41 +184,37 @@ async function legacyGetOutstandingBalance(eventId: string, playerName: string):
 }
 
 async function legacyGetGateBalance(eventId: string, playerName: string): Promise<number> {
-  const [histories, eventCost] = await Promise.all([
-    prisma.gameHistory.findMany({
-      where: { eventId, status: { not: "cancelled" } },
-      select: { paymentsSnapshot: true },
-    }),
-    prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: { where: { playerName } } },
-    }),
-  ]);
+  const { live, histories } = await loadLegacyPayments(eventId);
 
   let amount = 0;
 
-  for (const h of histories) {
-    if (!h.paymentsSnapshot) continue;
-    try {
-      const entries: Array<{ playerName: string; amount: number; status: string }> = JSON.parse(h.paymentsSnapshot);
-      const entry = entries.find((e) => e.playerName === playerName);
-      if (entry && entry.status === "pending") {
-        amount += entry.amount;
-      }
-    } catch { /* skip */ }
+  for (const entries of histories) {
+    const entry = entries.find((e) => e.playerName === playerName);
+    if (entry && entry.status === "pending") {
+      amount += entry.amount;
+    }
   }
 
-  if (eventCost?.payments.length) {
-    const live = eventCost.payments[0];
-    if (live.status === "pending") {
-      amount += live.amount;
-    }
+  const liveEntry = live.find((p) => p.playerName === playerName);
+  if (liveEntry && liveEntry.status === "pending") {
+    amount += liveEntry.amount;
   }
 
   return Math.round(amount * 100) / 100;
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────
+
+/**
+ * Load a player's ledger rows, or null when the player is unlinked or has no
+ * ledger rows — the signal to fall back to the legacy PlayerPayment reads.
+ */
+async function loadLedger(eventId: string, playerName: string): Promise<WalletTx[] | null> {
+  const userId = await resolveUserId(eventId, playerName);
+  if (!userId) return null;
+  const txs = await fetchLedger(eventId, userId);
+  return txs.length === 0 ? null : txs;
+}
 
 /**
  * Compute the outstanding balance for a single player within an event.
@@ -182,14 +225,8 @@ export async function getOutstandingBalance(
   eventId: string,
   playerName: string,
 ): Promise<PlayerBalance> {
-  const userId = await resolveUserId(eventId, playerName);
-  if (!userId) return legacyGetOutstandingBalance(eventId, playerName);
-
-  const txs = await fetchLedger(eventId, userId);
-  if (txs.length === 0) {
-    // No ledger rows — might be a legacy player. Fall back.
-    return legacyGetOutstandingBalance(eventId, playerName);
-  }
+  const txs = await loadLedger(eventId, playerName);
+  if (!txs) return legacyGetOutstandingBalance(eventId, playerName);
 
   const balanceCents = computeMoneyBalance(txs, OUTSTANDING_CLEARING_REASONS);
   // ADR 0019 §3: exclude legacy rows where eventInstanceId = eventId from per-game aggregates
@@ -215,11 +252,8 @@ export async function getGateBalance(
   eventId: string,
   playerName: string,
 ): Promise<number> {
-  const userId = await resolveUserId(eventId, playerName);
-  if (!userId) return legacyGetGateBalance(eventId, playerName);
-
-  const txs = await fetchLedger(eventId, userId);
-  if (txs.length === 0) return legacyGetGateBalance(eventId, playerName);
+  const txs = await loadLedger(eventId, playerName);
+  if (!txs) return legacyGetGateBalance(eventId, playerName);
 
   const balanceCents = computeMoneyBalance(txs, MONEY_CLEARING_REASONS);
   return Math.round(Math.max(0, balanceCents)) / 100;
@@ -236,38 +270,8 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
     select: { currentGameId: true },
   });
 
-  // Fetch all ledger rows for this event
-  const allTxs = await prisma.walletTransaction.findMany({
-    where: { eventId },
-    select: {
-      userId: true,
-      direction: true,
-      reason: true,
-      gameUnits: true,
-      amountCents: true,
-      createdAt: true,
-      eventInstanceId: true,
-      idempotencyKey: true,
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  // Group by userId
-  const byUser = new Map<string, WalletTx[]>();
-  for (const r of allTxs) {
-    const tx: WalletTx = {
-      direction: r.direction as WalletTx["direction"],
-      reason: r.reason as WalletTx["reason"],
-      gameUnits: r.gameUnits,
-      amountCents: r.amountCents,
-      createdAt: r.createdAt,
-      eventInstanceId: r.eventInstanceId,
-      idempotencyKey: r.idempotencyKey,
-    };
-    const list = byUser.get(r.userId) ?? [];
-    list.push(tx);
-    byUser.set(r.userId, list);
-  }
+  // One event-wide ledger read (shared row projection with the per-player path)
+  const byUser = await fetchEventLedger(eventId);
 
   // Resolve userId → playerName for display
   const userIds = [...byUser.keys()];
@@ -308,43 +312,23 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
       });
     }
   } else {
-    // Legacy fallback: compute debts from GameHistory + PlayerPayment
-    const histories = await prisma.gameHistory.findMany({
-      where: { eventId, status: { not: "cancelled" } },
-      select: { paymentsSnapshot: true },
-    });
-    const eventCostForDebts = await prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: true },
-    });
+    // Legacy fallback: compute debts from the one legacy read
+    const { live, histories } = await loadLegacyPayments(eventId);
 
     const debts = new Map<string, { amount: number; gamesOwed: number }>();
-
-    for (const h of histories) {
-      if (!h.paymentsSnapshot) continue;
-      try {
-        const entries: SnapshotEntry[] = JSON.parse(h.paymentsSnapshot);
-        for (const e of entries) {
-          if (e.status === "pending" || e.status === "sent") {
-            const d = debts.get(e.playerName) ?? { amount: 0, gamesOwed: 0 };
-            d.amount += e.amount;
-            d.gamesOwed++;
-            debts.set(e.playerName, d);
-          }
-        }
-      } catch { /* skip */ }
-    }
-
-    if (eventCostForDebts) {
-      for (const p of eventCostForDebts.payments) {
-        if (p.status === "pending" || p.status === "sent") {
-          const d = debts.get(p.playerName) ?? { amount: 0, gamesOwed: 0 };
-          d.amount += p.amount;
-          d.gamesOwed++;
-          debts.set(p.playerName, d);
-        }
+    const addDebt = (entry: SnapshotEntry) => {
+      if (entry.status === "pending" || entry.status === "sent") {
+        const d = debts.get(entry.playerName) ?? { amount: 0, gamesOwed: 0 };
+        d.amount += entry.amount;
+        d.gamesOwed++;
+        debts.set(entry.playerName, d);
       }
+    };
+
+    for (const entries of histories) {
+      for (const e of entries) addDebt(e);
     }
+    for (const p of live) addDebt(p);
 
     balances = [...debts.entries()].map(([playerName, { amount, gamesOwed }]) => ({
       playerName,
@@ -374,31 +358,19 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
     }
   }
 
-  // If no ledger data for current game, fall back to legacy PlayerPayment
+  // If no ledger data for current game, fall back to legacy projections
+  // (live PlayerPayment roll, then the latest GameHistory snapshot) via the
+  // one legacy read.
   if (totalCount === 0) {
-    const eventCost = await prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: true },
-    });
-    if (eventCost && eventCost.payments.length > 0) {
-      totalCount = eventCost.payments.length;
-      paidCount = eventCost.payments.filter((p) => p.status === "paid").length;
-    }
-  }
-
-  // If still no data, fall back to latest GameHistory.paymentsSnapshot
-  if (totalCount === 0) {
-    const latest = await prisma.gameHistory.findFirst({
-      where: { eventId, status: { not: "cancelled" } },
-      orderBy: { dateTime: "desc" },
-      select: { paymentsSnapshot: true },
-    });
-    if (latest?.paymentsSnapshot) {
-      try {
-        const entries: SnapshotEntry[] = JSON.parse(latest.paymentsSnapshot);
-        totalCount = entries.length;
-        paidCount = entries.filter((e) => e.status === "paid").length;
-      } catch { /* skip malformed */ }
+    const { live, histories } = await loadLegacyPayments(eventId);
+    if (live.length > 0) {
+      const agg = summarizePayments(live);
+      totalCount = agg.totalCount;
+      paidCount = agg.paidCount;
+    } else if (histories.length > 0) {
+      const agg = summarizePayments(histories[0]);
+      totalCount = agg.totalCount;
+      paidCount = agg.paidCount;
     }
   }
 

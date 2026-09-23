@@ -15,7 +15,8 @@ import { useT } from "~/lib/useT";
 import { MvpVotingCard } from "./MvpVotingCard";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { SeasonRankReveal } from "./rank/SeasonRankReveal";
-import type { SeasonRankMovement } from "~/lib/rankExplainer";
+import type { SeasonRankMovement, SeasonRankStanding } from "~/lib/rankExplainer";
+import { summarizePayments } from "~/lib/paymentSummary";
 
 interface PaymentEntry {
   playerName: string;
@@ -50,6 +51,13 @@ export interface PostGameStatus {
   gameConfig: { gameId: string; mode: "tracked" | "untracked"; payerName: string | null; payerIsPlayer: boolean } | null;
   /** The viewer's Season Rank movement from this Game, when it counted. */
   seasonRank?: SeasonRankMovement | null;
+  /** The viewer's current Rank Standing — present before this Game is scored. */
+  rankStanding?: SeasonRankStanding | null;
+  /**
+   * True when the viewer already paid their own share and is neither the
+   * receiver nor a settlement admin. The payment task is then hidden for them.
+   */
+  viewerPaymentSettled?: boolean;
 }
 
 interface Props {
@@ -107,6 +115,28 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
   useEffect(() => {
     if (!allDone) setGone(false);
   }, [allDone]);
+
+  // The Rank section is dismissable on its own, independently of the checklist:
+  // once wrap-up is done the card is only the result + Rank, and the player may
+  // not want that nagging. Keyed per Game so the next Game's Rank returns.
+  const rankDismissKey = `rank:dismiss:${eventId}:${status?.latestHistoryId ?? ""}`;
+  const [rankDismissed, setRankDismissed] = useState(false);
+  useEffect(() => {
+    if (!status) return;
+    setRankDismissed(() => {
+      try { return !!localStorage.getItem(rankDismissKey); } catch { return false; }
+    });
+  }, [status, rankDismissKey]);
+  const handleDismissRank = useCallback(() => {
+    try { localStorage.setItem(rankDismissKey, "1"); } catch { /* ignore */ }
+    setRankDismissed(true);
+  }, [rankDismissKey]);
+
+  // The Rank block stays on screen after wrap-up completes (unlike the
+  // checklist, which collapses), so the card needs a reason to remain: either
+  // it still has a pending task, or it still has a Rank worth keeping.
+  const rankVisible = !rankDismissed && (!!status?.seasonRank?.counted || !!status?.rankStanding);
+  const checklistOpen = !(status?.allComplete && gone);
 
   const onStatusChangeRef = useRef(onStatusChange);
   useEffect(() => {
@@ -176,11 +206,18 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
   // myMvpComplete=false and keeps their banner.
   const mvpTaskDone = status ? (status.myMvpComplete ?? status.bannerMvpComplete) : true;
   // `allComplete && !gone` keeps the card mounted through the celebration/exit
-  // choreography below instead of hard-removing it mid-click.
-  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (mvpTaskDone || !status.mvpEnabled || !status.isPlayer)) || (status.allComplete && gone)) return null;
+  // choreography below instead of hard-removing it mid-click. The Rank block
+  // outlives the checklist, so the card only leaves for good when it has
+  // neither a pending task nor a Rank left to show.
+  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (mvpTaskDone || !status.mvpEnabled || !status.isPlayer)) || (status.allComplete && gone && !rankVisible)) return null;
 
-  const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
-  const progressPct = (completedCount / 2) * 100;
+  // Payments are only a task when a cost exists. With no cost there is
+  // nothing to settle, so ticking it green (and counting it toward progress)
+  // would claim work that was never configured.
+  const paymentTaskDone = status.hasCost && status.allPaid;
+  const taskTotal = 1 + (status.hasCost ? 1 : 0);
+  const completedCount = (status.hasScore ? 1 : 0) + (paymentTaskDone ? 1 : 0);
+  const progressPct = (completedCount / taskTotal) * 100;
 
   const cyclePaymentStatus = (idx: number) => {
     const order: Array<"paid" | "pending"> = ["pending", "paid"];
@@ -214,7 +251,16 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
     setSaving(false);
   };
 
-  const paidCount = editablePayments.filter((p) => p.status === "paid").length;
+  // The summary must count the same roll the chips render. When durable
+  // GamePayment rows exist (settled via the settlement API), they are the live
+  // truth; the legacy GameHistory snapshot is frozen at reset time and never
+  // reflects later settlements, so counting it here reported a stale "2/10"
+  // while the chips showed 9/10 paid.
+  const paymentRoll = status.gamePayments && status.gamePayments.length > 0
+    ? status.gamePayments
+    : editablePayments;
+  const paidCount = summarizePayments(paymentRoll).paidCount;
+  const paymentTotal = paymentRoll.length;
   const hasPayments = editablePayments.length > 0;
   // Checklist items animate their check when they flip to done.
   const pop = (done: boolean) =>
@@ -242,7 +288,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
         ...(celebrating
           ? { boxShadow: `0 0 24px ${alpha(theme.palette.success.main, 0.35)}` }
           : {}),
-        ...(!celebrating && allDone
+        ...(!celebrating && allDone && !rankVisible
           ? { opacity: 0, transform: "scale(0.97) translateY(-8px)" }
           : {}),
       }}
@@ -259,64 +305,114 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
       />
       <Box sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2}>
-          {/* Header */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <CelebrationIcon
-              sx={{
-                color: allDone && celebrating ? theme.palette.success.main : theme.palette.warning.main,
-                ...(allDone && celebrating ? pop(true) : {}),
-              }}
-            />
-            <Typography variant="h6" fontWeight={700}>
-              {t("postGameTitle")}
-            </Typography>
-          </Box>
-
-          {/* Score hero — celebrate the result when score is set */}
-          {status.hasScore && status.scoreOne !== null && status.scoreTwo !== null && (
-            <Box sx={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
-              py: 2, px: 3, borderRadius: 3,
-              bgcolor: alpha(theme.palette.success.main, 0.06),
-              border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
-            }}>
-              <Box sx={{ textAlign: "center" }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                  {status.teamOneName}
-                </Typography>
-                <Typography variant="h4" fontWeight={800}>
-                  {status.scoreOne}
-                </Typography>
-              </Box>
-              <Typography variant="h5" color="text.disabled" fontWeight={300}>–</Typography>
-              <Box sx={{ textAlign: "center" }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                  {status.teamTwoName}
-                </Typography>
-                <Typography variant="h4" fontWeight={800}>
-                  {status.scoreTwo}
-                </Typography>
-              </Box>
+          {/* Header — only while there is still a checklist to close out */}
+          {checklistOpen && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <CelebrationIcon
+                sx={{
+                  color: allDone && celebrating ? theme.palette.success.main : theme.palette.warning.main,
+                  ...(allDone && celebrating ? pop(true) : {}),
+                }}
+              />
+              <Typography variant="h6" fontWeight={700}>
+                {t("postGameTitle")}
+              </Typography>
             </Box>
           )}
 
-          {/* Subtitle — only show when score is NOT set (otherwise the hero replaces it) */}
-          {!status.hasScore && (
-            <Typography variant="body2" color="text.secondary">
-              {t("postGameSubtitle")}
-            </Typography>
+          {/* Collapsed state — the Rank outlives the checklist, so the card
+              needs an anchor and a way back to the tasks hiding underneath. */}
+          {!checklistOpen && rankVisible && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <CelebrationIcon sx={{ color: theme.palette.success.main }} />
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "text.secondary", flex: 1 }}
+              >
+                {t("postGameResultEyebrow")}
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setGone(false)}
+                data-testid="post-game-show-tasks"
+                sx={{ textTransform: "none", fontWeight: 700, borderRadius: 2 }}
+              >
+                {t("postGameShowTasks")}
+              </Button>
+            </Box>
           )}
 
-          {/* Season Rank reveal — the viewer's movement for the just-played game */}
-          {status.seasonRank?.counted && (
-            <SeasonRankReveal
-              eventId={eventId}
-              historyId={status.latestHistoryId}
-              rank={status.seasonRank}
-              scoreOne={status.scoreOne}
-              scoreTwo={status.scoreTwo}
-            />
+          {/* Score + Rank share one card: the result and what it did to the
+              Rank. The score leads — it is what actually happened — and the
+              Rank sits under it as context. Pre-score the hero collapses to a
+              single line rather than three dashes pretending to be a result. */}
+          {(status.hasScore || rankVisible) && (
+            <Box
+              data-testid="post-game-result-card"
+              sx={{
+                borderRadius: 3,
+                overflow: "hidden",
+                border: `1px solid ${status.hasScore ? alpha(theme.palette.success.main, 0.25) : alpha(theme.palette.divider, 1)}`,
+                bgcolor: status.hasScore ? alpha(theme.palette.success.main, 0.06) : alpha(theme.palette.action.hover, 0.04),
+              }}
+            >
+              {status.hasScore ? (
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, py: 2, px: 3 }}>
+                  <Box sx={{ textAlign: "center" }}>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      {status.teamOneName}
+                    </Typography>
+                    <Typography variant="h3" fontWeight={800}>
+                      {status.scoreOne}
+                    </Typography>
+                  </Box>
+                  <Typography variant="h5" color="text.disabled" fontWeight={300}>–</Typography>
+                  <Box sx={{ textAlign: "center" }}>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      {status.teamTwoName}
+                    </Typography>
+                    <Typography variant="h3" fontWeight={800}>
+                      {status.scoreTwo}
+                    </Typography>
+                  </Box>
+                </Box>
+              ) : (
+                <Box sx={{ py: 1.5, px: 3, textAlign: "center" }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    {status.teamOneName} · {status.teamTwoName}
+                  </Typography>
+                  <Typography variant="body2" color="text.disabled">
+                    {t("postGameNoScoreYet")}
+                  </Typography>
+                </Box>
+              )}
+
+              {rankVisible && (
+                <Box sx={{ px: 2, pb: 1.5, borderTop: `1px solid ${alpha(theme.palette.divider, 0.7)}` }}>
+                  <SeasonRankReveal
+                    inline
+                    eventId={eventId}
+                    historyId={status.latestHistoryId}
+                    rank={status.seasonRank}
+                    standing={status.rankStanding}
+                    scoreOne={status.scoreOne}
+                    scoreTwo={status.scoreTwo}
+                    onDismiss={handleDismissRank}
+                  />
+                </Box>
+              )}
+            </Box>
           )}
+
+          {checklistOpen && (
+            <>
+              {/* Subtitle — only show when score is NOT set (otherwise the hero replaces it) */}
+              {!status.hasScore && (
+                <Typography variant="body2" color="text.secondary">
+                  {t("postGameSubtitle")}
+                </Typography>
+              )}
 
           {/* Checklist */}
           <Stack spacing={1.5}>
@@ -366,43 +462,46 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
               )}
             </Box>
 
-            {/* Payment task */}
+            {/* Payment task — hidden once the viewer's own share is settled:
+            a debtor who has paid has nothing to act on, while the receiver of
+            the money and the settlement admins keep it open until everyone paid. */}
+            {!status.viewerPaymentSettled && (
             <Box
               sx={{
                 p: 1.5,
                 borderRadius: 2,
-                bgcolor: status.allPaid
+                bgcolor: paymentTaskDone
                   ? alpha(theme.palette.success.main, 0.08)
                   : !status.hasCost
                     ? alpha(theme.palette.info.main, 0.06)
                     : alpha(theme.palette.action.hover, 0.04),
-                border: `1px solid ${status.allPaid ? alpha(theme.palette.success.main, 0.3) : !status.hasCost ? alpha(theme.palette.info.main, 0.3) : alpha(theme.palette.divider, 0.5)}`,
+                border: `1px solid ${paymentTaskDone ? alpha(theme.palette.success.main, 0.3) : !status.hasCost ? alpha(theme.palette.info.main, 0.3) : alpha(theme.palette.divider, 0.5)}`,
                 transition: "all 0.2s",
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                {status.allPaid ? (
+                {paymentTaskDone ? (
                   <CheckCircleIcon sx={{ color: theme.palette.success.main, ...pop(true) }} />
                 ) : (
                   <RadioButtonUncheckedIcon sx={{ color: theme.palette.text.disabled }} />
                 )}
-                <PaymentsIcon fontSize="small" sx={{ color: status.allPaid ? theme.palette.success.main : theme.palette.text.secondary }} />
+                <PaymentsIcon fontSize="small" sx={{ color: paymentTaskDone ? theme.palette.success.main : theme.palette.text.secondary }} />
                 <Box sx={{ flex: 1 }}>
                   <Typography
                     variant="body2"
                     fontWeight={600}
-                    sx={{ textDecoration: status.allPaid ? "line-through" : "none" }}
+                    sx={{ textDecoration: paymentTaskDone ? "line-through" : "none" }}
                   >
                     {t("postGameCompletePayments")}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {status.allPaid
-                      ? t("postGamePaymentsDone")
-                      : !status.hasCost
-                        ? t("postGameNoCostSet")
+                    {!status.hasCost
+                      ? t("postGameNoCostSet")
+                      : paymentTaskDone
+                        ? t("postGamePaymentsDone")
                         : t("postGamePaymentsSummary")
                             .replace("{paid}", String(paidCount))
-                            .replace("{total}", String(editablePayments.length))}
+                            .replace("{total}", String(paymentTotal))}
                   </Typography>
                 </Box>
                 {!status.hasCost && (
@@ -424,10 +523,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
                     <Typography variant="body2" fontWeight={600}>
                       {t("paymentsIsOwed", {
                         name: status.gameConfig.payerName,
-                        amount: status.gamePayments
-                          .filter((r) => r.status !== "paid")
-                          .reduce((s, r) => s + r.amount, 0)
-                          .toFixed(2),
+                        amount: summarizePayments(status.gamePayments).outstandingAmount.toFixed(2),
                       })}
                     </Typography>
                   ) : (
@@ -511,6 +607,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
                 </Box>
               ) : null}
             </Box>
+            )}
 
             {/* MVP voting task — players-only (isHistoryParticipant). Owners/admins
             who did not play can't vote, so they don't get the Vote MVP prompt. */}
@@ -538,8 +635,10 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
 
           {/* Progress summary */}
           <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
-            {t("postGameProgress").replace("{done}", String(completedCount)).replace("{total}", "2")}
+            {t("postGameProgress").replace("{done}", String(completedCount)).replace("{total}", String(taskTotal))}
           </Typography>
+            </>
+          )}
         </Stack>
       </Box>
       <PaymentConfigDialog

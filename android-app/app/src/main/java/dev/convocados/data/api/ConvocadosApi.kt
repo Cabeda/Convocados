@@ -354,6 +354,16 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchMvp(eventId: String, historyId: String): MvpResponse =
         client.get("/api/events/$eventId/history/$historyId/mvp")
 
+    // ── Match Events (post-game goals & assists) ──────────────────────────
+    suspend fun fetchMatchEvents(eventId: String, historyId: String): MatchEventsResponse =
+        client.get("/api/events/$eventId/history/$historyId/match-events")
+
+    suspend fun addMatchEvent(eventId: String, historyId: String, body: MatchEventRequest): MatchEventResponse =
+        client.post("/api/events/$eventId/history/$historyId/match-events", body)
+
+    suspend fun fetchMatchStats(eventId: String): MatchStatsResponse =
+        client.get("/api/events/$eventId/match-stats")
+
     // ── Follow ────────────────────────────────────────────────────────────
     suspend fun getFollowState(eventId: String): FollowStateResponse =
         client.get("/api/events/$eventId/follow")
@@ -366,6 +376,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun updateFollowPreferences(eventId: String, overrides: FollowOverridesRequest): FollowStateResponse =
         client.put("/api/events/$eventId/follow", overrides)
+
+    /** ADR 0025: reversible per-event invite opt-out for the caller's EventPlayer. */
+    suspend fun setInvitationOptOut(eventId: String, optOut: Boolean): InvitationOptOutResponse =
+        client.post("/api/events/$eventId/invitation-opt-out", InvitationOptOutRequest(optOut))
 
     // ── Court Finder ──────────────────────────────────────────────────────
     suspend fun fetchCourtAlternatives(
@@ -482,5 +496,8 @@ data class FollowOverridesRequest(
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
 )
+
+@Serializable data class InvitationOptOutRequest(val optOut: Boolean)
+@Serializable data class InvitationOptOutResponse(val ok: Boolean = false, val optedOut: Boolean = false)
 
 @Serializable data class RsvpSubmitRequest(val status: String)

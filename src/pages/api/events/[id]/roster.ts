@@ -8,7 +8,7 @@ import { createPlayerInvite, createGuestPlayerInvite } from "~/lib/invite.server
 import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.server";
 import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "~/lib/rosterCore.server";
 import { syncGamePayments } from "~/lib/settlement.server";
-import { addPlayerToTeams, validateTeams } from "./players";
+import { addPlayerToTeams, validateTeams } from "../../../../lib/teamFormation.server";
 
 /**
  * POST /api/events/[id]/roster — unified roster mutation (ADR 0025, #814).

@@ -167,6 +167,9 @@ data class StatsSummary(
     val avgRating: Int = 0,
     val bestRating: Int = 0,
     val eventsPlayed: Int = 0,
+    val totalMvpAwards: Int = 0,
+    val totalGoals: Int = 0,
+    val totalAssists: Int = 0,
 )
 
 @Serializable
@@ -189,6 +192,8 @@ data class EventStats(
     val losses: Int = 0,
     val winRate: Double = 0.0,
     val attendance: AttendanceInfo? = null,
+    val goals: Int = 0,
+    val assists: Int = 0,
 )
 
 @Serializable
@@ -294,6 +299,14 @@ data class PostGameStatus(
     // GameHistory snapshot, NOT the live (next-game) EventCost — so the banner
     // settles the last game, not the upcoming one.
     val paymentsSnapshot: List<PaymentSnapshotEntry>? = null,
+    /**
+     * Durable per-game settlement rows (payment overhaul). When present the
+     * banner renders and settles these instead of the frozen GameHistory
+     * snapshot — the server derives them from the authoritative GamePayment
+     * rows, so they never drift the way the snapshot does.
+     */
+    val gamePayments: List<SettlementRow>? = null,
+    val gameConfig: PostGamePaymentConfig? = null,
     val mvpEnabled: Boolean = false,
     val mvpComplete: Boolean = true,
     // Viewer-scoped MVP task: true once THIS user has voted (or has no task).
@@ -302,6 +315,19 @@ data class PostGameStatus(
     // Season Rank (ADR 0031) movement for the just-played Game. Null unless the
     // game counted and the viewer played. Mirrors the web `SeasonRankMovement`.
     val seasonRank: SeasonRankMovement? = null,
+    // The viewer's current Rank Standing — present before this Game is scored.
+    // Mirrors the web `SeasonRankStanding`.
+    val rankStanding: SeasonRankStanding? = null,
+    /**
+     * True when the viewer already paid their own share and is neither the
+     * receiver nor a settlement admin. The payment task is then hidden for them.
+     */
+    val viewerPaymentSettled: Boolean = false,
+    // Result-card fields: the score and team names shown alongside the Rank.
+    val scoreOne: Int? = null,
+    val scoreTwo: Int? = null,
+    val teamOneName: String = "",
+    val teamTwoName: String = "",
 )
 
 @Serializable
@@ -317,6 +343,41 @@ data class SeasonRankMovement(
     val provisional: Boolean = false,
     val gamesThisSeason: Int = 0,
     val edges: List<Double> = emptyList(),
+)
+
+/**
+ * The viewer's CURRENT Season Rank, as of the Games already counted —
+ * independent of whether the Game being wrapped up has a score yet. Delivered
+ * alongside `seasonRank` so the post-game card can show a Rank before the score
+ * lands instead of an empty section. Mirrors the web `SeasonRankStanding`.
+ */
+@Serializable
+data class SeasonRankStanding(
+    val seasonId: String = "",
+    val seasonName: String = "",
+    val rank: Double = 0.0,
+    val tier: Int = 0,
+    val provisional: Boolean = false,
+    val gamesThisSeason: Int = 0,
+    val edges: List<Double> = emptyList(),
+    val crew: ViewerCrewStanding? = null,
+)
+
+/**
+ * The viewer's Crew standing inside a Season. `pointsDelta` is what the Game
+ * being revealed paid the Crew; null while that Game has not counted yet, so
+ * the UI never invents a payout. Mirrors the web `ViewerCrewStanding`.
+ */
+@Serializable
+data class ViewerCrewStanding(
+    val crewId: String = "",
+    val name: String = "",
+    /** 1-based place among the Season's Crews. */
+    val place: Int = 0,
+    val placeCount: Int = 0,
+    val points: Double = 0.0,
+    /** Points this Game paid the Crew. Null while this Game is not counted. */
+    val pointsDelta: Double? = null,
 )
 
 @Serializable
@@ -490,6 +551,15 @@ data class SettlementRow(
     val isPayer: Boolean = false,
 )
 
+/** Payment config of the game the post-game banner is settling. */
+@Serializable
+data class PostGamePaymentConfig(
+    val gameId: String,
+    val mode: String = "tracked",
+    val payerName: String? = null,
+    val payerIsPlayer: Boolean = false,
+)
+
 @Serializable
 data class SettlementPerson(
     val name: String,
@@ -558,6 +628,72 @@ data class MvpResponse(
 @Serializable
 data class CreateEventResponse(val id: String)
 
+// ── Match Events (post-game goals & assists) ────────────────────────────────
+
+@Serializable
+data class MatchEvent(
+    val id: String,
+    val type: String = "goal",
+    val team: String = "unknown",
+    val minute: Int? = null,
+    /** How many goals this entry records: "X scored 3" is one row with count=3. */
+    val count: Int = 1,
+    val ownGoal: Boolean = false,
+    val penalty: Boolean = false,
+    val scorerEventPlayerId: String? = null,
+    val scorerName: String = "",
+    val assistEventPlayerId: String? = null,
+    val assistName: String? = null,
+    val createdAt: String = "",
+)
+
+@Serializable
+data class MatchEventScore(val teamOne: Int = 0, val teamTwo: Int = 0)
+
+@Serializable
+data class MatchEventsResponse(
+    val events: List<MatchEvent> = emptyList(),
+    val score: MatchEventScore? = null,
+    val scoringType: String = "standard",
+)
+
+@Serializable
+data class MatchEventRequest(
+    val type: String = "goal",
+    val team: String = "unknown",
+    val minute: Int? = null,
+    val count: Int = 1,
+    val ownGoal: Boolean = false,
+    val penalty: Boolean = false,
+    val scorerEventPlayerId: String? = null,
+    val scorerName: String? = null,
+    val assistEventPlayerId: String? = null,
+    val assistName: String? = null,
+)
+
+@Serializable
+data class MatchEventResponse(
+    val ok: Boolean = true,
+    val event: MatchEvent? = null,
+    val score: MatchEventScore? = null,
+)
+
+@Serializable
+data class MatchScorer(
+    val name: String,
+    val eventPlayerId: String? = null,
+    val goals: Int = 0,
+    val assists: Int = 0,
+    val ownGoals: Int = 0,
+    val penalties: Int = 0,
+)
+
+@Serializable
+data class MatchStatsResponse(
+    val scorers: List<MatchScorer> = emptyList(),
+    val scoringType: String = "standard",
+)
+
 @Serializable
 data class RemovePlayerResponse(
     val ok: Boolean = true,
@@ -582,6 +718,8 @@ data class FollowStateResponse(
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
+    /** ADR 0025: per-event invite opt-out (EventPlayer.invitationOptOutAt). */
+    val inviteOptedOut: Boolean? = null,
 )
 
 // ── Court Finder ────────────────────────────────────────────────────────────

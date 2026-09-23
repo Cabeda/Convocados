@@ -4,6 +4,7 @@ import { fireWebhooks } from "./webhook.server";
 import { autoPriorityEnroll } from "./priority.server";
 import { cancelEventJobs, scheduleEventReminders } from "./scheduler.server";
 import { logEvent } from "./eventLog.server";
+import { postLedgerEntry } from "./ledger.server";
 
 export interface CancelActor {
   id: string | null;
@@ -65,23 +66,37 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
     select: { userId: true, amountCents: true, currency: true },
   });
   for (const d of chargeDebits) {
-    await prisma.walletTransaction.create({
-      data: {
-        eventId: event.id,
-        userId: d.userId,
-        amountCents: d.amountCents,
-        currency: d.currency,
-        direction: "credit",
-        gameUnits: 0,
-        reason: "game_cancelled_credit",
-        eventInstanceId: game.id,
-      },
+    await postLedgerEntry({
+      eventId: event.id,
+      userId: d.userId,
+      amountCents: d.amountCents,
+      currency: d.currency,
+      direction: "credit",
+      reason: "game_cancelled_credit",
+      eventInstanceId: game.id,
+      idempotencyKey: `gamecancelled:${event.id}:${d.userId}:${game.id}`,
     });
   }
 
-  await prisma.walletTransaction.deleteMany({
+  // Reverse redeemed Game Units with a compensating `credit_restored` entry
+  // (the ledger is append-only; a redeemed credit is returned, not deleted).
+  const redeemed = await prisma.walletTransaction.findMany({
     where: { eventId: event.id, eventInstanceId: game.id, reason: "credit_redeemed" },
+    select: { userId: true, currency: true, gameUnits: true },
   });
+  for (const r of redeemed) {
+    await postLedgerEntry({
+      eventId: event.id,
+      userId: r.userId,
+      amountCents: 0,
+      currency: r.currency,
+      direction: "credit",
+      gameUnits: -r.gameUnits, // credit_redeemed is -1; restore +1
+      reason: "credit_restored",
+      eventInstanceId: game.id,
+      idempotencyKey: `creditrestored:${event.id}:${r.userId}:${game.id}`,
+    });
+  }
 
   await prisma.gameHistory.create({
     data: {
