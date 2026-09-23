@@ -1989,7 +1989,7 @@ private fun HeroWrapUp(
                     }
                     val mvpData = state.mvp
                     LaunchedEffect(pg.latestHistoryId) {
-                        if (pg.latestHistoryId != null && mvpData == null && !state.mvpLoading) viewModel.loadMvp(eventId, pg.latestHistoryId)
+                        if (mvpData == null && !state.mvpLoading) viewModel.loadMvp(eventId, pg.latestHistoryId)
                     }
                     if (state.mvpLoading) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) }
@@ -2011,7 +2011,7 @@ private fun HeroWrapUp(
                                 candidates.forEach { p ->
                                     val pid = p.id
                                     val isMyPick = p.name == myVote
-                                    FilterChip(selected = isMyPick, onClick = { if (pg.latestHistoryId != null) viewModel.voteMvp(eventId, pg.latestHistoryId, pid) }, label = { Text(p.name) }, leadingIcon = if (isMyPick) {{ Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) }} else null)
+                                    FilterChip(selected = isMyPick, onClick = { viewModel.voteMvp(eventId, pg.latestHistoryId, pid) }, label = { Text(p.name) }, leadingIcon = if (isMyPick) {{ Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) }} else null)
                                 }
                             }
                             // Show current tally if votes exist

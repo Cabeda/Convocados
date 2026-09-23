@@ -65,6 +65,13 @@ private val DAY_NAMES = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+// rememberSwipeToDismissBoxState(confirmValueChange = ...) is deprecated with no
+// replacement: the guidance is to restrict the anchor set instead, which this
+// screen already does via enableDismissFromStartToEnd = false. The callback is
+// kept purely for its side effect (delete on EndToStart), so restructure it as a
+// state observer before the suppression can go. Tracked with the other
+// deprecation migrations.
+@Suppress("DEPRECATION")
 fun CourtWatchesScreen(
     onBack: () -> Unit,
     viewModel: CourtWatchesViewModel = hiltViewModel(),
