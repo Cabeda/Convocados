@@ -134,6 +134,41 @@ export const GET: APIRoute = async ({ request }) => {
     playerNameByEvent.set(r.eventId, r.name);
   }
 
+  // Goals and assists are replayed from Match Events (ADR 0039), matched to the
+  // player's name within each event — the same identity resolution MVP uses.
+  const myMatchEvents = uniqueRatings.length > 0
+    ? await prisma.matchEvent.findMany({
+        where: { gameHistory: { eventId: { in: uniqueRatings.map((r) => r.eventId) } } },
+        select: {
+          type: true,
+          count: true,
+          scorerName: true,
+          assistName: true,
+          gameHistory: { select: { eventId: true } },
+        },
+      })
+    : [];
+
+  const goalsByEvent = new Map<string, number>();
+  const assistsByEvent = new Map<string, number>();
+  let totalGoals = 0;
+  let totalAssists = 0;
+  for (const e of myMatchEvents) {
+    const eventId = e.gameHistory.eventId;
+    const playerName = playerNameByEvent.get(eventId);
+    if (!playerName) continue;
+    const lower = playerName.toLowerCase();
+    if (e.type === "goal" && e.scorerName.toLowerCase() === lower) {
+      const n = e.count ?? 1;
+      totalGoals += n;
+      goalsByEvent.set(eventId, (goalsByEvent.get(eventId) ?? 0) + n);
+    }
+    if (e.assistName && e.assistName.toLowerCase() === lower) {
+      totalAssists++;
+      assistsByEvent.set(eventId, (assistsByEvent.get(eventId) ?? 0) + 1);
+    }
+  }
+
   // Compute MVP awards now that playerNameByEvent is available
   const mvpAwardsByEvent = new Map<string, number>();
   let totalMvpAwards = 0;
@@ -177,6 +212,8 @@ export const GET: APIRoute = async ({ request }) => {
             }
           : null,
         mvpAwards: mvpAwardsByEvent.get(r.eventId) ?? 0,
+        goals: goalsByEvent.get(r.eventId) ?? 0,
+        assists: assistsByEvent.get(r.eventId) ?? 0,
       };
     });
 
@@ -191,6 +228,8 @@ export const GET: APIRoute = async ({ request }) => {
       bestRating: Math.round(bestRating),
       eventsPlayed: uniqueRatings.length,
       totalMvpAwards,
+      totalGoals,
+      totalAssists,
     },
     events,
   });

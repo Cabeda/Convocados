@@ -31,10 +31,15 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.GameHistory
+import dev.convocados.data.api.MatchEventRequest
 import dev.convocados.data.api.SnapshotPaymentEntry
 import dev.convocados.data.api.SnapshotTeam
 import dev.convocados.data.api.SnapshotTeamPlayer
 import dev.convocados.data.api.SetScore
+import dev.convocados.ui.components.MatchEventDraft
+import dev.convocados.ui.components.MatchEventItem
+import dev.convocados.ui.components.MatchEventPlayer
+import dev.convocados.ui.components.MatchEventsSection
 import dev.convocados.ui.screen.games.formatRelativeDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,6 +66,12 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
     val saving: StateFlow<Boolean> = _saving
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
+    private val _matchEvents = MutableStateFlow<List<MatchEventItem>>(emptyList())
+    val matchEvents: StateFlow<List<MatchEventItem>> = _matchEvents
+    private val _matchEventsLoaded = MutableStateFlow(false)
+    val matchEventsLoaded: StateFlow<Boolean> = _matchEventsLoaded
+    private val _matchEventsSaving = MutableStateFlow(false)
+    val matchEventsSaving: StateFlow<Boolean> = _matchEventsSaving
 
     fun load(eventId: String, historyId: String) {
         viewModelScope.launch {
@@ -154,8 +165,71 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
         }
     }
 
-    fun updateScore(eventId: String, historyId: String, scoreOne: Int? = null, scoreTwo: Int? = null, scoreSets: List<SetScore>? = null) {
+    /** Load the goal timeline for this game — only when the user asks for it. */
+    fun loadMatchEvents(eventId: String, historyId: String) {
         viewModelScope.launch {
+            runCatching { api.fetchMatchEvents(eventId, historyId) }
+                .onSuccess { resp ->
+                    _matchEvents.value = resp.events.map {
+                        MatchEventItem(
+                            scorerName = it.scorerName,
+                            assistName = it.assistName,
+                            minute = it.minute,
+                            count = it.count,
+                            ownGoal = it.ownGoal,
+                            penalty = it.penalty,
+                        )
+                    }
+                }
+                .onFailure { _error.value = it.message }
+            _matchEventsLoaded.value = true
+        }
+    }
+
+    fun addMatchEvent(eventId: String, historyId: String, draft: MatchEventDraft) {
+        viewModelScope.launch {
+            _matchEventsSaving.value = true
+            runCatching {
+                api.addMatchEvent(
+                    eventId,
+                    historyId,
+                    MatchEventRequest(
+                        type = "goal",
+                        team = draft.team,
+                        minute = draft.minute,
+                        count = draft.count,
+                        ownGoal = draft.ownGoal,
+                        penalty = draft.penalty,
+                        scorerEventPlayerId = draft.scorerEventPlayerId,
+                        scorerName = draft.scorerName,
+                    ),
+                )
+            }
+                .onSuccess {
+                    val resp = runCatching { api.fetchMatchEvents(eventId, historyId) }.getOrNull()
+                    resp?.let { r ->
+                        _matchEvents.value = r.events.map {
+                            MatchEventItem(
+                                scorerName = it.scorerName,
+                                assistName = it.assistName,
+                                minute = it.minute,
+                            count = it.count,
+                                ownGoal = it.ownGoal,
+                                penalty = it.penalty,
+                            )
+                        }
+                    }
+                }
+                .onFailure { e ->
+                    val body = e.message ?: ""
+                    val match = Regex(""""error"\s*:\s*"([^"]+)"""").find(body)
+                    _error.value = match?.groupValues?.get(1) ?: "Failed to log the goal"
+                }
+            _matchEventsSaving.value = false
+        }
+    }
+
+    fun updateScore(eventId: String, historyId: String, scoreOne: Int? = null, scoreTwo: Int? = null, scoreSets: List<SetScore>? = null) {        viewModelScope.launch {
             _saving.value = true
             runCatching { api.updateScore(eventId, historyId, scoreOne, scoreTwo, scoreSets) }
                 .onSuccess { _history.value = it }
@@ -183,6 +257,9 @@ fun HistoryDetailScreen(
     val teamTwo by viewModel.teamTwo.collectAsState()
     val payments by viewModel.payments.collectAsState()
     val saving by viewModel.saving.collectAsState()
+    val matchEvents by viewModel.matchEvents.collectAsState()
+    val matchEventsLoaded by viewModel.matchEventsLoaded.collectAsState()
+    val matchEventsSaving by viewModel.matchEventsSaving.collectAsState()
     var editing by remember { mutableStateOf(false) }
     var scoreOneText by remember { mutableStateOf("") }
     var scoreTwoText by remember { mutableStateOf("") }
@@ -268,9 +345,25 @@ fun HistoryDetailScreen(
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(h.teamTwoName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OutlinedTextField(value = scoreTwoText, onValueChange = { scoreTwoText = it }, modifier = Modifier.width(60.dp), singleLine = true)
-                        }
+            // Match events (ADR 0039) — bottom of the page: the timeline only
+            // expands once someone opts in and logs a goal.
+            if (h.status == "played" && h.scoringType != "tennis") {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                    Box(Modifier.padding(14.dp)) {
+                        MatchEventsSection(
+                            events = matchEvents,
+                            players = (teamOne + teamTwo).map { MatchEventPlayer(it.id, it.name) },
+                            loading = !matchEventsLoaded,
+                            saving = matchEventsSaving,
+                            loadOnAppear = { viewModel.loadMatchEvents(eventId, historyId) },
+                            onAdd = { draft -> viewModel.addMatchEvent(eventId, historyId, draft) },
+                        )
                     }
-                    }
+                }
+            }
+        }
+    }
+}
                     if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }

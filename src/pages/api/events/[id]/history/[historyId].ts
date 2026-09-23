@@ -107,6 +107,26 @@ export const GET: APIRoute = async ({ params, request }) => {
     const paymentsSnapshot = paymentConfig
       ? settlementPaymentsSnapshot(paymentConfig)
       : gh.paymentsSnapshot;
+
+    // Goal timeline (ADR 0039). Set-based sports have no goals.
+    const matchEvents = getScoringType(event.sport) === "tennis"
+      ? []
+      : await prisma.matchEvent.findMany({
+          where: { gameHistoryId: gh.id },
+          select: {
+            id: true,
+            type: true,
+            team: true,
+            minute: true,
+            count: true,
+            ownGoal: true,
+            penalty: true,
+            scorerName: true,
+            assistName: true,
+          },
+          orderBy: [{ minute: "asc" }, { createdAt: "asc" }],
+        });
+
     return Response.json({
       id: gh.id,
       eventId: gh.eventId,
@@ -123,8 +143,14 @@ export const GET: APIRoute = async ({ params, request }) => {
       paymentConfig,
       createdAt: gh.createdAt.toISOString(),
       source: gh.source,
+      // Kept in sync with the list endpoint: the card needs this to decide
+      // between the "Approve ELO" button and the approved state. Omitting it
+      // made every historical game look unapproved, so the button appeared to
+      // do nothing.
+      eloProcessed: gh.eloProcessed,
       eloUpdates,
       isFriendly: gh.isFriendly,
+      matchEvents,
     });
   }
 

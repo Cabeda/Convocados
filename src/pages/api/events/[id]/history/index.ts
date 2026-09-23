@@ -212,8 +212,47 @@ export const GET: APIRoute = async ({ params, request }) => {
     mvp: gameHistoryIds.has(entry.id) ? (mvpMap.get(entry.id) ?? null) : null,
   }));
 
-  return Response.json(buildPaginatedResponse(withMvp, limit));
+  // Ship each page entry's goal timeline with the list response, same reason as
+  // MVP above: one batched query instead of a fetch per card. Set-based sports
+  // have no goals, so skip the query entirely for them.
+  const withMatchEvents = getScoringType(event.sport) === "tennis"
+    ? withMvp.map((entry) => ({ ...entry, matchEvents: [] }))
+    : await attachMatchEvents(withMvp);
+
+  return Response.json(buildPaginatedResponse(withMatchEvents, limit));
 };
+
+/** Batch-attach each history entry's goal timeline to the list page. */
+async function attachMatchEvents<T extends { id: string }>(entries: T[]) {
+  const historyIds = entries.map((e) => e.id);
+  if (historyIds.length === 0) return entries.map((e) => ({ ...e, matchEvents: [] }));
+
+  const events = await prisma.matchEvent.findMany({
+    where: { gameHistoryId: { in: historyIds } },
+    select: {
+      id: true,
+      gameHistoryId: true,
+      type: true,
+      team: true,
+      minute: true,
+      count: true,
+      ownGoal: true,
+      penalty: true,
+      scorerName: true,
+      assistName: true,
+    },
+    orderBy: [{ minute: "asc" }, { createdAt: "asc" }],
+  });
+
+  const byHistory = new Map<string, typeof events>();
+  for (const e of events) {
+    const arr = byHistory.get(e.gameHistoryId) ?? [];
+    arr.push(e);
+    byHistory.set(e.gameHistoryId, arr);
+  }
+
+  return entries.map((entry) => ({ ...entry, matchEvents: byHistory.get(entry.id) ?? [] }));
+}
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */
 export function computeHistoryDeltas(
