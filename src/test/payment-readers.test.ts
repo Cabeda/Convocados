@@ -285,6 +285,24 @@ describe("post-game status payment state from GamePayment", () => {
     expect(status).not.toBeNull();
     expect(status!.hasPendingPastPayments).toBe(true);
   });
+
+  it("reads the live occurrence via currentGameId when Game.dateTime drifted from Event.dateTime", async () => {
+    // Mirrors the E2E flow: cost is set AFTER the event was moved to the past,
+    // so the Game row keeps its original (future) dateTime while Event.dateTime
+    // moved back. Date-matching alone would miss the live occurrence.
+    const event = await seedEvent({ dateTime: new Date(Date.now() - 7200_000) });
+    await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 20, currency: "EUR" },
+    });
+    const driftedGame = await seedGame(event.id, { dateTime: new Date(Date.now() + 86400_000) });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: driftedGame.id } });
+    await seedGP(driftedGame.id, event.id, "Alice", 20, "pending");
+
+    const status = await computePostGameStatus(event.id, new Request("http://localhost/api/test"));
+    expect(status).not.toBeNull();
+    expect(status!.allPaid).toBe(false);
+    expect(status!.hasCost).toBe(true);
+  });
 });
 
 // ── history list GET: paymentsSnapshot served from the Game roll ────────────

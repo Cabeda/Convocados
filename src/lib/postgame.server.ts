@@ -64,7 +64,7 @@ export async function computePostGameStatus(
 ): Promise<PostGameStatusPayload | null> {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true },
+    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true, currentGameId: true },
   });
 
   if (!event) return null;
@@ -104,9 +104,14 @@ export async function computePostGameStatus(
   });
 
   // Resolve the payment roll for the past game: the latest history's
-  // occurrence when one exists, otherwise the still-unreset event occurrence.
+  // occurrence when one exists, otherwise the live occurrence (currentGameId —
+  // its Game.dateTime can drift from Event.dateTime after a datetime edit).
   const occurrenceDt = latestHistory?.dateTime ?? event.dateTime;
-  const pastRoll = await occurrencePaymentRoll(event.id, occurrenceDt);
+  const pastRoll = await occurrencePaymentRoll(
+    event.id,
+    occurrenceDt,
+    latestHistory ? undefined : event.currentGameId,
+  );
 
   let hasCost: boolean;
   let allPaid = true;

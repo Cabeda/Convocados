@@ -12,16 +12,25 @@ export interface PaymentRollEntry {
  * Returns null when no Game exists for the occurrence — callers decide
  * whether to treat that as "no payments" or fall back to the frozen
  * GameHistory.paymentsSnapshot residue.
+ *
+ * `gameId` pins the live occurrence (its Game.dateTime can drift from
+ * Event.dateTime after a datetime edit); otherwise match on dateTime.
  */
 export async function occurrencePaymentRoll(
   eventId: string,
   dateTime: Date,
+  gameId?: string | null,
 ): Promise<PaymentRollEntry[] | null> {
-  const game = await prisma.game.findFirst({
-    where: { eventId, dateTime },
-    orderBy: { createdAt: "desc" },
-    select: { id: true },
-  });
+  const game = gameId
+    ? await prisma.game.findFirst({
+        where: { id: gameId, eventId },
+        select: { id: true },
+      })
+    : await prisma.game.findFirst({
+        where: { eventId, dateTime },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
   if (!game) return null;
   const rows = await prisma.gamePayment.findMany({
     where: { gameId: game.id, archivedAt: null },
@@ -31,8 +40,12 @@ export async function occurrencePaymentRoll(
 }
 
 /** Player names on the occurrence's payment roll (empty when no Game). */
-export async function occurrencePaymentNames(eventId: string, dateTime: Date): Promise<string[]> {
-  const roll = await occurrencePaymentRoll(eventId, dateTime);
+export async function occurrencePaymentNames(
+  eventId: string,
+  dateTime: Date,
+  gameId?: string | null,
+): Promise<string[]> {
+  const roll = await occurrencePaymentRoll(eventId, dateTime, gameId);
   return (roll ?? []).map((r) => r.playerName);
 }
 

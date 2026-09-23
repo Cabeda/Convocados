@@ -4,7 +4,7 @@ import { occurrencePaymentNames } from "./paymentRoll.server";
 
 export interface SettledGameParticipantContext {
   sessionUser: { id?: string; name?: string | null } | null;
-  event: { id: string; dateTime: Date };
+  event: { id: string; dateTime: Date; currentGameId?: string | null };
   latestHistory: {
     teamsSnapshot: string | null;
     dateTime: Date;
@@ -28,9 +28,13 @@ export async function isSettledGameParticipant(context: SettledGameParticipantCo
 
   // Payment names come from the occurrence's durable GamePayment roll, never
   // the frozen paymentsSnapshot (retarget: 5rhgs71k). Before a history row
-  // materialises the settled game is still the event's own occurrence.
+  // materialises the settled game is the live occurrence (currentGameId).
   const paymentOccurrence = latestHistory?.dateTime ?? event.dateTime;
-  const paymentNames = await occurrencePaymentNames(event.id, paymentOccurrence);
+  const paymentNames = await occurrencePaymentNames(
+    event.id,
+    paymentOccurrence,
+    latestHistory ? undefined : event.currentGameId,
+  );
 
   const snapshotNames = new Set(
     [
@@ -48,15 +52,25 @@ export async function isSettledGameParticipant(context: SettledGameParticipantCo
       || latestHistory.dateTime.getTime() === event.dateTime.getTime();
     if (!noNamesForSettledGame) return false;
 
-    const settledGame = await prisma.game.findFirst({
-      where: { eventId: event.id, dateTime: event.dateTime },
-      include: {
-        participants: {
-          where: { archivedAt: null, status: { not: "pending" } }, // same as activeParticipantsWhere — nested relation has no gameId
-          include: { eventPlayer: { select: { name: true, userId: true } } },
-        },
-      },
-    });
+    const settledGame = event.currentGameId
+      ? await prisma.game.findFirst({
+          where: { id: event.currentGameId, eventId: event.id },
+          include: {
+            participants: {
+              where: { archivedAt: null, status: { not: "pending" } },
+              include: { eventPlayer: { select: { name: true, userId: true } } },
+            },
+          },
+        })
+      : await prisma.game.findFirst({
+          where: { eventId: event.id, dateTime: event.dateTime },
+          include: {
+            participants: {
+              where: { archivedAt: null, status: { not: "pending" } }, // same as activeParticipantsWhere — nested relation has no gameId
+              include: { eventPlayer: { select: { name: true, userId: true } } },
+            },
+          },
+        });
     if (settledGame?.participants.some((p) => p.eventPlayer.userId === sessionUser?.id)) {
       return true;
     }
