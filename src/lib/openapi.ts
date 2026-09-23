@@ -226,6 +226,33 @@ export const openApiSpec = {
         responses: { "200": { description: "ELO setting updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/competition": {
+      put: {
+        summary: "Update Competition settings (master enable, rank decay, inactive behavior)",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean" },
+                  rankDecayEnabled: { type: "boolean" },
+                  inactiveRankBehavior: { type: "string", enum: ["freeze", "reset"] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Competition settings updated" },
+          "409": { description: "Locked while a Season is active or under review" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/events/{id}/seasons": {
       get: {
         summary: "List Seasons for an event",
