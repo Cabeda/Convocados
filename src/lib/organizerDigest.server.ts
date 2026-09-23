@@ -77,13 +77,17 @@ export async function processOrganizerDigests(): Promise<DigestResult> {
       const playerCount = (await getActiveRosterState(event.id, event.maxPlayers, event.currentGameId)).totalCount;
       const spotsLeft = Math.max(0, event.maxPlayers - playerCount);
 
-      // Pending payments
-      const eventCost = await prisma.eventCost.findUnique({ where: { eventId: event.id } });
+      // Pending payments — ADR 0016: the current Game's GamePayment roll
+      // replaces the legacy EventCost/PlayerPayment counts.
       let pendingPayments = 0;
       let sentPayments = 0;
-      if (eventCost) {
-        pendingPayments = await prisma.playerPayment.count({ where: { eventCostId: eventCost.id, status: "pending" } });
-        sentPayments = await prisma.playerPayment.count({ where: { eventCostId: eventCost.id, status: "sent" } });
+      if (event.currentGameId) {
+        pendingPayments = await prisma.gamePayment.count({
+          where: { gameId: event.currentGameId, status: "pending", archivedAt: null },
+        });
+        sentPayments = await prisma.gamePayment.count({
+          where: { gameId: event.currentGameId, status: "sent", archivedAt: null },
+        });
       }
 
       let line = `${event.title}: ${playerCount}/${event.maxPlayers}`;

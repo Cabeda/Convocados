@@ -260,21 +260,11 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   // same rule the post-game banner uses), with a fallback to the played Game's
   // participants when no snapshot has materialised yet. Claiming a spot in a
   // later game does NOT grant edit rights (issue #658).
-  const participantEventCost = await prisma.eventCost.findUnique({
-    where: { eventId: params.id },
-    select: { totalAmount: true, payments: { select: { playerName: true } } },
-  });
   const isParticipant = session.user.name
     ? await isSettledGameParticipant({
         sessionUser: session.user,
         event,
         latestHistory: entry,
-        pastGameSource: entry.paymentsSnapshot
-          ? "snapshot"
-          : participantEventCost && participantEventCost.totalAmount > 0
-            ? "live"
-            : "none",
-        eventCost: participantEventCost,
       })
     : false;
 

@@ -1120,6 +1120,15 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
       teamsSnapshot: null,
       paymentsSnapshot: JSON.stringify([{ playerName: "Luis Lopes", amount: 10, status: "pending" }]),
     });
+    // Durable roll: occurrence Game + GamePayment (ADR 0016) — snapshot alone
+    // is residue and no longer grants participation.
+    const game = await testPrisma.game.create({
+      data: { eventId: id, dateTime: history.dateTime, status: "played" },
+    });
+    const ep = await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Luis Lopes" } });
+    await testPrisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Luis Lopes", amount: 10, status: "pending" },
+    });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
     expect(res.status).toBe(200);
   });

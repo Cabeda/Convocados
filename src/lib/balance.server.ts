@@ -5,8 +5,9 @@
  * - getGateBalance: "sent" clears the gate (uses MONEY_CLEARING_REASONS)
  * - getOutstandingBalance: "sent" does NOT clear (uses OUTSTANDING_CLEARING_REASONS)
  *
- * For anonymous players (no userId linked), falls back to legacy PlayerPayment
- * reads since the ledger requires a userId.
+ * For anonymous players (no userId linked), falls back to the legacy payment
+ * roll reads — GamePayment rows per occurrence (ADR 0016), since the ledger
+ * requires a userId.
  */
 
 import { prisma } from "./db.server";
@@ -21,6 +22,7 @@ import {
 } from "./wallet";
 import { summarizePayments } from "./paymentSummary";
 import { resolveLinkedUserId } from "./payerIdentity.server";
+import { occurrencePaymentRolls } from "./paymentRoll.server";
 
 export interface PlayerBalance {
   playerName: string;
@@ -70,24 +72,9 @@ async function fetchLedger(eventId: string, userId: string): Promise<WalletTx[]>
 
 // ─── Legacy fallback for anonymous players ─────────────────────────────────
 
-interface SnapshotEntry {
-  playerName: string;
-  amount: number;
-  status: string;
-}
-
 async function legacyGetOutstandingBalance(eventId: string, playerName: string): Promise<PlayerBalance> {
-  const [histories, eventCost] = await Promise.all([
-    prisma.gameHistory.findMany({
-      where: { eventId, status: { not: "cancelled" } },
-      select: { paymentsSnapshot: true, dateTime: true },
-      orderBy: { dateTime: "desc" },
-    }),
-    prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: { where: { playerName } } },
-    }),
-  ]);
+  // ADR 0016: occurrence payments live on GamePayment, ordered newest first.
+  const rolls = await occurrencePaymentRolls(eventId);
 
   let amount = 0;
   let gamesOwed = 0;
@@ -97,18 +84,9 @@ async function legacyGetOutstandingBalance(eventId: string, playerName: string):
   type GameEntry = { status: string; amt: number };
   const timeline: GameEntry[] = [];
 
-  if (eventCost?.payments.length) {
-    const live = eventCost.payments[0];
-    timeline.push({ status: live.status, amt: live.amount });
-  }
-
-  for (const h of histories) {
-    if (!h.paymentsSnapshot) continue;
-    try {
-      const entries: SnapshotEntry[] = JSON.parse(h.paymentsSnapshot);
-      const entry = entries.find((e) => e.playerName === playerName);
-      if (entry) timeline.push({ status: entry.status, amt: entry.amount });
-    } catch { /* skip malformed */ }
+  for (const roll of rolls) {
+    const entry = roll.payments.find((e) => e.playerName === playerName);
+    if (entry) timeline.push({ status: entry.status, amt: entry.amount });
   }
 
   for (const g of timeline) {
@@ -127,34 +105,13 @@ async function legacyGetOutstandingBalance(eventId: string, playerName: string):
 }
 
 async function legacyGetGateBalance(eventId: string, playerName: string): Promise<number> {
-  const [histories, eventCost] = await Promise.all([
-    prisma.gameHistory.findMany({
-      where: { eventId, status: { not: "cancelled" } },
-      select: { paymentsSnapshot: true },
-    }),
-    prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: { where: { playerName } } },
-    }),
-  ]);
+  const rolls = await occurrencePaymentRolls(eventId);
 
   let amount = 0;
-
-  for (const h of histories) {
-    if (!h.paymentsSnapshot) continue;
-    try {
-      const entries: Array<{ playerName: string; amount: number; status: string }> = JSON.parse(h.paymentsSnapshot);
-      const entry = entries.find((e) => e.playerName === playerName);
-      if (entry && entry.status === "pending") {
-        amount += entry.amount;
-      }
-    } catch { /* skip */ }
-  }
-
-  if (eventCost?.payments.length) {
-    const live = eventCost.payments[0];
-    if (live.status === "pending") {
-      amount += live.amount;
+  for (const roll of rolls) {
+    const entry = roll.payments.find((e) => e.playerName === playerName);
+    if (entry && entry.status === "pending") {
+      amount += entry.amount;
     }
   }
 
@@ -300,40 +257,19 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
       });
     }
   } else {
-    // Legacy fallback: compute debts from GameHistory + PlayerPayment
-    const histories = await prisma.gameHistory.findMany({
-      where: { eventId, status: { not: "cancelled" } },
-      select: { paymentsSnapshot: true },
-    });
-    const eventCostForDebts = await prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: true },
-    });
+    // Legacy fallback: compute debts from the occurrence GamePayment rolls
+    // (ADR 0016). Anonymous players have no ledger rows.
+    const rolls = await occurrencePaymentRolls(eventId);
 
     const debts = new Map<string, { amount: number; gamesOwed: number }>();
 
-    for (const h of histories) {
-      if (!h.paymentsSnapshot) continue;
-      try {
-        const entries: SnapshotEntry[] = JSON.parse(h.paymentsSnapshot);
-        for (const e of entries) {
-          if (e.status === "pending" || e.status === "sent") {
-            const d = debts.get(e.playerName) ?? { amount: 0, gamesOwed: 0 };
-            d.amount += e.amount;
-            d.gamesOwed++;
-            debts.set(e.playerName, d);
-          }
-        }
-      } catch { /* skip */ }
-    }
-
-    if (eventCostForDebts) {
-      for (const p of eventCostForDebts.payments) {
-        if (p.status === "pending" || p.status === "sent") {
-          const d = debts.get(p.playerName) ?? { amount: 0, gamesOwed: 0 };
-          d.amount += p.amount;
+    for (const roll of rolls) {
+      for (const e of roll.payments) {
+        if (e.status === "pending" || e.status === "sent") {
+          const d = debts.get(e.playerName) ?? { amount: 0, gamesOwed: 0 };
+          d.amount += e.amount;
           d.gamesOwed++;
-          debts.set(p.playerName, d);
+          debts.set(e.playerName, d);
         }
       }
     }
@@ -366,33 +302,37 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
     }
   }
 
-  // If no ledger data for current game, fall back to legacy PlayerPayment
-  if (totalCount === 0) {
-    const eventCost = await prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: true },
+  // If no ledger data for current game, fall back to the current Game's
+  // GamePayment roll (ADR 0016).
+  if (totalCount === 0 && currentGameId) {
+    const rows = await prisma.gamePayment.findMany({
+      where: { gameId: currentGameId, archivedAt: null },
+      select: { status: true },
     });
-    if (eventCost && eventCost.payments.length > 0) {
-      const agg = summarizePayments(eventCost.payments);
+    if (rows.length > 0) {
+      const agg = summarizePayments(rows);
       totalCount = agg.totalCount;
       paidCount = agg.paidCount;
     }
   }
 
-  // If still no data, fall back to latest GameHistory.paymentsSnapshot
+  // If still no data, fall back to the latest Game's GamePayment roll.
   if (totalCount === 0) {
-    const latest = await prisma.gameHistory.findFirst({
+    const latest = await prisma.game.findFirst({
       where: { eventId, status: { not: "cancelled" } },
       orderBy: { dateTime: "desc" },
-      select: { paymentsSnapshot: true },
+      select: { id: true },
     });
-    if (latest?.paymentsSnapshot) {
-      try {
-        const entries: SnapshotEntry[] = JSON.parse(latest.paymentsSnapshot);
-        const agg = summarizePayments(entries);
+    if (latest) {
+      const rows = await prisma.gamePayment.findMany({
+        where: { gameId: latest.id, archivedAt: null },
+        select: { status: true },
+      });
+      if (rows.length > 0) {
+        const agg = summarizePayments(rows);
         totalCount = agg.totalCount;
         paidCount = agg.paidCount;
-      } catch { /* skip malformed */ }
+      }
     }
   }
 
