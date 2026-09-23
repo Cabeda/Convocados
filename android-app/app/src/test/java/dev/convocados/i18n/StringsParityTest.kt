@@ -39,6 +39,11 @@ class StringsParityTest {
         "match_events_team_one",
         "match_events_team_two",
         "match_events_top_scorers",
+        "this_device_title",
+        "device_push_on",
+        "device_push_off",
+        "device_push_blocked",
+        "open_notification_settings",
         "invite_opt_out_label",
         "invite_opt_out_desc",
     )

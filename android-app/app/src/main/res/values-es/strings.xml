@@ -50,8 +50,6 @@
     <string name="server_url">URL del servidor</string>
     <string name="language">Idioma</string>
     <string name="notifications_title">Notificaciones</string>
-    <string name="enable_notifications">Activar notificaciones</string>
-    <string name="enable_notifications_desc">Elige cuándo Convocados puede enviar recordatorios y actualizaciones de partidos.</string>
     <string name="notifications_subtitle">Gestionar preferencias de push y correo</string>
     <string name="sign_out">Cerrar sesión</string>
     <string name="edit_name">Editar nombre</string>
@@ -216,6 +214,11 @@
     <string name="push_notifications">Notificaciones push</string>
     <string name="enable_push">Activar push</string>
     <string name="enable_push_desc">Interruptor general de todas las notificaciones push</string>
+    <string name="this_device_title">Este dispositivo</string>
+    <string name="device_push_on">Las notificaciones están activadas en este dispositivo</string>
+    <string name="device_push_off">Las notificaciones están desactivadas en este dispositivo</string>
+    <string name="device_push_blocked">Las notificaciones están bloqueadas en la configuración del sistema</string>
+    <string name="open_notification_settings">Abrir ajustes</string>
     <string name="player_activity_desc">Cuando los jugadores se unen o salen</string>
     <string name="game_reminders_desc">Antes de que empiece tu partido</string>
     <string name="event_updates">Actualizaciones del evento</string>
