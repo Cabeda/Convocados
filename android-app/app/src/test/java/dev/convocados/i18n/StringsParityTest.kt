@@ -44,6 +44,8 @@ class StringsParityTest {
         "device_push_off",
         "device_push_blocked",
         "open_notification_settings",
+        "invite_opt_out_label",
+        "invite_opt_out_desc",
     )
 
     @Test

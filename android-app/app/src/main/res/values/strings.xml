@@ -260,6 +260,8 @@
     <string name="event_updates_desc">When event details change</string>
     <string name="payment_reminders">Payment reminders</string>
     <string name="post_game_results_desc">Scores and wrap-up after the game ends</string>
+    <string name="invite_opt_out_label">Don\'t invite me to this game</string>
+    <string name="invite_opt_out_desc">Pause invites, suggestions and reminder pings for this game. You\'ll still stay on the player list.</string>
     <string name="notification_tiers_title">How notifications work</string>
     <string name="notification_tiers_desc">You get event updates (cancellations, invites, open spots) for all games you follow. Game details (player activity, reminders, scores) are only sent when you\'re playing — or you can enable \"All updates\" per event.</string>
 
