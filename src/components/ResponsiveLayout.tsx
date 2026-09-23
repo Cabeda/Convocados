@@ -29,6 +29,7 @@ import type { Locale } from "~/lib/i18n";
 import { useSession, signOut } from "~/lib/auth.client";
 import { shareForHomeScreen } from "~/lib/pwaInstall";
 import { INSTALL_BANNER_DISMISS_KEY, installBannerDismissed } from "~/lib/pushPrompt";
+import { BottomSlotProvider, useBottomSlotClaim } from "~/lib/bottomSlot";
 import { SignInButton } from "./SignInButton";
 import SupportLinks from "./SupportLinks";
 
@@ -122,8 +123,9 @@ function UpdateBanner() {
   }, []);
 
   const [dismissed, setDismissed] = useState(false);
+  const granted = useBottomSlotClaim("update", !!waiting && !dismissed);
 
-  if (!waiting || dismissed) return null;
+  if (!waiting || dismissed || !granted) return null;
 
   const handleUpdate = () => {
     waiting.postMessage("SKIP_WAITING");
@@ -196,14 +198,6 @@ function InstallBanner() {
     // Don't show if already installed or recently dismissed
     if (isStandalone() || isDismissed()) return;
 
-    // Yield the bottom slot to the update banner when an app update is pending
-    // — they share the same anchor and we never want both at once.
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistration().then((reg) => {
-        if (reg?.waiting) setShowBanner(false);
-      }).catch(() => {});
-    }
-
     if (typeof Notification !== "undefined") {
       setPermission(Notification.permission);
     } else {
@@ -267,7 +261,11 @@ function InstallBanner() {
     setDismissed();
   };
 
-  if (!showBanner && !showIos) return null;
+  // Yield the bottom slot to a pending app update (and keep the push prompt
+  // from stacking on top) — arbitration lives in useBottomSlotClaim.
+  const granted = useBottomSlotClaim("install", showBanner || showIos);
+
+  if (!granted || (!showBanner && !showIos)) return null;
 
   // #136: permission-aware description copy.
   // - iOS + notif default: pitch the iOS-specific two-step flow.
@@ -385,6 +383,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
   const currentLangLabel = LOCALE_OPTIONS.find((o) => o.code === locale)?.label ?? "Language";
 
   return (
+    <BottomSlotProvider>
     <Box sx={{
       display: "flex", flexDirection: "column", minHeight: "100vh",
       bgcolor: theme.palette.background.default,
@@ -606,5 +605,6 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
         </Container>
       </Box>
     </Box>
+    </BottomSlotProvider>
   );
 };
