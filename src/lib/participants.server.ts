@@ -27,13 +27,16 @@ export async function isSettledGameParticipant(context: SettledGameParticipantCo
   if (!needle) return false;
 
   // Payment names come from the occurrence's durable GamePayment roll, never
-  // the frozen paymentsSnapshot (retarget: 5rhgs71k). Before a history row
-  // materialises the settled game is the live occurrence (currentGameId).
-  const paymentOccurrence = latestHistory?.dateTime ?? event.dateTime;
+  // the frozen paymentsSnapshot (retarget: 5rhgs71k). Before a reset the
+  // settled occurrence is the live currentGameId (its Game.dateTime can drift
+  // from Event.dateTime after a datetime edit); after a reset it is the game
+  // matching the latest history's dateTime.
+  const occurrenceDt = latestHistory?.dateTime ?? event.dateTime;
+  const hasReset = !!latestHistory && event.dateTime.getTime() > latestHistory.dateTime.getTime();
   const paymentNames = await occurrencePaymentNames(
     event.id,
-    paymentOccurrence,
-    latestHistory ? undefined : event.currentGameId,
+    occurrenceDt,
+    hasReset ? undefined : event.currentGameId,
   );
 
   const snapshotNames = new Set(

@@ -16,6 +16,7 @@ import { isSettledGameParticipant } from "~/lib/participants.server";
 import { computePostGameStatus } from "~/lib/postgame.server";
 import { GET as GET_HISTORY_LIST } from "~/pages/api/events/[id]/history/index";
 import { DELETE as DELETE_PURGE } from "~/pages/api/events/[id]/purge-player";
+import { PUT as PUT_PAYMENTS } from "~/pages/api/events/[id]/payments";
 
 const OWNER = { id: "owner-1", name: "Owner", email: "owner@t.com" };
 
@@ -331,9 +332,6 @@ describe("history list payments served from GamePayment", () => {
     expect(payments[0].status).toBe("pending");
   });
 });
-
-// ── purge-player scrubs GamePayment rows too ────────────────────────────────
-
 describe("purge-player scrubs GamePayment", () => {
   it("deletes GamePayment rows keyed by the purged player name", async () => {
     const event = await seedEvent();
@@ -348,5 +346,33 @@ describe("purge-player scrubs GamePayment", () => {
     expect(dan).toHaveLength(0);
     const kate = await prisma.gamePayment.findMany({ where: { gameId: game.id, playerName: "Keeper Kate" } });
     expect(kate).toHaveLength(1);
+  });
+});
+
+// ── legacy PUT writer dual-writes the GamePayment roll ──────────────────────
+
+describe("PUT /payments dual-writes GamePayment", () => {
+  it("mirrors paid status onto the live occurrence GamePayment row", async () => {
+    const event = await seedEvent();
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 20, currency: "EUR" } });
+    const game = await seedGame(event.id);
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const gp = await seedGP(game.id, event.id, "Alice", 10, "sent");
+    await prisma.playerPayment.create({
+      data: { eventCostId: (await prisma.eventCost.findUniqueOrThrow({ where: { eventId: event.id } })).id, playerName: "Alice", amount: 10, status: "sent" },
+    });
+
+    const request = new Request("http://localhost/api/test", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ playerName: "Alice", status: "paid", method: "cash" }),
+    });
+    const res = await PUT_PAYMENTS({ params: { id: event.id }, request } as any);
+    expect(res.status).toBe(200);
+
+    const updated = await prisma.gamePayment.findUniqueOrThrow({ where: { id: gp.id } });
+    expect(updated.status).toBe("paid");
+    expect(updated.method).toBe("cash");
+    expect(updated.paidAt).not.toBeNull();
   });
 });

@@ -103,15 +103,16 @@ export async function computePostGameStatus(
     select: { totalAmount: true, currency: true },
   });
 
-  // Resolve the payment roll for the past game: the latest history's
-  // occurrence when one exists, otherwise the live occurrence (currentGameId —
-  // its Game.dateTime can drift from Event.dateTime after a datetime edit).
+  // Resolve the payment roll for the past game. When the event has NOT reset
+  // (history dateTime == event dateTime), the past occurrence is the live
+  // currentGameId — its Game.dateTime can drift from Event.dateTime after a
+  // datetime edit. After a reset, the past occurrence is the game matching the
+  // latest history's dateTime.
   const occurrenceDt = latestHistory?.dateTime ?? event.dateTime;
-  const pastRoll = await occurrencePaymentRoll(
-    event.id,
-    occurrenceDt,
-    latestHistory ? undefined : event.currentGameId,
-  );
+  const hasResetOccurred = !!latestHistory && event.dateTime.getTime() > latestHistory.dateTime.getTime();
+  const pastRoll = hasResetOccurred
+    ? await occurrencePaymentRoll(event.id, occurrenceDt)
+    : await occurrencePaymentRoll(event.id, occurrenceDt, event.currentGameId);
 
   let hasCost: boolean;
   let allPaid = true;

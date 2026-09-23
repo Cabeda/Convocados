@@ -119,6 +119,20 @@ export const PUT: APIRoute = async ({ params, request }) => {
     },
   });
 
+  // ADR 0016 dual-write (5rhgs71k): readers consume the occurrence GamePayment
+  // roll, so the legacy writer must mirror status/method/paidAt onto the live
+  // game's row. Contract 756nurms removes the PlayerPayment side.
+  if (event.currentGameId) {
+    await prisma.gamePayment.updateMany({
+      where: { gameId: event.currentGameId, playerName },
+      data: {
+        status,
+        paidAt: status === "paid" ? new Date() : null,
+        ...(method !== undefined && { method }),
+      },
+    });
+  }
+
   // ADR 0019: Write ledger row alongside PlayerPayment update
   if (isSelfReport && status === "sent" && session?.user) {
     await recordSelfReported({ eventId, userId: session.user.id, playerName });
