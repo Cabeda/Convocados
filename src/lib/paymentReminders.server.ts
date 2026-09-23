@@ -24,6 +24,7 @@ export async function getPlayersWithPendingPayments(): Promise<PendingPaymentPla
       payments: { some: { status: "pending" } },
       event: {
         dateTime: { lt: now }, // game started before now (duration handled below)
+        archivedAt: null,
       },
     },
     include: {
