@@ -412,4 +412,24 @@
     <string name="match_events_team_one">Team 1</string>
     <string name="match_events_team_two">Team 2</string>
     <string name="match_events_top_scorers">Torschützen</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Anmeldemethoden</string>
+    <string name="linked_signins_desc">Passwort und Social-Konten, mit denen du dich anmelden kannst.</string>
+    <string name="credential_password">Passwort</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Google verknüpfen</string>
+    <string name="unlink_credential_btn">Entfernen</string>
+    <string name="credential_unlinked">Anmeldemethode entfernt.</string>
+    <string name="credential_unlink_error">Anmeldemethode konnte nicht entfernt werden.</string>
+    <string name="credential_load_error">Anmeldemethoden konnten nicht geladen werden.</string>
+    <string name="link_google_success">Google mit deinem Konto verknüpft.</string>
+    <string name="link_google_error">Google konnte nicht verknüpft werden. Versuche es erneut.</string>
+    <string name="only_credential_hint">Dies ist deine einzige Anmeldemethode.</string>
+    <string name="merge_confirm_title">Konten zusammenführen?</string>
+    <string name="merge_confirm_desc">Diese Google-Anmeldung gehört zu einem anderen Convocados-Konto (%1$s, erstellt am %2$s). Zusammenführen verschiebt die Daten in dieses Konto, meldet andere Geräte ab und kann nicht rückgängig gemacht werden.</string>
+    <string name="merge_confirm_btn">Konten zusammenführen</string>
+    <string name="merge_cancel_btn">Abbrechen</string>
+    <string name="merge_success">Konten zusammengeführt.</string>
+    <string name="merge_error">Konten konnten nicht zusammengeführt werden.</string>
 </resources>

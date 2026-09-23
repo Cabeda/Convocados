@@ -1104,3 +1104,37 @@ data class UpdateSeasonRequest(
     val registrationOpensAt: String,
     val registrationClosesAt: String,
 )
+// ── Linked sign-in methods (ADR 0040) ──────────────────────────────────────
+
+@Serializable
+data class LinkedCredential(
+    val id: String,
+    val providerId: String,
+    val accountId: String,
+    val issuer: String? = null,
+    val createdAt: String,
+)
+
+@Serializable
+data class CredentialsResponse(val credentials: List<LinkedCredential> = emptyList())
+
+@Serializable
+data class PendingMergeView(
+    val absorbedUserId: String,
+    val absorbedEmail: String,
+    val absorbedName: String,
+    val absorbedCreatedAt: String,
+    val absorbedEventCount: Int = 0,
+    val providerId: String,
+    val accountId: String,
+)
+
+@Serializable
+data class PendingMergeResponse(val pendingMerge: PendingMergeView? = null)
+
+/** Server DELETE /api/me/credentials body — field name is accountId, value is the credential row id. */
+@Serializable
+data class UnlinkCredentialRequest(val accountId: String)
+
+@Serializable
+data class ConfirmMergeRequest(val confirm: Boolean = true)

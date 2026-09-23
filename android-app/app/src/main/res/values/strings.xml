@@ -477,4 +477,24 @@
     <string name="match_events_team_one">Team 1</string>
     <string name="match_events_team_two">Team 2</string>
     <string name="match_events_top_scorers">Top scorers</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Sign-in methods</string>
+    <string name="linked_signins_desc">Password and social accounts you can use to sign in.</string>
+    <string name="credential_password">Password</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Link Google</string>
+    <string name="unlink_credential_btn">Remove</string>
+    <string name="credential_unlinked">Sign-in method removed.</string>
+    <string name="credential_unlink_error">Could not remove sign-in method.</string>
+    <string name="credential_load_error">Could not load sign-in methods.</string>
+    <string name="link_google_success">Google linked to your account.</string>
+    <string name="link_google_error">Could not link Google. Try again.</string>
+    <string name="only_credential_hint">This is your only sign-in method.</string>
+    <string name="merge_confirm_title">Merge accounts?</string>
+    <string name="merge_confirm_desc">This Google sign-in belongs to another Convocados account (%1$s, created %2$s). Merging moves its data into this account, signs out its other devices, and cannot be undone.</string>
+    <string name="merge_confirm_btn">Merge accounts</string>
+    <string name="merge_cancel_btn">Cancel</string>
+    <string name="merge_success">Accounts merged.</string>
+    <string name="merge_error">Could not merge accounts.</string>
 </resources>

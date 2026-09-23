@@ -1,5 +1,6 @@
 package dev.convocados.ui.screen.profile
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,6 +15,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.credentials.CredentialManager
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.SubcomposeAsyncImage
 import dev.convocados.BuildConfig
@@ -37,8 +45,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
+import dev.convocados.data.api.LinkedCredential
+import dev.convocados.data.api.PendingMergeView
 import dev.convocados.data.api.UserProfile
 import dev.convocados.data.auth.AuthManager
+import dev.convocados.data.auth.LinkResult
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.push.PushTokenManager
@@ -50,8 +61,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 data class LocaleOption(val code: String, val label: String)
@@ -59,6 +74,24 @@ val LOCALE_OPTIONS = listOf(
     LocaleOption("en", "English"), LocaleOption("pt", "Português"),
     LocaleOption("es", "Español"), LocaleOption("fr", "Français"),
     LocaleOption("de", "Deutsch"), LocaleOption("it", "Italiano"),
+)
+
+/**
+ * UI state for the linked sign-in methods section (ADR 0040).
+ *
+ * [error] and [message] hold either a string-resource key (see
+ * [resolveCredentialsError] / [resolveCredentialsMessage]) or, for server
+ * rejections such as the sole-credential guard, the server's own text — the
+ * same contract the web `LinkedCredentialsSection` uses.
+ */
+data class CredentialsUiState(
+    val loading: Boolean = false,
+    val linking: Boolean = false,
+    val credentials: List<LinkedCredential> = emptyList(),
+    val error: String? = null,
+    val message: String? = null,
+    val pendingMerge: PendingMergeView? = null,
+    val mergeDialogOpen: Boolean = false,
 )
 
 @HiltViewModel
@@ -76,6 +109,9 @@ class ProfileViewModel @Inject constructor(
     val themeMode = settingsStore.themeMode
     val dynamicColor = settingsStore.dynamicColor
 
+    private val _credentialsUi = MutableStateFlow(CredentialsUiState())
+    val credentialsUi: StateFlow<CredentialsUiState> = _credentialsUi
+
     init { viewModelScope.launch { repository.refreshUserProfile() } }
 
     fun updateName(name: String) {
@@ -91,6 +127,117 @@ class ProfileViewModel @Inject constructor(
 
     fun removeProfilePhoto() {
         viewModelScope.launch { repository.removeProfilePhoto() }
+    }
+
+    // ── Linked sign-in methods (ADR 0040) ───────────────────────────────────
+
+    /** Reload credentials and any pending cross-account merge interstitial. */
+    fun refreshCredentials() {
+        viewModelScope.launch {
+            _credentialsUi.update { it.copy(loading = true) }
+            runCatching {
+                val creds = api.fetchCredentials().credentials
+                val pending = api.fetchPendingMerge().pendingMerge
+                creds to pending
+            }.onSuccess { (creds, pending) ->
+                _credentialsUi.update {
+                    it.copy(
+                        loading = false,
+                        linking = false,
+                        credentials = creds,
+                        pendingMerge = pending,
+                        mergeDialogOpen = pending != null,
+                        error = null,
+                    )
+                }
+            }.onFailure {
+                _credentialsUi.update { s ->
+                    s.copy(loading = false, linking = false, error = "credential_load_error")
+                }
+            }
+        }
+    }
+
+    fun unlinkCredential(credentialId: String) {
+        viewModelScope.launch {
+            runCatching { api.unlinkCredential(credentialId) }
+                .onSuccess {
+                    _credentialsUi.update { it.copy(message = "credential_unlinked", error = null) }
+                    refreshCredentials()
+                }
+                .onFailure { e ->
+                    _credentialsUi.update {
+                        it.copy(error = e.message ?: "credential_unlink_error", message = null)
+                    }
+                }
+        }
+    }
+
+    /** Link Google via Credential Manager (no browser session needed). */
+    fun linkGoogleWithCredentialManager(credentialManager: CredentialManager, activity: Activity) {
+        viewModelScope.launch {
+            _credentialsUi.update { it.copy(linking = true, error = null, message = null) }
+            try {
+                val request = authManager.buildGoogleSignInRequest()
+                val response = credentialManager.getCredential(activity, request)
+                val idToken = authManager.extractGoogleIdToken(response)
+                if (idToken == null) {
+                    _credentialsUi.update { it.copy(linking = false, error = "link_google_error") }
+                    return@launch
+                }
+                doLinkGoogle(idToken)
+            } catch (e: GetCredentialCancellationException) {
+                _credentialsUi.update { it.copy(linking = false) }
+            } catch (e: GetCredentialException) {
+                _credentialsUi.update { it.copy(linking = false, error = "link_google_error") }
+            } catch (e: Exception) {
+                _credentialsUi.update { it.copy(linking = false, error = "link_google_error") }
+            }
+        }
+    }
+
+    /** Link Google from an already-obtained idToken. */
+    fun linkGoogle(idToken: String) {
+        viewModelScope.launch { doLinkGoogle(idToken) }
+    }
+
+    private suspend fun doLinkGoogle(idToken: String) {
+        _credentialsUi.update { it.copy(linking = true, error = null, message = null) }
+        when (authManager.linkGoogleCredential(idToken)) {
+            LinkResult.Success -> {
+                _credentialsUi.update { it.copy(message = "link_google_success") }
+                refreshCredentials()
+            }
+            // Conflict captured the pending merge server-side — reload opens the
+            // interstitial, matching the web callback's account_already_linked path.
+            LinkResult.Conflict -> refreshCredentials()
+            is LinkResult.Error ->
+                _credentialsUi.update { it.copy(linking = false, error = "link_google_error") }
+        }
+    }
+
+    fun confirmMerge() {
+        viewModelScope.launch {
+            runCatching { api.confirmMerge() }
+                .onSuccess {
+                    _credentialsUi.update {
+                        it.copy(
+                            message = "merge_success",
+                            error = null,
+                            pendingMerge = null,
+                            mergeDialogOpen = false,
+                        )
+                    }
+                    refreshCredentials()
+                }
+                .onFailure { e ->
+                    _credentialsUi.update { it.copy(error = e.message ?: "merge_error") }
+                }
+        }
+    }
+
+    fun dismissMerge() {
+        _credentialsUi.update { it.copy(mergeDialogOpen = false) }
     }
 
     fun logout() { 
@@ -123,6 +270,7 @@ fun ProfileScreen(
     var editName by remember { mutableStateOf("") }
     var pickedPhoto by remember { mutableStateOf<Uri?>(null) }
     val scope = rememberCoroutineScope()
+    val credentialsUi by viewModel.credentialsUi.collectAsState()
 
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) pickedPhoto = uri
@@ -160,6 +308,32 @@ fun ProfileScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
+        }
+
+        // Linked sign-in methods (ADR 0040)
+        LaunchedEffect(Unit) { viewModel.refreshCredentials() }
+        LinkedCredentialsSection(
+            ui = credentialsUi,
+            onUnlink = { viewModel.unlinkCredential(it) },
+            onLinkGoogle = { credentialManager, activity ->
+                viewModel.linkGoogleWithCredentialManager(credentialManager, activity)
+            },
+        )
+        credentialsUi.error?.let { err ->
+            Text(
+                resolveCredentialsError(err),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        credentialsUi.message?.let { msg ->
+            Text(
+                resolveCredentialsMessage(msg),
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
         }
 
         // Notifications
@@ -276,6 +450,36 @@ fun ProfileScreen(
         ) { Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
     }
 
+    // Cross-account merge interstitial (ADR 0040)
+    if (credentialsUi.mergeDialogOpen) {
+        val pending = credentialsUi.pendingMerge
+        AlertDialog(
+            onDismissRequest = { if (!credentialsUi.loading) viewModel.dismissMerge() },
+            title = { Text(stringResource(R.string.merge_confirm_title)) },
+            text = {
+                Text(
+                    pending?.let {
+                        stringResource(
+                            R.string.merge_confirm_desc,
+                            it.absorbedEmail,
+                            formatDate(it.absorbedCreatedAt),
+                        )
+                    } ?: stringResource(R.string.merge_error),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmMerge() }) {
+                    Text(stringResource(R.string.merge_confirm_btn), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissMerge() }) {
+                    Text(stringResource(R.string.merge_cancel_btn), color = MaterialTheme.colorScheme.outline)
+                }
+            },
+        )
+    }
+
     // Edit name dialog
     if (showEditName) {
         AlertDialog(
@@ -317,8 +521,7 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun ProfileAvatar(name: String, image: String?, size: Dp = 96.dp, onClick: () -> Unit) {
-    Box(
+private fun ProfileAvatar(name: String, image: String?, size: Dp = 96.dp, onClick: () -> Unit) {    Box(
         Modifier
             .size(size)
             .clip(CircleShape)
@@ -379,3 +582,159 @@ fun MenuItem(title: String, subtitle: String, onClick: () -> Unit) {
         }
     }
 }
+
+// ── Linked sign-in methods (ADR 0040) ──────────────────────────────────────
+
+@Composable
+private fun LinkedCredentialsSection(
+    ui: CredentialsUiState,
+    onUnlink: (String) -> Unit,
+    onLinkGoogle: (CredentialManager, Activity) -> Unit,
+) {
+    val context = LocalContext.current
+    val hasGoogle = ui.credentials.any { it.providerId == "google" }
+    val sole = ui.credentials.size <= 1
+
+    SectionCard {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Link,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.linked_signins),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            Text(
+                stringResource(R.string.linked_signins_desc),
+                color = MaterialTheme.colorScheme.outline,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+            )
+
+            if (ui.loading && ui.credentials.isEmpty()) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+
+            ui.credentials.forEach { cred ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                providerIcon(cred.providerId),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                providerLabel(cred.providerId),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        if (sole) {
+                            Text(
+                                stringResource(R.string.only_credential_hint),
+                                color = MaterialTheme.colorScheme.secondary,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(start = 26.dp, top = 2.dp),
+                            )
+                        }
+                    }
+                    if (!sole) {
+                        TextButton(onClick = { onUnlink(cred.id) }) {
+                            Text(
+                                stringResource(R.string.unlink_credential_btn),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (!hasGoogle) {
+                val activity = context as? Activity
+                Button(
+                    onClick = {
+                        if (activity != null) {
+                            onLinkGoogle(CredentialManager.create(context), activity)
+                        }
+                    },
+                    enabled = !ui.linking,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
+                ) {
+                    if (ui.linking) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.PersonAdd,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.link_google_btn),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Maps an error key to user text; anything else is a server message shown as-is (web parity). */
+@Composable
+private fun resolveCredentialsError(key: String): String = when (key) {
+    "credential_load_error" -> stringResource(R.string.credential_load_error)
+    "credential_unlink_error" -> stringResource(R.string.credential_unlink_error)
+    "link_google_error" -> stringResource(R.string.link_google_error)
+    "merge_error" -> stringResource(R.string.merge_error)
+    else -> key
+}
+
+@Composable
+private fun resolveCredentialsMessage(key: String): String = when (key) {
+    "credential_unlinked" -> stringResource(R.string.credential_unlinked)
+    "link_google_success" -> stringResource(R.string.link_google_success)
+    "merge_success" -> stringResource(R.string.merge_success)
+    else -> key
+}
+
+@Composable
+private fun providerLabel(providerId: String): String = when (providerId) {
+    "credential" -> stringResource(R.string.credential_password)
+    "google" -> stringResource(R.string.credential_google)
+    else -> providerId
+}
+
+private fun providerIcon(providerId: String) = when (providerId) {
+    "credential" -> Icons.Default.Key
+    "google" -> Icons.Default.Public
+    else -> Icons.Default.Link
+}
+
+private fun formatDate(iso: String): String = runCatching {
+    val parsed = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).parse(iso.take(19))
+    parsed?.let {
+        SimpleDateFormat.getDateInstance(SimpleDateFormat.MEDIUM, Locale.getDefault()).format(it)
+    } ?: iso
+}.getOrDefault(iso)

@@ -412,4 +412,24 @@
     <string name="match_events_team_one">Squadra 1</string>
     <string name="match_events_team_two">Squadra 2</string>
     <string name="match_events_top_scorers">Migliori marcatori</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Metodi di accesso</string>
+    <string name="linked_signins_desc">Password e account social che puoi usare per accedere.</string>
+    <string name="credential_password">Password</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Collega Google</string>
+    <string name="unlink_credential_btn">Rimuovi</string>
+    <string name="credential_unlinked">Metodo di accesso rimosso.</string>
+    <string name="credential_unlink_error">Impossibile rimuovere il metodo di accesso.</string>
+    <string name="credential_load_error">Impossibile caricare i metodi di accesso.</string>
+    <string name="link_google_success">Google collegato al tuo account.</string>
+    <string name="link_google_error">Impossibile collegare Google. Riprova.</string>
+    <string name="only_credential_hint">Questo è il tuo unico metodo di accesso.</string>
+    <string name="merge_confirm_title">Unire gli account?</string>
+    <string name="merge_confirm_desc">Questo accesso Google appartiene a un altro account Convocados (%1$s, creato il %2$s). L\'unione sposta i dati in questo account, disconnette gli altri dispositivi e non può essere annullata.</string>
+    <string name="merge_confirm_btn">Unisci gli account</string>
+    <string name="merge_cancel_btn">Annulla</string>
+    <string name="merge_success">Account uniti.</string>
+    <string name="merge_error">Impossibile unire gli account.</string>
 </resources>
