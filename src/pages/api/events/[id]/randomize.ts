@@ -10,6 +10,7 @@ import { createLogger } from "../../../../lib/logger.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 import { applyFormationLayout } from "../../../../lib/teams";
 import { syncGamePayments } from "../../../../lib/settlement.server";
+import { syncGameFromTeamResults } from "../../../../lib/gameDualWrite.server";
 
 const log = createLogger("randomize");
 
@@ -100,7 +101,19 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   logEvent(eventId, "teams_randomized", null, null, { balanced, playerCount: players.length }).catch(() => {});
 
   // Keep payment rows aligned with the new lineup: only lineup players owe.
+  // Dual-write (ADR 0016): the draw also lands on the occurrence Game — team
+  // names/formations, GameParticipant team/slot, and a materialized
+  // GameHistory snapshot for the same occurrence.
   if (event.currentGameId) {
+    const game = await prisma.game.findUnique({ where: { id: event.currentGameId } });
+    if (game) {
+      const teamResults = await prisma.teamResult.findMany({
+        where: { eventId },
+        include: { members: { orderBy: { order: "asc" } } },
+        orderBy: { id: "asc" },
+      });
+      await syncGameFromTeamResults(game, teamResults);
+    }
     await syncGamePayments(event.currentGameId, eventId);
   }
 
