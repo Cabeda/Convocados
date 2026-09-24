@@ -7,6 +7,6 @@ const crewInviteToken = Astro.url.searchParams.get("crewInviteToken");
 const title = "Season — Convocados";
 ---
 
-<BaseLayout title={title} description="Manage Season Crews and starting date.">
+<BaseLayout title={title} description="Manage Season Crews and starting date." mergePrompt>
   <SeasonPage client:only="react" eventId={id!} seasonId={seasonId!} crewInviteToken={crewInviteToken ?? undefined} />
 </BaseLayout>
