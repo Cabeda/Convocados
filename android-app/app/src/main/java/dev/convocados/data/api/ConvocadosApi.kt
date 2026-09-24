@@ -144,6 +144,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateElo(eventId: String, enabled: Boolean): OkResponse =
         client.put("/api/events/$eventId/elo", EloRequest(enabled))
 
+    suspend fun updateCompetition(eventId: String, request: CompetitionRequest): CompetitionResponse =
+        client.put("/api/events/$eventId/competition", request)
+
     suspend fun updateHideEloInTeams(eventId: String, hide: Boolean): OkResponse =
         client.put("/api/events/$eventId/hide-elo-in-teams", HideEloInTeamsRequest(hide))
 
@@ -471,6 +474,20 @@ data class CreateEventRequest(
 @Serializable data class SetInitialRatingRequest(val name: String, val initialRating: Int)
 @Serializable data class PurgePlayerRequest(val name: String)
 @Serializable data class EloRequest(val eloEnabled: Boolean)
+@Serializable data class CompetitionRequest(
+    val enabled: Boolean? = null,
+    val rankDecayEnabled: Boolean? = null,
+    val inactiveRankBehavior: String? = null,
+)
+@Serializable data class CompetitionResponse(
+    val eloEnabled: Boolean = false,
+    val rankEnabled: Boolean = true,
+    val rankDecayEnabled: Boolean = false,
+    val inactiveRankBehavior: String = "freeze",
+    val balanced: Boolean = false,
+    val hideEloInTeams: Boolean = false,
+    val mvpEloEnabled: Boolean = true,
+)
 @Serializable data class HideEloInTeamsRequest(val hideEloInTeams: Boolean)
 @Serializable data class SplitCostsRequest(val splitCostsEnabled: Boolean)
 @Serializable data class BalancedRequest(val balanced: Boolean)

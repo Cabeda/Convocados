@@ -314,6 +314,14 @@
     <string name="duration">Duração</string>
     <string name="allow_manual_rating">Permitir rating manual</string>
     <string name="show_competitive_data">Mostrar dados competitivos</string>
+    <string name="competition_settings">Competição</string>
+    <string name="competitive_rankings">Classificações competitivas</string>
+    <string name="competitive_rankings_desc">Um interruptor liga as classificações, equipas equilibradas, Classificação da Época e impacto do MVP.</string>
+    <string name="advanced_settings">Avançado</string>
+    <string name="rank_decay">Reduzir Classificação de jogadores inactivos</string>
+    <string name="inactive_rank_behavior">Quando um jogador está inactivo ou saiu</string>
+    <string name="inactive_rank_freeze">Manter</string>
+    <string name="inactive_rank_reset">Reiniciar</string>
     <string name="mvp_voting">Votação MVP</string>
     <string name="mvp_elo">ELO do MVP</string>
     <string name="elo_ratings">Classificações ELO</string>

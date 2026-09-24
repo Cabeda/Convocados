@@ -354,6 +354,14 @@
     <string name="duration">Duration</string>
     <string name="allow_manual_rating">Allow manual rating</string>
     <string name="show_competitive_data">Show competitive data</string>
+    <string name="competition_settings">Competition</string>
+    <string name="competitive_rankings">Competitive rankings</string>
+    <string name="competitive_rankings_desc">One switch turns on skill ratings, balanced teams, Season Rank, and MVP impact.</string>
+    <string name="advanced_settings">Advanced</string>
+    <string name="rank_decay">Decay Rank for inactive players</string>
+    <string name="inactive_rank_behavior">When a player is inactive or withdrawn</string>
+    <string name="inactive_rank_freeze">Freeze</string>
+    <string name="inactive_rank_reset">Reset</string>
     <string name="mvp_voting">MVP voting</string>
     <string name="mvp_elo">MVP ELO</string>
     <string name="elo_ratings">ELO ratings</string>
