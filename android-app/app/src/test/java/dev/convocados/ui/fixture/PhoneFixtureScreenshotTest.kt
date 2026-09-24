@@ -1,6 +1,6 @@
 package dev.convocados.ui.fixture
 
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.convocados.ui.screen.stats.StatsContent

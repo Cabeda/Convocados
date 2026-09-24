@@ -1,7 +1,7 @@
 package dev.convocados.ui.screen.event
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import android.content.Context
@@ -22,6 +22,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@OptIn(coil3.annotation.DelicateCoilApi::class)
 class PlayerRowTest {
 
     @get:Rule
