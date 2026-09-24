@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
 import { calculateAttendance } from "../../../lib/attendance";
+import { occurrenceRosterNamesMap } from "../../../lib/gameRoster.server";
 
 export const GET: APIRoute = async ({ request }) => {
   // Support both OAuth bearer tokens and session cookies
@@ -185,10 +186,23 @@ export const GET: APIRoute = async ({ request }) => {
     }
   }
 
+  // Who-played from the durable Game roster, snapshot residue as fallback (mrcokrf9)
+  const enrichedHistoryByEvent = new Map(
+    await Promise.all(
+      [...historyByEvent.entries()].map(async ([eid, rows]) => {
+        const namesByKey = await occurrenceRosterNamesMap(
+          eid,
+          rows.map((h) => ({ key: h.dateTime.toISOString(), dateTime: h.dateTime, teamsSnapshot: h.teamsSnapshot })),
+        );
+        return [eid, rows.map((h) => ({ ...h, playerNames: namesByKey.get(h.dateTime.toISOString()) ?? [] }))] as const;
+      }),
+    ),
+  );
+
   const events = uniqueRatings
     .sort((a, b) => b.rating - a.rating)
     .map((r) => {
-      const eventHistory = historyByEvent.get(r.eventId) ?? [];
+      const eventHistory = enrichedHistoryByEvent.get(r.eventId) ?? [];
       const attendanceResult = calculateAttendance(eventHistory);
       const playerName = playerNameByEvent.get(r.eventId) ?? userName;
       const playerAttendance = attendanceResult.players.find((p) => p.name === playerName);

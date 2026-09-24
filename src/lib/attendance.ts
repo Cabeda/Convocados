@@ -1,5 +1,7 @@
 /** Attendance calculation logic — pure functions, no DB dependency */
 
+import { namesFromTeamsSnapshot } from "./snapshotParticipants";
+
 export interface AttendanceRecord {
   name: string;
   gamesPlayed: number;
@@ -14,26 +16,32 @@ export interface AttendanceResult {
   totalGames: number;
 }
 
-interface TeamSnapshot {
-  team: string;
-  players: { name: string; order: number }[];
-}
-
 interface HistoryEntry {
   status: string;
   dateTime: Date | string;
   teamsSnapshot: string | null;
+  /** Who-played names from the durable Game roster. When set, wins over the snapshot. */
+  playerNames?: string[];
+}
+
+/**
+ * Who played this occurrence: the durable Game-derived names when the caller
+ * supplied them, else the frozen teamsSnapshot (mrcokrf9).
+ */
+function playedNames(entry: HistoryEntry): string[] {
+  if (entry.playerNames) return entry.playerNames;
+  return namesFromTeamsSnapshot(entry.teamsSnapshot);
 }
 
 /**
  * Calculate attendance stats from game history entries.
- * Only counts games with status "played" and valid teamsSnapshot.
+ * Only counts games with status "played" and a resolvable roster.
  * Entries must be sorted by dateTime ascending (oldest first).
  */
 export function calculateAttendance(history: HistoryEntry[]): AttendanceResult {
-  // Filter to played games with valid snapshots, sorted chronologically
+  // Filter to played games with a roster, sorted chronologically
   const playedGames = history
-    .filter((h) => h.status === "played" && h.teamsSnapshot)
+    .filter((h) => h.status === "played")
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
 
   const totalGames = playedGames.length;
@@ -42,23 +50,12 @@ export function calculateAttendance(history: HistoryEntry[]): AttendanceResult {
   // Parse each game's players
   const gameParticipants: { dateTime: string; players: Set<string> }[] = [];
   for (const game of playedGames) {
-    try {
-      if (game.teamsSnapshot === null) continue;
-      const teams: TeamSnapshot[] = JSON.parse(game.teamsSnapshot);
-      const players = new Set<string>();
-      for (const team of teams) {
-        for (const p of team.players) {
-          players.add(p.name);
-        }
-      }
-      gameParticipants.push({
-        dateTime: new Date(game.dateTime).toISOString(),
-        players,
-      });
-    } catch {
-      // Skip malformed JSON
-      continue;
-    }
+    const names = playedNames(game);
+    if (names.length === 0) continue;
+    gameParticipants.push({
+      dateTime: new Date(game.dateTime).toISOString(),
+      players: new Set(names),
+    });
   }
 
   const effectiveTotal = gameParticipants.length;

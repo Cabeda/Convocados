@@ -7,6 +7,7 @@ import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { buildSettlementRows, resolveGameLineups, type PaymentMode } from "../../../../../lib/settlement.server";
 import { buildMvpSummaries } from "../../../../../lib/mvp.server";
+import { occurrenceRosterNamesMap } from "../../../../../lib/gameRoster.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 import { applyTeamsSnapshotToGame } from "../../../../../lib/gameDualWrite.server";
 
@@ -216,14 +217,20 @@ export const GET: APIRoute = async ({ params, request }) => {
   // fetch /history/[id]/mvp per card — an N+1 that scaled with the page size.
   const gameHistoryIds = new Set(allHistory.map((h) => h.id));
   const session = await getSession(request);
+  const mvpEntries = pageWithConfig.filter((entry) => gameHistoryIds.has(entry.id));
+  const rosterByEntry = await occurrenceRosterNamesMap(
+    event.id,
+    mvpEntries.map((e) => ({ key: e.id, dateTime: new Date(e.dateTime), teamsSnapshot: e.teamsSnapshot })),
+  );
   const mvpMap = await buildMvpSummaries(
     {
       id: event.id,
       durationMinutes: event.durationMinutes ?? null,
       mvpEnabled: event.mvpEnabled ?? null,
     },
-    pageWithConfig.filter((entry) => gameHistoryIds.has(entry.id)),
+    mvpEntries,
     session,
+    rosterByEntry,
   );
   const withMvp = pageWithConfig.map((entry) => ({
     ...entry,

@@ -1,6 +1,7 @@
 /** Priority enrollment eligibility — pure functions, no DB dependency */
 
 import { calculateAttendance, type AttendanceRecord } from "./attendance";
+import { namesFromTeamsSnapshot } from "./snapshotParticipants";
 
 export interface PrioritySettings {
   threshold: number;   // min games attended in window
@@ -28,6 +29,14 @@ interface HistoryEntry {
   status: string;
   dateTime: Date | string;
   teamsSnapshot: string | null;
+  /** Who-played names from the durable Game roster (mrcokrf9). */
+  playerNames?: string[];
+}
+
+/** Who played this occurrence: durable Game names first, snapshot residue otherwise. */
+function playedNames(entry: HistoryEntry): string[] {
+  if (entry.playerNames) return entry.playerNames;
+  return namesFromTeamsSnapshot(entry.teamsSnapshot);
 }
 
 interface PlayerWithAccount {
@@ -55,23 +64,14 @@ export function gamesInWindow(
 
   // We need to re-parse to check per-game participation in the window
   const playedGames = history
-    .filter((h) => h.status === "played" && h.teamsSnapshot)
+    .filter((h) => h.status === "played" && (h.playerNames?.length || h.teamsSnapshot))
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
 
   const windowGames = playedGames.slice(-windowSize);
   let count = 0;
   for (const game of windowGames) {
-    try {
-      if (game.teamsSnapshot === null) continue;
-      const teams: { team: string; players: { name: string }[] }[] = JSON.parse(game.teamsSnapshot);
-      for (const team of teams) {
-        if (team.players.some((p) => p.name === playerName)) {
-          count++;
-          break;
-        }
-      }
-    } catch {
-      continue;
+    if (playedNames(game).some((n) => n === playerName)) {
+      count++;
     }
   }
   return count;

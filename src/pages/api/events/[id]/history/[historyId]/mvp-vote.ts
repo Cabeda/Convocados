@@ -3,10 +3,8 @@ import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../../lib/apiRateLimit.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
-import {
-  isHistoryParticipant,
-  namesFromTeamsSnapshot,
-} from "../../../../../../lib/snapshotParticipants";
+import { isNameInList } from "../../../../../../lib/snapshotParticipants";
+import { occurrenceRoster } from "../../../../../../lib/gameRoster.server";
 
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -61,13 +59,19 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Voting is closed — the 7-day window has expired." }, { status: 400 });
   }
 
-  // Only players who actually played in this game (appear in teamsSnapshot) can vote.
+  // Only players who actually played in this game can vote — the durable Game
+  // roster is authoritative, snapshot is residue (mrcokrf9).
+  const roster = await occurrenceRoster(params.id ?? "", {
+    dateTime: history.dateTime,
+    teamsSnapshot: history.teamsSnapshot,
+  });
+  const rosterNames = roster.names;
   let voterName: string | undefined;
   let voterPlayerId: string | undefined;
 
   const voterNameFromSession = session.user?.name;
-  if (isHistoryParticipant(history, voterNameFromSession)) {
-    const matchName = namesFromTeamsSnapshot(history.teamsSnapshot).find(
+  if (isNameInList(rosterNames, voterNameFromSession)) {
+    const matchName = rosterNames.find(
       (n) => n.toLowerCase() === voterNameFromSession!.toLowerCase(),
     );
     voterName = matchName;
@@ -115,10 +119,10 @@ export const POST: APIRoute = async ({ params, request }) => {
   } else {
     // Name-based voting (Player records may have been deleted after recurrence reset)
     const nameToVoteFor = votedForNameBody || (votedForPlayerId?.startsWith("name:") ? votedForPlayerId.slice(5) : null);
-    if (!nameToVoteFor || !history.teamsSnapshot) {
+    if (!nameToVoteFor || rosterNames.length === 0) {
       return Response.json({ error: "Target player not found." }, { status: 400 });
     }
-    const match = namesFromTeamsSnapshot(history.teamsSnapshot).find(
+    const match = rosterNames.find(
       (n) => n.toLowerCase() === nameToVoteFor.toLowerCase(),
     );
     if (!match) {

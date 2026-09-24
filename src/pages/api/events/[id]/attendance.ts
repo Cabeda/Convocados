@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { calculateAttendance } from "../../../../lib/attendance";
+import { occurrenceRosterNamesMap } from "../../../../lib/gameRoster.server";
 
 export const GET: APIRoute = async ({ params }) => {
   const eventId = params.id ?? "";
@@ -16,11 +17,16 @@ export const GET: APIRoute = async ({ params }) => {
 
   const history = await prisma.gameHistory.findMany({
     where: { eventId },
-    select: { status: true, dateTime: true, teamsSnapshot: true },
+    select: { id: true, status: true, dateTime: true, teamsSnapshot: true },
     orderBy: { dateTime: "asc" },
   });
 
-  const result = calculateAttendance(history);
+  // Who-played from the durable Game roster, snapshot residue as fallback (mrcokrf9)
+  const namesById = await occurrenceRosterNamesMap(
+    eventId,
+    history.map((h) => ({ key: h.id, dateTime: h.dateTime, teamsSnapshot: h.teamsSnapshot })),
+  );
+  const result = calculateAttendance(history.map((h) => ({ ...h, playerNames: namesById.get(h.id) ?? [] })));
 
   return Response.json(result);
 };
