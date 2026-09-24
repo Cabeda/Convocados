@@ -3,7 +3,7 @@ package dev.convocados.ui.screen.profile
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import dev.convocados.ui.theme.ConvocadosTheme
 import org.junit.Rule

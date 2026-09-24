@@ -1340,7 +1340,7 @@ fun EventDetailScreen(
                                 onViewSeason = onSeasonDetail)
                             // Match events (ADR 0039): logged only once the game is settled.
                             val settledHistoryId = ds.postGame?.latestHistoryId
-                            if (settledHistoryId != null && ds.postGame?.gameEnded == true && !usesStructuredTennisScore(ds.event?.sport, null)) {
+                            if (settledHistoryId != null && ds.postGame.gameEnded == true && !usesStructuredTennisScore(ds.event.sport, null)) {
                                 Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                                     Box(Modifier.padding(16.dp)) {
                                         MatchEventsSection(
@@ -1354,7 +1354,7 @@ fun EventDetailScreen(
                                                     penalty = it.penalty,
                                                 )
                                             } ?: emptyList(),
-                                            players = (ds.event?.players ?: emptyList()).map { MatchEventPlayer(it.id, it.name) },
+                                            players = (ds.event.players).map { MatchEventPlayer(it.id, it.name) },
                                             loading = ds.matchEventsLoading,
                                             saving = ds.matchEventsSaving,
                                             loadOnAppear = { viewModel.loadMatchEvents(eventId, settledHistoryId) },
