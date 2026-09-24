@@ -159,6 +159,11 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     suspend fun getTeams(eventId: String): TeamsResponse =
         get("/api/events/$eventId/teams")
 
+    /** Native app-open heartbeat (GH #1070) — idempotent per UTC day server-side. */
+    suspend fun reportAppOpen() {
+        authenticatedRequest(HttpMethod.Post, "/api/me/app-open", mapOf<String, String>())
+    }
+
     suspend fun getMvp(eventId: String, historyId: String): MvpResponse =
         get("/api/events/$eventId/history/$historyId/mvp")
 

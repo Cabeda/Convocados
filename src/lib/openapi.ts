@@ -1040,6 +1040,13 @@ export const openApiSpec = {
         responses: { "200": { description: "Owned and joined games" }, "401": { description: "Unauthorized" } },
       },
     },
+    "/api/me/app-open": {
+      post: {
+        summary: "Record a native app-open heartbeat (idempotent per UTC day)",
+        tags: ["Users"],
+        responses: { "200": { description: "Recorded" }, "401": { description: "Unauthorized" } },
+      },
+    },
     "/api/me/co-players": {
       get: {
         summary: "List people the caller has co-played with (all events, ranked by frequency)",

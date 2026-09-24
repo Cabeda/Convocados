@@ -65,11 +65,17 @@ class RootViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            var appOpenReported = false
             isAuthenticated.collect { authed ->
                 if (authed) {
                     runCatching { setUser(api.fetchUserInfo()) }
                     pushTokenManager.registerCurrentToken()
                     TokenRefreshWorker.schedule(workManager)
+                    // GH #1070: one app-open heartbeat per process, once signed in.
+                    if (!appOpenReported) {
+                        appOpenReported = true
+                        runCatching { api.reportAppOpen() }
+                    }
                 } else {
                     setUser(null)
                     TokenRefreshWorker.cancel(workManager)
