@@ -470,13 +470,25 @@ export async function isRsvpCutoffSent(eventId: string) {
 // ─── App-open heartbeat ────────────────────────────────────────────────────
 
 /** Record a heartbeat for (userId, day=truncated UTC date). Idempotent per day. */
-export async function recordAppOpen(userId: string, at: Date = new Date()) {
+export async function recordAppOpen(
+  userId: string,
+  at: Date = new Date(),
+  platform: "web" | "android" | "ios" | null = null,
+) {
   const day = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()));
   await prisma.userAppOpen.upsert({
     where: { userId_day: { userId, day } },
-    create: { userId, day },
+    create: { userId, day, platform },
+    // First writer of the day wins; a later writer only fills a null platform
+    // (e.g. pre-existing web row upgraded by a native heartbeat).
     update: {},
   });
+  if (platform) {
+    await prisma.userAppOpen.updateMany({
+      where: { userId, day, platform: null },
+      data: { platform },
+    });
+  }
 }
 
 /** Distinct app-open days for the user within the last `lookbackDays` days (UTC). */

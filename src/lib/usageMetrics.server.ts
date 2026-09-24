@@ -43,6 +43,7 @@ export interface DailyUsage {
   date: string;
   dau: number;
   android: number;
+  ios: number;
   web: number;
 }
 
@@ -51,67 +52,64 @@ export interface WebDrillDown {
   os: Record<string, number>;
 }
 
+/** UTC midnight for the given instant. */
+function utcDay(at: Date = new Date()): Date {
+  return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()));
+}
+
+/** A heartbeat's platform bucket. Pre-column rows (null) counted as web. */
+function bucket(platform: string | null): "android" | "ios" | "web" {
+  return platform === "android" || platform === "ios" ? platform : "web";
+}
+
 /**
- * DAU over time from UserAppOpen (one row per user per day).
- * Platform breakdown: Android (native) vs Web.
+ * DAU over time from UserAppOpen (one row per user per day) and the platform
+ * recorded on the row itself. Windows are UTC-day based to match the stored
+ * `day` values exactly.
  */
 export async function getDailyUsage(days = 30): Promise<DailyUsage[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  since.setHours(0, 0, 0, 0);
+  // `days` calendar days including today → start (days - 1) days before today.
+  const since = new Date(utcDay().getTime() - (days - 1) * 24 * 60 * 60 * 1000);
 
   const appOpens = await prisma.userAppOpen.findMany({
     where: { day: { gte: since } },
-    select: { userId: true, day: true },
+    select: { userId: true, day: true, platform: true },
   });
 
-  // Get latest session per user for platform detection
-  const sessions = await prisma.session.findMany({
-    where: { createdAt: { gte: since } },
-    select: { userId: true, userAgent: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const userIsAndroid = new Map<string, boolean>();
-  for (const s of sessions) {
-    if (!userIsAndroid.has(s.userId)) {
-      userIsAndroid.set(s.userId, isAndroidApp(s.userAgent));
-    }
-  }
-
-  // Group by day
-  const dayMap = new Map<string, Set<string>>();
+  // Group by day: one entry per user (the row is unique per user/day).
+  const dayMap = new Map<string, Map<string, "android" | "ios" | "web">>();
   for (const open of appOpens) {
     const day = open.day.toISOString().slice(0, 10);
-    const set = dayMap.get(day) ?? new Set();
-    set.add(open.userId);
-    dayMap.set(day, set);
+    const users = dayMap.get(day) ?? new Map();
+    users.set(open.userId, bucket(open.platform));
+    dayMap.set(day, users);
   }
 
   const result: DailyUsage[] = [];
   const sortedDays = [...dayMap.keys()].sort();
   for (const day of sortedDays) {
     const users = dayMap.get(day)!;
-    let android = 0, web = 0;
-    for (const userId of users) {
-      if (userIsAndroid.get(userId)) android++;
+    let android = 0, ios = 0, web = 0;
+    for (const platform of users.values()) {
+      if (platform === "android") android++;
+      else if (platform === "ios") ios++;
       else web++;
     }
-    result.push({ date: day, dau: users.size, android, web });
+    result.push({ date: day, dau: users.size, android, ios, web });
   }
 
   return result;
 }
 
-/** Summary stats for the current period */
+/** Summary stats for the current period (UTC-day windows). */
 export async function getUsageSummary() {
-  const now = new Date();
-  const today = new Date(now.toISOString().slice(0, 10));
-  const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const today = utcDay();
+  // Trailing windows INCLUSIVE of today: WAU = 7 days, MAU = 30 days.
+  const sevenDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
 
-  const [dauToday, wau, mau] = await Promise.all([
-    prisma.userAppOpen.count({ where: { day: { gte: today } } }),
+  const [dauToday, wauRows, mauRows] = await Promise.all([
+    prisma.userAppOpen.count({ where: { day: today } }),
     prisma.userAppOpen.findMany({
       where: { day: { gte: sevenDaysAgo } },
       select: { userId: true },
@@ -124,32 +122,40 @@ export async function getUsageSummary() {
     }),
   ]);
 
-  // Platform + web drill-down from sessions in last 30 days
+  // Platform split from the heartbeat rows' own platform column (native clients
+  // create no session, so user-agent inference is impossible for them).
+  const platformRows = await prisma.userAppOpen.findMany({
+    where: { day: { gte: thirtyDaysAgo } },
+    select: { userId: true, platform: true },
+    distinct: ["userId"],
+  });
+
+  const platforms = { android: 0, ios: 0, web: 0 };
+  for (const row of platformRows) {
+    platforms[bucket(row.platform)]++;
+  }
+
+  // Web drill-down (browser/OS) still comes from sessions — it only concerns
+  // browser clients. Native users have no session and are not counted here.
   const recentSessions = await prisma.session.findMany({
     where: { createdAt: { gte: thirtyDaysAgo } },
     select: { userId: true, userAgent: true },
     distinct: ["userId"],
   });
 
-  const platforms = { android: 0, web: 0 };
   const webDrillDown: WebDrillDown = { browsers: {}, os: {} };
-
   for (const s of recentSessions) {
-    if (isAndroidApp(s.userAgent)) {
-      platforms.android++;
-    } else {
-      platforms.web++;
-      const browser = parseBrowser(s.userAgent);
-      const os = parseOS(s.userAgent);
-      webDrillDown.browsers[browser] = (webDrillDown.browsers[browser] ?? 0) + 1;
-      webDrillDown.os[os] = (webDrillDown.os[os] ?? 0) + 1;
-    }
+    if (isAndroidApp(s.userAgent)) continue;
+    const browser = parseBrowser(s.userAgent);
+    const os = parseOS(s.userAgent);
+    webDrillDown.browsers[browser] = (webDrillDown.browsers[browser] ?? 0) + 1;
+    webDrillDown.os[os] = (webDrillDown.os[os] ?? 0) + 1;
   }
 
   return {
     dauToday,
-    wau: wau.length,
-    mau: mau.length,
+    wau: wauRows.length,
+    mau: mauRows.length,
     platforms,
     webDrillDown,
   };

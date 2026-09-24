@@ -23,7 +23,7 @@ describe("getDailyUsage", () => {
     expect(result).toEqual([]);
   });
 
-  it("counts DAU per day and splits by platform", async () => {
+  it("counts DAU per day and splits by the platform on the heartbeat row", async () => {
     const webUser = await seedUser();
     const androidUser = await seedUser();
 
@@ -32,28 +32,19 @@ describe("getDailyUsage", () => {
 
     await prisma.userAppOpen.createMany({
       data: [
-        { userId: webUser.id, day: today },
-        { userId: androidUser.id, day: today },
+        { userId: webUser.id, day: today, platform: "web" },
+        { userId: androidUser.id, day: today, platform: "android" },
       ],
     });
 
-    // Web session
-    await prisma.session.create({
-      data: {
-        id: sid(),
-        token: sid(),
-        userId: webUser.id,
-        userAgent: "Mozilla/5.0 (Macintosh) Chrome/120.0",
-        expiresAt: new Date(Date.now() + 86400_000),
-      },
-    });
-    // Android native session
+    // A session for the android user (e.g. the same person signed in on a
+    // browser too) must not reclassify their heartbeat.
     await prisma.session.create({
       data: {
         id: sid(),
         token: sid(),
         userId: androidUser.id,
-        userAgent: "Convocados/1.0 Ktor Android",
+        userAgent: "Mozilla/5.0 (Macintosh) Chrome/120.0",
         expiresAt: new Date(Date.now() + 86400_000),
       },
     });

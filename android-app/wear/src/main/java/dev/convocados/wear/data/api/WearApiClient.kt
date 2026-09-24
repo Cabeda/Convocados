@@ -161,7 +161,7 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 
     /** Native app-open heartbeat (GH #1070) — idempotent per UTC day server-side. */
     suspend fun reportAppOpen() {
-        authenticatedRequest(HttpMethod.Post, "/api/me/app-open", mapOf<String, String>())
+        authenticatedRequest(HttpMethod.Post, "/api/me/app-open", mapOf("platform" to "android"))
     }
 
     suspend fun getMvp(eventId: String, historyId: String): MvpResponse =

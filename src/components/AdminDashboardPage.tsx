@@ -56,7 +56,7 @@ interface UsageSummary {
   dauToday: number;
   wau: number;
   mau: number;
-  platforms: { android: number; web: number };
+  platforms: { android: number; ios: number; web: number };
   webDrillDown: { browsers: Record<string, number>; os: Record<string, number> };
 }
 
@@ -64,6 +64,7 @@ interface UsagePoint {
   date: string;
   dau: number;
   android: number;
+  ios: number;
   web: number;
 }
 
@@ -387,6 +388,7 @@ export default function AdminDashboardPage() {
                         <Typography variant="subtitle2" fontWeight={600} gutterBottom>{t("adminPlatformBreakdown")}</Typography>
                         <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
                           <Chip label={`Android: ${usageSummary.platforms.android}`} color="success" variant="outlined" />
+                          <Chip label={`iOS: ${usageSummary.platforms.ios}`} color="secondary" variant="outlined" />
                           <Chip label={`Web: ${usageSummary.platforms.web}`} color="primary" variant="outlined" />
                         </Stack>
 
@@ -425,6 +427,7 @@ export default function AdminDashboardPage() {
                               <Legend />
                               <Line type="monotone" dataKey="dau" name="DAU" stroke="#4caf50" strokeWidth={2} dot={false} />
                               <Line type="monotone" dataKey="android" name="Android" stroke="#66bb6a" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+                              <Line type="monotone" dataKey="ios" name="iOS" stroke="#ab47bc" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
                               <Line type="monotone" dataKey="web" name="Web" stroke="#42a5f5" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
                             </LineChart>
                           </ResponsiveContainer>

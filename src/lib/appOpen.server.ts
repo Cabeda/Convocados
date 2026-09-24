@@ -16,7 +16,7 @@ export async function trackAppOpen(request: Request): Promise<void> {
     const session = await getSession(request);
     const userId = session?.user?.id;
     if (!userId) return;
-    await recordAppOpen(userId);
+    await recordAppOpen(userId, new Date(), "web");
   } catch (err) {
     log.error({ err }, "app-open heartbeat failed");
   }
