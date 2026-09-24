@@ -243,13 +243,22 @@ A player who joined but explicitly unfollowed will NOT receive notifications (th
 ## Quick Game
 A purely local, ephemeral score-tracking session on Wear OS with interval alarms. Not connected to any server-side Game. Does not sync, has no teams, and does not require authentication. Lost when the user navigates away.
 
-## My games dashboard
-Shows games grouped by relationship:
+## Home
+The signed-in default surface (web `/dashboard`, Android `games` route). Leads with **Up next**, then **Discover**, then a collapsed **Manage my games** section that groups Events by relationship:
 - **Owned** — events where `Event.ownerId = userId`. Always visible. Includes archived.
 - **Admin** — events where `EventAdmin.userId = userId`. Always visible. Archived events not shown.
 - **Followed** — events where `EventFollow.userId = userId`. Archived events auto-unfollow.
 
-Profile pages (`/api/users/[id]`) continue to show **joined** (participation via Player records), not followed.
+Signed-out visitors see the marketing landing at `/`; a signed-in visitor is routed to Home instead. Profile pages (`/api/users/[id]`) continue to show **joined** (participation via Player records), not followed.
+_Avoid_: dashboard (the old name), My Games (now the Manage section)
+
+## Up next
+The time-ordered list on **Home** of Games the user is *playing or organizing*: Events where the user is a **Participant** (roster `EventPlayer.userId`), **Owner**, or **Admin**. One row per Event (its current Game occurrence), ordered by kickoff ascending, with `in_progress` Games pinned first and labelled "Live now". Capped to a handful. Following an Event does *not* put it in Up next — followed-only Events live under **Manage my games**.
+_Avoid_: my games (that's the relationship-grouped Manage view), followed games
+
+## Discover
+The glimpse on **Home** of **Discoverable Events** the user could join: public, not archived, kickoff in the future, spots remaining, excluding Events the user is already involved in (playing, organizing, or following). Ordered soonest-first, capped, ending with a link to the full public listing (`/public`).
+_Avoid_: public games (the full listing), recruitment
 
 ## Follow toggle (event detail page)
 Authenticated users see a bell icon on the event detail page:

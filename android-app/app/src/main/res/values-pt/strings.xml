@@ -6,6 +6,13 @@
 
     <string name="create_game">Criar um jogo</string>
     <string name="my_games">Os meus jogos</string>
+    <string name="home">Início</string>
+    <string name="up_next">A seguir</string>
+    <string name="discover">Descobrir</string>
+    <string name="browse_all_public_games">Ver todos os jogos públicos</string>
+    <string name="no_upcoming_games">Ainda não há jogos agendados.</string>
+    <string name="no_discover_games">Não há jogos públicos para entrar de momento.</string>
+    <string name="live_now">A jogar agora</string>
     <string name="players">Jogadores</string>
     <string name="teams">Equipas</string>
     <string name="randomize_teams">Sortear equipas</string>
@@ -73,7 +80,7 @@
     <string name="public_games">Jogos públicos</string>
     <string name="profile">Perfil</string>
     <string name="stats">Estatísticas</string>
-    <string name="games_tab">Jogos</string>
+    <string name="games_tab">Início</string>
     <string name="live_indicator_pulsing">Indicador de jogo ao vivo (a pulsar)</string>
     <string name="live_indicator_steady">Indicador de jogo ao vivo (fixo)</string>
     <string name="elo_changes">Variações de ELO</string>

@@ -21,6 +21,14 @@ my-games:
     list-admin: { web: true, android: true, wearos: false }
     archived-games: { web: true, android: true, wearos: false }
 
+home:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    up-next: { web: true, android: true, wearos: false }
+    discover-strip: { web: true, android: true, wearos: false }
+
 create-event:
   web: true
   android: true

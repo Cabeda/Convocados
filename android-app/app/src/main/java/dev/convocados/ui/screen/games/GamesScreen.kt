@@ -34,7 +34,10 @@ import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.data.api.CoPlaySuggestion
+import dev.convocados.data.api.HomeResponse
 import dev.convocados.data.api.ProfileEvent
+import dev.convocados.data.api.PublicEvent
+import dev.convocados.data.api.UpNextGame
 import dev.convocados.data.repository.EventRepository
 import dev.convocados.data.repository.RecentlyViewedEvent
 import dev.convocados.ui.theme.contentMaxWidthDp
@@ -83,6 +86,11 @@ class GamesViewModel @Inject constructor(
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
 
+    // ADR 0041: signed-in Home feed (Up next + Discover), network-first. Kept
+    // out of Room — it is inherently live; on failure the previous value stays.
+    private val _home = MutableStateFlow<HomeResponse?>(null)
+    val home: StateFlow<HomeResponse?> = _home
+
     val ownedGames = repository.getEventsByType("owned")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -114,10 +122,15 @@ class GamesViewModel @Inject constructor(
         viewModelScope.launch {
             _refreshing.value = true
             repository.refreshMyGames()
+            loadHome()
             _refreshing.value = false
             loadSuggestionsPanel()
             loadParticipatedEvents()
         }
+    }
+
+    private suspend fun loadHome() {
+        runCatching { api.fetchHome() }.onSuccess { _home.value = it }
     }
 
     private suspend fun loadParticipatedEvents() {
@@ -180,8 +193,15 @@ fun GamesScreen(
     val suggestionsPanel by viewModel.suggestionsPanel.collectAsState()
     val recentlyViewed by viewModel.recentlyViewed.collectAsState()
     val participated by viewModel.participatedEvents.collectAsState()
+    val home by viewModel.home.collectAsState()
+    val upNext = home?.upNext.orEmpty()
+    val discover = home?.discover.orEmpty()
     var showArchived by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
+
+    // Refresh on (re-)entry — returning from a detail screen shows fresh data,
+    // on top of pull-to-refresh.
+    LaunchedEffect(Unit) { viewModel.refresh() }
 
     Scaffold(
         floatingActionButton = {
@@ -222,7 +242,7 @@ fun GamesScreen(
                 Tab(
                     selected = tabIndex == 0,
                     onClick = { showArchived = false },
-                    text = { Text("${stringResource(R.string.my_games)} (${active.size})") },
+                    text = { Text("${stringResource(R.string.home)} (${active.size})") },
                 )
                 if (archived.isNotEmpty()) {
                     Tab(
@@ -249,6 +269,55 @@ fun GamesScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
 
+                // ADR 0041: Up next — games the user plays or organizes.
+                if (!showArchived) {
+                    item(key = "up-next-header") {
+                        SectionHeader(stringResource(R.string.up_next))
+                    }
+                    if (upNext.isEmpty()) {
+                        item(key = "up-next-empty") {
+                            Text(
+                                stringResource(R.string.no_upcoming_games),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                    } else {
+                        items(upNext, key = { "upnext-${it.id}" }) { game ->
+                            UpNextCard(game = game, onClick = { onEventClick(game.id) })
+                        }
+                    }
+                }
+
+                // ADR 0041: Discover — a glimpse of public games looking for players.
+                if (!showArchived) {
+                    item(key = "discover-header") {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            SectionHeader(stringResource(R.string.discover))
+                            TextButton(onClick = onPublicClick) {
+                                Text(stringResource(R.string.browse_all_public_games))
+                            }
+                        }
+                    }
+                    if (discover.isEmpty()) {
+                        item(key = "discover-empty") {
+                            Text(
+                                stringResource(R.string.no_discover_games),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                    } else {
+                        items(discover, key = { "discover-${it.id}" }) { ev ->
+                            DiscoverCard(ev = ev, onClick = { onEventClick(ev.id) })
+                        }
+                    }
+                }
+
                 if (games.isEmpty() && showArchived) {
                     item {
                         Column(
@@ -262,7 +331,7 @@ fun GamesScreen(
                     }
                 }
 
-                if (games.isEmpty() && !showArchived) {
+                if (games.isEmpty() && !showArchived && upNext.isEmpty() && discover.isEmpty()) {
                     item {
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
@@ -557,6 +626,82 @@ private fun SectionHeader(title: String) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
     )
+}
+
+/** ADR 0041: a game the user plays/organizes, with a Live badge for in-progress games. */
+@Composable
+private fun UpNextCard(game: UpNextGame, onClick: () -> Unit) {
+    val isLive = game.status == "in_progress"
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SportIcon(game.sport, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    game.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (isLive) {
+                    AssistChip(onClick = onClick, label = { Text(stringResource(R.string.live_now)) })
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                stringResource(R.string.event_meta, formatEventDateInTz(game.dateTime, game.timezone), game.playerCount, game.maxPlayers) +
+                    (if (game.isRecurring) stringResource(R.string.recurring_suffix) else ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (game.location.isNotBlank()) {
+                Text(game.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** ADR 0041: a discoverable game the user could join. */
+@Composable
+private fun DiscoverCard(ev: PublicEvent, onClick: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SportIcon(ev.sport, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    ev.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    stringResource(R.string.spots_left, ev.spotsLeft),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                stringResource(R.string.event_meta, formatRelativeDate(ev.dateTime), ev.playerCount, ev.maxPlayers),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (ev.location.isNotBlank()) {
+                Text(ev.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, maxLines = 1)
+            }
+        }
+    }
 }
 
 /** Horizontal row of compact recently-viewed event cards (link/invite return). */

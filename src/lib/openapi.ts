@@ -105,14 +105,14 @@ export const openApiSpec = {
     },
     "/api/events/public": {
       get: {
-        summary: "List public events",
+        summary: "List upcoming public events (soonest first)",
         tags: ["Events"],
         security: anonymous,
         parameters: [
           { name: "sport", in: "query", schema: { type: "string" }, description: "Filter by sport" },
           { name: "hasSpots", in: "query", schema: { type: "boolean" }, description: "Only events with available spots" },
         ],
-        responses: { "200": { description: "List of public events" } },
+        responses: { "200": { description: "List of upcoming public events" } },
       },
     },
     "/api/events/{id}": {
@@ -1038,6 +1038,13 @@ export const openApiSpec = {
         summary: "Get authenticated user's games",
         tags: ["Users"],
         responses: { "200": { description: "Owned and joined games" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/home": {
+      get: {
+        summary: "Signed-in Home feed: next games (Up next) + a glimpse of joinable public games (Discover)",
+        tags: ["Users"],
+        responses: { "200": { description: "Up next + Discover" }, "401": { description: "Unauthorized" } },
       },
     },
     "/api/me/app-open": {

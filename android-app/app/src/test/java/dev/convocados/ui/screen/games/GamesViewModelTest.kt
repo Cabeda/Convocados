@@ -3,7 +3,9 @@ package dev.convocados.ui.screen.games
 import app.cash.turbine.test
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
+import dev.convocados.data.api.HomeResponse
 import dev.convocados.data.api.ProfileEvent
+import dev.convocados.data.api.UpNextGame
 import dev.convocados.data.api.UserProfile
 import dev.convocados.data.api.UserProfileResponse
 import dev.convocados.data.api.UserPublicProfile
@@ -80,8 +82,59 @@ class GamesViewModelTest {
     }
 
     @Test
-    fun `recentlyViewed exposes repository flow`() = runTest {
+    fun `refresh loads home feed from api`() = runTest {
         coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        coEvery { api.fetchHome() } returns HomeResponse(
+            upNext = listOf(
+                UpNextGame(
+                    id = "ev-1",
+                    title = "Sunday Football",
+                    dateTime = "2026-08-01T19:00:00Z",
+                    maxPlayers = 10,
+                    playerCount = 6,
+                ),
+            ),
+            discover = emptyList(),
+        )
+
+        val viewModel = GamesViewModel(repository, api, tokenStore)
+        advanceUntilIdle()
+
+        viewModel.home.test {
+            val item = awaitItem()
+            val feed = if (item == null) awaitItem() else item
+            assertEquals("ev-1", feed?.upNext?.first()?.id)
+        }
+    }
+
+    @Test
+    fun `home keeps previous value when the api fails (offline degrade)`() = runTest {
+        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        coEvery { api.fetchHome() } returns HomeResponse(
+            upNext = listOf(
+                UpNextGame(
+                    id = "ev-keep",
+                    title = "Kept Game",
+                    dateTime = "2026-08-01T19:00:00Z",
+                    maxPlayers = 10,
+                    playerCount = 6,
+                ),
+            ),
+        )
+
+        val viewModel = GamesViewModel(repository, api, tokenStore)
+        advanceUntilIdle()
+        assertEquals("ev-keep", viewModel.home.value?.upNext?.first()?.id)
+
+        coEvery { api.fetchHome() } throws RuntimeException("offline")
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals("ev-keep", viewModel.home.value?.upNext?.first()?.id)
+    }
+
+    @Test
+    fun `recentlyViewed exposes repository flow`() = runTest {        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
         val viewed = listOf(
             RecentlyViewedEvent("ev-1", "Thursday 5-a-side", "Pitch 2", "2026-08-20T19:00:00Z", "football", 1000L),
             RecentlyViewedEvent("ev-2", "Volleyball night", "Gym", "2026-08-22T20:00:00Z", "volleyball", 2000L),

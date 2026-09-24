@@ -6,6 +6,13 @@
 
     <string name="create_game">Spiel erstellen</string>
     <string name="my_games">Meine Spiele</string>
+    <string name="home">Start</string>
+    <string name="up_next">Als Nächstes</string>
+    <string name="discover">Entdecken</string>
+    <string name="browse_all_public_games">Alle öffentlichen Spiele ansehen</string>
+    <string name="no_upcoming_games">Noch keine anstehenden Spiele.</string>
+    <string name="no_discover_games">Derzeit keine öffentlichen Spiele zum Beitreten.</string>
+    <string name="live_now">Jetzt live</string>
     <string name="players">Spieler</string>
     <string name="teams">Teams</string>
     <string name="randomize_teams">Teams auslosen</string>
@@ -73,7 +80,7 @@
     <string name="public_games">Öffentliche Spiele</string>
     <string name="profile">Profil</string>
     <string name="stats">Statistiken</string>
-    <string name="games_tab">Spiele</string>
+    <string name="games_tab">Start</string>
     <string name="live_indicator_pulsing">Live-Anzeige (pulsierend)</string>
     <string name="live_indicator_steady">Live-Anzeige (statisch)</string>
     <string name="elo_changes">ELO-Änderungen</string>
