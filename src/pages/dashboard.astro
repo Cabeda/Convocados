@@ -1,12 +1,12 @@
 ---
 export const prerender = true;
 import BaseLayout from "../layouts/BaseLayout.astro";
-import DashboardPage from "../components/DashboardPage";
+import HomePage from "../components/HomePage";
 ---
 
 <BaseLayout
-  title="My Games — Convocados"
+  title="Home — Convocados"
   mainTransitionName="page-dashboard"
 >
-  <DashboardPage client:only="react" />
+  <HomePage client:only="react" />
 </BaseLayout>

@@ -1310,4 +1310,45 @@ describe("GET /api/events/public", () => {
     expect(page2.hasMore).toBe(false);
     expect(page2.nextCursor).toBeNull();
   });
+
+  it("excludes past events (only upcoming are joinable)", async () => {
+    await prisma.event.create({
+      data: {
+        title: "Past Game", location: "Pitch",
+        dateTime: new Date(Date.now() - 86400_000),
+        isPublic: true,
+      },
+    });
+    await prisma.event.create({
+      data: {
+        title: "Future Game", location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true,
+      },
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].title).toBe("Future Game");
+  });
+
+  it("orders upcoming events soonest-first", async () => {
+    await prisma.event.create({
+      data: {
+        title: "Later", location: "Pitch",
+        dateTime: new Date(Date.now() + 3 * 86400_000),
+        isPublic: true,
+      },
+    });
+    await prisma.event.create({
+      data: {
+        title: "Sooner", location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true,
+      },
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body.data.map((e: { title: string }) => e.title)).toEqual(["Sooner", "Later"]);
+  });
 });

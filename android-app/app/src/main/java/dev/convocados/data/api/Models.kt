@@ -254,6 +254,28 @@ data class PaginatedPublicEvents(
     val hasMore: Boolean = false,
 )
 
+/** ADR 0041: a game the user plays or organizes, with its current occurrence status. */
+@Serializable
+data class UpNextGame(
+    val id: String,
+    val title: String,
+    val location: String = "",
+    val dateTime: String,
+    val timezone: String = "UTC",
+    val sport: String = "",
+    val maxPlayers: Int,
+    val playerCount: Int,
+    val isRecurring: Boolean = false,
+    val status: String = "upcoming",
+)
+
+/** ADR 0041: signed-in Home feed — next games + a glimpse of discoverable games. */
+@Serializable
+data class HomeResponse(
+    val upNext: List<UpNextGame> = emptyList(),
+    val discover: List<PublicEvent> = emptyList(),
+)
+
 @Serializable
 data class PlayerRating(
     val id: String,

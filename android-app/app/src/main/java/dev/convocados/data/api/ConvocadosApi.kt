@@ -12,6 +12,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     // ── User ──────────────────────────────────────────────────────────────
     suspend fun fetchMyGames(): MyGamesResponse = client.get("/api/me/games")
+
+    /** ADR 0041: signed-in Home feed — next games + a glimpse of discoverable games. */
+    suspend fun fetchHome(): HomeResponse = client.get("/api/me/home")
     suspend fun fetchMyStats(): PlayerStats = client.get("/api/me/stats")
     suspend fun fetchUserInfo(): UserProfile = client.get("/api/me/profile")
 

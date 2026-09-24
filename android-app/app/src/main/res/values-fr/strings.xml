@@ -6,6 +6,13 @@
 
     <string name="create_game">Créer un match</string>
     <string name="my_games">Mes matchs</string>
+    <string name="home">Accueil</string>
+    <string name="up_next">À venir</string>
+    <string name="discover">Découvrir</string>
+    <string name="browse_all_public_games">Voir tous les matchs publics</string>
+    <string name="no_upcoming_games">Aucun match à venir pour l\'instant.</string>
+    <string name="no_discover_games">Aucun match public à rejoindre pour le moment.</string>
+    <string name="live_now">En direct</string>
     <string name="players">Joueurs</string>
     <string name="teams">Équipes</string>
     <string name="randomize_teams">Tirer les équipes au sort</string>
@@ -73,7 +80,7 @@
     <string name="public_games">Matchs publics</string>
     <string name="profile">Profil</string>
     <string name="stats">Statistiques</string>
-    <string name="games_tab">Matchs</string>
+    <string name="games_tab">Accueil</string>
     <string name="live_indicator_pulsing">Indicateur en direct (pulsation)</string>
     <string name="live_indicator_steady">Indicateur en direct (fixe)</string>
     <string name="elo_changes">Variations d\'ELO</string>

@@ -8,6 +8,7 @@
 |---------|:---:|:-------:|:-------:|
 | **Auth** | ✅ | ✅ | ✅ |
 | **My Games** | ✅ | ✅ | ✅ |
+| **Home** | ✅ | ✅ | ❌ |
 | **Create Event** | ✅ | ✅ | ❌ |
 | **Event Detail** | ✅ | ✅ | ❌ |
 | **Teams** | ✅ | ✅ | ✅ |
@@ -45,6 +46,13 @@
 | List Followed | ✅ | ✅ | ❌ |
 | List Admin | ✅ | ✅ | ❌ |
 | Archived Games | ✅ | ✅ | ❌ |
+
+### Home
+
+| Capability | Web | Android | Wear OS |
+|------------|:---:|:-------:|:-------:|
+| Up Next | ✅ | ✅ | ❌ |
+| Discover Strip | ✅ | ✅ | ❌ |
 
 ### Create Event
 
@@ -168,6 +176,7 @@
 | View Stats | ✅ | ✅ | ❌ |
 | View Other Profiles | ✅ | ✅ | ❌ |
 | Edit Name | ✅ | ❌ | ❌ |
+| Edit Photo | ✅ | ✅ | ❌ |
 
 ### Court Finder
 
