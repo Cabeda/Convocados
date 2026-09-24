@@ -123,6 +123,24 @@ final class APIClient: ObservableObject, @unchecked Sendable {
         try await get("/api/events/\(id)")
     }
 
+    // MARK: - Match Events (ADR 0039)
+
+    /// The goal timeline for a settled game.
+    func fetchMatchEvents(eventId: String, historyId: String) async throws -> MatchEventsResponse {
+        try await get("/api/events/\(eventId)/history/\(historyId)/match-events")
+    }
+
+    /// Log a goal on a settled game.
+    func addMatchEvent(eventId: String, historyId: String, body: MatchEventRequest) async throws -> MatchEventsResponse {
+        try await post("/api/events/\(eventId)/history/\(historyId)/match-events", body: body)
+    }
+
+    /// Remove a logged goal.
+    @discardableResult
+    func deleteMatchEvent(eventId: String, historyId: String, matchEventId: String) async throws -> OkResponse {
+        try await delete("/api/events/\(eventId)/history/\(historyId)/match-events/\(matchEventId)")
+    }
+
     func fetchHistory(id: String, cursor: String? = nil) async throws -> PaginatedHistory {
         let qs = cursor.map { "?cursor=\($0)" } ?? ""
         return try await get("/api/events/\(id)/history\(qs)")

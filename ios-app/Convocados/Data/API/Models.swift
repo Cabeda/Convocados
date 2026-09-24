@@ -110,6 +110,48 @@ struct PaginatedHistory: Codable {
     var hasMore: Bool = false
 }
 
+// MARK: - Match Events (ADR 0039)
+
+/// A goal/assist logged on a settled Game.
+struct MatchEvent: Codable, Identifiable {
+    let id: String
+    var type: String = "goal"
+    var team: String = "unknown"
+    var minute: Int?
+    var count: Int = 1
+    var ownGoal: Bool = false
+    var penalty: Bool = false
+    var scorerEventPlayerId: String?
+    var scorerName: String = ""
+    var assistEventPlayerId: String?
+    var assistName: String?
+    var createdAt: String = ""
+}
+
+/// Score derived from a game's goals (nil when no usable goals exist).
+struct DerivedScore: Codable {
+    var teamOne: Int
+    var teamTwo: Int
+}
+
+struct MatchEventsResponse: Codable {
+    var events: [MatchEvent] = []
+    var score: DerivedScore?
+    var scoringType: String = "standard"
+}
+
+/// Body for POST .../match-events. Encodable-only.
+struct MatchEventRequest: Codable {
+    var type: String = "goal"
+    var team: String
+    var minute: Int?
+    var count: Int = 1
+    var ownGoal: Bool = false
+    var penalty: Bool = false
+    var scorerEventPlayerId: String?
+    var scorerName: String
+}
+
 // MARK: - Stats
 
 struct PlayerStats: Codable {
@@ -126,6 +168,10 @@ struct StatsSummary: Codable {
     var avgRating: Int = 0
     var bestRating: Int = 0
     var eventsPlayed: Int = 0
+    /// Goals logged via Match Events (ADR 0039).
+    var totalGoals: Int = 0
+    /// Assists logged via Match Events (ADR 0039).
+    var totalAssists: Int = 0
 }
 
 struct AttendanceInfo: Codable {
@@ -146,6 +192,8 @@ struct EventStats: Codable {
     var losses: Int = 0
     var winRate: Double = 0.0
     var attendance: AttendanceInfo?
+    var goals: Int = 0
+    var assists: Int = 0
 }
 
 // MARK: - User
