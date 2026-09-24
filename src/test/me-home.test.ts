@@ -106,6 +106,7 @@ describe("GET /api/me/home", () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.upNext.map((g: { title: string }) => g.title)).toEqual(["My Owned"]);
+    expect(Array.isArray(body.actions)).toBe(true);
   });
 
   it("includes events the user plays (EventPlayer.userId) and admins", async () => {

@@ -5,6 +5,7 @@ import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
 import { getActiveRosterState } from "../../../lib/roster.server";
 import { findDiscoverableUpcomingEvents } from "../../../lib/discoverableEvents.server";
+import { computeHomeActions } from "../../../lib/homeActions.server";
 
 /** Signed-in Home: the soonest few games the user plays/organizes, plus a
  *  glimpse of Discoverable Events they could join. See ADR 0041. */
@@ -123,5 +124,9 @@ export const GET: APIRoute = async ({ request }) => {
     preferredSports,
   });
 
-  return Response.json({ upNext, discover });
+  // "Needs you" — the viewer's own actionable items (fill spots, settle,
+  // pay, vote). Batch, capped, self-clearing. See homeActions.server.ts.
+  const actions = await computeHomeActions(userId, now);
+
+  return Response.json({ upNext, discover, actions });
 };

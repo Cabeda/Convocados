@@ -13,6 +13,10 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import PeopleIcon from "@mui/icons-material/People";
 import PublicIcon from "@mui/icons-material/Public";
+import GroupAddIcon from "@mui/icons-material/GroupAdd";
+import ScoreboardIcon from "@mui/icons-material/Scoreboard";
+import PaymentsIcon from "@mui/icons-material/Payments";
+import HowToVoteIcon from "@mui/icons-material/HowToVote";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PushPromptBanner } from "./PushPromptBanner";
@@ -58,9 +62,23 @@ interface DiscoverGame {
   ownerId?: string | null;
 }
 
+/** A "Needs you" item from GET /api/me/home (homeActions.server.ts). */
+interface HomeAction {
+  type: "fill_spots" | "settle_score" | "pay_share" | "vote_mvp";
+  eventId: string;
+  eventTitle: string;
+  dateTime: string;
+  timezone: string;
+  deadline: string;
+  spotsLeft?: number;
+  amount?: number;
+  currency?: string;
+}
+
 interface HomeData {
   upNext: UpNextGame[];
   discover: DiscoverGame[];
+  actions?: HomeAction[];
 }
 
 interface DashboardData {
@@ -158,8 +176,41 @@ function UpNextCard({ game, locale, t }: { game: UpNextGame; locale: string; t: 
   );
 }
 
-function DiscoverCard({ game, locale, t }: { game: DiscoverGame; locale: string; t: TFunction }) {
-  const date = new Date(game.dateTime);
+/** A single "Needs you" card — one actionable item, deep-linking to the event. */
+function ActionCard({ action, locale, t }: { action: HomeAction; locale: string; t: TFunction }) {
+  const meta: Record<HomeAction["type"], { icon: React.ReactElement; label: string; color: string }> = {
+    fill_spots: { icon: <GroupAddIcon fontSize="small" />, label: t("actionFillSpots", { n: action.spotsLeft ?? 0 }), color: "primary" },
+    settle_score: { icon: <ScoreboardIcon fontSize="small" />, label: t("actionSettleScore"), color: "warning" },
+    pay_share: { icon: <PaymentsIcon fontSize="small" />, label: t("actionPayShare", { amount: `${(action.amount ?? 0).toFixed(2)} ${action.currency ?? "EUR"}` }), color: "error" },
+    vote_mvp: { icon: <HowToVoteIcon fontSize="small" />, label: t("actionVoteMvp"), color: "success" },
+  };
+  const m = meta[action.type];
+  return (
+    <Paper
+      elevation={2}
+      component="a"
+      href={`/events/${action.eventId}`}
+      sx={{
+        display: "flex", alignItems: "center", gap: 1.5, p: 2, borderRadius: 3,
+        textDecoration: "none", color: "inherit",
+        borderLeft: 4, borderColor: `${m.color}.main`,
+        transition: "transform 0.15s, box-shadow 0.15s",
+        "&:hover": { transform: "translateY(-2px)", boxShadow: 6 },
+      }}
+    >
+      <Box sx={{ color: `${m.color}.main`, display: "flex" }}>{m.icon}</Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="subtitle2" fontWeight={700} noWrap>{action.eventTitle}</Typography>
+        <Typography variant="body2" color="text.secondary">{m.label}</Typography>
+      </Box>
+      <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+        {formatKickoff(new Date(action.dateTime), locale, action.timezone)}
+      </Typography>
+    </Paper>
+  );
+}
+
+function DiscoverCard({ game, locale, t }: { game: DiscoverGame; locale: string; t: TFunction }) {  const date = new Date(game.dateTime);
   const isFull = game.spotsLeft === 0;
   const sportPreset = getSportPreset(game.sport);
   return (
@@ -396,9 +447,10 @@ export default function HomePage() {
 
   const upNext = home?.upNext ?? [];
   const discover = home?.discover ?? [];
+  const actions = home?.actions ?? [];
   const allArchived = [...(games?.archivedOwned ?? []), ...(games?.archivedAdmin ?? [])];
   const hasActive = !!games && (games.owned.length > 0 || games.admin.length > 0 || games.followed.length > 0);
-  const nothingToShow = !homeLoading && upNext.length === 0 && discover.length === 0;
+  const nothingToShow = !homeLoading && upNext.length === 0 && discover.length === 0 && actions.length === 0;
 
   return (
     <ThemeModeProvider>
@@ -454,6 +506,20 @@ export default function HomePage() {
                     <Alert severity="info">{t("noUpcomingGames")}</Alert>
                   )}
                 </Box>
+
+                {/* Needs you — the viewer's own actionable items */}
+                {actions.length > 0 && (
+                  <Box>
+                    <Typography variant="h6" fontWeight={600} gutterBottom>
+                      {t("needsYou")}
+                    </Typography>
+                    <Stack spacing={1.5}>
+                      {actions.map((a) => (
+                        <ActionCard key={`${a.type}-${a.eventId}`} action={a} locale={locale} t={t} />
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
 
                 {/* Discover — public games looking for players */}
                 <Box>

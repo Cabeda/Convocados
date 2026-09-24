@@ -244,7 +244,7 @@ A player who joined but explicitly unfollowed will NOT receive notifications (th
 A purely local, ephemeral score-tracking session on Wear OS with interval alarms. Not connected to any server-side Game. Does not sync, has no teams, and does not require authentication. Lost when the user navigates away.
 
 ## Home
-The signed-in default surface (web `/dashboard`, Android `games` route). Leads with **Up next**, then **Discover**, then a collapsed **Manage my games** section that groups Events by relationship:
+The signed-in default surface (web `/dashboard`, Android `games` route). Leads with **Up next**, then **Needs you**, then **Discover**, then a collapsed **Manage my games** section that groups Events by relationship:
 - **Owned** — events where `Event.ownerId = userId`. Always visible. Includes archived.
 - **Admin** — events where `EventAdmin.userId = userId`. Always visible. Archived events not shown.
 - **Followed** — events where `EventFollow.userId = userId`. Archived events auto-unfollow.
@@ -259,6 +259,16 @@ _Avoid_: my games (that's the relationship-grouped Manage view), followed games
 ## Discover
 The glimpse on **Home** of **Discoverable Events** the user could join: public, not archived, kickoff in the future, spots remaining, excluding Events the user is already involved in (playing, organizing, or following). Ordered soonest-first, capped, ending with a link to the full public listing (`/public`).
 _Avoid_: public games (the full listing), recruitment
+
+## Home action item
+A single thing the viewer personally has to act on, shown in the **Needs you** strip on **Home** and deep-linking to its Event. Four kinds, each self-clearing when done and scoped to the viewer's role:
+- **fill_spots** — an Event they own/admin that kicks off within 72h with at least one open spot.
+- **settle_score** — a recently ended Game of theirs with no score.
+- **pay_share** — an Outstanding Balance they owe.
+- **vote_mvp** — a recently ended Game they played in where they haven't cast their MVP vote.
+
+Batch-computed server-side (not per-Event `PostGameStatus`), ordered by the deadline that closes each item, capped. Distinct from the **Post-game wrap-up** banner (which is per-Event and richer).
+_Avoid_: to-do, task, notification
 
 ## Follow toggle (event detail page)
 Authenticated users see a bell icon on the event detail page:

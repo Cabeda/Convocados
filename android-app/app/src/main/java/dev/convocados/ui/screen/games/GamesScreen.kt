@@ -35,6 +35,7 @@ import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.data.api.CoPlaySuggestion
 import dev.convocados.data.api.HomeResponse
+import dev.convocados.data.api.HomeAction
 import dev.convocados.data.api.ProfileEvent
 import dev.convocados.data.api.PublicEvent
 import dev.convocados.data.api.UpNextGame
@@ -63,6 +64,11 @@ import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.SportsCricket
 import androidx.compose.material.icons.filled.SportsMartialArts
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.GroupAdd
+import androidx.compose.material.icons.filled.Scoreboard
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.HowToVote
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Stadium
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -196,6 +202,7 @@ fun GamesScreen(
     val home by viewModel.home.collectAsState()
     val upNext = home?.upNext.orEmpty()
     val discover = home?.discover.orEmpty()
+    val actions = home?.actions.orEmpty()
     var showArchived by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
 
@@ -286,6 +293,16 @@ fun GamesScreen(
                         items(upNext, key = { "upnext-${it.id}" }) { game ->
                             UpNextCard(game = game, onClick = { onEventClick(game.id) })
                         }
+                    }
+                }
+
+                // ADR 0041: Needs you — the viewer's own actionable items.
+                if (!showArchived && actions.isNotEmpty()) {
+                    item(key = "needs-you-header") {
+                        SectionHeader(stringResource(R.string.needs_you))
+                    }
+                    items(actions, key = { "action-${it.type}-${it.eventId}" }) { action ->
+                        HomeActionCard(action = action, onClick = { onEventClick(action.eventId) })
                     }
                 }
 
@@ -665,6 +682,57 @@ private fun UpNextCard(game: UpNextGame, onClick: () -> Unit) {
         }
     }
 }
+
+/** ADR 0041: a "Needs you" actionable item, deep-linking to its event. */
+@Composable
+private fun HomeActionCard(action: HomeAction, onClick: () -> Unit) {
+    val (icon, label, tint) = when (action.type) {
+        "fill_spots" -> Triple(
+            Icons.Default.GroupAdd,
+            stringResource(R.string.action_fill_spots, action.spotsLeft ?: 0),
+            MaterialTheme.colorScheme.primary,
+        )
+        "settle_score" -> Triple(
+            Icons.Default.Scoreboard,
+            stringResource(R.string.action_settle_score),
+            MaterialTheme.colorScheme.tertiary,
+        )
+        "pay_share" -> Triple(
+            Icons.Default.Payments,
+            stringResource(R.string.action_pay_share, formatAmount(action.amount, action.currency)),
+            MaterialTheme.colorScheme.error,
+        )
+        "vote_mvp" -> Triple(
+            Icons.Default.HowToVote,
+            stringResource(R.string.action_vote_mvp),
+            MaterialTheme.colorScheme.secondary,
+        )
+        else -> Triple(Icons.Default.Info, "", MaterialTheme.colorScheme.primary)
+    }
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    action.eventTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+private fun formatAmount(amount: Double?, currency: String?): String =
+    "%.2f %s".format(amount ?: 0.0, currency ?: "EUR")
 
 /** ADR 0041: a discoverable game the user could join. */
 @Composable

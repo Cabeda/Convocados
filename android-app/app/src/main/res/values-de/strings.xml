@@ -12,6 +12,11 @@
     <string name="browse_all_public_games">Alle öffentlichen Spiele ansehen</string>
     <string name="no_upcoming_games">Noch keine anstehenden Spiele.</string>
     <string name="no_discover_games">Derzeit keine öffentlichen Spiele zum Beitreten.</string>
+    <string name="needs_you">Du bist dran</string>
+    <string name="action_fill_spots">%1$d Platz/Plätze frei — Spieler einladen</string>
+    <string name="action_settle_score">Ergebnis des letzten Spiels eintragen</string>
+    <string name="action_pay_share">Du schuldest %1$s</string>
+    <string name="action_vote_mvp">Für den MVP stimmen</string>
     <string name="live_now">Jetzt live</string>
     <string name="players">Spieler</string>
     <string name="teams">Teams</string>

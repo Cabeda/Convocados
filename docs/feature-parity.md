@@ -53,6 +53,7 @@
 |------------|:---:|:-------:|:-------:|
 | Up Next | ✅ | ✅ | ❌ |
 | Discover Strip | ✅ | ✅ | ❌ |
+| Needs You | ✅ | ✅ | ❌ |
 
 ### Create Event
 

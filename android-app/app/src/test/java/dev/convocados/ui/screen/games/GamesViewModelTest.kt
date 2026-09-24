@@ -3,6 +3,7 @@ package dev.convocados.ui.screen.games
 import app.cash.turbine.test
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
+import dev.convocados.data.api.HomeAction
 import dev.convocados.data.api.HomeResponse
 import dev.convocados.data.api.ProfileEvent
 import dev.convocados.data.api.UpNextGame
@@ -108,8 +109,29 @@ class GamesViewModelTest {
     }
 
     @Test
-    fun `home keeps previous value when the api fails (offline degrade)`() = runTest {
+    fun `refresh exposes home actions from the feed`() = runTest {
         coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        coEvery { api.fetchHome() } returns HomeResponse(
+            actions = listOf(
+                HomeAction(
+                    type = "pay_share",
+                    eventId = "ev-1",
+                    eventTitle = "Sunday Football",
+                    dateTime = "2026-08-01T19:00:00Z",
+                    amount = 12.5,
+                    currency = "EUR",
+                ),
+            ),
+        )
+
+        val viewModel = GamesViewModel(repository, api, tokenStore)
+        advanceUntilIdle()
+
+        assertEquals("pay_share", viewModel.home.value?.actions?.first()?.type)
+    }
+
+    @Test
+    fun `home keeps previous value when the api fails (offline degrade)`() = runTest {        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
         coEvery { api.fetchHome() } returns HomeResponse(
             upNext = listOf(
                 UpNextGame(

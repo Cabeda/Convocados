@@ -28,6 +28,7 @@ home:
   capabilities:
     up-next: { web: true, android: true, wearos: false }
     discover-strip: { web: true, android: true, wearos: false }
+    needs-you: { web: true, android: true, wearos: false }
 
 create-event:
   web: true
