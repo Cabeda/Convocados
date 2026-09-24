@@ -276,9 +276,9 @@ private fun QuickSetScoreEditor(
         ) {
             TeamScoreButton(
                 teamName = stringResource(R.string.team_default_1),
-                score = if (isTiebreak) currentSet?.tiebreakTeamOne ?: 0 else currentSet?.teamOne ?: 0,
+                score = if (isTiebreak) currentSet.tiebreakTeamOne else currentSet?.teamOne ?: 0,
                 scoreLabel = if (isTiebreak) {
-                    (currentSet?.tiebreakTeamOne ?: 0).toString()
+                    currentSet.tiebreakTeamOne.toString()
                 } else {
                     displayTennisPointForTeam(currentGame, TennisTeam.ONE)
                 },
@@ -291,9 +291,9 @@ private fun QuickSetScoreEditor(
             )
             TeamScoreButton(
                 teamName = stringResource(R.string.team_default_2),
-                score = if (isTiebreak) currentSet?.tiebreakTeamTwo ?: 0 else currentSet?.teamTwo ?: 0,
+                score = if (isTiebreak) currentSet.tiebreakTeamTwo else currentSet?.teamTwo ?: 0,
                 scoreLabel = if (isTiebreak) {
-                    (currentSet?.tiebreakTeamTwo ?: 0).toString()
+                    currentSet.tiebreakTeamTwo.toString()
                 } else {
                     displayTennisPointForTeam(currentGame, TennisTeam.TWO)
                 },
