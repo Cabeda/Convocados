@@ -162,6 +162,9 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     suspend fun getMvp(eventId: String, historyId: String): MvpResponse =
         get("/api/events/$eventId/history/$historyId/mvp")
 
+    suspend fun getPostGameStatus(eventId: String): PostGameStatus =
+        get("/api/events/$eventId/post-game-status")
+
     suspend fun castMvpVote(
         eventId: String,
         historyId: String,

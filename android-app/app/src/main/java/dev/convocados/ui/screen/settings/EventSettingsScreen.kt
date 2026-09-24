@@ -28,6 +28,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
+import dev.convocados.data.api.CompetitionRequest
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventDetail
 import dev.convocados.ui.screen.create.SPORT_PRESETS
@@ -46,6 +47,12 @@ class EventSettingsViewModel @Inject constructor(
     val event: StateFlow<EventDetail?> = _event
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message
+
+    fun clearMessage() {
+        _message.value = null
+    }
 
     fun load(id: String) {
         viewModelScope.launch {
@@ -73,7 +80,32 @@ class EventSettingsViewModel @Inject constructor(
     fun unarchive(id: String) = exec { repository.unarchiveEvent(id); load(id) }
     fun transferOwnership(id: String, targetUserId: String) = exec { api.transferOwnership(id, targetUserId); load(id) }
 
+    fun toggleCompetition(id: String, enabled: Boolean) = execEmit {
+        api.updateCompetition(id, CompetitionRequest(enabled = enabled))
+        load(id)
+    }
+
+    fun toggleRankDecay(id: String, enabled: Boolean) = execEmit {
+        api.updateCompetition(id, CompetitionRequest(rankDecayEnabled = enabled))
+        load(id)
+    }
+
+    fun setInactiveRankBehavior(id: String, behavior: String) = execEmit {
+        api.updateCompetition(id, CompetitionRequest(inactiveRankBehavior = behavior))
+        load(id)
+    }
+
     private fun exec(block: suspend () -> Unit) { viewModelScope.launch { runCatching { block() } } }
+
+    /** Like [exec], but surfaces the failure (e.g. the Season-lock 409) as a message. */
+    private fun execEmit(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            runCatching {
+                block()
+                _message.value = null
+            }.onFailure { e -> _message.value = e.message ?: "Request failed" }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,17 +117,27 @@ fun EventSettingsScreen(
 ) {
     val event by viewModel.event.collectAsState()
     val loading by viewModel.loading.collectAsState()
+    val message by viewModel.message.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(eventId) { viewModel.load(eventId) }
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessage()
+        }
+    }
 
     var title by remember(event) { mutableStateOf(event?.title ?: "") }
     var location by remember(event) { mutableStateOf(event?.location ?: "") }
     var sport by remember(event) { mutableStateOf(event?.sport ?: "") }
     var isPublic by remember(event) { mutableStateOf(event?.isPublic ?: false) }
     var eloEnabled by remember(event) { mutableStateOf(event?.eloEnabled ?: false) }
+    var rankEnabled by remember(event) { mutableStateOf(event?.rankEnabled ?: true) }
+    var rankDecayEnabled by remember(event) { mutableStateOf(event?.rankDecayEnabled ?: false) }
+    var inactiveRankBehavior by remember(event) { mutableStateOf(event?.inactiveRankBehavior ?: "freeze") }
     var hideEloInTeams by remember(event) { mutableStateOf(event?.hideEloInTeams ?: false) }
     var splitCosts by remember(event) { mutableStateOf(event?.splitCostsEnabled ?: false) }
-    var balanced by remember(event) { mutableStateOf(event?.balanced ?: false) }
     var showCompetitiveData by remember(event) { mutableStateOf(event?.showCompetitiveData ?: true) }
     var allowManualRating by remember(event) { mutableStateOf(event?.allowManualRating ?: false) }
     var mvpEnabled by remember(event) { mutableStateOf(event?.mvpEnabled ?: false) }
@@ -111,6 +153,7 @@ fun EventSettingsScreen(
             TopAppBar(scrollBehavior = scrollBehavior, title = { Text(stringResource(R.string.event_settings)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background))
         },
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
         val ev = event ?: return@Scaffold
@@ -169,14 +212,48 @@ fun EventSettingsScreen(
             // General
             SectionTitle(stringResource(R.string.general))
             ToggleRow(stringResource(R.string.public_game), isPublic) { isPublic = it; viewModel.togglePublic(eventId, it) }
-            ToggleRow(stringResource(R.string.balanced_teams), balanced) { balanced = it; viewModel.toggleBalanced(eventId, it) }
 
-            // Teams & Ratings
-            SectionTitle(stringResource(R.string.teams_ratings))
-            ToggleRow(stringResource(R.string.elo_ratings), eloEnabled) { eloEnabled = it; viewModel.toggleElo(eventId, it) }
-            ToggleRow(stringResource(R.string.hide_elo_teams), hideEloInTeams, enabled = ev.balanced) { hideEloInTeams = it; viewModel.toggleHideEloInTeams(eventId, it) }
-            ToggleRow(stringResource(R.string.allow_manual_rating), allowManualRating, enabled = ev.eloEnabled) { allowManualRating = it; viewModel.toggleManualRating(eventId, it) }
+            // Competition (ADR 0031)
+            SectionTitle(stringResource(R.string.competition_settings))
+            ToggleRow(stringResource(R.string.competitive_rankings), eloEnabled && rankEnabled) {
+                viewModel.toggleCompetition(eventId, it)
+            }
+            Text(
+                stringResource(R.string.competitive_rankings_desc),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            SettingsLabel(stringResource(R.string.advanced_settings))
+            ToggleRow(stringResource(R.string.hide_elo_teams), hideEloInTeams, enabled = eloEnabled) { hideEloInTeams = it; viewModel.toggleHideEloInTeams(eventId, it) }
+            ToggleRow(stringResource(R.string.allow_manual_rating), allowManualRating, enabled = eloEnabled) { allowManualRating = it; viewModel.toggleManualRating(eventId, it) }
             ToggleRow(stringResource(R.string.show_competitive_data), showCompetitiveData) { showCompetitiveData = it; viewModel.toggleShowCompetitiveData(eventId, it) }
+            ToggleRow(stringResource(R.string.rank_decay), rankDecayEnabled, enabled = rankEnabled) { rankDecayEnabled = it; viewModel.toggleRankDecay(eventId, it) }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(R.string.inactive_rank_behavior),
+                        color = if (rankEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = inactiveRankBehavior == "freeze",
+                            enabled = rankEnabled,
+                            onClick = { inactiveRankBehavior = "freeze"; viewModel.setInactiveRankBehavior(eventId, "freeze") },
+                            label = { Text(stringResource(R.string.inactive_rank_freeze)) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer, selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer),
+                        )
+                        FilterChip(
+                            selected = inactiveRankBehavior == "reset",
+                            enabled = rankEnabled,
+                            onClick = { inactiveRankBehavior = "reset"; viewModel.setInactiveRankBehavior(eventId, "reset") },
+                            label = { Text(stringResource(R.string.inactive_rank_reset)) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer, selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer),
+                        )
+                    }
+                }
+            }
 
             // Features
             SectionTitle(stringResource(R.string.features))

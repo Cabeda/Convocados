@@ -4,6 +4,7 @@ import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
+import { cancelEventJobs } from "../../../../lib/scheduler.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -42,6 +43,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   if (archive) {
     await prisma.eventFollow.deleteMany({ where: { eventId: params.id } });
+    // Drop any pending reminder/post-game jobs so an already-scheduled
+    // occurrence cannot fire after the event is archived.
+    await cancelEventJobs(event.id);
   }
 
   const action = archive ? "event_archived" : "event_unarchived";

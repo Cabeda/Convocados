@@ -58,12 +58,12 @@ fun SeasonRankReveal(
 ) {
     val counted = rank?.counted == true
     if (!counted && standing == null) return
-    val seasonId = (if (counted) rank?.seasonId else standing?.seasonId).orEmpty()
+    val seasonId = (if (counted) rank.seasonId else standing?.seasonId).orEmpty()
     if (seasonId.isEmpty()) return
 
     val whyAria = stringResource(R.string.post_game_rank_why_aria)
     val dismissLabel = stringResource(R.string.post_game_rank_dismiss)
-    val seasonName = (if (counted) rank?.seasonName else standing?.seasonName).orEmpty()
+    val seasonName = (if (counted) rank.seasonName else standing?.seasonName).orEmpty()
     val viewSeasonAria = stringResource(R.string.post_game_rank_view_season_aria, seasonName)
     val provisional = if (counted) requireNotNull(rank).provisional else requireNotNull(standing).provisional
     val gamesThisSeason = if (counted) requireNotNull(rank).gamesThisSeason else requireNotNull(standing).gamesThisSeason
@@ -74,8 +74,8 @@ fun SeasonRankReveal(
     val tierColor = RankTierColors.getOrElse(tier) { RankTierColors.first() }
     val crew = standing?.crew
 
-    val positive = counted && rank != null && rank.delta > 0
-    val negative = counted && rank != null && rank.delta < 0
+    val positive = counted && rank.delta > 0
+    val negative = counted && rank.delta < 0
     val deltaColor = when {
         positive -> MaterialTheme.colorScheme.primary
         negative -> MaterialTheme.colorScheme.error
@@ -150,7 +150,7 @@ fun SeasonRankReveal(
                     color = tierColor,
                     modifier = Modifier.testTag("season_rank_value"),
                 )
-                if (counted && rank != null) {
+                if (counted) {
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = deltaColor.copy(alpha = 0.14f),
@@ -184,7 +184,7 @@ fun SeasonRankReveal(
                 )
             }
 
-            if (counted && rank != null && rank.tierAfter > rank.tierBefore) {
+            if (counted && rank.tierAfter > rank.tierBefore) {
                 Text(
                     stringResource(R.string.post_game_rank_tier_up, tierName),
                     style = MaterialTheme.typography.labelMedium,
@@ -298,7 +298,7 @@ fun SeasonRankReveal(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.padding(top = 4.dp),
         ) {
-            if (counted && rank != null) {
+            if (counted) {
                 TextButton(
                     onClick = onWhyClick,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),

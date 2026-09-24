@@ -50,8 +50,6 @@
     <string name="server_url">Server-URL</string>
     <string name="language">Sprache</string>
     <string name="notifications_title">Benachrichtigungen</string>
-    <string name="enable_notifications">Benachrichtigungen aktivieren</string>
-    <string name="enable_notifications_desc">Wähle, wann Convocados Erinnerungen und Spiel-Updates senden darf.</string>
     <string name="notifications_subtitle">Push- und E-Mail-Einstellungen verwalten</string>
     <string name="sign_out">Abmelden</string>
     <string name="edit_name">Name bearbeiten</string>
@@ -216,12 +214,19 @@
     <string name="push_notifications">Push-Benachrichtigungen</string>
     <string name="enable_push">Push aktivieren</string>
     <string name="enable_push_desc">Hauptschalter für alle Push-Benachrichtigungen</string>
+    <string name="this_device_title">Dieses Gerät</string>
+    <string name="device_push_on">Benachrichtigungen sind auf diesem Gerät aktiv</string>
+    <string name="device_push_off">Benachrichtigungen sind auf diesem Gerät deaktiviert</string>
+    <string name="device_push_blocked">Benachrichtigungen sind in den Systemeinstellungen blockiert</string>
+    <string name="open_notification_settings">Einstellungen öffnen</string>
     <string name="player_activity_desc">Wenn Spieler beitreten oder gehen</string>
     <string name="game_reminders_desc">Vor Beginn deines Spiels</string>
     <string name="event_updates">Ereignis-Updates</string>
     <string name="event_updates_desc">Wenn sich Ereignisdetails ändern</string>
     <string name="payment_reminders">Zahlungserinnerungen</string>
     <string name="post_game_results_desc">Ergebnisse und Zusammenfassung nach dem Spiel</string>
+    <string name="invite_opt_out_label">Lade mich nicht zu diesem Spiel ein</string>
+    <string name="invite_opt_out_desc">Pausiert Einladungen, Vorschläge und Erinnerungen für dieses Spiel. Du bleibst auf der Spielerliste.</string>
     <string name="notification_tiers_title">So funktionieren Benachrichtigungen</string>
     <string name="notification_tiers_desc">Du erhältst Ereignis-Updates (Absagen, Einladungen, freie Plätze) für alle Spiele, denen du folgst. Spieldetails (Spieleraktivität, Erinnerungen, Ergebnisse) werden nur gesendet, wenn du spielst — oder du aktivierst \"Alle Updates\" pro Ereignis.</string>
 
@@ -309,6 +314,14 @@
     <string name="duration">Dauer</string>
     <string name="allow_manual_rating">Manuelle Wertung erlauben</string>
     <string name="show_competitive_data">Wettbewerbsdaten anzeigen</string>
+    <string name="competition_settings">Wettbewerb</string>
+    <string name="competitive_rankings">Wettbewerbs-Ränge</string>
+    <string name="competitive_rankings_desc">Ein Schalter aktiviert Skill-Ratings, ausgeglichene Teams, Saison-Rang und MVP-Einfluss.</string>
+    <string name="advanced_settings">Erweitert</string>
+    <string name="rank_decay">Rang für inaktive Spieler verringern</string>
+    <string name="inactive_rank_behavior">Wenn ein Spieler inaktiv ist oder austritt</string>
+    <string name="inactive_rank_freeze">Einfrieren</string>
+    <string name="inactive_rank_reset">Zurücksetzen</string>
     <string name="mvp_voting">MVP-Abstimmung</string>
     <string name="mvp_elo">MVP-ELO</string>
     <string name="elo_ratings">ELO-Bewertungen</string>
@@ -412,4 +425,24 @@
     <string name="match_events_team_one">Team 1</string>
     <string name="match_events_team_two">Team 2</string>
     <string name="match_events_top_scorers">Torschützen</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Anmeldemethoden</string>
+    <string name="linked_signins_desc">Passwort und Social-Konten, mit denen du dich anmelden kannst.</string>
+    <string name="credential_password">Passwort</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Google verknüpfen</string>
+    <string name="unlink_credential_btn">Entfernen</string>
+    <string name="credential_unlinked">Anmeldemethode entfernt.</string>
+    <string name="credential_unlink_error">Anmeldemethode konnte nicht entfernt werden.</string>
+    <string name="credential_load_error">Anmeldemethoden konnten nicht geladen werden.</string>
+    <string name="link_google_success">Google mit deinem Konto verknüpft.</string>
+    <string name="link_google_error">Google konnte nicht verknüpft werden. Versuche es erneut.</string>
+    <string name="only_credential_hint">Dies ist deine einzige Anmeldemethode.</string>
+    <string name="merge_confirm_title">Konten zusammenführen?</string>
+    <string name="merge_confirm_desc">Diese Google-Anmeldung gehört zu einem anderen Convocados-Konto (%1$s, erstellt am %2$s). Zusammenführen verschiebt die Daten in dieses Konto, meldet andere Geräte ab und kann nicht rückgängig gemacht werden.</string>
+    <string name="merge_confirm_btn">Konten zusammenführen</string>
+    <string name="merge_cancel_btn">Abbrechen</string>
+    <string name="merge_success">Konten zusammengeführt.</string>
+    <string name="merge_error">Konten konnten nicht zusammengeführt werden.</string>
 </resources>
