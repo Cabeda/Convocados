@@ -62,6 +62,9 @@ interface SeedOpts {
   ownerId?: string | null;
   status?: string;
   maxPlayers?: number;
+  sport?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 async function seedEvent(opts: SeedOpts = {}) {
@@ -73,6 +76,9 @@ async function seedEvent(opts: SeedOpts = {}) {
       maxPlayers: opts.maxPlayers ?? 10,
       isPublic: opts.isPublic ?? false,
       ownerId: opts.ownerId ?? null,
+      ...(opts.sport ? { sport: opts.sport } : {}),
+      ...(opts.latitude !== undefined ? { latitude: opts.latitude } : {}),
+      ...(opts.longitude !== undefined ? { longitude: opts.longitude } : {}),
     },
   });
   if (opts.status) {
@@ -176,5 +182,42 @@ describe("GET /api/me/home", () => {
     const res = await GET(ctx());
     const body = await res.json();
     expect(body.discover).toHaveLength(3);
+  });
+
+  it("ranks discover by distance to the user's inferred region", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    // The user's own game is in Porto → the inferred origin is Porto.
+    await seedEvent({ title: "Mine", ownerId: user.id, latitude: 41.15, longitude: -8.61 });
+    // Far but sooner (Lisbon); near but later (Porto).
+    await seedEvent({ title: "Far Sooner", isPublic: true, dateTime: new Date(Date.now() + DAY), latitude: 38.72, longitude: -9.14 });
+    await seedEvent({ title: "Near Later", isPublic: true, dateTime: new Date(Date.now() + 3 * DAY), latitude: 41.16, longitude: -8.62 });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Near Later", "Far Sooner"]);
+  });
+
+  it("prefers the sports the user plays (distance bonus)", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    await seedEvent({ title: "My Padel", ownerId: user.id, sport: "padel", latitude: 41.15, longitude: -8.61 });
+    // ~0 km, but not a sport the user plays.
+    await seedEvent({ title: "Football Near", isPublic: true, sport: "football-5v5", latitude: 41.15, longitude: -8.61 });
+    // ~2.8 km, but the user's sport → ranks first via the match bonus.
+    await seedEvent({ title: "Padel Farther", isPublic: true, sport: "padel", latitude: 41.17, longitude: -8.63 });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Padel Farther", "Football Near"]);
+  });
+
+  it("falls back to soonest-first when the user has no located games", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    await seedEvent({ title: "Mine", ownerId: user.id });
+    await seedEvent({ title: "Sooner", isPublic: true, dateTime: new Date(Date.now() + DAY) });
+    await seedEvent({ title: "Later", isPublic: true, dateTime: new Date(Date.now() + 4 * DAY) });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Sooner", "Later"]);
   });
 });

@@ -59,7 +59,10 @@ export const GET: APIRoute = async ({ request }) => {
   };
 
   const [involved, liveEvents, upcomingEvents] = await Promise.all([
-    prisma.event.findMany({ where: involvedWhere, select: { id: true } }),
+    prisma.event.findMany({
+      where: involvedWhere,
+      select: { id: true, latitude: true, longitude: true, sport: true },
+    }),
     // In-progress games have a kickoff in the past, so they need their own query
     // (the upcoming query filters dateTime >= now).
     prisma.event.findMany({
@@ -99,10 +102,25 @@ export const GET: APIRoute = async ({ request }) => {
     })),
   );
 
+  // Inferred home region + preferred sports, so Discover feels local and
+  // relevant without ever asking the user (ADR 0041). Located games give a
+  // centroid; all involved games give the sport set. Both degrade gracefully:
+  // no located games → ranking falls back to soonest-first.
+  const located = involved.filter((e) => e.latitude !== null && e.longitude !== null);
+  const origin = located.length > 0
+    ? {
+        lat: located.reduce((sum, e) => sum + (e.latitude as number), 0) / located.length,
+        lng: located.reduce((sum, e) => sum + (e.longitude as number), 0) / located.length,
+      }
+    : undefined;
+  const preferredSports = [...new Set(involved.map((e) => e.sport))];
+
   const discover = await findDiscoverableUpcomingEvents({
     take: DISCOVER_LIMIT,
     excludeEventIds: involved.map((e) => e.id),
     now,
+    origin,
+    preferredSports,
   });
 
   return Response.json({ upNext, discover });

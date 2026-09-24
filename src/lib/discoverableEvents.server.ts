@@ -73,20 +73,83 @@ export function mapDiscoverableEvent(e: DiscoverableEventRow): DiscoverableEvent
 }
 
 /**
- * Fetch the soonest upcoming Discoverable Events, soonest-first, optionally
- * excluding a set of Event ids and capped at `take`.
+ * Fetch upcoming Discoverable Events, optionally excluding a set of Event ids
+ * and capped at `take`.
+ *
+ * Ordering is *time-first* by default (soonest kickoff). When the caller knows
+ * the user's `origin` (inferred home region) and/or `preferredSports`, the
+ * result is re-ranked so the strip feels local and relevant:
+ *   - distance to `origin` ascending, with a bonus that makes a preferred-sport
+ *     Event rank as if it were `SPORT_MATCH_BONUS_KM` closer;
+ *   - without an origin, preferred-sport Events first, then soonest.
+ *
+ * The pool is capped before ranking (there is no geo index in SQLite); a user
+ * with more than `RANK_POOL` future public Events may not see the absolute
+ * nearest, which is fine for a 3-item glimpse.
  */
+const RANK_POOL = 100;
+const SPORT_MATCH_BONUS_KM = 25;
+
+/** Great-circle distance between two coordinates, in kilometres. */
+export function haversineKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function rankDiscover(
+  events: DiscoverableEventSummary[],
+  origin: { lat: number; lng: number } | undefined,
+  preferredSports: string[],
+): DiscoverableEventSummary[] {
+  const sports = new Set(preferredSports);
+  const kickoff = (e: DiscoverableEventSummary) => new Date(e.dateTime).getTime();
+
+  const scored = events.map((e) => {
+    const distanceKm =
+      origin && e.latitude !== null && e.longitude !== null
+        ? haversineKm(origin, { lat: e.latitude, lng: e.longitude })
+        : null;
+    const matchesSport = sports.size === 0 || sports.has(e.sport);
+    return { e, distanceKm, matchesSport };
+  });
+
+  scored.sort((a, b) => {
+    if (origin) {
+      const scoreA = (a.distanceKm ?? Infinity) - (a.matchesSport ? SPORT_MATCH_BONUS_KM : 0);
+      const scoreB = (b.distanceKm ?? Infinity) - (b.matchesSport ? SPORT_MATCH_BONUS_KM : 0);
+      if (scoreA !== scoreB) return scoreA - scoreB;
+    } else if (a.matchesSport !== b.matchesSport) {
+      return a.matchesSport ? -1 : 1;
+    }
+    return kickoff(a.e) - kickoff(b.e);
+  });
+
+  return scored.map((s) => s.e);
+}
+
 export async function findDiscoverableUpcomingEvents(opts: {
   take?: number;
   excludeEventIds?: string[];
   now?: Date;
+  origin?: { lat: number; lng: number };
+  preferredSports?: string[];
 } = {}): Promise<DiscoverableEventSummary[]> {
-  const { take = 3, excludeEventIds = [], now = new Date() } = opts;
+  const { take = 3, excludeEventIds = [], now = new Date(), origin, preferredSports = [] } = opts;
   const events = await prisma.event.findMany({
     where: discoverableUpcomingWhere(now, excludeEventIds),
     include: { players: { orderBy: { order: "asc" } } },
     orderBy: { dateTime: "asc" },
-    take,
+    take: Math.max(take, RANK_POOL),
   });
-  return events.map(mapDiscoverableEvent);
+  const mapped = events.map(mapDiscoverableEvent);
+  return rankDiscover(mapped, origin, preferredSports).slice(0, take);
 }
