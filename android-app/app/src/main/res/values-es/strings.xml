@@ -6,6 +6,13 @@
 
     <string name="create_game">Crear un partido</string>
     <string name="my_games">Mis partidos</string>
+    <string name="home">Inicio</string>
+    <string name="up_next">Próximos</string>
+    <string name="discover">Descubrir</string>
+    <string name="browse_all_public_games">Ver todos los partidos públicos</string>
+    <string name="no_upcoming_games">Aún no hay partidos próximos.</string>
+    <string name="no_discover_games">No hay partidos públicos para unirse ahora mismo.</string>
+    <string name="live_now">En juego</string>
     <string name="players">Jugadores</string>
     <string name="teams">Equipos</string>
     <string name="randomize_teams">Sortear equipos</string>
@@ -73,7 +80,7 @@
     <string name="public_games">Partidos públicos</string>
     <string name="profile">Perfil</string>
     <string name="stats">Estadísticas</string>
-    <string name="games_tab">Partidos</string>
+    <string name="games_tab">Inicio</string>
     <string name="live_indicator_pulsing">Indicador en directo (parpadeando)</string>
     <string name="live_indicator_steady">Indicador en directo (fijo)</string>
     <string name="elo_changes">Cambios de ELO</string>
@@ -376,6 +383,21 @@
     <string name="save_photo">Guardar foto</string>
     <string name="zoom">Zoom</string>
     <string name="photo_load_error">No se pudo cargar la imagen.</string>
+    <string name="crew_proposals">Propuestas de equipo</string>
+    <string name="crew_proposal_review_queue">Revisión de propuestas</string>
+    <string name="crew_proposal_name">Nombre del equipo</string>
+    <string name="propose_crew">Proponer un equipo</string>
+    <string name="propose_crew_description">Elige 3–5 participantes de la temporada y envía tu equipo para aprobación.</string>
+    <string name="select_crew_members">Seleccionar miembros</string>
+    <string name="submit_crew_proposal">Enviar propuesta</string>
+    <string name="proposal_proposed_by">Propuesto por %1$s</string>
+    <string name="your_crew_proposals">Tus propuestas</string>
+    <string name="approve_proposal">Aprobar</string>
+    <string name="reject_proposal">Rechazar</string>
+    <string name="rejection_reason">Motivo del rechazo (opcional)</string>
+    <string name="proposal_status_pending">Pendiente</string>
+    <string name="proposal_status_approved">Aprobada</string>
+    <string name="proposal_status_rejected">Rechazada</string>
     <string name="season_rank">Clasificación de la Temporada</string>
     <string name="season_rank_subtitle">Los partidos amistosos no afectan a la Clasificación · %1$d partidos válidos</string>
     <string name="season_rank_provisional">Provisional</string>

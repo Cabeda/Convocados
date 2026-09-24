@@ -105,14 +105,14 @@ export const openApiSpec = {
     },
     "/api/events/public": {
       get: {
-        summary: "List public events",
+        summary: "List upcoming public events (soonest first)",
         tags: ["Events"],
         security: anonymous,
         parameters: [
           { name: "sport", in: "query", schema: { type: "string" }, description: "Filter by sport" },
           { name: "hasSpots", in: "query", schema: { type: "boolean" }, description: "Only events with available spots" },
         ],
-        responses: { "200": { description: "List of public events" } },
+        responses: { "200": { description: "List of upcoming public events" } },
       },
     },
     "/api/events/{id}": {
@@ -327,6 +327,28 @@ export const openApiSpec = {
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam, { name: "membershipId", in: "path" as const, required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Member removed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/crew-proposals": {
+      get: {
+        summary: "List Season Crew proposals and eligible candidates",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Proposals and candidates" }, ...errorResponses },
+      },
+      post: {
+        summary: "Submit a Season Crew proposal",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "201": { description: "Proposal created" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}": {
+      patch: {
+        summary: "Approve or reject a Season Crew proposal (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam, { name: "proposalId", in: "path" as const, required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Proposal reviewed" }, ...errorResponses },
       },
     },
     "/api/events/{id}/seasons/{seasonId}/crews": {
@@ -1038,6 +1060,13 @@ export const openApiSpec = {
         summary: "Get authenticated user's games",
         tags: ["Users"],
         responses: { "200": { description: "Owned and joined games" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/home": {
+      get: {
+        summary: "Signed-in Home feed: next games (Up next) + a glimpse of joinable public games (Discover)",
+        tags: ["Users"],
+        responses: { "200": { description: "Up next + Discover" }, "401": { description: "Unauthorized" } },
       },
     },
     "/api/me/app-open": {

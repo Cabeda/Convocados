@@ -7,6 +7,13 @@
     <!-- Shared keys from web i18n -->
     <string name="create_game">Create a Game</string>
     <string name="my_games">My Games</string>
+    <string name="home">Home</string>
+    <string name="up_next">Up next</string>
+    <string name="discover">Discover</string>
+    <string name="browse_all_public_games">Browse all public games</string>
+    <string name="no_upcoming_games">No upcoming games yet.</string>
+    <string name="no_discover_games">No public games to join right now.</string>
+    <string name="live_now">Live now</string>
     <string name="players">Players</string>
     <string name="teams">Teams</string>
     <string name="randomize_teams">Randomize teams</string>
@@ -438,6 +445,21 @@
     <string name="season_status_cancelled">Cancelled</string>
     <string name="season_join">Join Season</string>
     <string name="season_leave">Leave Season</string>
+    <string name="crew_proposals">Crew proposals</string>
+    <string name="crew_proposal_review_queue">Crew proposal review</string>
+    <string name="crew_proposal_name">Crew name</string>
+    <string name="propose_crew">Propose a Crew</string>
+    <string name="propose_crew_description">Choose 3–5 Season participants and submit your Crew for admin approval.</string>
+    <string name="select_crew_members">Select Crew members</string>
+    <string name="submit_crew_proposal">Submit Crew proposal</string>
+    <string name="proposal_proposed_by">Proposed by %1$s</string>
+    <string name="your_crew_proposals">Your Crew proposals</string>
+    <string name="approve_proposal">Approve</string>
+    <string name="reject_proposal">Reject</string>
+    <string name="rejection_reason">Rejection reason (optional)</string>
+    <string name="proposal_status_pending">Pending</string>
+    <string name="proposal_status_approved">Approved</string>
+    <string name="proposal_status_rejected">Rejected</string>
     <string name="season_manage">Manage</string>
     <string name="season_activate">Start Season</string>
     <string name="season_complete">Complete Season</string>

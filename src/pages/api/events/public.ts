@@ -1,13 +1,14 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { parsePaginationParams, buildPaginatedResponse } from "../../../lib/pagination";
+import { discoverableUpcomingWhere, mapDiscoverableEvent } from "../../../lib/discoverableEvents.server";
 
 export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
   const { limit, cursor } = parsePaginationParams(url);
 
   const events = await prisma.event.findMany({
-    where: { isPublic: true, archivedAt: null },
+    where: discoverableUpcomingWhere(),
     include: {
       players: { orderBy: { order: "asc" } },
     },
@@ -16,24 +17,5 @@ export const GET: APIRoute = async ({ request }) => {
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  const mapped = events.map((e) => ({
-    id: e.id,
-    url: `/events/${e.id}`,
-    title: e.title,
-    location: e.location,
-    latitude: e.latitude,
-    longitude: e.longitude,
-    sport: e.sport,
-    dateTime: e.dateTime.toISOString(),
-    timezone: e.timezone,
-    maxPlayers: e.maxPlayers,
-    playerCount: e.players.length,
-    spotsLeft: Math.max(0, e.maxPlayers - e.players.length),
-    isRecurring: e.isRecurring,
-    source: e.source,
-    ownerId: e.ownerId,
-    playtomicTenantName: e.playtomicTenantName,
-  }));
-
-  return Response.json(buildPaginatedResponse(mapped, limit));
+  return Response.json(buildPaginatedResponse(events.map(mapDiscoverableEvent), limit));
 };

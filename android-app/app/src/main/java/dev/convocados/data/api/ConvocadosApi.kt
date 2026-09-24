@@ -12,6 +12,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     // ── User ──────────────────────────────────────────────────────────────
     suspend fun fetchMyGames(): MyGamesResponse = client.get("/api/me/games")
+
+    /** ADR 0041: signed-in Home feed — next games + a glimpse of discoverable games. */
+    suspend fun fetchHome(): HomeResponse = client.get("/api/me/home")
     suspend fun fetchMyStats(): PlayerStats = client.get("/api/me/stats")
     suspend fun fetchUserInfo(): UserProfile = client.get("/api/me/profile")
 
@@ -64,6 +67,17 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun recommendCrews(eventId: String, seasonId: String, crewCount: Int): RecommendCrewsResponse =
         client.post("/api/events/$eventId/seasons/$seasonId/crews/recommend", RecommendCrewsRequest(crewCount))
+
+    // ── Crew proposals (web parity, GH #923) ──────────────────────────────
+
+    suspend fun fetchCrewProposals(eventId: String, seasonId: String): CrewProposalsResponse =
+        client.get("/api/events/$eventId/seasons/$seasonId/crew-proposals")
+
+    suspend fun submitCrewProposal(eventId: String, seasonId: String, name: String, membershipIds: List<String>): CrewProposalResponse =
+        client.post("/api/events/$eventId/seasons/$seasonId/crew-proposals", SubmitCrewProposalRequest(name, membershipIds))
+
+    suspend fun decideCrewProposal(eventId: String, seasonId: String, proposalId: String, decision: String, rejectionReason: String? = null): CrewProposalResponse =
+        client.patch("/api/events/$eventId/seasons/$seasonId/crew-proposals/$proposalId", CrewProposalDecisionRequest(decision, rejectionReason))
 
     suspend fun deleteCrew(eventId: String, seasonId: String, crewId: String): OkResponse =
         client.delete("/api/events/$eventId/seasons/$seasonId/crews/$crewId", null)

@@ -36,6 +36,7 @@ function parseAndroidEndpoints(): EndpointCall[] {
       .replace(/\$historyId/g, "{historyId}")
       .replace(/\$seasonId/g, "{seasonId}")
       .replace(/\$crewId/g, "{crewId}")
+      .replace(/\$proposalId/g, "{proposalId}")
       .replace(/\$membershipId/g, "{membershipId}")
       .replace(/\$userId/g, "{id}")
       .replace(/\$token/g, "{token}")

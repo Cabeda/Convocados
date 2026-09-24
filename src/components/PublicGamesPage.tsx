@@ -1,5 +1,6 @@
-/* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import { useState, useMemo, useEffect, useCallback } from "react";
+import type * as ReactLeaflet from "react-leaflet";
+import type * as Leaflet from "leaflet";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button,
   CircularProgress, Grid, ToggleButtonGroup, ToggleButton,
@@ -278,31 +279,48 @@ function TableView({ events, locale, t }: {
   );
 }
 
-// ── Map view ──────────────────────────────────────────────────────────────────
+// ── Map view (bundled Leaflet — no CDN, so it works under the app CSP) ─────────
 
 interface GeoEvent extends PublicEvent {
   lat: number;
   lng: number;
 }
 
+interface LeafletBundle {
+  MapContainer: typeof ReactLeaflet.MapContainer;
+  TileLayer: typeof ReactLeaflet.TileLayer;
+  Marker: typeof ReactLeaflet.Marker;
+  Popup: typeof ReactLeaflet.Popup;
+  divIcon: typeof Leaflet.divIcon;
+}
+
 function MapView({ events, t }: {
   events: PublicEvent[];
   t: TFunction;
 }) {
-  const [userPos, setUserPos] = useState<[number, number] | null>(null);
-  const [geoError, setGeoError] = useState(false);
+  const [bundle, setBundle] = useState<LeafletBundle | null>(null);
 
-  // Request user location
+  // Lazy-load Leaflet + its CSS through the bundler so scripts/styles are served
+  // from 'self'. (The previous srcdoc iframe pulled Leaflet from unpkg, which the
+  // app CSP forbids — and a srcdoc document inherits the parent CSP, so the map
+  // silently never loaded.)
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setGeoError(true);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setUserPos([pos.coords.latitude, pos.coords.longitude]),
-      () => setGeoError(true),
-      { timeout: 8000 },
-    );
+    let cancelled = false;
+    Promise.all([
+      import("react-leaflet"),
+      import("leaflet"),
+      import("leaflet/dist/leaflet.css"),
+    ]).then(([rl, L]) => {
+      if (cancelled) return;
+      setBundle({
+        MapContainer: rl.MapContainer,
+        TileLayer: rl.TileLayer,
+        Marker: rl.Marker,
+        Popup: rl.Popup,
+        divIcon: L.divIcon,
+      });
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   // Use stored coordinates — no client-side geocoding needed
@@ -313,24 +331,59 @@ function MapView({ events, t }: {
     [events],
   );
 
-  const center = userPos ?? (geoEvents.length > 0 ? [geoEvents[0].lat, geoEvents[0].lng] as [number, number] : [39.5, -8.0] as [number, number]);
+  // Centre on the average of the pins so every game is roughly in frame.
+  const center: [number, number] = geoEvents.length > 0
+    ? [
+        geoEvents.reduce((s, e) => s + e.lat, 0) / geoEvents.length,
+        geoEvents.reduce((s, e) => s + e.lng, 0) / geoEvents.length,
+      ]
+    : [41.15, -8.63];
+
+  // A divIcon pin — no image assets, so nothing can be blocked by img-src.
+  const pinIcon = useMemo(() => {
+    if (!bundle) return null;
+    return bundle.divIcon({
+      className: "",
+      html: '<div style="width:16px;height:16px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#1b6b4a;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 16],
+      popupAnchor: [0, -16],
+    });
+  }, [bundle]);
 
   return (
     <Stack spacing={1}>
-      {geoError && (
-        <Alert severity="info" sx={{ borderRadius: 2 }}>
-          {t("mapPermissionDenied")}
-        </Alert>
-      )}
       <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden", height: 450 }}>
-        <iframe
-          title="Events map"
-          width="100%"
-          height="100%"
-          style={{ border: 0 }}
-          sandbox="allow-scripts allow-top-navigation"
-          srcDoc={buildMapHtml(center, geoEvents, t)}
-        />
+        {bundle && pinIcon ? (
+          <bundle.MapContainer
+            center={center}
+            zoom={geoEvents.length > 0 ? 12 : 6}
+            style={{ height: "100%", width: "100%" }}
+            scrollWheelZoom
+          >
+            <bundle.TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            />
+            {geoEvents.map((ev) => {
+              const sportPreset = getSportPreset(ev.sport);
+              return (
+                <bundle.Marker key={ev.id} position={[ev.lat, ev.lng]} icon={pinIcon}>
+                  <bundle.Popup>
+                    <strong>{ev.title}</strong><br />
+                    {t(sportPreset.labelKey as Parameters<typeof t>[0])} — {ev.playerCount}/{ev.maxPlayers}<br />
+                    {ev.location ? <>{ev.location}<br /></> : null}
+                    <a href={`/events/${ev.id}`}>{t("joinGame")}</a>
+                  </bundle.Popup>
+                </bundle.Marker>
+              );
+            })}
+          </bundle.MapContainer>
+        ) : (
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+            <CircularProgress />
+          </Box>
+        )}
       </Paper>
       {geoEvents.length === 0 && (
         <Alert severity="warning" sx={{ borderRadius: 2 }}>
@@ -339,44 +392,6 @@ function MapView({ events, t }: {
       )}
     </Stack>
   );
-}
-
-function buildMapHtml(
-  center: [number, number],
-  events: GeoEvent[],
-  t: TFunction,
-): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-
-  // Use an OpenStreetMap embed with markers via a data URI with Leaflet
-  const html = `<!DOCTYPE html>
-<html><head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>html,body,#map{margin:0;padding:0;width:100%;height:100%}</style>
-</head><body>
-<div id="map"></div>
-<script>
-var map=L.map('map').setView([${center[0]},${center[1]}],${events.length > 0 ? 10 : 5});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  attribution:'&copy; OpenStreetMap contributors',maxZoom:18
-}).addTo(map);
-${events.map((ev) => {
-    const sportPreset = getSportPreset(ev.sport);
-    const title = ev.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-    const sportLabel = t(sportPreset.labelKey as Parameters<typeof t>[0]);
-    const joinLabel = t("joinGame");
-    const eventUrl = `${origin}/events/${ev.id}`;
-    const popupContent = `<b>${title}</b><br/>${sportLabel} — ${ev.playerCount}/${ev.maxPlayers}<br/><a href="#" onclick="window.top.location.href='${eventUrl}';return false;">${joinLabel}</a>`;
-    return `L.marker([${ev.lat},${ev.lng}]).addTo(map).bindPopup('${popupContent.replace(/'/g, "\\'")}');`;
-  }).join("\n")}
-${events.length > 1 ? `map.fitBounds([${events.map((e) => `[${e.lat},${e.lng}]`).join(",")}],{padding:[30,30]});` : ""}
-</script>
-</body></html>`;
-
-  return html;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────

@@ -402,7 +402,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
             <Typography
               variant="h6"
               component="a"
-              href="/"
+              href={session?.user ? "/dashboard" : "/"}
               sx={{
                 flexGrow: 1, fontWeight: 700, textDecoration: "none", color: "inherit",
                 "&:hover": { color: theme.palette.primary.main },

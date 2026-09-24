@@ -1,6 +1,7 @@
 import {
   Box, Typography, Stack, useTheme, useMediaQuery, Chip, Button,
 } from "@mui/material";
+import { useEffect } from "react";
 import AndroidIcon from "@mui/icons-material/Android";
 import CasinoIcon from "@mui/icons-material/Casino";
 import PaymentsIcon from "@mui/icons-material/Payments";
@@ -13,6 +14,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import CreateEventForm from "./CreateEventForm";
 import AppsSection from "./AppsSection";
 import { useT } from "~/lib/useT";
+import { useSession } from "~/lib/auth.client";
 
 const STORE_URL = "https://play.google.com/store/apps/details?id=com.cabeda.Convocados";
 
@@ -148,6 +150,19 @@ export default function LandingPage() {
 }
 
 export function LandingPageWithProviders() {
+  const { data: session, isPending } = useSession();
+
+  // Signed-in users get the Home surface, not the marketing landing. Keep the
+  // page statically prerendered for anonymous/SEO visitors (ADR 0041); this
+  // bounce is client-side because `/` has `prerender = true`.
+  useEffect(() => {
+    if (!isPending && session?.user) {
+      window.location.replace("/dashboard");
+    }
+  }, [isPending, session?.user]);
+
+  if (session?.user) return null;
+
   return (
     <ThemeModeProvider>
       <ResponsiveLayout>

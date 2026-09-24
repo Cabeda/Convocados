@@ -6,6 +6,13 @@
 
     <string name="create_game">Créer un match</string>
     <string name="my_games">Mes matchs</string>
+    <string name="home">Accueil</string>
+    <string name="up_next">À venir</string>
+    <string name="discover">Découvrir</string>
+    <string name="browse_all_public_games">Voir tous les matchs publics</string>
+    <string name="no_upcoming_games">Aucun match à venir pour l\'instant.</string>
+    <string name="no_discover_games">Aucun match public à rejoindre pour le moment.</string>
+    <string name="live_now">En direct</string>
     <string name="players">Joueurs</string>
     <string name="teams">Équipes</string>
     <string name="randomize_teams">Tirer les équipes au sort</string>
@@ -73,7 +80,7 @@
     <string name="public_games">Matchs publics</string>
     <string name="profile">Profil</string>
     <string name="stats">Statistiques</string>
-    <string name="games_tab">Matchs</string>
+    <string name="games_tab">Accueil</string>
     <string name="live_indicator_pulsing">Indicateur en direct (pulsation)</string>
     <string name="live_indicator_steady">Indicateur en direct (fixe)</string>
     <string name="elo_changes">Variations d\'ELO</string>
@@ -376,6 +383,21 @@
     <string name="save_photo">Enregistrer la photo</string>
     <string name="zoom">Zoom</string>
     <string name="photo_load_error">Impossible de charger l\'image.</string>
+    <string name="crew_proposals">Propositions d\'équipe</string>
+    <string name="crew_proposal_review_queue">Révision des propositions</string>
+    <string name="crew_proposal_name">Nom de l\'équipe</string>
+    <string name="propose_crew">Proposer une équipe</string>
+    <string name="propose_crew_description">Choisis 3 à 5 participants de la saison et soumets ton équipe pour approbation.</string>
+    <string name="select_crew_members">Sélectionner les membres</string>
+    <string name="submit_crew_proposal">Soumettre la proposition</string>
+    <string name="proposal_proposed_by">Proposé par %1$s</string>
+    <string name="your_crew_proposals">Tes propositions</string>
+    <string name="approve_proposal">Approuver</string>
+    <string name="reject_proposal">Rejeter</string>
+    <string name="rejection_reason">Motif du rejet (facultatif)</string>
+    <string name="proposal_status_pending">En attente</string>
+    <string name="proposal_status_approved">Approuvée</string>
+    <string name="proposal_status_rejected">Rejetée</string>
     <string name="season_rank">Classement de la Saison</string>
     <string name="season_rank_subtitle">Les matchs amicaux n\'affectent pas le Classement · %1$d matchs comptés</string>
     <string name="season_rank_provisional">Provisoire</string>
