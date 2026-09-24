@@ -4,7 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
@@ -13,6 +15,8 @@ import dev.convocados.wear.data.auth.WearGoogleSignIn
 import dev.convocados.wear.data.auth.WearRestoreCredentialCoordinator
 import dev.convocados.wear.data.auth.WearTokenStore
 import dev.convocados.wear.data.local.QuickGameStore
+import dev.convocados.wear.ui.ongoing.OngoingLaunch
+import dev.convocados.wear.ui.ongoing.WearOngoingActivity
 import dev.convocados.wear.ui.screen.auth.AuthScreen
 import dev.convocados.wear.ui.screen.games.GamesScreen
 import dev.convocados.wear.ui.screen.games.GamesViewModel
@@ -42,13 +46,38 @@ fun WearNavigation(
     googleSignIn: WearGoogleSignIn,
     restoreCredentialCoordinator: WearRestoreCredentialCoordinator,
     quickGameStore: QuickGameStore,
+    launch: OngoingLaunch? = null,
+    launchSeq: Int = 0,
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
     val navController = rememberSwipeDismissableNavController()
     val isAuthenticated by tokenStore.isAuthenticated.collectAsState()
     val activeQuickGame by quickGameStore.state.collectAsState()
 
-    val startDestination = if (isAuthenticated) WearRoutes.GAMES else WearRoutes.AUTH
+    // Only the launch at first composition picks the start destination; later
+    // intents (a re-tap of the chip while the app is alive) are navigated below.
+    val initialLaunch = remember { launch }
+    val startDestination = remember {
+        startDestinationFor(isAuthenticated, initialLaunch)
+    }
+
+    LaunchedEffect(launchSeq) {
+        val target = launch ?: return@LaunchedEffect
+        if (!tokenStore.isAuthenticated.value) return@LaunchedEffect
+        when {
+            target.eventId != null -> {
+                if (navController.currentDestination?.route != WearRoutes.SCORE) {
+                    navController.navigate(WearRoutes.score(target.eventId)) { launchSingleTop = true }
+                }
+            }
+            target.quickGame -> {
+                if (navController.currentDestination?.route != WearRoutes.QUICK_SCORE) {
+                    launchQuickGame(navController, "continue", null, null)
+                }
+            }
+        }
+    }
 
     AppScaffold {
         SwipeDismissableNavHost(
@@ -108,6 +137,7 @@ fun WearNavigation(
                         navController.navigate(WearRoutes.teams(eventId))
                     },
                     onFinish = {
+                        WearOngoingActivity.stop(context)
                         navController.popBackStack()
                     },
                 )
@@ -173,6 +203,7 @@ fun WearNavigation(
                     viewModel = viewModel,
                     onEnd = {
                         viewModel.endGame()
+                        WearOngoingActivity.stop(context)
                         navController.popBackStack()
                     },
                     onRestart = {
@@ -190,6 +221,7 @@ fun WearNavigation(
                     viewModel = viewModel,
                     onDone = {
                         if (viewModel.uiState.value.saved) {
+                            WearOngoingActivity.stop(context)
                             finishQuickGame(navController)
                         } else {
                             navController.popBackStack()
@@ -221,6 +253,19 @@ fun WearNavigation(
         }
     }
 }
+
+/**
+ * The start destination for a launch. A live-game or quick-game ongoing chip
+ * deep-links straight into the running session instead of the games list, so
+ * reopening the app resumes scoring.
+ */
+internal fun startDestinationFor(isAuthenticated: Boolean, launch: OngoingLaunch?): String =
+    when {
+        !isAuthenticated -> WearRoutes.AUTH
+        launch?.eventId != null -> WearRoutes.score(launch.eventId)
+        launch?.quickGame == true -> WearRoutes.QUICK_SCORE
+        else -> WearRoutes.GAMES
+    }
 
 /** Return to Games after a successful quick-game save, removing the quick-game flow. */
 internal fun finishQuickGame(navController: androidx.navigation.NavController) {

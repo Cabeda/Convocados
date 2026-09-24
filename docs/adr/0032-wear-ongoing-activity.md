@@ -29,12 +29,25 @@ fit the physical display area.
    `NotificationManagerCompat.notify(...)` itself, otherwise the watch-face
    indicator and the recents chip never render — this was the actual cause of the
    second "Missing ongoing activity" rejection.
-4. **Tiles reference the running session.** The quick-game tile launches the same
-   `WearActivity` entry point as the ongoing activity's touch intent, so the tile
-   carousel always offers a way back into the live session.
-5. **POST_NOTIFICATIONS is requested** on API 33+ at launch, because the ongoing
+4. **Tiles and the chip deep-link into the running session.** The ongoing
+   activity's touch intent and the quick-game tile both carry an `OngoingLaunch`
+   extra (`eventId` or `quickGame`), and `WearActivity` (now `singleTask`) routes
+   the start destination to the live `ScoreScreen` / `QuickScoreScreen` instead
+   of the games list. Opening the app from the chip or tile must *resume the
+   game*, not land on the list — a re-tap while the app is alive is delivered via
+   `onNewIntent` and re-navigates. (Play's tile guidance: tapping an in-progress
+   tile shows the in-progress activity.)
+5. **The status is the live score.** The `OngoingActivity` carries a
+   `Status.TextPart` with the running score, so the chip/recents surface is
+   glanceable rather than a bare icon.
+6. **The indicator outlives the screen.** `RememberOngoingActivity` clears the
+   activity only when the session is no longer live
+   (`shouldClearOngoing(enabled)`), never merely because the score screen left
+   composition. Navigating to Teams/Save mid-game must not drop the indicator;
+   explicit end/save actions stop it.
+7. **POST_NOTIFICATIONS is requested** on API 33+ at launch, because the ongoing
    notification (and therefore the activity indicator) cannot render without it.
-6. **Content stays inside the display.** Wide controls near the top/bottom of a
+8. **Content stays inside the display.** Wide controls near the top/bottom of a
    round display are constrained to the display's inscribed square
    (`ROUND_SAFE_FRACTION` / `roundSafeWidth` / `roundSafeSize`), because
    `ScreenScaffold`'s content padding is a fixed percentage that is not

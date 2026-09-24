@@ -18,6 +18,7 @@ import dev.convocados.wear.data.local.QuickGameStore
 import dev.convocados.wear.data.local.QUICK_SPORT_PADEL
 import dev.convocados.wear.data.local.QUICK_SPORT_TENNIS
 import dev.convocados.wear.ui.WearActivity
+import dev.convocados.wear.ui.ongoing.WearOngoingActivity
 import javax.inject.Inject
 
 private const val COLOR_TEXT = 0xFFFFFFFF.toInt()
@@ -103,7 +104,7 @@ class QuickGameTileService : TileService() {
                     .setClickable(
                         ModifiersBuilders.Clickable.Builder()
                             .setId("quick_game")
-                            .setOnClick(launchApp())
+                            .setOnClick(launchApp(openQuickGame = data.hasGame))
                             .build(),
                     )
                     .build(),
@@ -177,13 +178,21 @@ class QuickGameTileService : TileService() {
             .addContent(text(label, 14f, true, COLOR_ON_PRIMARY))
             .build()
 
-    private fun launchApp(): ActionBuilders.LaunchAction =
-        ActionBuilders.LaunchAction.Builder()
-            .setAndroidActivity(
-                ActionBuilders.AndroidActivity.Builder()
-                    .setPackageName(packageName)
-                    .setClassName(WearActivity::class.java.name)
-                    .build(),
+    private fun launchApp(openQuickGame: Boolean): ActionBuilders.LaunchAction {
+        val activity = ActionBuilders.AndroidActivity.Builder()
+            .setPackageName(packageName)
+            .setClassName(WearActivity::class.java.name)
+        // While a quick game exists, the tile resumes it instead of landing on
+        // the games list — the tile-side reference Play's ongoing-activity gate
+        // expects, and the user's "reopened and it didn't open in the game".
+        if (openQuickGame) {
+            activity.addKeyToExtraMapping(
+                WearOngoingActivity.EXTRA_QUICK_GAME,
+                ActionBuilders.booleanExtra(true),
             )
+        }
+        return ActionBuilders.LaunchAction.Builder()
+            .setAndroidActivity(activity.build())
             .build()
+    }
 }

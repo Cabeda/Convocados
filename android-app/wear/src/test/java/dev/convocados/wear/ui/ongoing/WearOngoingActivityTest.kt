@@ -3,10 +3,14 @@ package dev.convocados.wear.ui.ongoing
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
+import androidx.wear.ongoing.OngoingActivity
+import dev.convocados.wear.ui.WearActivity
 import dev.convocados.wear.util.GameScorePhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -83,5 +87,83 @@ class WearOngoingActivityTest {
         WearOngoingActivity.stop(context)
 
         assertTrue(manager.activeNotifications.isEmpty())
+    }
+
+    // ── Deep link: the chip must resume the live session, not the games list ──
+
+    @Test
+    fun `ongoing launch intent carries the live game event deep link`() {
+        val context = RuntimeEnvironment.getApplication()
+        val intent = ongoingLaunchIntent(context, OngoingLaunch(eventId = "evt-42"))
+
+        assertEquals(WearActivity::class.java.name, intent.component?.className)
+        assertEquals("evt-42", intent.getStringExtra(WearOngoingActivity.EXTRA_EVENT_ID))
+        assertFalse(intent.getBooleanExtra(WearOngoingActivity.EXTRA_QUICK_GAME, false))
+    }
+
+    @Test
+    fun `ongoing launch intent carries the quick game deep link`() {
+        val context = RuntimeEnvironment.getApplication()
+        val intent = ongoingLaunchIntent(context, OngoingLaunch(quickGame = true))
+
+        assertTrue(intent.getBooleanExtra(WearOngoingActivity.EXTRA_QUICK_GAME, true))
+        assertNull(intent.getStringExtra(WearOngoingActivity.EXTRA_EVENT_ID))
+    }
+
+    @Test
+    fun `parseOngoingLaunch round-trips both deep links and ignores a plain launch`() {
+        val context = RuntimeEnvironment.getApplication()
+
+        assertEquals(
+            OngoingLaunch(eventId = "evt-42"),
+            parseOngoingLaunch(ongoingLaunchIntent(context, OngoingLaunch(eventId = "evt-42"))),
+        )
+        assertEquals(
+            OngoingLaunch(quickGame = true),
+            parseOngoingLaunch(ongoingLaunchIntent(context, OngoingLaunch(quickGame = true))),
+        )
+        assertNull(parseOngoingLaunch(Intent(context, WearActivity::class.java)))
+        assertNull(parseOngoingLaunch(null))
+    }
+
+    // ── Status: the surface must show the score, not just an icon ──
+
+    @Test
+    fun `ongoing status carries the live score text`() {
+        val context = RuntimeEnvironment.getApplication()
+        val status = ongoingStatus("Northside 3 – 2 Riverside")
+
+        assertEquals(
+            "Northside 3 – 2 Riverside",
+            status.getText(context, System.currentTimeMillis()).toString(),
+        )
+    }
+
+    @Test
+    fun `show attaches a readable ongoing activity with status and deep link`() {
+        val context = RuntimeEnvironment.getApplication()
+        shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+
+        WearOngoingActivity.show(
+            context,
+            "Live score",
+            "Northside 3 – 2 Riverside",
+            OngoingLaunch(eventId = "evt-42"),
+        )
+
+        val recovered = OngoingActivity.recoverOngoingActivity(context)
+        assertNotNull("the watch face / recents must be able to recover the ongoing activity", recovered)
+        assertEquals(
+            "Northside 3 – 2 Riverside",
+            recovered!!.status?.getText(context, System.currentTimeMillis())?.toString(),
+        )
+    }
+
+    // ── Lifecycle: leaving the screen mid-game must not clear the indicator ──
+
+    @Test
+    fun `ongoing activity is only cleared when the session is no longer live`() {
+        assertFalse("a live game must survive the score screen leaving composition", shouldClearOngoing(true))
+        assertTrue("an ended game clears the indicator", shouldClearOngoing(false))
     }
 }

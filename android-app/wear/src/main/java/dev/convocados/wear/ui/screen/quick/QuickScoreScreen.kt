@@ -30,6 +30,7 @@ import dev.convocados.wear.ui.roundEquatorSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
 import dev.convocados.wear.ui.roundSafeSize
+import dev.convocados.wear.ui.ongoing.OngoingLaunch
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
 import dev.convocados.wear.ui.ongoing.ongoingScoreText
 import dev.convocados.wear.ui.ongoing.shouldShowQuickGameOngoing
@@ -61,6 +62,7 @@ fun QuickScoreScreen(
             stringResource(R.string.team_default_2),
             state.scoreTwo,
         ),
+        launch = OngoingLaunch(quickGame = true),
     )
     if (kickoffMs == null) return // no active quick game; caller handles end
 
