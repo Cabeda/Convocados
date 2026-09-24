@@ -65,7 +65,29 @@ const discover = [
   },
 ];
 
-const homePayload = { upNext, discover };
+const homeActions = [
+  {
+    type: "fill_spots",
+    eventId: "evt-play-1",
+    eventTitle: "Sunday Football",
+    dateTime: new Date(now + 1 * DAY).toISOString(),
+    timezone: "UTC",
+    deadline: new Date(now + 1 * DAY).toISOString(),
+    spotsLeft: 4,
+  },
+  {
+    type: "pay_share",
+    eventId: "evt-play-2",
+    eventTitle: "Midweek Football",
+    dateTime: new Date(now + 2 * DAY).toISOString(),
+    timezone: "UTC",
+    deadline: new Date(now + 2 * DAY).toISOString(),
+    amount: 12.5,
+    currency: "EUR",
+  },
+];
+
+const homePayload = { upNext, discover, actions: homeActions };
 
 const gamesPayload = {
   owned: [
@@ -147,7 +169,7 @@ describe("HomePage — Up next + Discover (ADR 0041)", () => {
     await waitFor(() => {
       expect(screen.getByText("Up next")).toBeInTheDocument();
       expect(screen.getAllByText("Sunday Football").length).toBeGreaterThan(0);
-      expect(screen.getByText("Midweek Football")).toBeInTheDocument();
+      expect(screen.getAllByText("Midweek Football").length).toBeGreaterThan(0);
     });
   });
 
@@ -192,8 +214,17 @@ describe("HomePage — Up next + Discover (ADR 0041)", () => {
     });
   });
 
-  it("falls back to a create CTA when there is nothing to show", async () => {
-    buildFetch({ upNext: [], discover: [] });
+  it("renders the Needs you queue with action labels", async () => {
+    buildFetch();
+    renderWithTheme(<HomePage />);
+    await waitFor(() => {
+      expect(screen.getByText("Needs you")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/invite players/i)).toBeInTheDocument();
+    expect(screen.getByText(/You owe 12.50 EUR/)).toBeInTheDocument();
+  });
+
+  it("falls back to a create CTA when there is nothing to show", async () => {    buildFetch({ upNext: [], discover: [] });
     renderWithTheme(<HomePage />);
     await waitFor(() => {
       expect(screen.getByText("No upcoming games yet.")).toBeInTheDocument();

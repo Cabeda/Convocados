@@ -53,6 +53,8 @@
 |------------|:---:|:-------:|:-------:|
 | Up Next | ✅ | ✅ | ❌ |
 | Discover Strip | ✅ | ✅ | ❌ |
+| Needs You | ✅ | ✅ | ❌ |
+| Add Games Prompt | ✅ | ✅ | ❌ |
 
 ### Create Event
 
@@ -62,6 +64,7 @@
 | Sport Presets | ✅ | ✅ | ❌ |
 | Custom Team Names | ✅ | ✅ | ❌ |
 | Location Map Picker | ✅ | ❌ | ❌ |
+| Quick Add | ✅ | ❌ | ❌ |
 
 ### Event Detail
 

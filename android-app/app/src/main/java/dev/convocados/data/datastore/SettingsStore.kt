@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -88,5 +89,16 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
 
     suspend fun markNotificationPermissionRequested() {
         context.dataStore.edit { it[NOTIF_PERM_REQUESTED_KEY] = true }
+    }
+
+    // #1166: epoch-ms until which the "Add your other games" Home prompt stays
+    // hidden after dismissal (30-day cooldown, mirroring the web prompt).
+    private val ADD_GAMES_PROMPT_DISMISSED_UNTIL_KEY = longPreferencesKey("add_games_prompt_dismissed_until")
+
+    val addGamesPromptDismissedUntil: Flow<Long> =
+        context.dataStore.data.map { it[ADD_GAMES_PROMPT_DISMISSED_UNTIL_KEY] ?: 0L }
+
+    suspend fun setAddGamesPromptDismissedUntil(epochMs: Long) {
+        context.dataStore.edit { it[ADD_GAMES_PROMPT_DISMISSED_UNTIL_KEY] = epochMs }
     }
 }

@@ -269,11 +269,28 @@ data class UpNextGame(
     val status: String = "upcoming",
 )
 
+/** ADR 0041: a "Needs you" item the viewer should act on. */
+@Serializable
+data class HomeAction(
+    val type: String,
+    val eventId: String,
+    val eventTitle: String,
+    val dateTime: String,
+    val timezone: String = "UTC",
+    val deadline: String = "",
+    val spotsLeft: Int? = null,
+    val amount: Double? = null,
+    val currency: String? = null,
+)
+
 /** ADR 0041: signed-in Home feed — next games + a glimpse of discoverable games. */
 @Serializable
 data class HomeResponse(
     val upNext: List<UpNextGame> = emptyList(),
     val discover: List<PublicEvent> = emptyList(),
+    val actions: List<HomeAction> = emptyList(),
+    /** Growth prompt (#1166): viewer plays in events they don't own. */
+    val suggestAddGames: Boolean = false,
 )
 
 @Serializable

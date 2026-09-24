@@ -3,16 +3,19 @@ package dev.convocados.ui.screen.games
 import app.cash.turbine.test
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
+import dev.convocados.data.api.HomeAction
 import dev.convocados.data.api.HomeResponse
 import dev.convocados.data.api.ProfileEvent
 import dev.convocados.data.api.UpNextGame
 import dev.convocados.data.api.UserProfile
+import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.api.UserProfileResponse
 import dev.convocados.data.api.UserPublicProfile
 import dev.convocados.data.repository.EventRepository
 import dev.convocados.data.repository.RecentlyViewedEvent
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,11 +31,13 @@ class GamesViewModelTest {
     private val repository = mockk<EventRepository>(relaxed = true)
     private val api = mockk<ConvocadosApi>(relaxed = true)
     private val tokenStore = mockk<dev.convocados.data.auth.TokenStore>(relaxed = true)
+    private val settingsStore = mockk<SettingsStore>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        every { settingsStore.addGamesPromptDismissedUntil } returns flowOf(0L)
     }
 
     @After
@@ -50,7 +55,7 @@ class GamesViewModelTest {
         coEvery { repository.getEventsByType("followed") } returns flowOf(followed)
         coEvery { repository.getEventsByType("archivedOwned") } returns flowOf(emptyList())
 
-        val viewModel = GamesViewModel(repository, api, tokenStore)
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
 
         viewModel.ownedGames.test {
             // stateIn starts with emptyList() initial value
@@ -66,7 +71,7 @@ class GamesViewModelTest {
     @Test
     fun `refresh calls repository refresh`() = runTest {
         coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
-        val viewModel = GamesViewModel(repository, api, tokenStore)
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
 
         // Let init { refresh() } complete
         advanceUntilIdle()
@@ -97,7 +102,7 @@ class GamesViewModelTest {
             discover = emptyList(),
         )
 
-        val viewModel = GamesViewModel(repository, api, tokenStore)
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
         advanceUntilIdle()
 
         viewModel.home.test {
@@ -108,8 +113,65 @@ class GamesViewModelTest {
     }
 
     @Test
-    fun `home keeps previous value when the api fails (offline degrade)`() = runTest {
+    fun `home exposes the add-games growth prompt flag`() = runTest {
         coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        coEvery { api.fetchHome() } returns HomeResponse(suggestAddGames = true)
+
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
+        advanceUntilIdle()
+
+        assertEquals(true, viewModel.home.value?.suggestAddGames)
+    }
+
+    @Test
+    fun `refresh exposes home actions from the feed`() = runTest {
+        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        coEvery { api.fetchHome() } returns HomeResponse(
+            actions = listOf(
+                HomeAction(
+                    type = "pay_share",
+                    eventId = "ev-1",
+                    eventTitle = "Sunday Football",
+                    dateTime = "2026-08-01T19:00:00Z",
+                    amount = 12.5,
+                    currency = "EUR",
+                ),
+            ),
+        )
+
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
+        advanceUntilIdle()
+
+        assertEquals("pay_share", viewModel.home.value?.actions?.first()?.type)
+    }
+
+        @Test
+    fun `add-games prompt shows when flagged and hides after dismiss`() = runTest {
+        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        coEvery { api.fetchHome() } returns HomeResponse(suggestAddGames = true)
+        coEvery { settingsStore.setAddGamesPromptDismissedUntil(any()) } returns Unit
+
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
+        advanceUntilIdle()
+
+        viewModel.showAddGamesPrompt.test {
+            // stateIn replays its initial false before the combined true lands.
+            val first = awaitItem()
+            val value = if (!first) awaitItem() else first
+            assertEquals(true, value)
+        }
+
+        viewModel.dismissAddGamesPrompt()
+        advanceUntilIdle()
+
+        coVerify { settingsStore.setAddGamesPromptDismissedUntil(any()) }
+        viewModel.showAddGamesPrompt.test {
+            assertEquals(false, awaitItem())
+        }
+    }
+
+    @Test
+    fun `home keeps previous value when the api fails (offline degrade)`() = runTest {        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
         coEvery { api.fetchHome() } returns HomeResponse(
             upNext = listOf(
                 UpNextGame(
@@ -122,7 +184,7 @@ class GamesViewModelTest {
             ),
         )
 
-        val viewModel = GamesViewModel(repository, api, tokenStore)
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
         advanceUntilIdle()
         assertEquals("ev-keep", viewModel.home.value?.upNext?.first()?.id)
 
@@ -141,7 +203,7 @@ class GamesViewModelTest {
         )
         coEvery { repository.recentlyViewed() } returns flowOf(viewed)
 
-        val viewModel = GamesViewModel(repository, api, tokenStore)
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
         advanceUntilIdle()
 
         viewModel.recentlyViewed.test {
@@ -161,7 +223,7 @@ class GamesViewModelTest {
             ),
         )
 
-        val viewModel = GamesViewModel(repository, api, tokenStore)
+        val viewModel = GamesViewModel(repository, api, tokenStore, settingsStore)
         advanceUntilIdle()
 
         viewModel.participatedEvents.test {

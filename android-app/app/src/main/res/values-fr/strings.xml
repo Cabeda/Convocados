@@ -12,6 +12,15 @@
     <string name="browse_all_public_games">Voir tous les matchs publics</string>
     <string name="no_upcoming_games">Aucun match à venir pour l\'instant.</string>
     <string name="no_discover_games">Aucun match public à rejoindre pour le moment.</string>
+    <string name="needs_you">Vous attend</string>
+    <string name="action_fill_spots">%1$d place(s) libre(s) — invitez des joueurs</string>
+    <string name="action_settle_score">Ajoutez le score du dernier match</string>
+    <string name="action_pay_share">Vous devez %1$s</string>
+    <string name="action_vote_mvp">Votez pour le MVP</string>
+    <string name="add_games_prompt_title">Ajoutez vos autres matchs</string>
+    <string name="add_games_prompt_body">Vous jouez avec un autre groupe ? Ajoutez aussi ce match — partagez le lien et tout le monde peut rejoindre.</string>
+    <string name="add_games_cta">Ajouter un match</string>
+    <string name="dismiss">Ignorer</string>
     <string name="live_now">En direct</string>
     <string name="players">Joueurs</string>
     <string name="teams">Équipes</string>

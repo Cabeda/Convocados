@@ -28,6 +28,8 @@ home:
   capabilities:
     up-next: { web: true, android: true, wearos: false }
     discover-strip: { web: true, android: true, wearos: false }
+    needs-you: { web: true, android: true, wearos: false }
+    add-games-prompt: { web: true, android: true, wearos: false }
 
 create-event:
   web: true
@@ -38,6 +40,7 @@ create-event:
     sport-presets: { web: true, android: true, wearos: false }
     custom-team-names: { web: true, android: true, wearos: false }
     location-map-picker: { web: true, android: false, wearos: false }
+    quick-add: { web: true, android: false, wearos: false }
 
 event-detail:
   web: true

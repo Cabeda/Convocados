@@ -5,6 +5,7 @@ import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
 import { getActiveRosterState } from "../../../lib/roster.server";
 import { findDiscoverableUpcomingEvents } from "../../../lib/discoverableEvents.server";
+import { computeHomeActions } from "../../../lib/homeActions.server";
 
 /** Signed-in Home: the soonest few games the user plays/organizes, plus a
  *  glimpse of Discoverable Events they could join. See ADR 0041. */
@@ -123,5 +124,23 @@ export const GET: APIRoute = async ({ request }) => {
     preferredSports,
   });
 
-  return Response.json({ upNext, discover });
+  // "Needs you" — the viewer's own actionable items (fill spots, settle,
+  // pay, vote). Batch, capped, self-clearing. See homeActions.server.ts.
+  const actions = await computeHomeActions(userId, now);
+
+  // Growth prompt (#1166): the viewer plays in an Event they don't own (proof
+  // of other groups), or owns no active events at all. Cheap checks.
+  const [playedElsewhere, ownedActive] = await Promise.all([
+    prisma.event.count({
+      where: {
+        archivedAt: null,
+        ownerId: { not: userId },
+        eventPlayers: { some: { userId } },
+      },
+    }),
+    prisma.event.count({ where: { archivedAt: null, ownerId: userId } }),
+  ]);
+  const suggestAddGames = playedElsewhere > 0 || ownedActive === 0;
+
+  return Response.json({ upNext, discover, actions, suggestAddGames });
 };
