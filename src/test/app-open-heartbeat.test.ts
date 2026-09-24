@@ -9,11 +9,12 @@ vi.mock("~/lib/authenticate.server", () => ({
 
 import { POST } from "~/pages/api/me/app-open";
 
-function ctx() {
+function ctx(body?: unknown) {
   return {
     request: new Request("http://localhost/api/me/app-open", {
       method: "POST",
       headers: { "content-type": "application/json" },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
   } as any;
 }
@@ -42,11 +43,24 @@ describe("POST /api/me/app-open", () => {
     const user = await seedUser();
     mockAuth.mockResolvedValue({ userId: user.id, scopes: [], authMethod: "oauth", clientId: "c1" });
 
-    const res = await POST(ctx());
+    const res = await POST(ctx({ platform: "android" }));
     expect(res.status).toBe(200);
 
     const rows = await prisma.userAppOpen.findMany({ where: { userId: user.id } });
     expect(rows).toHaveLength(1);
+    expect(rows[0].platform).toBe("android");
+  });
+
+  it("records the platform from the body (ios), defaulting to android", async () => {
+    const iosUser = await seedUser();
+    const legacyUser = await seedUser();
+    mockAuth.mockResolvedValueOnce({ userId: iosUser.id, scopes: [], authMethod: "oauth", clientId: "c1" });
+    await POST(ctx({ platform: "ios" }));
+    mockAuth.mockResolvedValueOnce({ userId: legacyUser.id, scopes: [], authMethod: "oauth", clientId: "c1" });
+    await POST(ctx()); // older clients send no body
+
+    expect((await prisma.userAppOpen.findFirstOrThrow({ where: { userId: iosUser.id } })).platform).toBe("ios");
+    expect((await prisma.userAppOpen.findFirstOrThrow({ where: { userId: legacyUser.id } })).platform).toBe("android");
   });
 
   it("is idempotent per UTC day", async () => {

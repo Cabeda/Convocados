@@ -1365,6 +1365,10 @@ model UserAppOpen {
   userId String
   user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   day    DateTime // truncated to date (UTC)
+  // Which client produced this heartbeat: "web" (middleware page navigation),
+  // "android" or "ios" (native POST /api/me/app-open). Null for rows written
+  // before this column existed.
+  platform String?
 
   @@unique([userId, day])
   @@index([userId, day])

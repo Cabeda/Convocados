@@ -20,6 +20,14 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  await recordAppOpen(authCtx.userId);
+  // Platform drives the admin Android/iOS/Web split. Body is optional: older
+  // clients send none and are attributed to "android" (the only native client
+  // when this endpoint shipped); iOS sends "ios".
+  let platform: "android" | "ios" = "android";
+  const body = await request.json().catch(() => null) as { platform?: unknown } | null;
+  const raw = typeof body?.platform === "string" ? body.platform.trim().toLowerCase() : "";
+  if (raw === "ios") platform = "ios";
+
+  await recordAppOpen(authCtx.userId, new Date(), platform);
   return Response.json({ ok: true });
 };

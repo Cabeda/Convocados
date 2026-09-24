@@ -115,7 +115,8 @@ final class APIClient: ObservableObject, @unchecked Sendable {
 
     /// Native app-open heartbeat (GH #1070) — idempotent per UTC day server-side.
     func reportAppOpen() async throws -> OkResponse {
-        try await post("/api/me/app-open")
+        struct Body: Codable { let platform: String }
+        return try await post("/api/me/app-open", body: Body(platform: "ios"))
     }
 
     func fetchEvent(id: String) async throws -> EventDetail {
