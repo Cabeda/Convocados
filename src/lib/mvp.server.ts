@@ -37,6 +37,7 @@ export async function buildMvpSummaries(
   event: MvpSummaryEvent,
   entries: MvpSummaryEntry[],
   session: { user?: { id: string; name?: string | null } } | null,
+  playerNamesByEntry?: Map<string, string[]>,
 ): Promise<Map<string, MvpSummary>> {
   const result = new Map<string, MvpSummary>();
   if (entries.length === 0) return result;
@@ -63,7 +64,8 @@ export async function buildMvpSummaries(
   const namesByEntry = new Map<string, string[]>();
   const allNames = new Set<string>();
   for (const e of entries) {
-    const names = namesFromTeamsSnapshot(e.teamsSnapshot);
+    // Durable Game roster when the caller resolved it (mrcokrf9), snapshot residue otherwise.
+    const names = playerNamesByEntry?.get(e.id) ?? namesFromTeamsSnapshot(e.teamsSnapshot);
     namesByEntry.set(e.id, names);
     for (const n of names) allNames.add(n);
   }

@@ -2,6 +2,7 @@
 
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
+import { withRosterNames } from "./gameRoster.server";
 
 const log = createLogger("priority");
 
@@ -259,7 +260,11 @@ export async function autoPriorityEnroll(eventId: string) {
     maxPercent: event.priorityMaxPercent,
   };
 
-  const eligibility = calculateEligibility(history, players, settings);
+  const eligibility = calculateEligibility(
+    await withRosterNames(eventId, history),
+    players,
+    settings,
+  );
   const ranked = rankAndCap(eligibility.eligible, event.maxPlayers, event.priorityMaxPercent);
 
   if (ranked.length === 0) return;

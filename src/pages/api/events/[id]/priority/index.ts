@@ -9,6 +9,7 @@ import {
 } from "../../../../../lib/priority.server";
 import {} from "../../../../../lib/attendance";
 import { calculateEligibility, rankAndCap } from "../../../../../lib/priority";
+import { withRosterNames } from "../../../../../lib/gameRoster.server";
 
 /** GET — list priority settings, enrollments, and eligibility preview */
 export const GET: APIRoute = async ({ params }) => {
@@ -46,7 +47,11 @@ export const GET: APIRoute = async ({ params }) => {
     maxPercent: event.priorityMaxPercent,
   };
 
-  const eligibility = calculateEligibility(history, players, settings);
+  const eligibility = calculateEligibility(
+    await withRosterNames(event.id, history),
+    players,
+    settings,
+  );
   const ranked = rankAndCap(eligibility.eligible, event.maxPlayers, event.priorityMaxPercent);
 
   return Response.json({

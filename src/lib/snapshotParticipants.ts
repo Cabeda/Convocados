@@ -85,3 +85,17 @@ export function isHistoryParticipant(
 ): boolean {
   return isNameInTeamsSnapshot(history?.teamsSnapshot, name);
 }
+
+/**
+ * Case-insensitive membership test against an already-resolved roster list.
+ * Companion to the snapshot helpers for callers that resolved who-played from
+ * the durable Game roster (mrcokrf9).
+ */
+export function isNameInList(
+  names: readonly string[],
+  name: string | null | undefined,
+): boolean {
+  const needle = normalizeName(name);
+  if (!needle) return false;
+  return names.some((n) => normalizeName(n) === needle);
+}

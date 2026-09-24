@@ -6,6 +6,7 @@ import {
   isHistoryParticipant,
   namesFromTeamsSnapshot,
 } from "../../../../../../lib/snapshotParticipants";
+import { occurrenceRoster } from "../../../../../../lib/gameRoster.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
@@ -116,13 +117,17 @@ export const GET: APIRoute = async ({ params, request }) => {
     }
   }
 
-  // Extract participants from teamsSnapshot for the voting UI
+  // Extract participants from the durable Game roster (snapshot residue as
+  // fallback) for the voting UI (mrcokrf9)
   let participants: Array<{ id: string; name: string; voteCount: number }> = [];
   let eligibleVoters = 0;
-  if (history.teamsSnapshot) {
+  const roster = await occurrenceRoster(params.id ?? "", {
+    dateTime: history.dateTime,
+    teamsSnapshot: history.teamsSnapshot,
+  });
+  if (roster.names.length > 0) {
     try {
-      const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
-      const names = teams.flatMap((t) => t.players.map((p) => p.name));
+      const names = roster.names;
       // Build tally map from votes
       const tally = new Map<string, number>();
       for (const v of votes) {
