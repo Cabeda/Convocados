@@ -29,7 +29,12 @@ import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
+import dev.convocados.wear.ui.roundEquatorSize
+import dev.convocados.wear.ui.roundBezelClip
+import dev.convocados.wear.ui.scoreContentPadding
+import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundSafeSize
+import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
 import dev.convocados.wear.ui.ongoing.ongoingScoreText
 import dev.convocados.wear.ui.ongoing.shouldShowLiveGameOngoing
@@ -78,106 +83,112 @@ fun ScoreScreen(
         text = ongoingScoreText(state.teamOneName, state.scoreOne, state.teamTwoName, state.scoreTwo),
     )
 
-    ScreenScaffold { contentPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding),
-            contentAlignment = Alignment.Center,
-        ) {
-            when {
-                state.isLoading -> {
-                    CircularProgressIndicator()
-                }
-                // Gate by game phase so a game that hasn't started (or has
-                // finished) never shows a dead "Start scoring" button. We
-                // explain why and offer a useful alternative instead.
-                scorePhase == GameScorePhase.NOT_STARTED -> {
-                    OffWindowGameContent(
-                        state = state,
-                        onTeams = onTeams,
-                    )
-                }
-                scorePhase == GameScorePhase.ENDED -> {
-                    EndedGameContent(state = state)
-                }
-                state.history == null -> {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(16.dp),
-                    ) {
-                        Text(
-                            text = state.game?.title ?: stringResource(R.string.score_title),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold { contentPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scoreContentPadding(contentPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    state.isLoading -> {
+                        CircularProgressIndicator()
+                    }
+                    // Gate by game phase so a game that hasn't started (or has
+                    // finished) never shows a dead "Start scoring" button. We
+                    // explain why and offer a useful alternative instead.
+                    scorePhase == GameScorePhase.NOT_STARTED -> {
+                        OffWindowGameContent(
+                            state = state,
+                            onTeams = onTeams,
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (state.isStarting) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                        } else {
-                            Button(
-                                onClick = { viewModel.startGame() },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                                ),
-                            ) {
-                                Text(stringResource(R.string.start_scoring))
+                    }
+                    scorePhase == GameScorePhase.ENDED -> {
+                        EndedGameContent(state = state)
+                    }
+                    state.history == null -> {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(16.dp),
+                        ) {
+                            Text(
+                                text = state.game?.title ?: stringResource(R.string.score_title),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            if (state.isStarting) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            } else {
+                                Button(
+                                    onClick = { viewModel.startGame() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    ),
+                                ) {
+                                    Text(stringResource(R.string.start_scoring))
+                                }
+                            }
+                            state.error?.let { error ->
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = error,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            CompactButton(onClick = onTeams) {
+                                Text(stringResource(R.string.teams_title))
                             }
                         }
-                        state.error?.let { error ->
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = error,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        CompactButton(onClick = onTeams) {
-                            Text(stringResource(R.string.teams_title))
-                        }
                     }
-                }
-                else -> {
-                    if (isAmbient) {
-                        AmbientScoreDisplay(state = state)
-                    } else {
-                        if (state.isTennisScoring) {
-                            TennisScoreEditor(
-                                state = state,
-                                onIncrementOne = viewModel::incrementScoreOne,
-                                onDecrementOne = viewModel::decrementScoreOne,
-                                onIncrementTwo = viewModel::incrementScoreTwo,
-                                onDecrementTwo = viewModel::decrementScoreTwo,
-                                onNextSet = viewModel::advanceSet,
-                                onToggleTiebreak = viewModel::toggleTiebreak,
-                                onTeams = onTeams,
-                                onFinish = onFinish,
-                                onUndo = {
-                                    viewModel.undoLastScore()
-                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                },
-                            )
+                    else -> {
+                        if (isAmbient) {
+                            AmbientScoreDisplay(state = state)
                         } else {
-                            ScoreEditor(
-                                state = state,
-                                onIncrementOne = viewModel::incrementScoreOne,
-                                onDecrementOne = viewModel::decrementScoreOne,
-                                onIncrementTwo = viewModel::incrementScoreTwo,
-                                onDecrementTwo = viewModel::decrementScoreTwo,
-                                onTeams = onTeams,
-                                onFinish = onFinish,
-                                onUndo = {
-                                    viewModel.undoLastScore()
-                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                },
-                            )
+                            if (state.isTennisScoring) {
+                                TennisScoreEditor(
+                                    state = state,
+                                    onIncrementOne = viewModel::incrementScoreOne,
+                                    onDecrementOne = viewModel::decrementScoreOne,
+                                    onIncrementTwo = viewModel::incrementScoreTwo,
+                                    onDecrementTwo = viewModel::decrementScoreTwo,
+                                    onNextSet = viewModel::advanceSet,
+                                    onToggleTiebreak = viewModel::toggleTiebreak,
+                                    onTeams = onTeams,
+                                    onFinish = onFinish,
+                                    onUndo = {
+                                        viewModel.undoLastScore()
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    },
+                                )
+                            } else {
+                                ScoreEditor(
+                                    state = state,
+                                    onIncrementOne = viewModel::incrementScoreOne,
+                                    onDecrementOne = viewModel::decrementScoreOne,
+                                    onIncrementTwo = viewModel::incrementScoreTwo,
+                                    onDecrementTwo = viewModel::decrementScoreTwo,
+                                    onTeams = onTeams,
+                                    onFinish = onFinish,
+                                    onUndo = {
+                                        viewModel.undoLastScore()
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -206,41 +217,47 @@ fun ScoreFixtureContent(
     onToggleTiebreak: () -> Unit = {},
     onUndo: () -> Unit = {},
 ) {
-    ScreenScaffold { contentPadding ->
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(contentPadding),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isAmbient) {
-                AmbientScoreDisplay(state)
-            } else if (state.isTennisScoring) {
-                TennisScoreEditor(
-                    state = state,
-                    onIncrementOne = onIncrementOne,
-                    onDecrementOne = onDecrementOne,
-                    onIncrementTwo = onIncrementTwo,
-                    onDecrementTwo = onDecrementTwo,
-                    onNextSet = onNextSet,
-                    onToggleTiebreak = onToggleTiebreak,
-                    onTeams = onTeams,
-                    onFinish = onFinish,
-                    onUndo = onUndo,
-                    nowOverride = now,
-                )
-            } else {
-                ScoreEditor(
-                    state = state,
-                    onIncrementOne = onIncrementOne,
-                    onDecrementOne = onDecrementOne,
-                    onIncrementTwo = onIncrementTwo,
-                    onDecrementTwo = onDecrementTwo,
-                    onTeams = onTeams,
-                    onFinish = onFinish,
-                    onUndo = onUndo,
-                    nowOverride = now,
-                )
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold { contentPadding ->
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .scoreContentPadding(contentPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isAmbient) {
+                    AmbientScoreDisplay(state)
+                } else if (state.isTennisScoring) {
+                    TennisScoreEditor(
+                        state = state,
+                        onIncrementOne = onIncrementOne,
+                        onDecrementOne = onDecrementOne,
+                        onIncrementTwo = onIncrementTwo,
+                        onDecrementTwo = onDecrementTwo,
+                        onNextSet = onNextSet,
+                        onToggleTiebreak = onToggleTiebreak,
+                        onTeams = onTeams,
+                        onFinish = onFinish,
+                        onUndo = onUndo,
+                        nowOverride = now,
+                    )
+                } else {
+                    ScoreEditor(
+                        state = state,
+                        onIncrementOne = onIncrementOne,
+                        onDecrementOne = onDecrementOne,
+                        onIncrementTwo = onIncrementTwo,
+                        onDecrementTwo = onDecrementTwo,
+                        onTeams = onTeams,
+                        onFinish = onFinish,
+                        onUndo = onUndo,
+                        nowOverride = now,
+                    )
+                }
             }
         }
     }
@@ -413,7 +430,7 @@ internal fun TennisScoreEditor(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.weight(1f).fillMaxWidth().roundListInset(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TeamScoreButton(
                     teamName = state.teamOneName,
                     score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamOne ?: 0 else currentSet?.teamOne ?: 0,
@@ -452,7 +469,7 @@ internal fun TennisScoreEditor(
             val tiebreakSource = remember { MutableInteractionSource() }
             val undoSource = remember { MutableInteractionSource() }
             val teamsSource = remember { MutableInteractionSource() }
-            ButtonGroup(Modifier.fillMaxWidth()) {
+            ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
                 if (gameOver) {
                     Button(
                         onClick = onFinish,
@@ -474,7 +491,7 @@ internal fun TennisScoreEditor(
                 ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") } }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            ButtonGroup(Modifier.fillMaxWidth()) {
+            ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
                 Button(
                     onClick = onUndo,
                     modifier = Modifier.animateWidth(undoSource),
@@ -531,7 +548,7 @@ internal fun ScoreEditor(
         Row(
             modifier = Modifier
                 .align(Alignment.Center)
-                .roundSafeSize()
+                .roundEquatorSize()
                 // Bezel-safe inset so tiles sit inside the round display
                 // instead of touching the screen edge.
                 .padding(8.dp),

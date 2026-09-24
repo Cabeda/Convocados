@@ -25,6 +25,7 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.input.RemoteInputIntentHelper
 import dev.convocados.wear.BuildConfig
+import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.TextMuted
 
@@ -55,199 +56,206 @@ fun AuthScreen(
     val devPassword = if (BuildConfig.DEBUG) BuildConfig.WEAR_DEV_PASSWORD else ""
     val hasDevCreds = devEmail.isNotBlank() && devPassword.isNotBlank()
 
-    ScreenScaffold(scrollState = columnState) { contentPadding ->
-        TransformingLazyColumn(
-            state = columnState,
-            contentPadding = contentPadding,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            item {
-                // ListHeader morphs with the scroll and reserves top bezel
-                // inset so the title is never clipped on round screens.
-                ListHeader(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec)
-                        .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-
-            if (uiState.showEmailLogin) {
-                // --- Email Login Form (using Wear OS RemoteInput) ---
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold(scrollState = columnState) { contentPadding ->
+            TransformingLazyColumn(
+                state = columnState,
+                contentPadding = contentPadding,
+                modifier = Modifier.fillMaxSize(),
+            ) {
                 item {
-                    val emailLauncher = rememberLauncherForActivityResult(
-                        ActivityResultContracts.StartActivityForResult()
-                    ) { result ->
-                        result.data?.let { data ->
-                            val results = RemoteInput.getResultsFromIntent(data)
-                            results?.getCharSequence("email")?.toString()?.let {
-                                viewModel.onEmailChanged(it)
-                            }
-                        }
-                    }
-
-                    val passwordLauncher = rememberLauncherForActivityResult(
-                        ActivityResultContracts.StartActivityForResult()
-                    ) { result ->
-                        result.data?.let { data ->
-                            val results = RemoteInput.getResultsFromIntent(data)
-                            results?.getCharSequence("password")?.toString()?.let {
-                                viewModel.onPasswordChanged(it)
-                            }
-                        }
-                    }
-
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
-                        // Email input button
-                        Button(
-                            onClick = {
-                                val remoteInput = RemoteInput.Builder("email")
-                                    .setLabel("Email")
-                                    .build()
-                                val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
-                                RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(remoteInput))
-                                intent.putExtra("android.text.InputType", android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
-                                emailLauncher.launch(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.filledTonalButtonColors(),
-                        ) {
-                            Text(
-                                text = uiState.email.ifBlank { "Email" },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
-
-                        Spacer(Modifier.height(6.dp))
-
-                        // Password input button
-                        Button(
-                            onClick = {
-                                val remoteInput = RemoteInput.Builder("password")
-                                    .setLabel("Password")
-                                    .build()
-                                val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
-                                RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(remoteInput))
-                                intent.putExtra("android.text.InputType", android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD)
-                                passwordLauncher.launch(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.filledTonalButtonColors(),
-                        ) {
-                            Text(
-                                text = if (uiState.password.isBlank()) "Password" else "••••••••",
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = { viewModel.loginWithEmail() },
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        enabled = !uiState.isSigningIn
+                    // ListHeader morphs with the scroll and reserves top bezel
+                    // inset so the title is never clipped on round screens.
+                    ListHeader(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                            .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                        transformation = SurfaceTransformation(transformationSpec),
                     ) {
-                        Text(stringResource(R.string.sign_in_email))
-                    }
-                }
+                        Text(
+                            text = stringResource(R.string.app_name),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                           }
+    }
 
-                // Dev-only: one-tap login with pre-filled credentials
-                if (hasDevCreds) {
+                if (uiState.showEmailLogin) {
+                    // --- Email Login Form (using Wear OS RemoteInput) ---
                     item {
-                        CompactButton(
-                            onClick = {
-                                viewModel.onEmailChanged(devEmail)
-                                viewModel.onPasswordChanged(devPassword)
-                                viewModel.loginWithEmail()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
+                        val emailLauncher = rememberLauncherForActivityResult(
+                            ActivityResultContracts.StartActivityForResult()
+                        ) { result ->
+                            result.data?.let { data ->
+                                val results = RemoteInput.getResultsFromIntent(data)
+                                results?.getCharSequence("email")?.toString()?.let {
+                                    viewModel.onEmailChanged(it)
+                                }
+                            }
+                        }
+
+                        val passwordLauncher = rememberLauncherForActivityResult(
+                            ActivityResultContracts.StartActivityForResult()
+                        ) { result ->
+                            result.data?.let { data ->
+                                val results = RemoteInput.getResultsFromIntent(data)
+                                results?.getCharSequence("password")?.toString()?.let {
+                                    viewModel.onPasswordChanged(it)
+                                }
+                            }
+                        }
+
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
+                            // Email input button
+                            Button(
+                                onClick = {
+                                    val remoteInput = RemoteInput.Builder("email")
+                                        .setLabel("Email")
+                                        .build()
+                                    val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
+                                    RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(remoteInput))
+                                    intent.putExtra("android.text.InputType", android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
+                                    emailLauncher.launch(intent)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.filledTonalButtonColors(),
+                            ) {
+                                Text(
+                                    text = uiState.email.ifBlank { "Email" },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+
+                            Spacer(Modifier.height(6.dp))
+
+                            // Password input button
+                            Button(
+                                onClick = {
+                                    val remoteInput = RemoteInput.Builder("password")
+                                        .setLabel("Password")
+                                        .build()
+                                    val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
+                                    RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(remoteInput))
+                                    intent.putExtra("android.text.InputType", android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD)
+                                    passwordLauncher.launch(intent)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.filledTonalButtonColors(),
+                            ) {
+                                Text(
+                                    text = if (uiState.password.isBlank()) "Password" else "••••••••",
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                    }
+
+                    item {
+                        Button(
+                            onClick = { viewModel.loginWithEmail() },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            enabled = !uiState.isSigningIn
                         ) {
-                            Text(
-                                text = "Dev Login",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
+                            Text(stringResource(R.string.sign_in_email))
+                        }
+                    }
+
+                    // Dev-only: one-tap login with pre-filled credentials
+                    if (hasDevCreds) {
+                        item {
+                            CompactButton(
+                                onClick = {
+                                    viewModel.onEmailChanged(devEmail)
+                                    viewModel.onPasswordChanged(devPassword)
+                                    viewModel.loginWithEmail()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    text = "Dev Login",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+
+                    item {
+                        TextButton(onClick = { viewModel.toggleEmailLogin() }) {
+                            Text("Back to Google", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+
+                } else {
+                    // --- Primary Google Login ---
+                    item { Spacer(modifier = Modifier.height(8.dp)) }
+
+                    item {
+                        if (uiState.isSigningIn) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        } else {
+                            Button(
+                                onClick = { activity?.let { viewModel.signInWithGoogle(it) } },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = activity != null,
+                                label = { Text(stringResource(R.string.sign_in_google)) }
                             )
+                        }
+                    }
+
+                    item {
+                        TextButton(
+                            onClick = { viewModel.toggleEmailLogin() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Use Email/Password", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
 
-                item {
-                    TextButton(onClick = { viewModel.toggleEmailLogin() }) {
-                        Text("Back to Google", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-
-            } else {
-                // --- Primary Google Login ---
-                item { Spacer(modifier = Modifier.height(8.dp)) }
-
-                item {
-                    if (uiState.isSigningIn) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    } else {
-                        Button(
-                            onClick = { activity?.let { viewModel.signInWithGoogle(it) } },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = activity != null,
-                            label = { Text(stringResource(R.string.sign_in_google)) }
+                uiState.error?.let { error ->
+                    item {
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
                         )
                     }
                 }
 
                 item {
-                    TextButton(
-                        onClick = { viewModel.toggleEmailLogin() },
-                        modifier = Modifier.fillMaxWidth()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CompactButton(
+                        onClick = onQuickGame,
+                        // Bottom bezel inset so release builds (no backend
+                        // selector below) don't clip this last item on round.
+                        modifier = Modifier.minimumVerticalContentPadding(
+                            ButtonDefaults.minimumVerticalListContentPadding
+                        ),
                     ) {
-                        Text("Use Email/Password", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = stringResource(R.string.quick_game),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
                     }
                 }
-            }
 
-            uiState.error?.let { error ->
-                item {
-                    Text(
-                        text = error,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
-                    )
+                // Dev-only: backend selector
+                if (BuildConfig.DEBUG) {
+                    item { BackendSelector(viewModel) }
                 }
             }
-
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                CompactButton(
-                    onClick = onQuickGame,
-                    // Bottom bezel inset so release builds (no backend
-                    // selector below) don't clip this last item on round.
-                    modifier = Modifier.minimumVerticalContentPadding(
-                        ButtonDefaults.minimumVerticalListContentPadding
-                    ),
-                ) {
-                    Text(
-                        text = stringResource(R.string.quick_game),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
-
-            // Dev-only: backend selector
-            if (BuildConfig.DEBUG) {
-                item { BackendSelector(viewModel) }
-            }
-        }
+    
+ }
     }
 }
 

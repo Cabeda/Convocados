@@ -26,6 +26,9 @@ import dev.convocados.wear.data.api.displayTennisPoint
 import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.RememberKeepScreenOn
+import dev.convocados.wear.ui.roundEquatorSize
+import dev.convocados.wear.ui.roundBezelClip
+import dev.convocados.wear.ui.scoreContentPadding
 import dev.convocados.wear.ui.roundSafeSize
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
 import dev.convocados.wear.ui.ongoing.ongoingScoreText
@@ -120,105 +123,109 @@ internal fun QuickScoreContent(
         if (next <= totalDurationMs) (next.toFloat() / totalDurationMs) else null
     } else null
 
-    ScreenScaffold { contentPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding)
-                .pointerInput(Unit) {
-                    // Swipe up ends the quick game; swipe down saves it to an event.
-                    val threshold = 64.dp.toPx()
-                    var dragY = 0f
-                    detectVerticalDragGestures(
-                        onDragStart = { dragY = 0f },
-                        onDragEnd = {
-                            when {
-                                dragY < -threshold -> onEnd()
-                                dragY > threshold -> onSave()
-                            }
-                        },
-                    ) { _, dy -> dragY += dy }
-                },
-        ) {
-            if (isQuickStructuredSport(state.sport)) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    QuickSetScoreEditor(
-                        modifier = Modifier.roundSafeSize(),
-                        state = state,
-                        onIncrementOne = onIncrementOne,
-                        onDecrementOne = onDecrementOne,
-                        onIncrementTwo = onIncrementTwo,
-                        onDecrementTwo = onDecrementTwo,
-                        onNextSet = onNextSet,
-                        onToggleTiebreak = onToggleTiebreak,
-                    )
-                }
-            } else {
-                Row(
-                    // Bezel-safe inset so tiles sit inside the round display;
-                    // roundSafeSize keeps the whole editor inside the bezel.
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .roundSafeSize()
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    TeamScoreButton(
-                        teamName = stringResource(R.string.team_default_1),
-                        score = state.scoreOne,
-                        container = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        onIncrement = onIncrementOne,
-                        onDecrement = onDecrementOne,
-                        enabled = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TeamScoreButton(
-                        teamName = stringResource(R.string.team_default_2),
-                        score = state.scoreTwo,
-                        container = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        onIncrement = onIncrementTwo,
-                        onDecrement = onDecrementTwo,
-                        enabled = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-
-            if (elapsedMs >= 0) {
-                GameEdgeProgress(
-                    progress = progress,
-                    alarmFractions = alarmFractions,
-                    nextAlarmFraction = nextAlarmFraction,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                val s = elapsedMs / 1000
-                GameClock(
-                    text = "%d:%02d".format(s / 60, s % 60),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 4.dp),
-                )
-            }
-
-            // Swipe hint (no numeric countdown — ADR 0027). Clears the
-            // 12-o'clock progress marker on round screens; pill background
-            // keeps it legible where the marker crosses.
-            Text(
-                text = stringResource(R.string.quick_swipe_hint),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold { contentPadding ->
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 20.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .padding(horizontal = 10.dp, vertical = 2.dp),
-            )
+                    .fillMaxSize()
+                    .scoreContentPadding(contentPadding)
+                    .pointerInput(Unit) {
+                        // Swipe up ends the quick game; swipe down saves it to an event.
+                        val threshold = 64.dp.toPx()
+                        var dragY = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { dragY = 0f },
+                            onDragEnd = {
+                                when {
+                                    dragY < -threshold -> onEnd()
+                                    dragY > threshold -> onSave()
+                                }
+                            },
+                        ) { _, dy -> dragY += dy }
+                    },
+            ) {
+                if (isQuickStructuredSport(state.sport)) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        QuickSetScoreEditor(
+                            modifier = Modifier.roundSafeSize(),
+                            state = state,
+                            onIncrementOne = onIncrementOne,
+                            onDecrementOne = onDecrementOne,
+                            onIncrementTwo = onIncrementTwo,
+                            onDecrementTwo = onDecrementTwo,
+                            onNextSet = onNextSet,
+                            onToggleTiebreak = onToggleTiebreak,
+                        )
+                    }
+                } else {
+                    Row(
+                        // Bezel-safe inset so tiles sit inside the round display;
+                        // roundEquatorSize uses the full circular width at center.
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .roundEquatorSize()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        TeamScoreButton(
+                            teamName = stringResource(R.string.team_default_1),
+                            score = state.scoreOne,
+                            container = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            onIncrement = onIncrementOne,
+                            onDecrement = onDecrementOne,
+                            enabled = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TeamScoreButton(
+                            teamName = stringResource(R.string.team_default_2),
+                            score = state.scoreTwo,
+                            container = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            onIncrement = onIncrementTwo,
+                            onDecrement = onDecrementTwo,
+                            enabled = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                if (elapsedMs >= 0) {
+                    GameEdgeProgress(
+                        progress = progress,
+                        alarmFractions = alarmFractions,
+                        nextAlarmFraction = nextAlarmFraction,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    val s = elapsedMs / 1000
+                    GameClock(
+                        text = "%d:%02d".format(s / 60, s % 60),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 4.dp),
+                    )
+                }
+                // Swipe hint (no numeric countdown — ADR 0027). Clears the
+                // 12-o'clock progress marker on round screens; pill background
+                // keeps it legible where the marker crosses.
+                Text(
+                    text = stringResource(R.string.quick_swipe_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 20.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                )
+            }
         }
     }
 }

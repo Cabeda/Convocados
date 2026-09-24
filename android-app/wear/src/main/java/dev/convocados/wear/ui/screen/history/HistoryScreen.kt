@@ -13,6 +13,8 @@ import androidx.wear.compose.material3.*
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
+import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundBezelClip
 
 @Composable
 fun HistoryScreen(
@@ -23,62 +25,69 @@ fun HistoryScreen(
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
-    ScreenScaffold(scrollState = columnState) { contentPadding ->
-        TransformingLazyColumn(
-            state = columnState,
-            contentPadding = contentPadding,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            item {
-                ListHeader(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec)
-                        .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) {
-                    Text(
-                        text = stringResource(R.string.history_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-
-            if (state.rows.isEmpty()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold(scrollState = columnState) { contentPadding ->
+            TransformingLazyColumn(
+                state = columnState,
+                contentPadding = contentPadding,
+                modifier = Modifier.fillMaxSize(),
+            ) {
                 item {
-                    Text(
-                        text = stringResource(R.string.no_history),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    )
-                }
-            } else {
-                items(state.rows, key = { it.historyId }) { row ->
-                    Button(
-                        onClick = { onHistorySelected(row.eventId, row.historyId) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = {
-                            Text(
-                                text = row.title,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        secondaryLabel = {
-                            val score = "${row.scoreOne ?: 0} - ${row.scoreTwo ?: 0}"
-                            Text(
-                                text = "${row.teamOneName} $score ${row.teamTwoName}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                    )
+                    ListHeader(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                            .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                        transformation = SurfaceTransformation(transformationSpec),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.history_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                           }
+    }
+
+                if (state.rows.isEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.no_history),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().roundListInset().padding(vertical = 8.dp),
+                        )
+                    }
+                } else {
+                    items(state.rows, key = { it.historyId }) { row ->
+                        Button(
+                            onClick = { onHistorySelected(row.eventId, row.historyId) },
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
+                            label = {
+                                Text(
+                                    text = row.title,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            secondaryLabel = {
+                                val score = "${row.scoreOne ?: 0} - ${row.scoreTwo ?: 0}"
+                                Text(
+                                    text = "${row.teamOneName} $score ${row.teamTwoName}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                        )
+                    }
                 }
             }
-        }
+    
+ }
     }
 }

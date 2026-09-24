@@ -1,5 +1,7 @@
 package dev.convocados.wear.ui.screen.mvp
 
+import androidx.compose.foundation.layout.Box
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +34,8 @@ import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
+import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundBezelClip
 
 @Composable
 fun MvpVotingScreen(
@@ -47,144 +51,151 @@ fun MvpVotingScreen(
         viewModel.load(eventId, historyId)
     }
 
-    ScreenScaffold(scrollState = columnState) { contentPadding ->
-        TransformingLazyColumn(
-            state = columnState,
-            contentPadding = contentPadding,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            item {
-                ListHeader(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec)
-                        .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) {
-                    Text(
-                        text = stringResource(R.string.mvp_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-
-            when {
-                state.isLoading -> item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-                state.error != null -> item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold(scrollState = columnState) { contentPadding ->
+            TransformingLazyColumn(
+                state = columnState,
+                contentPadding = contentPadding,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                item {
+                    ListHeader(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                            .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                        transformation = SurfaceTransformation(transformationSpec),
                     ) {
                         Text(
-                            text = state.error.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
+                            text = stringResource(R.string.mvp_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        CompactButton(onClick = { viewModel.load(eventId, historyId) }) {
-                            Text(stringResource(R.string.mvp_retry))
+                           }
+    }
+
+                when {
+                    state.isLoading -> item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            CircularProgressIndicator()
                         }
                     }
-                }
-                state.response?.isVotingOpen == true && state.response?.hasVoted != null -> {
-                    item {
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                    state.error != null -> item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
                             Text(
-                                text = stringResource(R.string.mvp_vote_prompt),
+                                text = state.error.orEmpty(),
                                 style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
                             )
-                            if (state.response?.hasVoted == true) {
-                                Text(
-                                    text = stringResource(R.string.mvp_vote_recorded),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            CompactButton(onClick = { viewModel.load(eventId, historyId) }) {
+                                Text(stringResource(R.string.mvp_retry))
                             }
                         }
                     }
-                    items(
-                        items = state.response?.participants.orEmpty(),
-                        key = { it.playerId },
-                    ) { participant ->
-                        Button(
-                            onClick = { viewModel.vote(participant.playerId) },
-                            enabled = !state.isSubmitting,
-                            modifier = Modifier.fillMaxWidth(),
-                            label = {
-                                Text(
-                                    text = participant.playerName,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            secondaryLabel = {
-                                Text(
-                                    text = stringResource(R.string.mvp_votes, participant.voteCount),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            },
-                        )
-                    }
-                }
-                state.response?.isVotingOpen == true -> item {
-                    Text(
-                        text = stringResource(R.string.mvp_not_eligible),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    )
-                }
-                else -> {
-                    item {
-                        Text(
-                            text = stringResource(R.string.mvp_voting_closed),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        )
-                    }
-                    val winners = state.response?.mvp.orEmpty()
-                    if (winners.isEmpty()) {
+                    state.response?.isVotingOpen == true && state.response?.hasVoted != null -> {
                         item {
-                            Text(
-                                text = stringResource(R.string.mvp_no_votes),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                            )
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                                Text(
+                                    text = stringResource(R.string.mvp_vote_prompt),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                if (state.response?.hasVoted == true) {
+                                    Text(
+                                        text = stringResource(R.string.mvp_vote_recorded),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
                         }
-                    } else {
-                        items(winners, key = { it.playerId }) { winner ->
+                        items(
+                            items = state.response?.participants.orEmpty(),
+                            key = { it.playerId },
+                        ) { participant ->
                             Button(
-                                onClick = {},
-                                enabled = false,
-                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { viewModel.vote(participant.playerId) },
+                                enabled = !state.isSubmitting,
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
                                 label = {
                                     Text(
-                                        text = winner.playerName,
+                                        text = participant.playerName,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 },
                                 secondaryLabel = {
                                     Text(
-                                        text = stringResource(R.string.mvp_votes, winner.voteCount),
+                                        text = stringResource(R.string.mvp_votes, participant.voteCount),
                                         style = MaterialTheme.typography.labelSmall,
                                     )
                                 },
                             )
                         }
                     }
+                    state.response?.isVotingOpen == true -> item {
+                        Text(
+                            text = stringResource(R.string.mvp_not_eligible),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        )
+                    }
+                    else -> {
+                        item {
+                            Text(
+                                text = stringResource(R.string.mvp_voting_closed),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            )
+                        }
+                        val winners = state.response?.mvp.orEmpty()
+                        if (winners.isEmpty()) {
+                            item {
+                                Text(
+                                    text = stringResource(R.string.mvp_no_votes),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                )
+                            }
+                        } else {
+                            items(winners, key = { it.playerId }) { winner ->
+                                Button(
+                                    onClick = {},
+                                    enabled = false,
+                                    modifier = Modifier.fillMaxWidth().roundListInset(),
+                                    label = {
+                                        Text(
+                                            text = winner.playerName,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    },
+                                    secondaryLabel = {
+                                        Text(
+                                            text = stringResource(R.string.mvp_votes, winner.voteCount),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
             }
-        }
+    
+ }
     }
 }
