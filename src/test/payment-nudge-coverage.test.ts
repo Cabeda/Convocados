@@ -391,6 +391,34 @@ describe("GET /api/events/[id]/balance", () => {
     expect(body.callerBalance).toBeNull();
   });
 
+  it("returns threshold + gateAmount so the client payment-gate mirror matches the server decision", async () => {
+    const { event, ec } = await seedOwnerAndEvent({ enforcement: "hard_gate", threshold: 7 });
+    const user = await prisma.user.create({ data: { id: "u5", name: "Alice", email: "a5@t.com" } });
+    await seedPlayer(event.id, "Alice", user.id);
+    await seedPayment(ec.id, "Alice", 10, "pending");
+    mockSession = { user: { id: user.id, name: "Alice" } };
+    mockCheckOwnership = () => ({ isOwner: false, isAdmin: false });
+
+    const res = await getBalance(getCtx(event.id));
+    const body = await res.json();
+
+    // The join path (applyRosterChange / legacy route) decides with
+    // getGateBalance + paymentGateThreshold — the balance endpoint must expose
+    // the same inputs so the client mirror (Quick Join pill) cannot drift.
+    expect(body.threshold).toBe(7);
+    expect(body.gateAmount).toBe(await getGateBalance(event.id, "Alice"));
+  });
+
+  it("returns gateAmount=null when the caller has no player in this event", async () => {
+    const { event } = await seedOwnerAndEvent();
+    const user = await prisma.user.create({ data: { id: "u6", name: "NoPlayer", email: "np@t.com" } });
+    mockSession = { user: { id: user.id, name: "NoPlayer" } };
+    mockCheckOwnership = () => ({ isOwner: false, isAdmin: false });
+    const res = await getBalance(getCtx(event.id));
+    const body = await res.json();
+    expect(body.gateAmount).toBeNull();
+  });
+
   it("non-privileged with showDebtorNames=false sees only own balance", async () => {
     const { event, ec } = await seedOwnerAndEvent({ showDebtorNames: false });
     const user = await prisma.user.create({ data: { id: "u4", name: "Alice", email: "u4@t.com" } });

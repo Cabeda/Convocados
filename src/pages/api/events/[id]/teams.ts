@@ -7,6 +7,24 @@ import { activeParticipantsWhere } from "../../../../lib/activeParticipants.serv
 import { applyFormationLayout } from "../../../../lib/teams";
 import { getDefaultFormation } from "../../../../lib/formations";
 import { syncGamePayments } from "../../../../lib/settlement.server";
+import { syncGameFromTeamResults } from "../../../../lib/gameDualWrite.server";
+
+/** Dual-write a fresh teamResult draw onto the occurrence Game (ADR 0016):
+ * Game team names/formations, GameParticipant team/slot, and any materialized
+ * GameHistory snapshot for the same occurrence. */
+async function dualWriteCurrentGameTeams(currentGameId: string | null, eventId: string) {
+	if (!currentGameId) return;
+	const game = await prisma.game.findUnique({ where: { id: currentGameId } });
+	if (game) {
+		const teamResults = await prisma.teamResult.findMany({
+			where: { eventId },
+			include: { members: { orderBy: { order: "asc" } } },
+			orderBy: { id: "asc" },
+		});
+		await syncGameFromTeamResults(game, teamResults);
+	}
+	await syncGamePayments(currentGameId, eventId);
+}
 
 /** Resolve the active player list for an event.
  * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
@@ -199,9 +217,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 	}
 
 	// Keep payment rows aligned with the new lineup: only lineup players owe.
-	if (event.currentGameId) {
-		await syncGamePayments(event.currentGameId, eventId);
-	}
+	await dualWriteCurrentGameTeams(event.currentGameId, eventId);
 
 	return Response.json({ ok: true });
 };
@@ -337,9 +353,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 	}
 
 	// Keep payment rows aligned with the new lineup: only lineup players owe.
-	if (event.currentGameId) {
-		await syncGamePayments(event.currentGameId, event.id);
-	}
+	await dualWriteCurrentGameTeams(event.currentGameId, event.id);
 
 	// Return updated teams
 	const updatedEvent = await prisma.event.findUnique({

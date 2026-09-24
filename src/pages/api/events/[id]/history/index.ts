@@ -8,6 +8,7 @@ import { logEvent } from "../../../../../lib/eventLog.server";
 import { buildSettlementRows, resolveGameLineups, type PaymentMode } from "../../../../../lib/settlement.server";
 import { buildMvpSummaries } from "../../../../../lib/mvp.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
+import { applyTeamsSnapshotToGame } from "../../../../../lib/gameDualWrite.server";
 
 // GET /api/events/[id]/history — paginated history entries
 export const GET: APIRoute = async ({ params, request }) => {
@@ -383,7 +384,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   // Parse and validate teamsSnapshot structure
-  let parsedTeams: { team: string; players: { name: string; order: number }[] }[];
+  let parsedTeams: { team: string; formation?: string | null; players: { name: string; order: number; slot?: number | null }[] }[];
   try {
     parsedTeams = teamsSnapshot;
     if (!Array.isArray(parsedTeams) || parsedTeams.length !== 2) {
@@ -398,21 +399,58 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Invalid teamsSnapshot format" }, { status: 400 });
   }
 
-  const history = await prisma.gameHistory.create({
-    data: {
-      eventId: params.id ?? "",
-      dateTime: new Date(dateTime),
-      teamOneName,
-      teamTwoName,
-      scoreOne: parsedScoreOne,
-      scoreTwo: parsedScoreTwo,
-      scoreSets: parsedScoreSets ? JSON.stringify(parsedScoreSets) : null,
-      teamsSnapshot: JSON.stringify(teamsSnapshot),
-      status: "played",
-      source: "historical",
-      eloProcessed: false,
-    },
+  const when = new Date(dateTime);
+  const formationAt = (idx: number) =>
+    (parsedTeams[idx] && typeof parsedTeams[idx].formation === "string"
+      ? parsedTeams[idx].formation
+      : null) ?? null;
+
+  // Dual-write (ADR 0016): every historical entry gets its occurrence Game up
+  // front, sharing the id so cost/status/PATCH lookups keyed on historyId
+  // resolve the same row. Created inside one transaction so a history row can
+  // never exist without its Game.
+  const history = await prisma.$transaction(async (tx) => {
+    const game = await tx.game.create({
+      data: {
+        eventId: params.id ?? "",
+        dateTime: when,
+        status: "played",
+        isFriendly: false,
+        scoreOne: parsedScoreOne,
+        scoreTwo: parsedScoreTwo,
+        scoreSets: parsedScoreSets ? JSON.stringify(parsedScoreSets) : null,
+        teamOneName,
+        teamTwoName,
+        teamOneFormation: formationAt(0),
+        teamTwoFormation: formationAt(1),
+        source: "historical",
+        eloProcessed: false,
+      },
+    });
+    return tx.gameHistory.create({
+      data: {
+        id: game.id,
+        eventId: params.id ?? "",
+        dateTime: when,
+        teamOneName,
+        teamTwoName,
+        scoreOne: parsedScoreOne,
+        scoreTwo: parsedScoreTwo,
+        scoreSets: parsedScoreSets ? JSON.stringify(parsedScoreSets) : null,
+        teamsSnapshot: JSON.stringify(teamsSnapshot),
+        status: "played",
+        source: "historical",
+        eloProcessed: false,
+      },
+    });
   });
+
+  // GameParticipant roster from the snapshot (team/slot/order), mirroring the
+  // unified backfill shape.
+  await applyTeamsSnapshotToGame(
+    { id: history.id, eventId: params.id ?? "", dateTime: history.dateTime },
+    history.teamsSnapshot,
+  );
 
   const actor = session.user.name ?? session.user.email ?? "Unknown";
   const actorId = session.user.id;

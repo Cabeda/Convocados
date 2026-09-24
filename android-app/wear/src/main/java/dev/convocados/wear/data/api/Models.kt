@@ -173,3 +173,17 @@ data class MvpVoteResponse(
     val ok: Boolean,
     val vote: MvpVoteResult,
 )
+
+@Serializable
+data class PostGameStatus(
+    val seasonRank: SeasonRankMovement? = null,
+)
+
+@Serializable
+data class SeasonRankMovement(
+    val seasonId: String = "",
+    val counted: Boolean = false,
+    val tierBefore: Int = 0,
+    val tierAfter: Int = 0,
+    val provisional: Boolean = false,
+)

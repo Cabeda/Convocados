@@ -1,0 +1,65 @@
+---
+export const prerender = true;
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Accounts & Sign-in" description="How Convocados sign-in methods work, why you might end up with two accounts, and how to merge them.">
+  <h1>Accounts &amp; Sign-in</h1>
+  <p class="subtitle">One person, one account — how sign-in methods work and what to do if you end up with two.</p>
+
+  <h2>Sign-in methods</h2>
+  <p>You can sign in to Convocados with:</p>
+  <ul>
+    <li><strong>Password</strong> — email + password you chose at sign-up</li>
+    <li><strong>Google</strong> — one click, uses your Google account's primary email</li>
+  </ul>
+  <p>
+    If both methods use the <strong>same email address</strong>, they automatically share one account —
+    no extra steps needed. You can manage both under <strong>Sign-in methods</strong> on your profile.
+  </p>
+
+  <h2>Why you might have two accounts</h2>
+  <p>
+    Signing in with Google creates (or opens) the account for your Google account's primary email.
+    If you later sign up with a password using a <em>different</em> email, that creates a second,
+    separate account. Convocados cannot tell that the two emails belong to the same person, so it
+    never merges them on its own — you stay in control of which account is which.
+  </p>
+  <p>The result: your events, players, or history may be split across the two accounts.</p>
+
+  <h2>How to merge two accounts</h2>
+  <p>
+    Merging moves the data of one account into another. Pick the account you want to
+    <strong>keep</strong> (the "survivor") first — its data stays put.
+  </p>
+
+  <h3>From the web app</h3>
+  <ol>
+    <li>Sign in to the account you want to <strong>keep</strong></li>
+    <li>Open your <strong>profile</strong> (click your name, top-right)</li>
+    <li>Find the <strong>Sign-in methods</strong> section</li>
+    <li>Click <strong>Link Google</strong></li>
+    <li>Sign in with the Google account that belongs to the <em>other</em> Convocados account</li>
+    <li>A <strong>Merge accounts?</strong> dialog shows which account will be absorbed — confirm with <strong>Merge accounts</strong></li>
+  </ol>
+
+  <h2>What happens on merge</h2>
+  <ul>
+    <li>The absorbed account's data moves into the account you kept</li>
+    <li>The absorbed account is signed out on all its devices</li>
+    <li>The absorbed email + Google credential now belong to the surviving account</li>
+    <li>The merge <strong>cannot be undone</strong> — the confirmation dialog explains the details before you commit</li>
+  </ul>
+
+  <h2>Avoiding splits in the first place</h2>
+  <ul>
+    <li>Sign in the same way each time, or link both methods to one account early via <strong>Sign-in methods → Link Google</strong></li>
+    <li>Before creating a "new" account, try signing in with Google — you may already have one</li>
+  </ul>
+
+  <h2>See also</h2>
+  <ul>
+    <li><a href="/docs/privacy">Privacy</a> — how account data is handled</li>
+    <li><a href="/docs/delete-account">Delete Your Account</a> — permanent removal instead of merging</li>
+  </ul>
+</DocsLayout>

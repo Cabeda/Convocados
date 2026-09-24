@@ -8,6 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.api.TennisTeam
+import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.api.advanceTennisPoint
 import dev.convocados.wear.data.api.rewindTennisSetPoint
 import dev.convocados.wear.data.api.tennisGameScore
@@ -64,10 +65,15 @@ class ScoreViewModel @Inject constructor(
     private val scoreRepository: WearScoreRepository,
     private val settingsStore: GameSettingsStore,
     private val workManager: WorkManager,
+    private val client: WearApiClient,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ScoreUiState())
     val uiState: StateFlow<ScoreUiState> = _uiState.asStateFlow()
+
+    // ADR 0031 pilot: one-shot Season Rank tier-UP haptic signal for the screen.
+    private val _tierUp = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val tierUp: SharedFlow<Unit> = _tierUp.asSharedFlow()
 
     @Volatile
     var tickProvider: () -> Flow<java.time.Instant> = { tickFlow() }
@@ -325,10 +331,26 @@ class ScoreViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(isOfflineQueued = result.exceptionOrNull()?.let(::isRetryableScoreFailure) == true)
                 }
+                if (result.isSuccess) maybeEmitTierUp(historyId)
             }
             ScoreSyncWorker.enqueueOneTime(workManager)
             saving = false
         }
+    }
+
+    /**
+     * ADR 0031 pilot: after a successful online submit, fetch the post-game
+     * Season Rank movement and fire a one-shot haptic if the tier went UP —
+     * once per history record. Silent on same-tier, tier-down, provisional,
+     * or offline-queued submits (result is not success there).
+     */
+    private suspend fun maybeEmitTierUp(historyId: String) {
+        val movement = runCatching { client.getPostGameStatus(eventId) }
+            .getOrNull()?.seasonRank ?: return
+        if (!movement.counted || movement.provisional || movement.tierAfter <= movement.tierBefore) return
+        if (historyId in settingsStore.current(eventId).celebratedTierUp) return
+        settingsStore.update(eventId) { it.copy(celebratedTierUp = it.celebratedTierUp + historyId) }
+        _tierUp.tryEmit(Unit)
     }
 }
 

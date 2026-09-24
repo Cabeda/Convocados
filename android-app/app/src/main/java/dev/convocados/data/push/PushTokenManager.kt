@@ -36,6 +36,10 @@ class PushTokenManager @Inject constructor(
     }
 
     /** Register the current FCM token with the server. Call after login. */
+    // FirebaseMessaging.token is deprecated upstream in firebase-messaging 25.x
+    // without a published replacement; it remains the supported way to read the
+    // token here. Tracked with the other deprecation migrations.
+    @Suppress("DEPRECATION")
     fun registerCurrentToken() {
         scope.launch {
             try {

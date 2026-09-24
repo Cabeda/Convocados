@@ -1,0 +1,40 @@
+# CLA assistant — requires first-time contributors to sign CLA.md before merge.
+# Signatures are committed to the dedicated `cla-signatures` branch (never main).
+name: CLA
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  issues: write
+  statuses: write
+  contents: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    # pull_request_target runs in the base-repo context; never check out or
+    # execute PR-head code here.
+    steps:
+      - name: CLA assistant
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: "signatures/cla-signatures.txt"
+          branch: "cla-signatures"
+          # Maintainer + CI bots never need to re-sign.
+          allow-list: "Cabeda,dependabot[bot],github-actions[bot],renovate[bot]"
+          custom-notsigned-pr-comment: >
+            Thanks for the contribution! Please read and sign the
+            [Contributor License Agreement](https://github.com/Cabeda/Convocados/blob/main/CLA.md)
+            by commenting:
+            "I have read the CLA Document and I hereby sign the CLA".
+            The pull request can be merged once the CLA is signed.
+          custom-allsigned-pr-comment: >
+            All contributors have signed the Convocados CLA. Thank you!
+          lock-pull-request-after-signing: false

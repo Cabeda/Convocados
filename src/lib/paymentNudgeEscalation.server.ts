@@ -48,6 +48,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     where: {
       dateTime: { lt: now },
       currentGameId: { not: null },
+      archivedAt: null,
     },
     select: {
       id: true,

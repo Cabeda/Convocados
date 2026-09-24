@@ -13,6 +13,7 @@ import { perPlayerShare } from "../../../../../lib/gameCost";
 import { postLedgerEntry } from "../../../../../lib/ledger.server";
 import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
+import { resolveMirrorGame, applyTeamsSnapshotToGame, mirrorPaymentsSnapshotToGame } from "../../../../../lib/gameDualWrite.server";
 
 const log = createLogger("history-patch");
 
@@ -223,6 +224,11 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   const body = await request.json();
 
+  // Dual-write target: the occurrence Game (ADR 0016). Resolved once so the
+  // isFriendly early-return and the main score/status/teams path below both
+  // mirror onto the same row.
+  const mirrorGame = await resolveMirrorGame(params.id ?? "", params.historyId ?? "", entry.dateTime);
+
   // Handle isFriendly toggle — owner/admin only
   if (typeof body.isFriendly === "boolean") {
     if (!isOwner && !isAdmin) {
@@ -232,6 +238,12 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       where: { id: historyId },
       data: { isFriendly: body.isFriendly },
     });
+    if (mirrorGame) {
+      await prisma.game.update({
+        where: { id: mirrorGame.id },
+        data: { isFriendly: body.isFriendly },
+      });
+    }
 
     // If toggling off friendly on a processed game, or on for an unprocessed one, recalculate ELO
     if (entry.eloProcessed && body.isFriendly) {
@@ -474,6 +486,38 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       ...(paymentsSnapshot !== undefined && { paymentsSnapshot }),
     },
   });
+
+  // Dual-write the occurrence data to the Game model (ADR 0016) so readers
+  // that migrated off GameHistory never see a stale score/status/roster.
+  if (mirrorGame) {
+    const scoreChanged =
+      status !== undefined ||
+      scoreOne !== undefined ||
+      scoreTwo !== undefined ||
+      scoreSetsProvided ||
+      clearStructuredScore;
+    if (scoreChanged) {
+      await prisma.game.update({
+        where: { id: mirrorGame.id },
+        data: {
+          ...(status !== undefined && { status }),
+          ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
+          ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
+          ...(scoreSetsProvided && { scoreSets }),
+          ...(clearStructuredScore && { scoreSets: null }),
+        },
+      });
+    }
+    if (teamsSnapshot !== undefined) {
+      await applyTeamsSnapshotToGame(
+        { id: mirrorGame.id, eventId: params.id ?? "", dateTime: updated.dateTime },
+        updated.teamsSnapshot,
+      );
+    }
+    if (paymentsSnapshot !== undefined) {
+      await mirrorPaymentsSnapshotToGame(mirrorGame, updated.paymentsSnapshot, params.id ?? "");
+    }
+  }
 
   // Log activity for each type of change
   const actor = session.user.name ?? session.user.email ?? "Unknown";

@@ -155,6 +155,22 @@ export async function processGame(
     data: { eloProcessed: true },
   });
 
+  // Dual-write (ADR 0016): keep the occurrence Game's flag in sync so readers
+  // off Game never see an unprocessed ELO state after approval. Match by id
+  // (shared-id worlds) or by the occurrence (backfill/materialise worlds).
+  const hist = await prisma.gameHistory.findUnique({
+    where: { id: historyId },
+    select: { eventId: true, dateTime: true },
+  });
+  if (hist) {
+    await prisma.game.updateMany({
+      where: {
+        OR: [{ id: historyId }, { eventId: hist.eventId, dateTime: hist.dateTime }],
+      },
+      data: { eloProcessed: true },
+    });
+  }
+
   return updates;
 }
 

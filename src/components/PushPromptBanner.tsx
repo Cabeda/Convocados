@@ -5,6 +5,7 @@ import BlockIcon from "@mui/icons-material/Block";
 import AddToHomeScreenIcon from "@mui/icons-material/AddToHomeScreen";
 import { useT } from "~/lib/useT";
 import { resolveIosHelpLink, isIos, isStandalone, installBannerDismissed } from "~/lib/pushPrompt";
+import { useBottomSlotClaim } from "~/lib/bottomSlot";
 
 const DISMISS_KEY = "push_prompt_dismissed_at";
 const COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days (tightened from 30d after #463)
@@ -81,6 +82,11 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
     });
   }, [followCount, forceOnEventDetail]);
 
+  // #977: share the bottom slot with the global install/update banners so at
+  // most one prompt is ever on screen. Outside a ResponsiveLayout (component
+  // tests, isolated stories) there is no provider and we always render.
+  const granted = useBottomSlotClaim("push", true);
+
   const handleEnable = async () => {
     try {
       const reg = await navigator.serviceWorker.register("/sw.js");
@@ -141,6 +147,8 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
     }).catch(() => {});
     setVisible(false);
   };
+
+  if (!granted) return null;
 
   if (needsInstall) {
     return (

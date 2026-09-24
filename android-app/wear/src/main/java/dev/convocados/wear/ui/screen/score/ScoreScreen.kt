@@ -12,8 +12,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -48,6 +50,12 @@ fun ScoreScreen(
     onFinish: () -> Unit = {},
 ) {
     LaunchedEffect(eventId) { viewModel.load(eventId) }
+
+    // ADR 0031 pilot: tier-up after a scored point buzzes once per history.
+    val hapticFeedback = LocalHapticFeedback.current
+    LaunchedEffect(Unit) {
+        viewModel.tierUp.collect { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress) }
+    }
 
     val state by viewModel.uiState.collectAsState()
     val isAmbient = LocalAmbientMode.current
