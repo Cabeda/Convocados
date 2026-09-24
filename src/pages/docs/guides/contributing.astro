@@ -78,12 +78,25 @@ npm run dev                # start dev server on http://localhost:4321`}</code><
   <h2>Making changes</h2>
   <ol>
     <li>Fork the repository and create a feature branch</li>
-    <li>Make your changes</li>
+    <li>Make your changes (test-first: write a failing test, then implement)</li>
     <li>Run <code>npm run typecheck</code> and <code>npm run test</code> to verify</li>
     <li>Open a pull request against <code>main</code></li>
+    <li>
+      Sign the <a href="https://github.com/Cabeda/Convocados/blob/main/CLA.md">Contributor License Agreement</a>
+      when the CLA bot asks on your first PR (comment
+      &ldquo;I have read the CLA Document and I hereby sign the CLA&rdquo;)
+    </li>
   </ol>
 
   <div class="callout callout-info">
     <strong>Database changes:</strong> If you modify <code>prisma/schema.prisma</code>, run <code>npm run db:migrate</code> to create a migration file, then commit it with your PR.
+  </div>
+
+  <div class="callout callout-info">
+    <strong>CLA:</strong> First-time contributors must sign the CLA before their
+    pull request can be merged — it lets the maintainer relicense or sell
+    commercial licenses over contributed code under FSL-1.1-ALv2. Trademark use
+    of the Convocados name and logo is covered separately in
+    <a href="https://github.com/Cabeda/Convocados/blob/main/TRADEMARK.md">TRADEMARK.md</a>.
   </div>
 </DocsLayout>

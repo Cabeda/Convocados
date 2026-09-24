@@ -125,7 +125,7 @@ Open `http://localhost:4321` — create your first game in 10 seconds.
 
 ## Contributing
 
-Contributions welcome! The project uses TDD with strict pre-push hooks (lint + typecheck + tests must pass). See [AGENTS.md](./AGENTS.md) for the full development workflow and [contributing guide](https://convocados.cabeda.dev/docs/guides/contributing).
+Contributions welcome! First-time contributors sign the [Contributor License Agreement](./CLA.md) (the CLA bot prompts you on your first PR). The project uses TDD with strict pre-push hooks (lint + typecheck + tests must pass). See [CONTRIBUTING.md](./CONTRIBUTING.md) for the short guide, [AGENTS.md](./AGENTS.md) for the full development workflow, and the [contributing guide](https://convocados.cabeda.dev/docs/guides/contributing).
 
 Good first issues are labeled [`good first issue`](https://github.com/Cabeda/Convocados/labels/good%20first%20issue).
 
@@ -158,3 +158,5 @@ Full docs at [`/docs`](https://convocados.cabeda.dev/docs):
 The source is public and free to use, modify, and self-host — including for your own club or organization. The one thing the license forbids is **competing use**: shipping Convocados (or a fork) as a commercial product or service that substitutes for it. That requires a commercial license. Every version automatically becomes Apache-2.0 two years after release.
 
 FSL is *source-available*, not OSI-approved open source. A commercial license is available on request.
+
+The **Convocados name and logo** are trademarks of José Cabeda, licensed separately from the code — see [TRADEMARK.md](./TRADEMARK.md).
