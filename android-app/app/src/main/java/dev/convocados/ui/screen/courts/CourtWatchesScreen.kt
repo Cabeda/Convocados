@@ -65,13 +65,8 @@ private val DAY_NAMES = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-// rememberSwipeToDismissBoxState(confirmValueChange = ...) is deprecated with no
-// replacement: the guidance is to restrict the anchor set instead, which this
-// screen already does via enableDismissFromStartToEnd = false. The callback is
-// kept purely for its side effect (delete on EndToStart), so restructure it as a
-// state observer before the suppression can go. Tracked with the other
-// deprecation migrations.
-@Suppress("DEPRECATION")
+// The delete side effect is observed from the dismiss state instead of the
+// deprecated confirmValueChange callback; start-to-end dismissal stays disabled.
 fun CourtWatchesScreen(
     onBack: () -> Unit,
     viewModel: CourtWatchesViewModel = hiltViewModel(),
@@ -100,15 +95,14 @@ fun CourtWatchesScreen(
             }
             else -> LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.watches, key = { it.id }) { watch ->
+                    val dismissState = rememberSwipeToDismissBoxState()
+                    LaunchedEffect(dismissState.currentValue) {
+                        if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
+                            viewModel.deleteWatch(watch.id)
+                        }
+                    }
                     SwipeToDismissBox(
-                        state = rememberSwipeToDismissBoxState(
-                            confirmValueChange = { value ->
-                                if (value == SwipeToDismissBoxValue.EndToStart) {
-                                    viewModel.deleteWatch(watch.id)
-                                    true
-                                } else false
-                            }
-                        ),
+                        state = dismissState,
                         backgroundContent = {
                             Box(
                                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 20.dp),
