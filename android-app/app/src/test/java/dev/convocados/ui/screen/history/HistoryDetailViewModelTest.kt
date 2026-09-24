@@ -119,4 +119,55 @@ class HistoryDetailViewModelTest {
         assertEquals("Match events can only be logged on played games.", vm.error.value)
         assertFalse(vm.matchEventsSaving.value)
     }
+
+    @Test
+    fun `durable paymentConfig rows are preferred over the frozen snapshot`() = runTest {
+        val poisonedSnapshot = """[{"playerName":"Ghost","amount":99,"status":"paid"}]"""
+        val history = GameHistory(
+            id = "h1", dateTime = "2024-01-01T10:00:00Z",
+            teamOneName = "A", teamTwoName = "B",
+            paymentsSnapshot = poisonedSnapshot,
+            paymentConfig = HistoryPaymentConfig(
+                gameId = "g1",
+                rows = listOf(
+                    SettlementRow(eventPlayerId = "ep1", name = "Alice", amount = 10.0, status = "pending"),
+                    SettlementRow(eventPlayerId = "ep2", name = "Bob", amount = 10.0, status = "paid", isPayer = true),
+                ),
+            ),
+        )
+        coEvery { api.fetchHistoryDetail("e1", "h1") } returns history
+
+        val vm = HistoryDetailViewModel(api)
+        vm.load("e1", "h1")
+        advanceUntilIdle()
+
+        assertEquals(2, vm.payments.value.size)
+        assertEquals("Alice", vm.payments.value[0].name)
+        assertEquals("ep1", vm.payments.value[0].eventPlayerId)
+        assertTrue(vm.payments.value[1].isPayer)
+    }
+
+    @Test
+    fun `toggling a durable row settles via the settlement API, not the snapshot`() = runTest {
+        val history = GameHistory(
+            id = "h1", dateTime = "2024-01-01T10:00:00Z",
+            teamOneName = "A", teamTwoName = "B",
+            paymentConfig = HistoryPaymentConfig(
+                gameId = "g1",
+                rows = listOf(SettlementRow(eventPlayerId = "ep1", name = "Alice", amount = 10.0, status = "pending")),
+            ),
+        )
+        coEvery { api.fetchHistoryDetail("e1", "h1") } returns history
+        coEvery { api.settleShare("e1", "g1", "ep1") } returns OkResponse(ok = true)
+
+        val vm = HistoryDetailViewModel(api)
+        vm.load("e1", "h1")
+        advanceUntilIdle()
+
+        vm.togglePayment("e1", "h1", 0)
+        advanceUntilIdle()
+
+        coVerify { api.settleShare("e1", "g1", "ep1") }
+        coVerify(exactly = 0) { api.updateHistorySnapshot(any(), any(), any(), any()) }
+    }
 }
