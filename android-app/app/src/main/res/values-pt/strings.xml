@@ -440,4 +440,24 @@
     <string name="match_events_team_one">Equipa 1</string>
     <string name="match_events_team_two">Equipa 2</string>
     <string name="match_events_top_scorers">Melhores marcadores</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Métodos de início de sessão</string>
+    <string name="linked_signins_desc">Palavra-passe e contas sociais que podes usar para entrar.</string>
+    <string name="credential_password">Palavra-passe</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Ligar Google</string>
+    <string name="unlink_credential_btn">Remover</string>
+    <string name="credential_unlinked">Método de início de sessão removido.</string>
+    <string name="credential_unlink_error">Não foi possível remover o método de início de sessão.</string>
+    <string name="credential_load_error">Não foi possível carregar os métodos de início de sessão.</string>
+    <string name="link_google_success">Google ligado à tua conta.</string>
+    <string name="link_google_error">Não foi possível ligar o Google. Tenta novamente.</string>
+    <string name="only_credential_hint">Este é o teu único método de início de sessão.</string>
+    <string name="merge_confirm_title">Fundir contas?</string>
+    <string name="merge_confirm_desc">Este início de sessão Google pertence a outra conta Convocados (%1$s, criada em %2$s). Fundir move os dados para esta conta, fecha sessão noutros dispositivos e não pode ser desfeito.</string>
+    <string name="merge_confirm_btn">Fundir contas</string>
+    <string name="merge_cancel_btn">Cancelar</string>
+    <string name="merge_success">Contas fundidas.</string>
+    <string name="merge_error">Não foi possível fundir as contas.</string>
 </resources>

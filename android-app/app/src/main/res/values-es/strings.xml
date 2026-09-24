@@ -417,4 +417,24 @@
     <string name="match_events_team_one">Equipo 1</string>
     <string name="match_events_team_two">Equipo 2</string>
     <string name="match_events_top_scorers">Máximos goleadores</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Métodos de acceso</string>
+    <string name="linked_signins_desc">Contraseña y cuentas sociales que puedes usar para entrar.</string>
+    <string name="credential_password">Contraseña</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Vincular Google</string>
+    <string name="unlink_credential_btn">Quitar</string>
+    <string name="credential_unlinked">Método de acceso eliminado.</string>
+    <string name="credential_unlink_error">No se pudo eliminar el método de acceso.</string>
+    <string name="credential_load_error">No se pudieron cargar los métodos de acceso.</string>
+    <string name="link_google_success">Google vinculado a tu cuenta.</string>
+    <string name="link_google_error">No se pudo vincular Google. Inténtalo de nuevo.</string>
+    <string name="only_credential_hint">Este es tu único método de acceso.</string>
+    <string name="merge_confirm_title">¿Fusionar cuentas?</string>
+    <string name="merge_confirm_desc">Este acceso de Google pertenece a otra cuenta de Convocados (%1$s, creada el %2$s). Fusionar mueve sus datos a esta cuenta, cierra sesión en otros dispositivos y no se puede deshacer.</string>
+    <string name="merge_confirm_btn">Fusionar cuentas</string>
+    <string name="merge_cancel_btn">Cancelar</string>
+    <string name="merge_success">Cuentas fusionadas.</string>
+    <string name="merge_error">No se pudieron fusionar las cuentas.</string>
 </resources>

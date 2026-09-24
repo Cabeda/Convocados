@@ -429,6 +429,18 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun retractInvite(eventId: String, inviteId: String): OkResponse =
         client.delete("/api/events/$eventId/invites", InviteRetractRequest(inviteId))
+
+    // ── Linked sign-in methods (ADR 0040) ──────────────────────────────────
+    suspend fun fetchCredentials(): CredentialsResponse = client.get("/api/me/credentials")
+
+    suspend fun unlinkCredential(credentialId: String): OkResponse =
+        client.delete("/api/me/credentials", UnlinkCredentialRequest(credentialId))
+
+    suspend fun fetchPendingMerge(): PendingMergeResponse =
+        client.get("/api/me/credentials/pending-merge")
+
+    suspend fun confirmMerge(): OkResponse =
+        client.post("/api/me/credentials/merge", ConfirmMergeRequest())
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────
