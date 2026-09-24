@@ -107,7 +107,7 @@ class ScoreViewModel @Inject constructor(
                 // of the game window, and highlight the next upcoming one.
                 val alarmFractions = computeAlarmFractions(settings.alarms, durationMinutes)
                 val totalMs = durationMinutes * 60_000L
-                val nextAlarmFraction = nextAlarm?.let { n -> kickoffMs?.let { k -> ((n - k).toFloat() / totalMs).coerceIn(0f, 1f) } }
+                val nextAlarmFraction = nextAlarm?.let { n -> kickoffMs.let { k -> ((n - k).toFloat() / totalMs).coerceIn(0f, 1f) } }
                 _uiState.update { state ->
                     val parsedScoreSets = if (history == null) {
                         state.scoreSets
@@ -125,7 +125,7 @@ class ScoreViewModel @Inject constructor(
                         // API while a structured match is incomplete. Do not
                         // turn the local fallback 0-0 values into a final result.
                         hasFinalScore = if (hasStructuredScore) hasCompletedMatch(parsedScoreSets)
-                            else history?.scoreOne != null && history?.scoreTwo != null,
+                            else history?.scoreOne != null && history.scoreTwo != null,
                         scoreSets = parsedScoreSets,
                         legacyScalarScore = if (tennisScoring && history?.scoreSetsJson == null && history?.scoreOne != null && history.scoreTwo != null) {
                             history.scoreOne to history.scoreTwo
@@ -364,8 +364,8 @@ internal fun hasCompletedMatch(sets: List<SetScore>): Boolean =
 internal fun matchScoreFromSets(sets: List<SetScore>): Pair<Int, Int> = sets.fold(0 to 0) { score, set ->
     if (!isCompletedSet(set)) return@fold score
     val hasTiebreak = set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null
-    val teamOneWon = if (hasTiebreak) set.tiebreakTeamOne!! > set.tiebreakTeamTwo!! else set.teamOne > set.teamTwo
-    val teamTwoWon = if (hasTiebreak) set.tiebreakTeamTwo!! > set.tiebreakTeamOne!! else set.teamTwo > set.teamOne
+    val teamOneWon = if (hasTiebreak) set.tiebreakTeamOne > set.tiebreakTeamTwo else set.teamOne > set.teamTwo
+    val teamTwoWon = if (hasTiebreak) set.tiebreakTeamTwo > set.tiebreakTeamOne else set.teamTwo > set.teamOne
     when {
         teamOneWon -> (score.first + 1) to score.second
         teamTwoWon -> score.first to (score.second + 1)
@@ -376,8 +376,8 @@ internal fun matchScoreFromSets(sets: List<SetScore>): Pair<Int, Int> = sets.fol
 private fun isCompletedSet(set: SetScore): Boolean {
     val hasTiebreak = set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null
     if (hasTiebreak) {
-        return maxOf(set.tiebreakTeamOne!!, set.tiebreakTeamTwo!!) >= 7 &&
-            kotlin.math.abs(set.tiebreakTeamOne!! - set.tiebreakTeamTwo!!) >= 2
+        return maxOf(set.tiebreakTeamOne, set.tiebreakTeamTwo) >= 7 &&
+            kotlin.math.abs(set.tiebreakTeamOne - set.tiebreakTeamTwo) >= 2
     }
     val high = maxOf(set.teamOne, set.teamTwo)
     return high >= 6 && (kotlin.math.abs(set.teamOne - set.teamTwo) >= 2 || high >= 7)
