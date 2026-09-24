@@ -3,10 +3,12 @@ import { prisma } from "../../../lib/db.server";
 import { auth } from "../../../lib/auth.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
 import { verifyGoogleIdToken } from "../../../lib/googleToken.server";
+import { captureDuring, noteAccountLookup } from "../../../lib/mergeCapture.server";
 import crypto from "node:crypto";
 
 // ponytail: single endpoint for all native mobile auth flows.
-// Dispatches on `action` field: google-id-token, email-signin, email-signup, magic-link.
+// Dispatches on `action` field: google-id-token, email-signin, email-signup,
+// magic-link, refresh, google-link.
 // Returns OAuth tokens directly (same format as mobile-callback POST).
 
 const MOBILE_CLIENT_ID = "convocados-mobile-app";
@@ -120,6 +122,81 @@ async function handleGoogleIdToken(body: Record<string, unknown>, request: Reque
   }
 
   return issueTokens(user.id);
+}
+
+/**
+ * Link a Google credential to the *currently authenticated* user (ADR 0040).
+ *
+ * Android has no browser session for the web `linkSocial` redirect flow, so it
+ * presents Google via Credential Manager and posts the idToken here instead.
+ * On an Account(issuer, accountId) owned by another user we stash the pending
+ * merge for the interstitial — same contract as the web OAuth link callback.
+ */
+async function handleGoogleLink(body: Record<string, unknown>, request: Request) {
+  const idToken = String(body.idToken ?? "").trim();
+  if (!idToken) {
+    return Response.json({ error: "idToken is required" }, { status: 400 });
+  }
+
+  const authHeader = request.headers.get("authorization") ?? "";
+  const accessToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!accessToken) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const session = await prisma.oauthAccessToken.findFirst({
+    where: { token: accessToken, expiresAt: { gt: new Date() } },
+  });
+  if (!session?.userId) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const validAudiences = [
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_ANDROID_CLIENT_ID,
+    process.env.GOOGLE_WEB_CLIENT_ID,
+  ].filter(Boolean) as string[];
+
+  const payload = await verifyGoogleIdToken(idToken, validAudiences);
+  if (!payload) {
+    return Response.json({ error: "Invalid or expired Google ID token" }, { status: 401 });
+  }
+
+  const existing = await prisma.account.findFirst({
+    where: { providerId: "google", accountId: payload.sub },
+  });
+
+  if (existing) {
+    if (existing.userId === session.userId) {
+      return Response.json({ ok: true, alreadyLinked: true });
+    }
+    // Owned by someone else — capture the pending merge for the interstitial.
+    // The credential must NOT be attached to the survivor here; that only
+    // happens when the user confirms POST /api/me/credentials/merge.
+    await captureDuring(session.userId, async () => {
+      noteAccountLookup(
+        { providerId: "google", accountId: payload.sub, issuer: existing.issuer },
+        existing,
+      );
+    });
+    return Response.json(
+      { error: "account_already_linked_to_different_user" },
+      { status: 409 },
+    );
+  }
+
+  await prisma.account.create({
+    data: {
+      id: crypto.randomUUID(),
+      userId: session.userId,
+      accountId: payload.sub,
+      providerId: "google",
+      issuer: "https://accounts.google.com",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  });
+  return Response.json({ ok: true });
 }
 
 /** Handle email/password sign-in. */
@@ -258,9 +335,14 @@ export const POST: APIRoute = async ({ request }) => {
         return handleMagicLink(body);
       case "refresh":
         return handleRefresh(body);
+      case "google-link":
+        return handleGoogleLink(body, request);
       default:
         return Response.json(
-          { error: "Invalid action. Use: google-id-token, email-signin, email-signup, magic-link, refresh" },
+          {
+            error:
+              "Invalid action. Use: google-id-token, email-signin, email-signup, magic-link, refresh, google-link",
+          },
           { status: 400 },
         );
     }

@@ -50,6 +50,14 @@ sealed interface AuthResult {
     data object Cancelled : AuthResult
 }
 
+/** Result of linking a Google credential to the signed-in user (ADR 0040). */
+sealed interface LinkResult {
+    data object Success : LinkResult
+    /** The Google account already belongs to a different user — pending merge captured. */
+    data object Conflict : LinkResult
+    data class Error(val message: String) : LinkResult
+}
+
 @Singleton
 class AuthManager @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -116,8 +124,48 @@ class AuthManager @Inject constructor(
         }
     }
 
-    // ── Email/Password Sign-In ───────────────────────────────────────────────
+    // ── Account linking (ADR 0040) ───────────────────────────────────────────
 
+    /**
+     * Extract the Google idToken from a Credential Manager response without
+     * exchanging it for tokens — linking keeps the existing session.
+     */
+    fun extractGoogleIdToken(response: GetCredentialResponse): String? = runCatching {
+        GoogleIdTokenCredential.createFrom(response.credential.data).idToken
+    }.getOrNull()
+
+    /**
+     * Link a Google credential to the signed-in user.
+     *
+     * Android has no browser session for the web linkSocial redirect flow, so
+     * the idToken from Credential Manager is posted to mobile-native instead.
+     */
+    suspend fun linkGoogleCredential(idToken: String): LinkResult {
+        val accessToken = tokenStore.getTokens()?.accessToken
+            ?: return LinkResult.Error("Not authenticated")
+        if (idToken.isBlank()) return LinkResult.Error("idToken is required")
+
+        return try {
+            val response = httpClient.post("$baseUrl/api/auth/mobile-native") {
+                contentType(ContentType.Application.Json)
+                header("Authorization", "Bearer $accessToken")
+                setBody(mapOf("action" to "google-link", "idToken" to idToken))
+            }
+            when {
+                response.status == HttpStatusCode.Conflict -> LinkResult.Conflict
+                response.status.isSuccess() -> LinkResult.Success
+                else -> {
+                    val err = runCatching { response.body<MobileAuthMessage>() }.getOrNull()
+                    LinkResult.Error(err?.error ?: err?.message ?: "Could not link Google")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Google link failed", e)
+            LinkResult.Error(e.message ?: "Could not link Google")
+        }
+    }
+
+    // ── Email/Password Sign-In ───────────────────────────────────────────────
     suspend fun signInWithEmail(email: String, password: String): AuthResult {
         return try {
             val response = httpClient.post("$baseUrl/api/auth/mobile-native") {

@@ -19,6 +19,12 @@ class ConvocadosFcmService : FirebaseMessagingService() {
 
     @Inject lateinit var pushTokenManager: PushTokenManager
 
+    // FirebaseMessagingService.onNewToken is marked deprecated upstream in
+    // firebase-messaging 25.x with no replacement published yet, but it is still
+    // the documented callback for token rotation. Tracked with the other
+    // deprecation migrations; suppress rather than drop the override (dropping it
+    // would silently stop token re-registration).
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun onNewToken(token: String) {
         Log.d("FCM", "New token: ${token.take(20)}...")
         // Re-register immediately if user is authenticated

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
+import { getPendingMerge, clearPendingMerges } from "~/lib/mergeCapture.server";
 
 // Mock better-auth handler — controls email/password sign-in/sign-up behavior
 const mockAuthHandler = vi.fn();
@@ -348,6 +349,184 @@ describe("POST /api/auth/mobile-native — refresh", () => {
     await POST(ctx({ action: "refresh", refresh_token: refreshToken }));
     const res = await POST(ctx({ action: "refresh", refresh_token: refreshToken }));
     expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /api/auth/mobile-native — google-link (ADR 0040)", () => {
+  function ctxWithAuth(body: unknown, accessToken?: string) {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (accessToken) headers.authorization = `Bearer ${accessToken}`;
+    const request = new Request("http://localhost/api/auth/mobile-native", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    return { request, params: {} } as any;
+  }
+
+  async function seedSession(email: string, userId = "survivor") {
+    await prisma.user.create({
+      data: {
+        id: userId,
+        email,
+        name: "Survivor",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+    const accessToken = randomBytes(32).toString("hex");
+    await prisma.oauthAccessToken.create({
+      data: {
+        id: randomUUID(),
+        token: accessToken,
+        userId,
+        clientId: "convocados-mobile-app",
+        scopes: "openid",
+        expiresAt: new Date(Date.now() + 3600_000),
+      },
+    });
+    return accessToken;
+  }
+
+  function googlePayload(sub: string, email = "linked@example.com") {
+    return {
+      aud: "test-client-id",
+      email,
+      email_verified: true,
+      sub,
+      name: "Linked User",
+      picture: "https://example.com/p.jpg",
+    };
+  }
+
+  beforeEach(() => {
+    clearPendingMerges();
+  });
+
+  it("returns 401 when no Authorization header is sent", async () => {
+    const res = await POST(ctxWithAuth({ action: "google-link", idToken: "tok" }));
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toContain("Not authenticated");
+  });
+
+  it("returns 401 for an unknown or expired access token", async () => {
+    const res = await POST(
+      ctxWithAuth({ action: "google-link", idToken: "tok" }, "not-a-real-token"),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when idToken is missing", async () => {
+    const accessToken = await seedSession("s@example.com");
+    const res = await POST(ctxWithAuth({ action: "google-link" }, accessToken));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("idToken is required");
+  });
+
+  it("returns 401 when Google verification fails", async () => {
+    const accessToken = await seedSession("s@example.com");
+    mockVerifyGoogleToken.mockResolvedValueOnce(null);
+
+    const res = await POST(ctxWithAuth({ action: "google-link", idToken: "bad" }, accessToken));
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toContain("Invalid or expired");
+  });
+
+  it("links a free Google account to the session user", async () => {
+    const accessToken = await seedSession("s@example.com");
+    mockVerifyGoogleToken.mockResolvedValue(googlePayload("free-sub-1"));
+
+    const res = await POST(
+      ctxWithAuth({ action: "google-link", idToken: "tok" }, accessToken),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+
+    const account = await prisma.account.findFirst({
+      where: { userId: "survivor", providerId: "google" },
+    });
+    expect(account).not.toBeNull();
+    expect(account!.accountId).toBe("free-sub-1");
+    expect(account!.issuer).toBe("https://accounts.google.com");
+    expect(getPendingMerge("survivor")).toBeNull();
+  });
+
+  it("is idempotent when the Google account is already linked to the same user", async () => {
+    const accessToken = await seedSession("s@example.com");
+    await prisma.account.create({
+      data: {
+        id: "acc-existing",
+        userId: "survivor",
+        accountId: "already-sub",
+        providerId: "google",
+        issuer: "https://accounts.google.com",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+    mockVerifyGoogleToken.mockResolvedValue(googlePayload("already-sub"));
+
+    const res = await POST(
+      ctxWithAuth({ action: "google-link", idToken: "tok" }, accessToken),
+    );
+    expect(res.status).toBe(200);
+
+    const accounts = await prisma.account.findMany({
+      where: { userId: "survivor", providerId: "google" },
+    });
+    expect(accounts).toHaveLength(1);
+    expect(getPendingMerge("survivor")).toBeNull();
+  });
+
+  it("returns 409 and captures a pending merge when the account belongs to another user", async () => {
+    const accessToken = await seedSession("s@example.com");
+    await prisma.user.create({
+      data: {
+        id: "absorbed-user",
+        email: "other@example.com",
+        name: "Other",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+    await prisma.account.create({
+      data: {
+        id: "acc-owned",
+        userId: "absorbed-user",
+        accountId: "owned-sub",
+        providerId: "google",
+        issuer: "https://accounts.google.com",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+    mockVerifyGoogleToken.mockResolvedValue(googlePayload("owned-sub", "other@example.com"));
+
+    const res = await POST(
+      ctxWithAuth({ action: "google-link", idToken: "tok" }, accessToken),
+    );
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe("account_already_linked_to_different_user");
+
+    // Conflict must NOT attach the credential to the survivor.
+    const attached = await prisma.account.findFirst({
+      where: { userId: "survivor", providerId: "google" },
+    });
+    expect(attached).toBeNull();
+
+    // Interstitial data is available via GET /api/me/credentials/pending-merge.
+    const pending = getPendingMerge("survivor");
+    expect(pending).not.toBeNull();
+    expect(pending!.absorbedUserId).toBe("absorbed-user");
+    expect(pending!.accountId).toBe("owned-sub");
+    expect(pending!.providerId).toBe("google");
   });
 });
 

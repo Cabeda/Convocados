@@ -73,6 +73,7 @@ export const docsNav: DocsNavSection[] = [
       { href: "/docs/guides/webhook-openclaw", label: "Webhook + OpenClaw" },
       { href: "/docs/guides/self-hosting", label: "Self-Hosting" },
       { href: "/docs/guides/contributing", label: "Contributing" },
+      { href: "/docs/accounts", label: "Accounts & Sign-in" },
       { href: "/docs/privacy", label: "Privacy" },
       { href: "/docs/delete-account", label: "Delete Account" },
     ],

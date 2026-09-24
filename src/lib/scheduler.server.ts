@@ -151,6 +151,9 @@ async function _processReminderJob(job: { id: string; eventId: string | null; ty
     },
   });
   if (!event) return;
+  // Archived events never notify — jobs may still be queued from before the
+  // archive. Mark processed (the caller does) without sending anything.
+  if (event.archivedAt) return;
 
   const activePlayers = event.players.filter((p) => !p.archivedAt);
   const spotsLeft = Math.max(0, event.maxPlayers - activePlayers.length);
@@ -217,6 +220,8 @@ async function _processPostGameJob(job: { id: string; eventId: string | null }) 
     },
   });
   if (!event) return;
+  // Archived events never notify (see _processReminderJob).
+  if (event.archivedAt) return;
 
   const activePlayers = event.players.filter((p) => !p.archivedAt);
   const spotsLeft = Math.max(0, event.maxPlayers - activePlayers.length);

@@ -32,6 +32,8 @@ data class GameSettings(
     val vibrationEnabled: Boolean = false,
     val vibrationIntervalMinutes: Int = 5,
     val gameEndVibration: Boolean = false,
+    /** GameHistory ids whose Season Rank tier-up haptic already fired (ADR 0031). */
+    val celebratedTierUp: Set<String> = emptySet(),
 ) {
     /** Effective kickoff: user override ?: scheduled game time. */
     val effectiveKickoffMs: Long? get() = kickoffEpochMs ?: scheduledKickoffMs

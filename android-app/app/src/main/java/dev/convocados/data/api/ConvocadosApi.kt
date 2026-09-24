@@ -144,6 +144,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateElo(eventId: String, enabled: Boolean): OkResponse =
         client.put("/api/events/$eventId/elo", EloRequest(enabled))
 
+    suspend fun updateCompetition(eventId: String, request: CompetitionRequest): CompetitionResponse =
+        client.put("/api/events/$eventId/competition", request)
+
     suspend fun updateHideEloInTeams(eventId: String, hide: Boolean): OkResponse =
         client.put("/api/events/$eventId/hide-elo-in-teams", HideEloInTeamsRequest(hide))
 
@@ -377,6 +380,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateFollowPreferences(eventId: String, overrides: FollowOverridesRequest): FollowStateResponse =
         client.put("/api/events/$eventId/follow", overrides)
 
+    /** ADR 0025: reversible per-event invite opt-out for the caller's EventPlayer. */
+    suspend fun setInvitationOptOut(eventId: String, optOut: Boolean): InvitationOptOutResponse =
+        client.post("/api/events/$eventId/invitation-opt-out", InvitationOptOutRequest(optOut))
+
     // ── Court Finder ──────────────────────────────────────────────────────
     suspend fun fetchCourtAlternatives(
         eventId: String,
@@ -425,6 +432,18 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun retractInvite(eventId: String, inviteId: String): OkResponse =
         client.delete("/api/events/$eventId/invites", InviteRetractRequest(inviteId))
+
+    // ── Linked sign-in methods (ADR 0040) ──────────────────────────────────
+    suspend fun fetchCredentials(): CredentialsResponse = client.get("/api/me/credentials")
+
+    suspend fun unlinkCredential(credentialId: String): OkResponse =
+        client.delete("/api/me/credentials", UnlinkCredentialRequest(credentialId))
+
+    suspend fun fetchPendingMerge(): PendingMergeResponse =
+        client.get("/api/me/credentials/pending-merge")
+
+    suspend fun confirmMerge(): OkResponse =
+        client.post("/api/me/credentials/merge", ConfirmMergeRequest())
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────
@@ -455,6 +474,20 @@ data class CreateEventRequest(
 @Serializable data class SetInitialRatingRequest(val name: String, val initialRating: Int)
 @Serializable data class PurgePlayerRequest(val name: String)
 @Serializable data class EloRequest(val eloEnabled: Boolean)
+@Serializable data class CompetitionRequest(
+    val enabled: Boolean? = null,
+    val rankDecayEnabled: Boolean? = null,
+    val inactiveRankBehavior: String? = null,
+)
+@Serializable data class CompetitionResponse(
+    val eloEnabled: Boolean = false,
+    val rankEnabled: Boolean = true,
+    val rankDecayEnabled: Boolean = false,
+    val inactiveRankBehavior: String = "freeze",
+    val balanced: Boolean = false,
+    val hideEloInTeams: Boolean = false,
+    val mvpEloEnabled: Boolean = true,
+)
 @Serializable data class HideEloInTeamsRequest(val hideEloInTeams: Boolean)
 @Serializable data class SplitCostsRequest(val splitCostsEnabled: Boolean)
 @Serializable data class BalancedRequest(val balanced: Boolean)
@@ -492,5 +525,8 @@ data class FollowOverridesRequest(
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
 )
+
+@Serializable data class InvitationOptOutRequest(val optOut: Boolean)
+@Serializable data class InvitationOptOutResponse(val ok: Boolean = false, val optedOut: Boolean = false)
 
 @Serializable data class RsvpSubmitRequest(val status: String)

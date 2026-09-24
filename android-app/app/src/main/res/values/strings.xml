@@ -73,8 +73,6 @@
     <string name="server_url">Server URL</string>
     <string name="language">Language</string>
     <string name="notifications_title">Notifications</string>
-    <string name="enable_notifications">Enable notifications</string>
-    <string name="enable_notifications_desc">Choose when Convocados can send game reminders and updates.</string>
     <string name="notifications_subtitle">Manage push &amp; email preferences</string>
     <string name="sign_out">Sign out</string>
     <string name="edit_name">Edit name</string>
@@ -251,12 +249,19 @@
     <string name="push_notifications">Push notifications</string>
     <string name="enable_push">Enable push</string>
     <string name="enable_push_desc">Master toggle for all push notifications</string>
+    <string name="this_device_title">This device</string>
+    <string name="device_push_on">Notifications are on for this device</string>
+    <string name="device_push_off">Notifications are off on this device</string>
+    <string name="device_push_blocked">Notifications are blocked in system settings</string>
+    <string name="open_notification_settings">Open settings</string>
     <string name="player_activity_desc">When players join or leave</string>
     <string name="game_reminders_desc">Before your game starts</string>
     <string name="event_updates">Event updates</string>
     <string name="event_updates_desc">When event details change</string>
     <string name="payment_reminders">Payment reminders</string>
     <string name="post_game_results_desc">Scores and wrap-up after the game ends</string>
+    <string name="invite_opt_out_label">Don\'t invite me to this game</string>
+    <string name="invite_opt_out_desc">Pause invites, suggestions and reminder pings for this game. You\'ll still stay on the player list.</string>
     <string name="notification_tiers_title">How notifications work</string>
     <string name="notification_tiers_desc">You get event updates (cancellations, invites, open spots) for all games you follow. Game details (player activity, reminders, scores) are only sent when you\'re playing — or you can enable \"All updates\" per event.</string>
 
@@ -349,6 +354,14 @@
     <string name="duration">Duration</string>
     <string name="allow_manual_rating">Allow manual rating</string>
     <string name="show_competitive_data">Show competitive data</string>
+    <string name="competition_settings">Competition</string>
+    <string name="competitive_rankings">Competitive rankings</string>
+    <string name="competitive_rankings_desc">One switch turns on skill ratings, balanced teams, Season Rank, and MVP impact.</string>
+    <string name="advanced_settings">Advanced</string>
+    <string name="rank_decay">Decay Rank for inactive players</string>
+    <string name="inactive_rank_behavior">When a player is inactive or withdrawn</string>
+    <string name="inactive_rank_freeze">Freeze</string>
+    <string name="inactive_rank_reset">Reset</string>
     <string name="mvp_voting">MVP voting</string>
     <string name="mvp_elo">MVP ELO</string>
     <string name="elo_ratings">ELO ratings</string>
@@ -477,4 +490,24 @@
     <string name="match_events_team_one">Team 1</string>
     <string name="match_events_team_two">Team 2</string>
     <string name="match_events_top_scorers">Top scorers</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Sign-in methods</string>
+    <string name="linked_signins_desc">Password and social accounts you can use to sign in.</string>
+    <string name="credential_password">Password</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Link Google</string>
+    <string name="unlink_credential_btn">Remove</string>
+    <string name="credential_unlinked">Sign-in method removed.</string>
+    <string name="credential_unlink_error">Could not remove sign-in method.</string>
+    <string name="credential_load_error">Could not load sign-in methods.</string>
+    <string name="link_google_success">Google linked to your account.</string>
+    <string name="link_google_error">Could not link Google. Try again.</string>
+    <string name="only_credential_hint">This is your only sign-in method.</string>
+    <string name="merge_confirm_title">Merge accounts?</string>
+    <string name="merge_confirm_desc">This Google sign-in belongs to another Convocados account (%1$s, created %2$s). Merging moves its data into this account, signs out its other devices, and cannot be undone.</string>
+    <string name="merge_confirm_btn">Merge accounts</string>
+    <string name="merge_cancel_btn">Cancel</string>
+    <string name="merge_success">Accounts merged.</string>
+    <string name="merge_error">Could not merge accounts.</string>
 </resources>

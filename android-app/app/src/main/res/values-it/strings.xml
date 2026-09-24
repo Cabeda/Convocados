@@ -50,8 +50,6 @@
     <string name="server_url">URL del server</string>
     <string name="language">Lingua</string>
     <string name="notifications_title">Notifiche</string>
-    <string name="enable_notifications">Attiva le notifiche</string>
-    <string name="enable_notifications_desc">Scegli quando Convocados può inviare promemoria e aggiornamenti sulle partite.</string>
     <string name="notifications_subtitle">Gestisci le preferenze push ed e-mail</string>
     <string name="sign_out">Esci</string>
     <string name="edit_name">Modifica nome</string>
@@ -216,12 +214,19 @@
     <string name="push_notifications">Notifiche push</string>
     <string name="enable_push">Attiva push</string>
     <string name="enable_push_desc">Interruttore generale per tutte le notifiche push</string>
+    <string name="this_device_title">Questo dispositivo</string>
+    <string name="device_push_on">Le notifiche sono attive su questo dispositivo</string>
+    <string name="device_push_off">Le notifiche sono disattivate su questo dispositivo</string>
+    <string name="device_push_blocked">Le notifiche sono bloccate nelle impostazioni di sistema</string>
+    <string name="open_notification_settings">Apri impostazioni</string>
     <string name="player_activity_desc">Quando i giocatori si uniscono o escono</string>
     <string name="game_reminders_desc">Prima dell\'inizio della partita</string>
     <string name="event_updates">Aggiornamenti dell\'evento</string>
     <string name="event_updates_desc">Quando cambiano i dettagli dell\'evento</string>
     <string name="payment_reminders">Promemoria pagamenti</string>
     <string name="post_game_results_desc">Risultati e riepilogo dopo la partita</string>
+    <string name="invite_opt_out_label">Non invitarmi a questa partita</string>
+    <string name="invite_opt_out_desc">Metti in pausa inviti, suggerimenti e promemoria per questa partita. Rimarrai nella lista giocatori.</string>
     <string name="notification_tiers_title">Come funzionano le notifiche</string>
     <string name="notification_tiers_desc">Ricevi aggiornamenti dell\'evento (cancellazioni, inviti, posti liberi) per tutte le partite che segui. I dettagli del gioco (attività giocatori, promemoria, risultati) vengono inviati solo quando giochi — oppure attiva \"Tutti gli aggiornamenti\" per evento.</string>
 
@@ -309,6 +314,14 @@
     <string name="duration">Durata</string>
     <string name="allow_manual_rating">Consenti valutazione manuale</string>
     <string name="show_competitive_data">Mostra dati competitivi</string>
+    <string name="competition_settings">Competizione</string>
+    <string name="competitive_rankings">Classifiche competitive</string>
+    <string name="competitive_rankings_desc">Un interruttore attiva classifiche, squadre bilanciate, Classifica della Stagione e impatto MVP.</string>
+    <string name="advanced_settings">Avanzate</string>
+    <string name="rank_decay">Riduci la Classifica dei giocatori inattivi</string>
+    <string name="inactive_rank_behavior">Quando un giocatore è inattivo o si ritira</string>
+    <string name="inactive_rank_freeze">Blocca</string>
+    <string name="inactive_rank_reset">Reimposta</string>
     <string name="mvp_voting">Votazione MVP</string>
     <string name="mvp_elo">ELO MVP</string>
     <string name="elo_ratings">Classifiche ELO</string>
@@ -412,4 +425,24 @@
     <string name="match_events_team_one">Squadra 1</string>
     <string name="match_events_team_two">Squadra 2</string>
     <string name="match_events_top_scorers">Migliori marcatori</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Metodi di accesso</string>
+    <string name="linked_signins_desc">Password e account social che puoi usare per accedere.</string>
+    <string name="credential_password">Password</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Collega Google</string>
+    <string name="unlink_credential_btn">Rimuovi</string>
+    <string name="credential_unlinked">Metodo di accesso rimosso.</string>
+    <string name="credential_unlink_error">Impossibile rimuovere il metodo di accesso.</string>
+    <string name="credential_load_error">Impossibile caricare i metodi di accesso.</string>
+    <string name="link_google_success">Google collegato al tuo account.</string>
+    <string name="link_google_error">Impossibile collegare Google. Riprova.</string>
+    <string name="only_credential_hint">Questo è il tuo unico metodo di accesso.</string>
+    <string name="merge_confirm_title">Unire gli account?</string>
+    <string name="merge_confirm_desc">Questo accesso Google appartiene a un altro account Convocados (%1$s, creato il %2$s). L\'unione sposta i dati in questo account, disconnette gli altri dispositivi e non può essere annullata.</string>
+    <string name="merge_confirm_btn">Unisci gli account</string>
+    <string name="merge_cancel_btn">Annulla</string>
+    <string name="merge_success">Account uniti.</string>
+    <string name="merge_error">Impossibile unire gli account.</string>
 </resources>
