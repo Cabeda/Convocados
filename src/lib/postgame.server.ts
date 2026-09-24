@@ -5,6 +5,7 @@ import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
 import { isSettledGameParticipant } from "./participants.server";
 import { isHistoryParticipant } from "./snapshotParticipants";
 import { getWrapUpGameSettlement } from "./settlement.server";
+import { occurrencePaymentRoll } from "./paymentRoll.server";
 import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
 import { summarizePayments } from "./paymentSummary";
 
@@ -63,7 +64,7 @@ export async function computePostGameStatus(
 ): Promise<PostGameStatusPayload | null> {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true },
+    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true, currentGameId: true },
   });
 
   if (!event) return null;
@@ -94,49 +95,46 @@ export async function computePostGameStatus(
   }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
 
-  // Check payment status — look at live payments first, then fall back to
-  // the latest history snapshot (covers the case where a recurrence reset
-  // cleared the live payments but the previous game still has unpaid items).
+  // Check payment status — the occurrence Game's GamePayment roll is the
+  // durable source (ADR 0016). The frozen paymentsSnapshot is only residue
+  // read when no Game exists for the occurrence.
   const eventCost = await prisma.eventCost.findUnique({
     where: { eventId: event.id },
-    include: { payments: { select: { status: true, playerName: true, amount: true, method: true } } },
+    select: { totalAmount: true, currency: true },
   });
 
-  // Determine hasCost and allPaid for the PAST game.
-  // The banner is about settling the past game. When a history entry exists,
-  // its paymentsSnapshot is the authoritative source. Live payments may belong
-  // to the NEXT game (after recurrence reset re-created costs for new players),
-  // so we only fall back to live payments when either:
-  //  a) No history entry exists yet (game ended but hasn't reset)
-  //  b) History exists without snapshot BUT the game hasn't reset yet
-  //     (history.dateTime matches event.dateTime — same game)
+  // Resolve the payment roll for the past game. When the event has NOT reset
+  // (history dateTime == event dateTime), the past occurrence is the live
+  // currentGameId — its Game.dateTime can drift from Event.dateTime after a
+  // datetime edit. After a reset, the past occurrence is the game matching the
+  // latest history's dateTime.
+  const occurrenceDt = latestHistory?.dateTime ?? event.dateTime;
+  const hasResetOccurred = !!latestHistory && event.dateTime.getTime() > latestHistory.dateTime.getTime();
+  const pastRoll = hasResetOccurred
+    ? await occurrencePaymentRoll(event.id, occurrenceDt)
+    : await occurrencePaymentRoll(event.id, occurrenceDt, event.currentGameId);
+
   let hasCost: boolean;
   let allPaid = true;
-  let pastGameSource: "snapshot" | "live" | "none" = "none";
+  let pastGameSource: "game" | "snapshot" | "none" = "none";
 
-  // Detect whether a recurrence reset has moved the event forward.
-  // If latestHistory.dateTime < event.dateTime, the event moved to a new occurrence
-  // and live payments belong to the new game, not the past one.
-  const hasResetOccurred = latestHistory
-    && event.dateTime.getTime() > latestHistory.dateTime.getTime();
-
-  if (latestHistory?.paymentsSnapshot) {
-    // History snapshot exists — this is the authoritative source for the past game
+  if (pastRoll && pastRoll.length > 0) {
+    pastGameSource = "game";
+    hasCost = true;
+    allPaid = summarizePayments(pastRoll).allPaid;
+  } else if (latestHistory?.paymentsSnapshot) {
+    // No Game for the occurrence (pre-ADR residue) — frozen snapshot remains
+    // the only record.
     pastGameSource = "snapshot";
     hasCost = true;
     try {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
       allPaid = summarizePayments(snapshot).allPaid;
     } catch { /* ignore parse errors */ }
-  } else if (eventCost && eventCost.totalAmount > 0 && !hasResetOccurred) {
-    // No snapshot AND game hasn't reset yet — live payments are the past game's
-    pastGameSource = "live";
-    hasCost = true;
-    allPaid = summarizePayments(eventCost.payments).allPaid;
   } else {
-    // Either: no cost at all, OR history exists post-reset with no snapshot
-    // (past game had no cost). Live payments belong to the NEW game — don't use.
-    hasCost = false;
+    // No Game and no snapshot: a one-off that hasn't reset still surfaces the
+    // EventCost template (cost configured, nothing charged yet).
+    hasCost = !latestHistory && (eventCost?.totalAmount ?? 0) > 0;
   }
 
   // ─── Session-dependent flags (needed before the MVP block below) ──────
@@ -247,13 +245,19 @@ export async function computePostGameStatus(
   // Untracked games ("each one pays their own share") are settled by
   // definition, so stale legacy snapshot rows must not count as pending.
   let hasPendingPastPayments = false;
-  if (!gameEnded && latestHistory?.paymentsSnapshot && wrapUpSettlement?.mode !== "untracked") {
-    try {
-      const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
-      if (snapshot.length > 0) {
-        hasPendingPastPayments = !summarizePayments(snapshot).allPaid;
-      }
-    } catch { /* ignore */ }
+  if (!gameEnded && wrapUpSettlement?.mode !== "untracked") {
+    const pendingRoll = pastRoll
+      ?? (() => {
+        if (!latestHistory?.paymentsSnapshot) return null;
+        try {
+          return JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
+        } catch {
+          return null;
+        }
+      })();
+    if (pendingRoll && pendingRoll.length > 0) {
+      hasPendingPastPayments = !summarizePayments(pendingRoll).allPaid;
+    }
   }
 
   // Build paymentsSnapshot for the banner to render inline.
@@ -272,17 +276,17 @@ export async function computePostGameStatus(
     latestHistoryId = latestHistory.id;
   }
 
-  if (pastGameSource === "snapshot" && latestHistory?.paymentsSnapshot) {
-    try {
-      paymentsSnapshot = JSON.parse(latestHistory.paymentsSnapshot);
-    } catch { /* ignore */ }
-  } else if (pastGameSource === "live" && eventCost && eventCost.payments.length > 0) {
-    paymentsSnapshot = eventCost.payments.map((p) => ({
+  if (pastGameSource === "game" && pastRoll) {
+    paymentsSnapshot = pastRoll.map((p) => ({
       playerName: p.playerName,
       amount: p.amount,
       status: p.status,
       method: p.method,
     }));
+  } else if (pastGameSource === "snapshot" && latestHistory?.paymentsSnapshot) {
+    try {
+      paymentsSnapshot = JSON.parse(latestHistory.paymentsSnapshot);
+    } catch { /* ignore */ }
   }
 
   // Check if the current user is a participant of the settled game.
@@ -303,8 +307,6 @@ export async function computePostGameStatus(
         sessionUser: session.user,
         event,
         latestHistory,
-        pastGameSource,
-        eventCost,
       });
     }
   }

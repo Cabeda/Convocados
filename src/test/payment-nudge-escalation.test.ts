@@ -37,10 +37,44 @@ async function seedPastEvent(ownerId: string | null, hoursAgo: number) {
   });
 }
 
+/**
+ * Occurrence Game + EventPlayer + GamePayment (ADR 0016 debt source).
+ * Returns the GamePayment row.
+ */
+async function seedOwedPayment(
+  eventId: string,
+  name: string,
+  amount: number,
+  status: string,
+  userId: string | null,
+) {
+  const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
+  let game = await prisma.game.findFirst({ where: { eventId } });
+  if (!game) {
+    game = await prisma.game.create({
+      data: { eventId, dateTime: event.dateTime, status: "played" },
+    });
+    await prisma.event.update({ where: { id: eventId }, data: { currentGameId: game.id } });
+  }
+  const eventPlayer = await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId, name } },
+    create: { eventId, name, userId },
+    update: userId ? { userId } : {},
+  });
+  return prisma.gamePayment.upsert({
+    where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: eventPlayer.id } },
+    create: { gameId: game.id, eventPlayerId: eventPlayer.id, playerName: name, amount, status },
+    update: { amount, status },
+  });
+}
+
 beforeEach(async () => {
   mockSendPush.mockClear();
   mockWantsReminder.mockReturnValue(true);
   await prisma.paymentNudgeStage.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.player.deleteMany();
@@ -61,16 +95,7 @@ describe("processPaymentEscalation", () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
     const event = await seedPastEvent(owner.id, 1); // ended 1h ago
-
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 10 },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
-    });
+    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
 
     const result = await processPaymentEscalation();
 
@@ -87,16 +112,7 @@ describe("processPaymentEscalation", () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
     const event = await seedPastEvent(owner.id, 50); // ended 50h ago
-
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 10 },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
-    });
+    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
     // Already at stage 1
     await prisma.paymentNudgeStage.create({
       data: { eventId: event.id, userId: debtor.id, stage: 1, lastSentAt: new Date(Date.now() - 49 * 3600_000) },
@@ -112,20 +128,9 @@ describe("processPaymentEscalation", () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
     const event = await seedPastEvent(owner.id, 130); // ended 130h ago (>5 days)
-
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 50 },
-    });
-    await prisma.playerPayment.createMany({
-      data: [
-        { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
-        { eventCostId: cost.id, playerName: "Paid1", amount: 5, status: "paid" },
-        { eventCostId: cost.id, playerName: "Paid2", amount: 5, status: "paid" },
-      ],
-    });
+    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
+    await seedOwedPayment(event.id, "Paid1", 5, "paid", null);
+    await seedOwedPayment(event.id, "Paid2", 5, "paid", null);
     await prisma.paymentNudgeStage.create({
       data: { eventId: event.id, userId: debtor.id, stage: 2 },
     });
@@ -140,16 +145,7 @@ describe("processPaymentEscalation", () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
     const event = await seedPastEvent(owner.id, 170); // ended 170h ago (>7 days)
-
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 10 },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
-    });
+    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
     await prisma.paymentNudgeStage.create({
       data: { eventId: event.id, userId: debtor.id, stage: 3 },
     });
@@ -171,16 +167,7 @@ describe("processPaymentEscalation", () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
     const event = await seedPastEvent(owner.id, 1);
-
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 10 },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
-    });
+    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
 
     const result = await processPaymentEscalation();
 
@@ -191,17 +178,8 @@ describe("processPaymentEscalation", () => {
   it("skips players not linked to a user account", async () => {
     const owner = await seedUser({ name: "Owner" });
     const event = await seedPastEvent(owner.id, 1);
-
-    // Player without userId
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Guest", order: 0 },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 10 },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Guest", amount: 5, status: "pending" },
-    });
+    // EventPlayer without userId
+    await seedOwedPayment(event.id, "Guest", 5, "pending", null);
 
     const result = await processPaymentEscalation();
 
@@ -213,16 +191,7 @@ describe("processPaymentEscalation", () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
     const event = await seedPastEvent(owner.id, 200);
-
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 10 },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
-    });
+    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
     await prisma.paymentNudgeStage.create({
       data: { eventId: event.id, userId: debtor.id, stage: 3, organiserAlert: true },
     });
@@ -240,16 +209,7 @@ describe("processPaymentEscalation", () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
     const event = await seedPastEvent(owner.id, 1); // ended 1h ago
-
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 10 },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
-    });
+    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
 
     // Simulate 3 consecutive cron ticks: the nudge must fire on tick 1 only.
     await processPaymentEscalation();
@@ -268,22 +228,13 @@ describe("processPaymentEscalation", () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
     const event = await seedPastEvent(owner.id, 1);
-
-    await prisma.player.create({
-      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
-    });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 10 },
-    });
-    const payment = await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
-    });
+    const payment = await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
 
     await processPaymentEscalation();
     expect(mockSendPush.mock.calls.length).toBe(1);
 
     // Debtor pays: next tick sends nothing and drops the stale tracker.
-    await prisma.playerPayment.update({ where: { id: payment.id }, data: { status: "paid" } });
+    await prisma.gamePayment.update({ where: { id: payment.id }, data: { status: "paid" } });
     mockSendPush.mockClear();
     await processPaymentEscalation();
 

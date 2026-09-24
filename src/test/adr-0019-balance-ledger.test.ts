@@ -96,13 +96,16 @@ describe("getOutstandingBalance ledger vs legacy routing", () => {
     });
     await prisma.player.create({ data: { eventId: event.id, name: "Alice", userId: user.id } });
 
-    // Legacy PlayerPayment exists (no ledger rows yet)
-    const ec = await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 10 } });
-    await prisma.playerPayment.create({
-      data: { eventCostId: ec.id, playerName: "Alice", amount: 5, status: "pending" },
+    // Legacy occurrence roll exists (no ledger rows yet) — GamePayment is the
+    // durable row readers retargeted to (ADR 0016 / 5rhgs71k)
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 10 } });
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: new Date(Date.now() - 86400_000), status: "played" } });
+    const epAlice = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice" } });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: epAlice.id, playerName: "Alice", amount: 5, status: "pending" },
     });
 
-    // Should fall back to legacy (no WalletTransaction rows)
+    // Should fall back to legacy roll (no WalletTransaction rows)
     const legacy = await getOutstandingBalance(event.id, "Alice");
     expect(legacy.amount).toBe(5);
 
@@ -114,12 +117,13 @@ describe("getOutstandingBalance ledger vs legacy routing", () => {
       },
     });
     const fromLedger = await getOutstandingBalance(event.id, "Alice");
-    expect(fromLedger.amount).toBe(7); // 700 cents from ledger, not €5 from PlayerPayment
+    expect(fromLedger.amount).toBe(7); // 700 cents from ledger, not €5 from the roll
 
-    // Anonymous player — always falls back to legacy
+    // Anonymous player — always falls back to the occurrence roll
     await prisma.player.create({ data: { eventId: event.id, name: "Ghost" } });
-    await prisma.playerPayment.create({
-      data: { eventCostId: ec.id, playerName: "Ghost", amount: 3, status: "pending" },
+    const epGhost = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ghost" } });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: epGhost.id, playerName: "Ghost", amount: 3, status: "pending" },
     });
     const anon = await getOutstandingBalance(event.id, "Ghost");
     expect(anon.amount).toBe(3);

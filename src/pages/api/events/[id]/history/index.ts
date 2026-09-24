@@ -98,6 +98,23 @@ export const GET: APIRoute = async ({ params, request }) => {
   const eloMap = computeHistoryDeltas(allHistory);
 
   // Merge legacy GameHistory + new Game rows into a unified response
+  // ADR 0016 / 5rhgs71k: when the occurrence's Game exists, its GamePayment
+  // roll is served as paymentsSnapshot — the frozen JSON stays only as
+  // residue for pre-Game rows.
+  const paymentsByDate = new Map<string, Array<{ playerName: string; amount: number; status: string; method?: string | null }>>();
+  for (const g of playedGames) {
+    if (g.payments.length) {
+      paymentsByDate.set(
+        g.dateTime.toISOString(),
+        g.payments.map((p) => ({
+          playerName: p.eventPlayer?.name ?? p.playerName,
+          amount: p.amount,
+          status: p.status,
+          method: p.method,
+        })),
+      );
+    }
+  }
   const legacyMapped = history.map((h) => ({
     id: h.id,
     dateTime: h.dateTime.toISOString(),
@@ -109,7 +126,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     teamOneName: h.teamOneName,
     teamTwoName: h.teamTwoName,
     teamsSnapshot: h.teamsSnapshot,
-    paymentsSnapshot: h.paymentsSnapshot,
+    paymentsSnapshot: paymentsByDate.get(h.dateTime.toISOString()) ? JSON.stringify(paymentsByDate.get(h.dateTime.toISOString())) : h.paymentsSnapshot,
     createdAt: h.createdAt.toISOString(),
     source: h.source,
     eloUpdates: hideCompetitive ? null : (eloMap.get(h.id) ?? null),

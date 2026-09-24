@@ -190,6 +190,24 @@ describe("DELETE /api/events/[id]/purge-player", () => {
     expect(payments.map((p) => p.playerName)).toContain("Bob");
   });
 
+  it("deletes GamePayment records keyed by the purged player name", async () => {
+    await seedOwnerAndEvent();
+    const game = await prisma.game.create({ data: { eventId: "e-purge", dateTime: new Date() } });
+    for (const [name, status] of [["Alice", "pending"], ["Bob", "paid"]] as const) {
+      const ep = await prisma.eventPlayer.create({ data: { eventId: "e-purge", name } });
+      await prisma.gamePayment.create({
+        data: { gameId: game.id, eventPlayerId: ep.id, playerName: name, amount: 5, status },
+      });
+    }
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: "owner-purge", name: "Owner" } } } as any);
+
+    await DELETE(deleteCtx("e-purge", { name: "Alice" }));
+
+    const payments = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(payments.map((p) => p.playerName)).not.toContain("Alice");
+    expect(payments.map((p) => p.playerName)).toContain("Bob");
+  });
+
   it("removes player from TeamMember records", async () => {
     await seedOwnerAndEvent();
     const team = await prisma.teamResult.create({

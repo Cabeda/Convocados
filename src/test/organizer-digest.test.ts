@@ -136,16 +136,14 @@ describe("processOrganizerDigests", () => {
       data: { userId: user.id, digestMode: true, digestTime },
     });
     const event = await seedEvent(user.id, { title: "Paid Game" });
-    const cost = await prisma.eventCost.create({
-      data: { eventId: event.id, totalAmount: 50 },
-    });
-    await prisma.playerPayment.createMany({
-      data: [
-        { eventCostId: cost.id, playerName: "A", amount: 5, status: "pending" },
-        { eventCostId: cost.id, playerName: "B", amount: 5, status: "pending" },
-        { eventCostId: cost.id, playerName: "C", amount: 5, status: "sent" },
-      ],
-    });
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    for (const [name, status] of [["A", "pending"], ["B", "pending"], ["C", "sent"]] as const) {
+      const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name } });
+      await prisma.gamePayment.create({
+        data: { gameId: game.id, eventPlayerId: ep.id, playerName: name, amount: 5, status },
+      });
+    }
 
     const result = await processOrganizerDigests();
 

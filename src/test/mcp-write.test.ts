@@ -344,9 +344,18 @@ describe("MCP write tools — randomize_teams", () => {
 
 describe("MCP write tools — update_payment", () => {
   async function seedCost(eventId: string) {
-    const cost = await prisma.eventCost.create({ data: { eventId, totalAmount: 50 } });
-    await prisma.playerPayment.create({ data: { eventCostId: cost.id, playerName: "Alice", amount: 10, status: "pending" } });
-    return cost;
+    // Ledger writes still require the EventCost template (contract 756nurms
+    // moves the durable row to GamePayment — readers already retargeted).
+    await prisma.eventCost.create({ data: { eventId, totalAmount: 50 } });
+    const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
+    const ep = await prisma.eventPlayer.upsert({
+      where: { eventId_name: { eventId, name: "Alice" } },
+      create: { eventId, name: "Alice" },
+      update: {},
+    });
+    return prisma.gamePayment.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, playerName: "Alice", amount: 10, status: "pending" },
+    });
   }
 
   it("marks a player payment as paid and writes the ledger credit", async () => {
@@ -614,7 +623,13 @@ describe("MCP write tools — additional validation and auth gaps", () => {
     const event = await createEvent(owner.id);
     await addActivePlayer(event.id, event.currentGameId!, "Alice");
     const cost = await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 30 } });
-    await prisma.playerPayment.create({ data: { eventCostId: cost.id, playerName: "Alice", amount: 10, status: "pending" } });
+    const ep = await prisma.eventPlayer.findUniqueOrThrow({
+      where: { eventId_name: { eventId: event.id, name: "Alice" } },
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, playerName: "Alice", amount: 10, status: "pending" },
+    });
+    void cost;
     mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:payments"], authMethod: "oauth", clientId: "c1" });
     const res = await POST(ctx(callTool("convocados_update_payment", { eventId: event.id, playerName: "Alice", status: "paid", method: null })));
     expect(res.status).toBe(200);

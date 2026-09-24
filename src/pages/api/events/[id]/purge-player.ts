@@ -43,6 +43,11 @@ export const DELETE: APIRoute = async ({ params, request }) => {
       where: { eventCost: { eventId }, playerName: name },
     }),
 
+    // 3b. Delete GamePayment records keyed by playerName (ADR 0016)
+    prisma.gamePayment.deleteMany({
+      where: { game: { eventId }, playerName: name },
+    }),
+
     // 4. Scrub from TeamMember (live team assignments)
     prisma.teamMember.deleteMany({
       where: { name, team: { eventId } },

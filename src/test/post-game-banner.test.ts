@@ -20,6 +20,28 @@ function ctx(params: Record<string, string>, queryString?: string) {
   return { request, params, url: new URL(urlStr) } as any;
 }
 
+/** Occurrence Game + GamePayment roll (ADR 0016) — what postgame readers consume. */
+async function seedOccurrencePayments(
+  event: { id: string; dateTime: Date },
+  entries: Array<{ playerName: string; amount: number; status: string }>,
+) {
+  const game = await prisma.game.create({
+    data: { eventId: event.id, dateTime: event.dateTime, status: "played", teamOneName: "A", teamTwoName: "B" },
+  });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  for (const e of entries) {
+    const ep = await prisma.eventPlayer.upsert({
+      where: { eventId_name: { eventId: event.id, name: e.playerName } },
+      create: { eventId: event.id, name: e.playerName },
+      update: {},
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: e.playerName, amount: e.amount, status: e.status },
+    });
+  }
+  return game;
+}
+
 beforeEach(async () => {
   vi.clearAllMocks();
   await resetRateLimitStore();
@@ -281,12 +303,11 @@ describe("GET /api/events/:id/post-game-status", () => {
     const cost = await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
     });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Alice", amount: 25, status: "pending" },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Bob", amount: 25, status: "paid" },
-    });
+    void cost;
+    await seedOccurrencePayments(event, [
+      { playerName: "Alice", amount: 25, status: "pending" },
+      { playerName: "Bob", amount: 25, status: "paid" },
+    ]);
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
     expect(json.allPaid).toBe(false);
@@ -635,12 +656,11 @@ describe("GET /api/events/:id/post-game-status", () => {
     const cost = await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
     });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Alice", amount: 25, status: "pending" },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Bob", amount: 25, status: "paid" },
-    });
+    void cost;
+    await seedOccurrencePayments(event, [
+      { playerName: "Alice", amount: 25, status: "pending" },
+      { playerName: "Bob", amount: 25, status: "paid" },
+    ]);
     // History exists but no paymentsSnapshot
     await prisma.gameHistory.create({
       data: {
@@ -654,7 +674,7 @@ describe("GET /api/events/:id/post-game-status", () => {
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
-    // Should derive from live payments
+    // Should derive from the occurrence GamePayment roll
     expect(json.paymentsSnapshot).toHaveLength(2);
     expect(json.costCurrency).toBe("EUR");
   });
@@ -826,12 +846,11 @@ describe("GET /api/events/:id/post-game-status", () => {
     const cost = await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
     });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Alice", amount: 25, status: "paid" },
-    });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Bob", amount: 25, status: "pending" },
-    });
+    void cost;
+    await seedOccurrencePayments(event, [
+      { playerName: "Alice", amount: 25, status: "paid" },
+      { playerName: "Bob", amount: 25, status: "pending" },
+    ]);
     // No history entry at all
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
@@ -1271,12 +1290,20 @@ describe("isParticipant visibility rules (issue #658)", () => {
   it("returns isParticipant=true for an unpaid player on the settled game's payment roll even when not in the teams", async () => {
     await login("u-carol", "Carol", { isOwner: false, isAdmin: false });
     const event = await endedEvent();
-    await settledHistory(event.id, {
+    const history = await settledHistory(event.id, {
       teams: JSON.stringify([
         { team: "A", players: [{ name: "Alice", order: 0 }] },
         { team: "B", players: [{ name: "Bob", order: 0 }] },
       ]),
       payments: JSON.stringify([{ playerName: "Carol", amount: 25, status: "pending", method: null }]),
+    });
+    // Durable roll (ADR 0016): participation reads GamePayment, snapshot is residue.
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: history.dateTime, status: "played" },
+    });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Carol" } });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Carol", amount: 25, status: "pending" },
     });
 
     const res = await getPostGameStatus(ctx({ id: event.id }));

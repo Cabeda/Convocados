@@ -32,29 +32,52 @@ async function seedEventWithHistory(opts: {
     },
   });
 
-  // Create history entries with payment snapshots
+  // Past occurrence Games with their GamePayment rolls (ADR 0016)
   if (opts.snapshots) {
     for (let i = 0; i < opts.snapshots.length; i++) {
-      await prisma.gameHistory.create({
+      const game = await prisma.game.create({
         data: {
           eventId: event.id,
           dateTime: new Date(Date.now() - (opts.snapshots.length - i) * 7 * 86400_000),
+          status: "played",
           teamOneName: "A",
           teamTwoName: "B",
-          paymentsSnapshot: JSON.stringify(opts.snapshots[i]),
         },
       });
+      for (const p of opts.snapshots[i]) {
+        const ep = await prisma.eventPlayer.upsert({
+          where: { eventId_name: { eventId: event.id, name: p.playerName } },
+          create: { eventId: event.id, name: p.playerName },
+          update: {},
+        });
+        await prisma.gamePayment.create({
+          data: { gameId: game.id, eventPlayerId: ep.id, playerName: p.playerName, amount: p.amount, status: p.status },
+        });
+      }
     }
   }
 
-  // Create live payments
+  // Current (live) occurrence payments
   if (opts.livePayments) {
-    const ec = await prisma.eventCost.create({
+    await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 10, currency: "EUR" },
     });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
     for (const p of opts.livePayments) {
+      const ep = await prisma.eventPlayer.upsert({
+        where: { eventId_name: { eventId: event.id, name: p.playerName } },
+        create: { eventId: event.id, name: p.playerName },
+        update: {},
+      });
+      await prisma.gamePayment.create({
+        data: { gameId: game.id, eventPlayerId: ep.id, playerName: p.playerName, amount: p.amount, status: p.status },
+      });
+      // Dual-row: legacy PUT writer still mutates PlayerPayment (756nurms)
       await prisma.playerPayment.create({
-        data: { eventCostId: ec.id, playerName: p.playerName, amount: p.amount, status: p.status },
+        data: { eventCostId: (await prisma.eventCost.findUniqueOrThrow({ where: { eventId: event.id } })).id, playerName: p.playerName, amount: p.amount, status: p.status },
       });
     }
   }
@@ -63,6 +86,9 @@ async function seedEventWithHistory(opts: {
 }
 
 beforeEach(async () => {
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -138,19 +164,22 @@ describe("getOutstandingBalance", () => {
     expect(balance.amount).toBe(5); // only the oldest unpaid
   });
 
-  it("ignores cancelled history entries", async () => {
+  it("ignores cancelled games", async () => {
     const event = await prisma.event.create({
       data: { title: "T", location: "L", dateTime: new Date() },
     });
-    await prisma.gameHistory.create({
+    const game = await prisma.game.create({
       data: {
         eventId: event.id,
         dateTime: new Date(Date.now() - 86400_000),
+        status: "cancelled",
         teamOneName: "A",
         teamTwoName: "B",
-        status: "cancelled",
-        paymentsSnapshot: JSON.stringify([{ playerName: "Alice", amount: 10, status: "pending" }]),
       },
+    });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice" } });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Alice", amount: 10, status: "pending" },
     });
     const balance = await getOutstandingBalance(event.id, "Alice");
     expect(balance.amount).toBe(0);

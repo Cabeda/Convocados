@@ -194,19 +194,26 @@ async function updatePayment(args: Record<string, unknown>, ctx: AuthContext) {
   }
 
   await requireEventAccess(ctx, eventId);
-  const eventCost = await prisma.eventCost.findUnique({ where: { eventId } });
-  if (!eventCost) throw new McpError("No cost set for this event.", -32001, 404);
-  const payment = await prisma.playerPayment.findUnique({
-    where: { eventCostId_playerName: { eventCostId: eventCost.id, playerName } },
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) throw new McpError("No cost set for this event.", -32001, 404);
+  const eventPlayer = await prisma.eventPlayer.findUnique({
+    where: { eventId_name: { eventId, name: playerName } },
+    select: { id: true },
+  });
+  if (!eventPlayer) throw new McpError("Player payment not found.", -32001, 404);
+  // ADR 0016: the current Game's GamePayment roll replaces the legacy
+  // EventCost/PlayerPayment row.
+  const payment = await prisma.gamePayment.findUnique({
+    where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
   });
   if (!payment) throw new McpError("Player payment not found.", -32001, 404);
 
   const method =
     args.method === undefined ? undefined : args.method === null ? null : String(args.method).trim().slice(0, 50) || null;
 
-  const updated = await prisma.playerPayment.update({
+  const updated = await prisma.gamePayment.update({
     where: { id: payment.id },
-    data: { status, paidAt: status === "paid" ? new Date() : null, ...(method !== undefined && { method }) },
+    data: { status, paidAt: status === "paid" ? new Date() : null, markedBy: ctx.userId, ...(method !== undefined && { method }) },
   });
 
   if (status === "paid") {

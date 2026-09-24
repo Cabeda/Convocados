@@ -9,6 +9,9 @@
  *
  * ponytail: simple time-based progression, no state machine. Upgrade path: per-event
  * escalation timing config if groups want faster/slower cadence.
+ *
+ * Debt discovery reads the occurrence Game's GamePayment roll (ADR 0016) —
+ * the legacy EventCost/PlayerPayment join is gone (retarget: 5rhgs71k).
  */
 import { prisma } from "./db.server";
 import { sendPushToUser } from "./push.server";
@@ -38,44 +41,79 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
   const now = new Date();
   const result: EscalationResult = { stage1Sent: [], stage2Sent: [], stage3Sent: [], organizerAlerts: [] };
 
-  // Find all events with pending payments where the game has ended
-  const eventCosts = await prisma.eventCost.findMany({
+  // Events whose occurrence has ended and still has an occurrence Game —
+  // unsettled rows are loaded from GamePayment in a second pass (Event has no
+  // currentGame relation, only currentGameId).
+  const candidateEvents = await prisma.event.findMany({
     where: {
-      payments: { some: { status: { in: ["pending", "sent"] } } },
-      event: { dateTime: { lt: now }, archivedAt: null },
+      dateTime: { lt: now },
+      currentGameId: { not: null },
+      archivedAt: null,
     },
-    include: {
-      event: { select: { id: true, title: true, dateTime: true, durationMinutes: true, ownerId: true, maxPlayers: true } },
-      payments: { where: { status: { in: ["pending", "sent"] } } },
+    select: {
+      id: true,
+      title: true,
+      dateTime: true,
+      durationMinutes: true,
+      ownerId: true,
+      currentGameId: true,
     },
   });
+  const candidateGameIds = candidateEvents
+    .map((e) => e.currentGameId)
+    .filter((id): id is string => id !== null);
+  const gamesById = new Map(
+    (await prisma.game.findMany({
+      where: {
+        id: { in: candidateGameIds },
+        status: { not: "cancelled" },
+        payments: { some: { status: { in: ["pending", "sent"] }, archivedAt: null } },
+      },
+      select: {
+        id: true,
+        payments: {
+          where: { archivedAt: null },
+          select: {
+            status: true,
+            amount: true,
+            playerName: true,
+            eventPlayer: { select: { userId: true } },
+          },
+        },
+      },
+    })).map((g) => [g.id, g.payments] as const),
+  );
 
-  for (const ec of eventCosts) {
-    const gameEnd = new Date(ec.event.dateTime.getTime() + ec.event.durationMinutes * 60_000);
+  const openEvents = candidateEvents.filter(
+    (e) => e.currentGameId !== null && gamesById.has(e.currentGameId),
+  );
+
+  for (const event of openEvents) {
+    if (!event.currentGameId) continue;
+    const gameEnd = new Date(event.dateTime.getTime() + event.durationMinutes * 60_000);
     if (now < gameEnd) continue;
-
     const hoursSinceEnd = (now.getTime() - gameEnd.getTime()) / (60 * 60 * 1000);
-    const totalPayments = await prisma.playerPayment.count({ where: { eventCostId: ec.id } });
-    const paidCount = await prisma.playerPayment.count({ where: { eventCostId: ec.id, status: "paid" } });
+    const gamePayments = gamesById.get(event.currentGameId) ?? [];
+    const totalPayments = gamePayments.length;
+    const paidCount = gamePayments.filter((p) => p.status === "paid").length;
 
     // Users with a still-unsettled payment on this event. Trackers for anyone
     // else (paid since the last tick) are stale and removed below so a future
     // debt starts cleanly at stage 0.
     const activeUserIds = new Set<string>();
+    const eventDebtorNames: string[] = [];
+    const eventOrganizerAlerts: string[] = [];
 
-    for (const payment of ec.payments) {
-      // Find linked user
-      const player = await prisma.player.findFirst({
-        where: { eventId: ec.eventId, name: payment.playerName, userId: { not: null } },
-        select: { userId: true },
-      });
-      if (!player?.userId) continue;
-      activeUserIds.add(player.userId);
+    for (const payment of gamePayments) {
+      if (payment.status === "paid") continue;
+      const userId = payment.eventPlayer?.userId;
+      if (!userId) continue;
+      activeUserIds.add(userId);
 
       // Get or create nudge stage tracker
       const tracker = await prisma.paymentNudgeStage.upsert({
-        where: { eventId_userId: { eventId: ec.eventId, userId: player.userId } },
-        create: { eventId: ec.eventId, userId: player.userId, stage: 0 },
+        where: { eventId_userId: { eventId: event.id, userId } },
+        create: { eventId: event.id, userId, stage: 0 },
         update: {},
       });
 
@@ -83,45 +121,47 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       if (tracker.organiserAlert) continue;
 
       // Check prefs
-      const prefs = await getNotificationPrefs(player.userId);
+      const prefs = await getNotificationPrefs(userId);
       if (!wantsPaymentReminderPush(prefs)) continue;
 
-      const url = `/events/${ec.eventId}?action=pay`;
+      const url = `/events/${event.id}?action=pay`;
 
       // Stage progression based on time since game end
       if (tracker.stage === 0 && hoursSinceEnd >= STAGE_1_DELAY_H) {
         // Stage 1: soft nudge
-        await sendPushToUser(player.userId, ec.event.title, `💸 You owe €${payment.amount.toFixed(2)} — tap to pay`, url);
+        await sendPushToUser(userId, event.title, `💸 You owe €${payment.amount.toFixed(2)} — tap to pay`, url);
         await prisma.paymentNudgeStage.update({
-          where: { eventId_userId: { eventId: ec.eventId, userId: player.userId } },
+          where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 1, lastSentAt: now },
         });
-        result.stage1Sent.push(`${player.userId}:${ec.eventId}`);
+        result.stage1Sent.push(`${userId}:${event.id}`);
       } else if (tracker.stage === 1 && hoursSinceEnd >= STAGE_2_DELAY_H) {
         // Stage 2: follow-up
-        await sendPushToUser(player.userId, ec.event.title, `⏰ Still pending — €${payment.amount.toFixed(2)} for ${ec.event.title}`, url);
+        await sendPushToUser(userId, event.title, `⏰ Still pending — €${payment.amount.toFixed(2)} for ${event.title}`, url);
         await prisma.paymentNudgeStage.update({
-          where: { eventId_userId: { eventId: ec.eventId, userId: player.userId } },
+          where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 2, lastSentAt: now },
         });
-        result.stage2Sent.push(`${player.userId}:${ec.eventId}`);
+        result.stage2Sent.push(`${userId}:${event.id}`);
       } else if (tracker.stage === 2 && hoursSinceEnd >= STAGE_3_DELAY_H) {
         // Stage 3: social proof
         const unpaidCount = totalPayments - paidCount;
         const body = `${paidCount}/${totalPayments} players have paid. You're one of ${unpaidCount} who haven't.`;
-        await sendPushToUser(player.userId, ec.event.title, body, url);
+        await sendPushToUser(userId, event.title, body, url);
         await prisma.paymentNudgeStage.update({
-          where: { eventId_userId: { eventId: ec.eventId, userId: player.userId } },
+          where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 3, lastSentAt: now },
         });
-        result.stage3Sent.push(`${player.userId}:${ec.eventId}`);
+        result.stage3Sent.push(`${userId}:${event.id}`);
       } else if (tracker.stage === 3 && hoursSinceEnd >= ORGANIZER_ALERT_DELAY_H) {
         // Organizer alert — stop nudging, tell the owner
         await prisma.paymentNudgeStage.update({
-          where: { eventId_userId: { eventId: ec.eventId, userId: player.userId } },
+          where: { eventId_userId: { eventId: event.id, userId } },
           data: { organiserAlert: true },
         });
-        result.organizerAlerts.push(`${player.userId}:${ec.eventId}`);
+        result.organizerAlerts.push(`${userId}:${event.id}`);
+        eventOrganizerAlerts.push(`${userId}:${event.id}`);
+        eventDebtorNames.push(payment.playerName);
       }
     }
 
@@ -131,28 +171,19 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     // Empty active set means no linked user still owes: clear all trackers.
     await prisma.paymentNudgeStage.deleteMany({
       where: activeUserIds.size > 0
-        ? { eventId: ec.eventId, userId: { notIn: [...activeUserIds] } }
-        : { eventId: ec.eventId },
+        ? { eventId: event.id, userId: { notIn: [...activeUserIds] } }
+        : { eventId: event.id },
     }).catch(() => {}); // ponytail: best-effort cleanup, not critical
 
     // Send organizer alert as a batch (one notification for all stage-3-expired debtors per event)
-    if (ec.event.ownerId && result.organizerAlerts.length > 0) {
-      const debtorNames = ec.payments
-        .filter((_p) => {
-          const key = `${ec.eventId}`;
-          return result.organizerAlerts.some((a) => a.endsWith(`:${key}`));
-        })
-        .map((p) => p.playerName);
-
-      if (debtorNames.length > 0) {
-        const body = `${debtorNames.length} player(s) still haven't paid after a week: ${debtorNames.slice(0, 3).join(", ")}${debtorNames.length > 3 ? ` +${debtorNames.length - 3} more` : ""}`;
-        await sendPushToUser(
-          ec.event.ownerId,
-          ec.event.title,
-          body,
-          `/events/${ec.eventId}?action=confirm-payment`,
-        ).catch((err) => log.error({ err, eventId: ec.eventId }, "Failed to send organizer payment alert"));
-      }
+    if (event.ownerId && eventOrganizerAlerts.length > 0 && eventDebtorNames.length > 0) {
+      const body = `${eventDebtorNames.length} player(s) still haven't paid after a week: ${eventDebtorNames.slice(0, 3).join(", ")}${eventDebtorNames.length > 3 ? ` +${eventDebtorNames.length - 3} more` : ""}`;
+      await sendPushToUser(
+        event.ownerId,
+        event.title,
+        body,
+        `/events/${event.id}?action=confirm-payment`,
+      ).catch((err) => log.error({ err, eventId: event.id }, "Failed to send organizer payment alert"));
     }
   }
 
@@ -164,10 +195,17 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     .then((rows) => [...new Set(rows.map((r) => r.eventId))])
     .catch(() => [] as string[]);
   for (const eventId of trackedEventIds) {
-    const remaining = await prisma.eventCost.count({
-      where: { eventId, payments: { some: { status: { in: ["pending", "sent"] } } } },
-    }).catch(() => 1);
-    if (remaining === 0) {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { currentGameId: true },
+    }).catch(() => null);
+    let stillOwing = false;
+    if (event?.currentGameId) {
+      stillOwing = (await prisma.gamePayment.count({
+        where: { gameId: event.currentGameId, status: { in: ["pending", "sent"] }, archivedAt: null },
+      }).catch(() => 0)) > 0;
+    }
+    if (!stillOwing) {
       await prisma.paymentNudgeStage.deleteMany({ where: { eventId } }).catch(() => {});
     }
   }

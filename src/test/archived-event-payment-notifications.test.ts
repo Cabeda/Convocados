@@ -55,10 +55,23 @@ async function seedPastEvent(ownerId: string, hoursAgo: number, archived = false
   });
 }
 
-/** Legacy EventCost + PlayerPayment debt source with a linked Player. */
+/**
+ * Debt fixture during the reader/writer split (5rhgs71k):
+ * - GamePayment on the occurrence Game = what escalation readers consume
+ * - PlayerPayment = what the legacy email reminder path still reads
+ */
 async function seedDebt(eventId: string, name: string, userId: string) {
   await prisma.player.create({
     data: { eventId, name, order: 0, userId },
+  });
+  const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
+  const game = await prisma.game.create({
+    data: { eventId, dateTime: event.dateTime, status: "played" },
+  });
+  await prisma.event.update({ where: { id: eventId }, data: { currentGameId: game.id } });
+  const eventPlayer = await prisma.eventPlayer.create({ data: { eventId, name, userId } });
+  await prisma.gamePayment.create({
+    data: { gameId: game.id, eventPlayerId: eventPlayer.id, playerName: name, amount: 5, status: "pending" },
   });
   const cost = await prisma.eventCost.create({
     data: { eventId, totalAmount: 10, currency: "EUR" },
@@ -72,6 +85,9 @@ beforeEach(async () => {
   mockSendPush.mockClear();
   mockWantsReminder.mockReturnValue(true);
   await prisma.paymentNudgeStage.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.player.deleteMany();

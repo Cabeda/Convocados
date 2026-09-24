@@ -52,6 +52,9 @@ vi.mock("~/lib/webhook.server", () => ({
 }));
 
 beforeEach(async () => {
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -127,13 +130,62 @@ async function seedPlayer(eventId: string, name: string, userId?: string) {
   });
 }
 
+/**
+ * Dual-row fixture during the reader/writer split (5rhgs71k / 756nurms):
+ * - GamePayment = what balance readers retargeted to (ADR 0016)
+ * - PlayerPayment = what the legacy PUT writer still mutates
+ */
 async function seedPayment(ecId: string, playerName: string, amount: number, status = "pending") {
+  const ec = await prisma.eventCost.findUniqueOrThrow({ where: { id: ecId } });
+  const event = await prisma.event.findUniqueOrThrow({ where: { id: ec.eventId } });
+  let gameId = event.currentGameId;
+  if (!gameId) {
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    gameId = game.id;
+  }
+  const ep = await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId: event.id, name: playerName } },
+    create: { eventId: event.id, name: playerName },
+    update: {},
+  });
+  await prisma.gamePayment.upsert({
+    where: { gameId_eventPlayerId: { gameId, eventPlayerId: ep.id } },
+    create: { gameId, eventPlayerId: ep.id, playerName, amount, status },
+    update: { amount, status },
+  });
   return prisma.playerPayment.create({
     data: { eventCostId: ecId, playerName, amount, status },
   });
 }
 
 async function seedHistory(eventId: string, snapshot: Array<{ playerName: string; amount: number; status: string }>) {
+  // Balance readers now walk occurrence GamePayment rolls — seed the Game row.
+  const game = await prisma.game.create({
+    data: {
+      eventId,
+      dateTime: new Date(Date.now() - 7 * 86400_000),
+      status: "played",
+      teamOneName: "A", teamTwoName: "B",
+    },
+  });
+  const seen = new Set<string>();
+  for (const p of snapshot) {
+    // One roll row per player per game — first occurrence wins (mirrors the
+    // old snapshot find() semantics for the mixed sent+pending fixture).
+    if (seen.has(p.playerName)) continue;
+    seen.add(p.playerName);
+    const ep = await prisma.eventPlayer.upsert({
+      where: { eventId_name: { eventId, name: p.playerName } },
+      create: { eventId, name: p.playerName },
+      update: {},
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: p.playerName, amount: p.amount, status: p.status },
+    });
+  }
   return prisma.gameHistory.create({
     data: {
       eventId,
@@ -198,15 +250,23 @@ describe("balance.server.ts", () => {
 
     it("streak counts through multiple paid history entries with no live payment", async () => {
       const { event } = await seedOwnerAndEvent();
-      // No live payment, 3 history entries all paid
+      // No live payment, 3 past occurrence Games all paid
       for (let i = 0; i < 3; i++) {
-        await prisma.gameHistory.create({
+        const game = await prisma.game.create({
           data: {
             eventId: event.id,
             dateTime: new Date(Date.now() - (i + 1) * 86400_000),
+            status: "played",
             teamOneName: "A", teamTwoName: "B",
-            paymentsSnapshot: JSON.stringify([{ playerName: "Alice", amount: 5, status: "paid" }]),
           },
+        });
+        const ep = await prisma.eventPlayer.upsert({
+          where: { eventId_name: { eventId: event.id, name: "Alice" } },
+          create: { eventId: event.id, name: "Alice" },
+          update: {},
+        });
+        await prisma.gamePayment.create({
+          data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Alice", amount: 5, status: "paid" },
         });
       }
       const balance = await getOutstandingBalance(event.id, "Alice");
@@ -269,13 +329,21 @@ describe("balance.server.ts", () => {
     it("sums pending across multiple history snapshots", async () => {
       const { event } = await seedOwnerAndEvent();
       await seedHistory(event.id, [{ playerName: "Alice", amount: 5, status: "pending" }]);
-      await prisma.gameHistory.create({
+      const older = await prisma.game.create({
         data: {
           eventId: event.id,
           dateTime: new Date(Date.now() - 14 * 86400_000),
+          status: "played",
           teamOneName: "A", teamTwoName: "B",
-          paymentsSnapshot: JSON.stringify([{ playerName: "Alice", amount: 3, status: "pending" }]),
         },
+      });
+      const ep = await prisma.eventPlayer.upsert({
+        where: { eventId_name: { eventId: event.id, name: "Alice" } },
+        create: { eventId: event.id, name: "Alice" },
+        update: {},
+      });
+      await prisma.gamePayment.create({
+        data: { gameId: older.id, eventPlayerId: ep.id, playerName: "Alice", amount: 3, status: "pending" },
       });
       const gate = await getGateBalance(event.id, "Alice");
       expect(gate).toBe(8);

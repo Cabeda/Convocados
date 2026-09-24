@@ -5,8 +5,9 @@
  * - getGateBalance: "sent" clears the gate (uses MONEY_CLEARING_REASONS)
  * - getOutstandingBalance: "sent" does NOT clear (uses OUTSTANDING_CLEARING_REASONS)
  *
- * For anonymous players (no userId linked), falls back to legacy PlayerPayment
- * reads since the ledger requires a userId.
+ * For anonymous players (no userId linked), falls back to the legacy payment
+ * roll reads — GamePayment rows per occurrence (ADR 0016), since the ledger
+ * requires a userId.
  */
 
 import { prisma } from "./db.server";
@@ -21,6 +22,7 @@ import {
 } from "./wallet";
 import { summarizePayments } from "./paymentSummary";
 import { resolveLinkedUserId } from "./payerIdentity.server";
+import { occurrencePaymentRolls } from "./paymentRoll.server";
 
 export interface PlayerBalance {
   playerName: string;
@@ -110,40 +112,23 @@ interface SnapshotEntry {
 }
 
 /**
- * The one legacy read: live PlayerPayment rows plus every non-cancelled
- * GameHistory.paymentsSnapshot (newest game first). Every legacy projection
- * below derives from this instead of re-querying and re-parsing snapshots.
+ * The one legacy read: the occurrence GamePayment rolls for every non-cancelled
+ * Game (newest game first, ADR 0016). Every legacy projection below derives
+ * from this instead of re-querying and re-parsing snapshots.
  */
 async function loadLegacyPayments(eventId: string): Promise<{
   live: SnapshotEntry[];
   histories: SnapshotEntry[][];
 }> {
-  const [histories, eventCost] = await Promise.all([
-    prisma.gameHistory.findMany({
-      where: { eventId, status: { not: "cancelled" } },
-      select: { paymentsSnapshot: true, dateTime: true },
-      orderBy: { dateTime: "desc" },
-    }),
-    prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: true },
-    }),
-  ]);
-
-  const live: SnapshotEntry[] = (eventCost?.payments ?? []).map((p) => ({
+  const rolls = await occurrencePaymentRolls(eventId);
+  const live: SnapshotEntry[] = (rolls[0]?.payments ?? []).map((p) => ({
     playerName: p.playerName,
     amount: p.amount,
     status: p.status,
   }));
-
-  const parsedHistories: SnapshotEntry[][] = [];
-  for (const h of histories) {
-    if (!h.paymentsSnapshot) continue;
-    try {
-      parsedHistories.push(JSON.parse(h.paymentsSnapshot) as SnapshotEntry[]);
-    } catch { /* skip malformed */ }
-  }
-
+  const parsedHistories: SnapshotEntry[][] = rolls.slice(1).map((roll) =>
+    roll.payments.map((p) => ({ playerName: p.playerName, amount: p.amount, status: p.status })),
+  );
   return { live, histories: parsedHistories };
 }
 
@@ -312,7 +297,8 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
       });
     }
   } else {
-    // Legacy fallback: compute debts from the one legacy read
+    // Legacy fallback: compute debts from the one legacy read (occurrence
+    // GamePayment rolls, ADR 0016). Anonymous players have no ledger rows.
     const { live, histories } = await loadLegacyPayments(eventId);
 
     const debts = new Map<string, { amount: number; gamesOwed: number }>();
@@ -358,9 +344,8 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
     }
   }
 
-  // If no ledger data for current game, fall back to legacy projections
-  // (live PlayerPayment roll, then the latest GameHistory snapshot) via the
-  // one legacy read.
+  // If no ledger data for current game, fall back to the one legacy read —
+  // the newest occurrence GamePayment roll (live), then older rolls.
   if (totalCount === 0) {
     const { live, histories } = await loadLegacyPayments(eventId);
     if (live.length > 0) {
