@@ -56,7 +56,7 @@ function minDateTime() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function CreateEventForm({ bare }: { bare?: boolean }) {
+export default function CreateEventForm({ bare, quick = false }: { bare?: boolean; quick?: boolean }) {
   const t = useT();
   const locale = detectLocale();
   const [title, setTitle] = useState(() => getRandomTitle(locale as TitleLocale));
@@ -151,6 +151,131 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
     window.location.href = `/events/${json.id}`;
   };
 
+  // Field groups, reflowed by the quick-add density (ticket #1166): in quick
+  // mode the venue + max players sit up top and teams/timezone/recurrence move
+  // under "More options"; the default density keeps today's layout.
+  const basicsFields = (
+    <>
+      <LocationAutocomplete
+        value={location}
+        onChange={(v) => { setLocation(v); setLocationCoord(undefined); }}
+        coordinate={locationCoord}
+        label={t("locationOptional")}
+        placeholder={t("locationPlaceholder")}
+      />
+
+      {isPlaytomicSport(sport) && (
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<PlaceIcon />}
+          onClick={() => setCourtFinderOpen(true)}
+        >
+          {t("playtomicFindCourt")}
+        </Button>
+      )}
+
+      <TextField
+        label={t("maxPlayers")}
+        type="number"
+        value={maxPlayers}
+        onChange={(e) => setMaxPlayers(e.target.value)}
+        helperText={t("maxPlayersHelper")}
+        fullWidth
+        error={maxPlayers !== "" && (isNaN(parseInt(maxPlayers)) || parseInt(maxPlayers) < 2 || parseInt(maxPlayers) > 100)}
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start"><PeopleIcon fontSize="small" /></InputAdornment>
+            ),
+          },
+          htmlInput: { min: 2, max: 100 }
+        }} />
+    </>
+  );
+
+  const timezoneRecurrence = (
+    <>
+      <FormControl fullWidth>
+        <InputLabel>{t("timezone")}</InputLabel>
+        <Select value={timezone} label={t("timezone")}
+          onChange={(e) => setTimezone(e.target.value)}>
+          {COMMON_TIMEZONES.map((tz) => (
+            <MenuItem key={tz.value} value={tz.value}>{tz.label}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth>
+        <InputLabel>{t("recurrence")}</InputLabel>
+        <Select
+          value={recurrencePreset}
+          label={t("recurrence")}
+          renderValue={(val) => {
+            if (val === "none") return t("doesNotRepeat");
+            if (val === "daily") return t("daily");
+            if (val === "weekly") return t("weeklyOnDay", { day: t(DAYS[jsDayToDayIndex(new Date(dateTime).getDay())].key) });
+            if (val === "monthly") return t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) });
+            if (val === "yearly") return t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) });
+            if (val === "custom") return t("customRecurrence");
+            return "";
+          }}
+          onChange={(e) => {
+            const val = e.target.value as RecurrencePreset;
+            if (val === "custom") {
+              const eventDay = jsDayToDayCode(new Date(dateTime).getDay());
+              if (customByDays.length === 0) setCustomByDays([eventDay]);
+              setCustomDialogOpen(true);
+            } else {
+              setRecurrencePreset(val);
+            }
+          }}
+        >
+          <MenuItem value="none">{t("doesNotRepeat")}</MenuItem>
+          <MenuItem value="daily">{t("daily")}</MenuItem>
+          <MenuItem value="weekly">
+            {t("weeklyOnDay", { day: t(DAYS[jsDayToDayIndex(new Date(dateTime).getDay())].key) })}
+          </MenuItem>
+          <MenuItem value="monthly">
+            {t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) })}
+          </MenuItem>
+          <MenuItem value="yearly">
+            {t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) })}
+          </MenuItem>
+          <Divider />
+          <MenuItem value="custom">{t("customRecurrence")}</MenuItem>
+        </Select>
+      </FormControl>
+
+      {recurrencePreset !== "none" && (
+        <Alert severity="info" sx={{ fontSize: "0.85rem" }}>
+          {t("recurrenceInfo")}
+        </Alert>
+      )}
+    </>
+  );
+
+  const teamsFields = (
+    <>
+      <Divider><Chip label={t("teamNames")} size="small" /></Divider>
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <TextField name="teamOneName" label={t("team1Name")}
+            defaultValue="Ninjas" fullWidth slotProps={{
+            htmlInput: { maxLength: 50 }
+          }} />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <TextField name="teamTwoName" label={t("team2Name")}
+            defaultValue="Gunas" fullWidth slotProps={{
+            htmlInput: { maxLength: 50 }
+          }} />
+        </Grid>
+      </Grid>
+    </>
+  );
+
   const inner = (
     <>
         <Container maxWidth="sm" sx={{ py: bare ? { xs: 1, md: 3 } : 6 }}>
@@ -226,62 +351,9 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
                       inputLabel: { shrink: true }
                     }} />
 
-                  <FormControl fullWidth>
-                    <InputLabel>{t("timezone")}</InputLabel>
-                    <Select value={timezone} label={t("timezone")}
-                      onChange={(e) => setTimezone(e.target.value)}>
-                      {COMMON_TIMEZONES.map((tz) => (
-                        <MenuItem key={tz.value} value={tz.value}>{tz.label}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  {quick && basicsFields}
 
-                  <FormControl fullWidth>
-                    <InputLabel>{t("recurrence")}</InputLabel>
-                    <Select
-                      value={recurrencePreset}
-                      label={t("recurrence")}
-                      renderValue={(val) => {
-                        if (val === "none") return t("doesNotRepeat");
-                        if (val === "daily") return t("daily");
-                        if (val === "weekly") return t("weeklyOnDay", { day: t(DAYS[jsDayToDayIndex(new Date(dateTime).getDay())].key) });
-                        if (val === "monthly") return t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) });
-                        if (val === "yearly") return t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) });
-                        if (val === "custom") return t("customRecurrence");
-                        return "";
-                      }}
-                      onChange={(e) => {
-                        const val = e.target.value as RecurrencePreset;
-                        if (val === "custom") {
-                          const eventDay = jsDayToDayCode(new Date(dateTime).getDay());
-                          if (customByDays.length === 0) setCustomByDays([eventDay]);
-                          setCustomDialogOpen(true);
-                        } else {
-                          setRecurrencePreset(val);
-                        }
-                      }}
-                    >
-                      <MenuItem value="none">{t("doesNotRepeat")}</MenuItem>
-                      <MenuItem value="daily">{t("daily")}</MenuItem>
-                      <MenuItem value="weekly">
-                        {t("weeklyOnDay", { day: t(DAYS[jsDayToDayIndex(new Date(dateTime).getDay())].key) })}
-                      </MenuItem>
-                      <MenuItem value="monthly">
-                        {t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) })}
-                      </MenuItem>
-                      <MenuItem value="yearly">
-                        {t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) })}
-                      </MenuItem>
-                      <Divider />
-                      <MenuItem value="custom">{t("customRecurrence")}</MenuItem>
-                    </Select>
-                  </FormControl>
-
-                  {recurrencePreset !== "none" && (
-                    <Alert severity="info" sx={{ fontSize: "0.85rem" }}>
-                      {t("recurrenceInfo")}
-                    </Alert>
-                  )}
+                  {!quick && timezoneRecurrence}
 
                   {/* Advanced options */}
                   <Accordion disableGutters elevation={0} sx={{
@@ -291,64 +363,13 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
                     "&:before": { display: "none" },
                   }}>
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2" color="text.secondary">{t("advancedOptions")}</Typography>
+                      <Typography variant="body2" color="text.secondary">{quick ? t("moreOptions") : t("advancedOptions")}</Typography>
                     </AccordionSummary>
                     <AccordionDetails>
                       <Stack spacing={3}>
-                        <LocationAutocomplete
-                          value={location}
-                          onChange={(v) => { setLocation(v); setLocationCoord(undefined); }}
-                          coordinate={locationCoord}
-                          label={t("locationOptional")}
-                          placeholder={t("locationPlaceholder")}
-                        />
-
-                        {isPlaytomicSport(sport) && (
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={<PlaceIcon />}
-                            onClick={() => setCourtFinderOpen(true)}
-                          >
-                            {t("playtomicFindCourt")}
-                          </Button>
-                        )}
-
-                        <TextField
-                          label={t("maxPlayers")}
-                          type="number"
-                          value={maxPlayers}
-                          onChange={(e) => setMaxPlayers(e.target.value)}
-                          helperText={t("maxPlayersHelper")}
-                          fullWidth
-                          error={maxPlayers !== "" && (isNaN(parseInt(maxPlayers)) || parseInt(maxPlayers) < 2 || parseInt(maxPlayers) > 100)}
-                          slotProps={{
-                            input: {
-                              startAdornment: (
-                                <InputAdornment position="start"><PeopleIcon fontSize="small" /></InputAdornment>
-                              ),
-                            },
-
-                            htmlInput: { min: 2, max: 100 }
-                          }} />
-
-                        <Divider><Chip label={t("teamNames")} size="small" /></Divider>
-
-                        <Grid container spacing={2}>
-                          <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField name="teamOneName" label={t("team1Name")}
-                              defaultValue="Ninjas" fullWidth slotProps={{
-                              htmlInput: { maxLength: 50 }
-                            }} />
-                          </Grid>
-                          <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField name="teamTwoName" label={t("team2Name")}
-                              defaultValue="Gunas" fullWidth slotProps={{
-                              htmlInput: { maxLength: 50 }
-                            }} />
-                          </Grid>
-                        </Grid>
-
+                        {quick && timezoneRecurrence}
+                        {!quick && basicsFields}
+                        {teamsFields}
                       </Stack>
                     </AccordionDetails>
                   </Accordion>

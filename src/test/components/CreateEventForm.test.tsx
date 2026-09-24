@@ -191,6 +191,39 @@ describe("CreateEventForm — recurrence dropdown", () => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Quick-add density (ticket #1166)
+// ---------------------------------------------------------------------------
+describe("CreateEventForm — quick-add density", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetch.mockReset();
+  });
+
+  it("shows venue and max players inline with a 'More options' expander", () => {
+    renderWithTheme(<CreateEventForm quick />);
+    expect(screen.getByLabelText(/Location/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Max players/i)).toBeInTheDocument();
+    expect(screen.getByText(/More options/i)).toBeInTheDocument();
+  });
+
+  it("submits unchanged from quick mode", async () => {
+    const user = userEvent.setup();
+    setupSubmission("quick-event");
+    renderWithTheme(<CreateEventForm quick />);
+
+    const titleInput = screen.getByLabelText(/Game title/i);
+    await user.clear(titleInput);
+    await user.type(titleInput, "Quick Game");
+    await user.click(screen.getByRole("button", { name: /Create game/i }));
+
+    await waitFor(() => {
+      expect(getSubmittedBody().title).toBe("Quick Game");
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Recurrence submission — all presets
 // ---------------------------------------------------------------------------
 describe("CreateEventForm — recurrence submission", () => {

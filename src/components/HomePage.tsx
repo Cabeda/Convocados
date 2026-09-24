@@ -20,6 +20,7 @@ import HowToVoteIcon from "@mui/icons-material/HowToVote";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PushPromptBanner } from "./PushPromptBanner";
+import { AddGamesPrompt } from "./AddGamesPrompt";
 import CreateEventForm from "./CreateEventForm";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
@@ -79,6 +80,8 @@ interface HomeData {
   upNext: UpNextGame[];
   discover: DiscoverGame[];
   actions?: HomeAction[];
+  /** Growth prompt: the viewer plays in events they don't own (#1166). */
+  suggestAddGames?: boolean;
 }
 
 interface DashboardData {
@@ -474,6 +477,8 @@ export default function HomePage() {
               highIntent={hasActive && highIntent}
             />
 
+            {home?.suggestAddGames && <AddGamesPrompt onAdd={() => setCreateOpen(true)} />}
+
             {(homeLoading || isLoading) && !home ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
                 <CircularProgress />
@@ -670,7 +675,7 @@ export default function HomePage() {
         <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="md" fullWidth>
           <DialogTitle>{t("createGame")}</DialogTitle>
           <DialogContent>
-            <CreateEventForm bare />
+            <CreateEventForm bare quick />
           </DialogContent>
         </Dialog>
       </ResponsiveLayout>

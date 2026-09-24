@@ -289,6 +289,8 @@ data class HomeResponse(
     val upNext: List<UpNextGame> = emptyList(),
     val discover: List<PublicEvent> = emptyList(),
     val actions: List<HomeAction> = emptyList(),
+    /** Growth prompt (#1166): viewer plays in events they don't own. */
+    val suggestAddGames: Boolean = false,
 )
 
 @Serializable

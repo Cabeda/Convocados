@@ -17,6 +17,10 @@
     <string name="action_settle_score">Adiciona o resultado do último jogo</string>
     <string name="action_pay_share">Deves %1$s</string>
     <string name="action_vote_mvp">Vota no MVP</string>
+    <string name="add_games_prompt_title">Adiciona os teus outros jogos</string>
+    <string name="add_games_prompt_body">Jogas com outro grupo? Adiciona também esse jogo — partilha o link e todos podem entrar.</string>
+    <string name="add_games_cta">Adicionar jogo</string>
+    <string name="dismiss">Dispensar</string>
     <string name="live_now">A jogar agora</string>
     <string name="players">Jogadores</string>
     <string name="teams">Equipas</string>

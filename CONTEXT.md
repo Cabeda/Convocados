@@ -270,6 +270,10 @@ A single thing the viewer personally has to act on, shown in the **Needs you** s
 Batch-computed server-side (not per-Event `PostGameStatus`), ordered by the deadline that closes each item, capped. Distinct from the **Post-game wrap-up** banner (which is per-Event and richer).
 _Avoid_: to-do, task, notification
 
+## Add your other games
+The growth prompt on **Home** shown to a user who is a **Participant** in an Event they do *not* own — evidence they play with other groups. Nudges them to add those games so more games exist and get shared; dismissible with a cooldown. An added game is **Unlisted** by default and spread by its link, so partial adoption (guests, non-users) is expected and fine.
+_Avoid_: import, sync
+
 ## Follow toggle (event detail page)
 Authenticated users see a bell icon on the event detail page:
 - **Bell filled** — following with notifications on (per global defaults)

@@ -17,6 +17,10 @@
     <string name="action_settle_score">Ajoutez le score du dernier match</string>
     <string name="action_pay_share">Vous devez %1$s</string>
     <string name="action_vote_mvp">Votez pour le MVP</string>
+    <string name="add_games_prompt_title">Ajoutez vos autres matchs</string>
+    <string name="add_games_prompt_body">Vous jouez avec un autre groupe ? Ajoutez aussi ce match — partagez le lien et tout le monde peut rejoindre.</string>
+    <string name="add_games_cta">Ajouter un match</string>
+    <string name="dismiss">Ignorer</string>
     <string name="live_now">En direct</string>
     <string name="players">Joueurs</string>
     <string name="teams">Équipes</string>

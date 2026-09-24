@@ -203,6 +203,8 @@ fun GamesScreen(
     val upNext = home?.upNext.orEmpty()
     val discover = home?.discover.orEmpty()
     val actions = home?.actions.orEmpty()
+    val suggestAddGames = home?.suggestAddGames == true
+    var addGamesDismissed by remember { mutableStateOf(false) }
     var showArchived by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
 
@@ -275,6 +277,16 @@ fun GamesScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+
+                // Ticket #1166: growth prompt — add your other games.
+                if (!showArchived && suggestAddGames && !addGamesDismissed) {
+                    item(key = "add-games-prompt") {
+                        AddGamesPromptCard(
+                            onAdd = onCreateClick,
+                            onDismiss = { addGamesDismissed = true },
+                        )
+                    }
+                }
 
                 // ADR 0041: Up next — games the user plays or organizes.
                 if (!showArchived) {
@@ -678,6 +690,38 @@ private fun UpNextCard(game: UpNextGame, onClick: () -> Unit) {
             )
             if (game.location.isNotBlank()) {
                 Text(game.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** Ticket #1166: growth prompt nudging players to add their other games. */
+@Composable
+private fun AddGamesPromptCard(onAdd: () -> Unit, onDismiss: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.GroupAdd, contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.add_games_prompt_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    stringResource(R.string.add_games_prompt_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row {
+                    TextButton(onClick = onAdd) { Text(stringResource(R.string.add_games_cta)) }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.dismiss)) }
+                }
             }
         }
     }

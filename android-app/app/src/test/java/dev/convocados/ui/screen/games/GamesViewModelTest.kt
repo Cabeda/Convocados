@@ -109,6 +109,17 @@ class GamesViewModelTest {
     }
 
     @Test
+    fun `home exposes the add-games growth prompt flag`() = runTest {
+        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        coEvery { api.fetchHome() } returns HomeResponse(suggestAddGames = true)
+
+        val viewModel = GamesViewModel(repository, api, tokenStore)
+        advanceUntilIdle()
+
+        assertEquals(true, viewModel.home.value?.suggestAddGames)
+    }
+
+    @Test
     fun `refresh exposes home actions from the feed`() = runTest {
         coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
         coEvery { api.fetchHome() } returns HomeResponse(
