@@ -40,6 +40,8 @@ import dev.convocados.wear.ui.theme.expressiveMotion
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.expressiveTokens
+import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.util.GameListTimeState
 import dev.convocados.wear.util.PullToRefreshProgress
 import dev.convocados.wear.util.formatRelativeTime
@@ -152,216 +154,223 @@ fun GamesScreen(
         label = "pullIndicator",
     )
 
-    ScreenScaffold(scrollState = columnState) { contentPadding ->
-        when {
-            state.isLoading && state.games.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-            state.games.isEmpty() && state.pastGames.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    ) {
-                        Text(
-                            text = stringResource(
-                                if (showOfflineBanner) R.string.offline_cached
-                                else R.string.no_games,
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        CompactButton(onClick = { viewModel.refresh() }) {
-                            Text(stringResource(R.string.refresh))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        CompactButton(onClick = onQuickGame) {
-                            Text(stringResource(R.string.quick_game))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        CompactButton(onClick = onSignOut) {
-                            Text(stringResource(R.string.sign_out))
-                        }
-                    }
-                }
-            }
-            else -> {
-                TransformingLazyColumn(
-                    state = columnState,
-                    contentPadding = contentPadding,
-                    modifier = Modifier.fillMaxSize().nestedScroll(pullToRefresh),
-                ) {
-                    item {
-                        ListHeader(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .transformedHeight(this, transformationSpec)
-                                .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
-                            transformation = SurfaceTransformation(transformationSpec),
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold(scrollState = columnState) { contentPadding ->
+            when {
+                state.isLoading && state.games.isEmpty() -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                           }
+    }
+                state.games.isEmpty() && state.pastGames.isEmpty() -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(horizontal = 16.dp),
                         ) {
                             Text(
-                                text = stringResource(R.string.games_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
+                                text = stringResource(
+                                    if (showOfflineBanner) R.string.offline_cached
+                                    else R.string.no_games,
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            CompactButton(onClick = { viewModel.refresh() }) {
+                                Text(stringResource(R.string.refresh))
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            CompactButton(onClick = onQuickGame) {
+                                Text(stringResource(R.string.quick_game))
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            CompactButton(onClick = onSignOut) {
+                                Text(stringResource(R.string.sign_out))
+                            }
                         }
                     }
-
-                    // Pull-to-refresh feedback: the ring fills with the pull distance and
-                    // springs back on release; it spins while a refresh runs.
-                    if (refreshing || pullProgress > 0f) {
+                }
+                else -> {
+                    TransformingLazyColumn(
+                        state = columnState,
+                        contentPadding = contentPadding,
+                        modifier = Modifier.fillMaxSize().nestedScroll(pullToRefresh),
+                    ) {
                         item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
+                            ListHeader(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .transformedHeight(this, transformationSpec)
+                                    .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                                transformation = SurfaceTransformation(transformationSpec),
                             ) {
-                                if (refreshing) {
-                                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                                } else {
-                                    CircularProgressIndicator(
-                                        progress = { displayedPull },
-                                        modifier = Modifier.size(20.dp),
+                                Text(
+                                    text = stringResource(R.string.games_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+
+                        // Pull-to-refresh feedback: the ring fills with the pull distance and
+                        // springs back on release; it spins while a refresh runs.
+                        if (refreshing || pullProgress > 0f) {
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (refreshing) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                    } else {
+                                        CircularProgressIndicator(
+                                            progress = { displayedPull },
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(
+                                            if (refreshing) R.string.refreshing else R.string.pull_to_refresh
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(
-                                        if (refreshing) R.string.refreshing else R.string.pull_to_refresh
+                            }
+                        }
+
+                        if (continueQuickGame) {
+                            item {
+                                Button(
+                                    onClick = onContinueQuickGame,
+                                    modifier = Modifier.fillMaxWidth().roundListInset(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                     ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.continue_quick_game),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    if (continueQuickGame) {
-                        item {
-                            Button(
-                                onClick = onContinueQuickGame,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                ),
-                            ) {
+                        if (state.pendingSyncCount > 0) {
+                            item {
                                 Text(
-                                    text = stringResource(R.string.continue_quick_game),
-                                    style = MaterialTheme.typography.labelMedium,
+                                    text = stringResource(R.string.pending_sync, state.pendingSyncCount),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = tokens.colorFor(ExpressiveSemanticRole.Pending),
+                                    modifier = Modifier.fillMaxWidth().roundListInset(),
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
-                    }
 
-                    if (state.pendingSyncCount > 0) {
-                        item {
-                            Text(
-                                text = stringResource(R.string.pending_sync, state.pendingSyncCount),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = tokens.colorFor(ExpressiveSemanticRole.Pending),
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center
+                        if (showOfflineBanner) {
+                            item {
+                                Text(
+                                    text = stringResource(R.string.offline_cached),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = tokens.colorFor(ExpressiveSemanticRole.Offline),
+                                    modifier = Modifier.fillMaxWidth().roundListInset(),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
+                        items(state.games, key = { it.id }) { game ->
+                            val canScore = game.id in state.canScoreGameIds
+                            GameChip(
+                                game = game,
+                                isSuggested = game.id == state.suggestedGameId,
+                                canScore = canScore,
+                                onClick = { onGameSelected(game.id) },
+                                nowOverride = now,
                             )
                         }
-                    }
 
-                    if (showOfflineBanner) {
-                        item {
-                            Text(
-                                text = stringResource(R.string.offline_cached),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = tokens.colorFor(ExpressiveSemanticRole.Offline),
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-
-                    items(state.games, key = { it.id }) { game ->
-                        val canScore = game.id in state.canScoreGameIds
-                        GameChip(
-                            game = game,
-                            isSuggested = game.id == state.suggestedGameId,
-                            canScore = canScore,
-                            onClick = { onGameSelected(game.id) },
-                            nowOverride = now,
-                        )
-                    }
-
-                    if (state.pastGames.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            CompactButton(
-                                onClick = { viewModel.togglePastGames() },
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        if (state.showPastGames) R.string.hide_past_games
-                                        else R.string.show_past_games
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
-                        }
-
-                        if (state.showPastGames) {
-                            items(visiblePastGames, key = { "past-${it.id}" }) { game ->
-                                val canScore = game.id in state.canScoreGameIds
-                                GameChip(
-                                    game = game,
-                                    isSuggested = false,
-                                    canScore = canScore,
-                                    onClick = { onGameSelected(game.id) },
-                                    nowOverride = now,
-                                )
+                        if (state.pastGames.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                CompactButton(
+                                    onClick = { viewModel.togglePastGames() },
+                                ) {
+                                    Text(
+                                        text = stringResource(
+                                            if (state.showPastGames) R.string.hide_past_games
+                                            else R.string.show_past_games
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                }
                             }
 
-                            if (state.visiblePastCount < state.pastGames.size) {
-                                item {
-                                    CompactButton(
-                                        onClick = { viewModel.loadMorePast() },
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.load_more),
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
+                            if (state.showPastGames) {
+                                items(visiblePastGames, key = { "past-${it.id}" }) { game ->
+                                    val canScore = game.id in state.canScoreGameIds
+                                    GameChip(
+                                        game = game,
+                                        isSuggested = false,
+                                        canScore = canScore,
+                                        onClick = { onGameSelected(game.id) },
+                                        nowOverride = now,
+                                    )
+                                }
+
+                                if (state.visiblePastCount < state.pastGames.size) {
+                                    item {
+                                        CompactButton(
+                                            onClick = { viewModel.loadMorePast() },
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.load_more),
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    item {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        CompactButton(
-                            onClick = onQuickGame,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.quick_game),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            CompactButton(
+                                onClick = onQuickGame,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.quick_game),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                         }
-                    }
 
-                    item {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        CompactButton(
-                            onClick = onHistory,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.history_title),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            CompactButton(
+                                onClick = onHistory,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.history_title),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
+    
+ }
     }
 }
 
@@ -387,7 +396,7 @@ internal fun GameChip(
 
     Button(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().roundListInset(),
         label = {
             Text(
                 text = game.title,

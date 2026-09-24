@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import dev.convocados.wear.R
+import dev.convocados.wear.ui.roundBezelClip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
@@ -55,116 +56,123 @@ fun GameSettingsScreen(
         }
     }
 
-    ScreenScaffold(scrollState = columnState) { contentPadding ->
-        TransformingLazyColumn(
-            state = columnState,
-            contentPadding = contentPadding,
-            modifier = Modifier.fillMaxSize().nestedScroll(pullToBack),
-        ) {
-            item {
-                ListHeader(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec)
-                        .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) { Text("Game settings", color = MaterialTheme.colorScheme.primary) }
-            }
-
-            // ── Kickoff ─────────────────────────────────────────────
-            item {
-                val time = Instant.ofEpochMilli(state.kickoffEpochMs)
-                    .atZone(ZoneId.systemDefault()).format(timeFormat)
-                Text(
-                    text = "Kickoff $time" + if (state.isKickoffOverridden) " (set)" else "",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
-            }
-            item {
-                Button(
-                    onClick = { viewModel.kickoffNow() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Kick off now") }
-            }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CompactButton(onClick = { viewModel.nudgeKickoff(-1) }) { Text("−1m") }
-                    CompactButton(onClick = { viewModel.nudgeKickoff(1) }) { Text("+1m") }
-                    if (state.isKickoffOverridden) {
-                        CompactButton(onClick = { viewModel.resetKickoff() }) { Text("Reset") }
-                    }
-                }
-            }
-
-            item {
-                SwitchButton(
-                    checked = state.keepScreenOn,
-                    onCheckedChange = { viewModel.setKeepScreenOn(it) },
-                    label = { Text(stringResource(R.string.keep_screen_on_label)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            // ── Vibration alerts ─────────────────────────────────────
-            item {
-                SwitchButton(
-                    checked = state.vibrationEnabled,
-                    onCheckedChange = { viewModel.setVibrationEnabled(it) },
-                    label = { Text("Vibration alerts") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            if (state.vibrationEnabled) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold(scrollState = columnState) { contentPadding ->
+            TransformingLazyColumn(
+                state = columnState,
+                contentPadding = contentPadding,
+                modifier = Modifier.fillMaxSize().nestedScroll(pullToBack),
+            ) {
                 item {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "Every",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            CompactButton(onClick = { viewModel.setVibrationInterval(state.vibrationIntervalMinutes - 1) }) { Text("−") }
-                            Text(
-                                text = "${state.vibrationIntervalMinutes} min",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                            )
-                            CompactButton(onClick = { viewModel.setVibrationInterval(state.vibrationIntervalMinutes + 1) }) { Text("+") }
+                    ListHeader(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                            .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                        transformation = SurfaceTransformation(transformationSpec),
+                    ) { Text("Game settings", color = MaterialTheme.colorScheme.primary)        }
+    }
+
+                // ── Kickoff ─────────────────────────────────────────────
+                item {
+                    val time = Instant.ofEpochMilli(state.kickoffEpochMs)
+                        .atZone(ZoneId.systemDefault()).format(timeFormat)
+                    Text(
+                        text = "Kickoff $time" + if (state.isKickoffOverridden) " (set)" else "",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                item {
+                    Button(
+                        onClick = { viewModel.kickoffNow() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Kick off now") }
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        CompactButton(onClick = { viewModel.nudgeKickoff(-1) }) { Text("−1m") }
+                        CompactButton(onClick = { viewModel.nudgeKickoff(1) }) { Text("+1m") }
+                        if (state.isKickoffOverridden) {
+                            CompactButton(onClick = { viewModel.resetKickoff() }) { Text("Reset") }
                         }
                     }
                 }
 
-                // Exact-alarm permission fallback
-                if (!state.canScheduleExact) {
+                item {
+                    SwitchButton(
+                        checked = state.keepScreenOn,
+                        onCheckedChange = { viewModel.setKeepScreenOn(it) },
+                        label = { Text(stringResource(R.string.keep_screen_on_label)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                // ── Vibration alerts ─────────────────────────────────────
+                item {
+                    SwitchButton(
+                        checked = state.vibrationEnabled,
+                        onCheckedChange = { viewModel.setVibrationEnabled(it) },
+                        label = { Text("Vibration alerts") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                if (state.vibrationEnabled) {
                     item {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "Alarms may be delayed. Allow exact alarms for on-time buzzes.",
+                                text = "Every",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            CompactButton(onClick = {
-                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                                    runCatching {
-                                        context.startActivity(
-                                            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                                                .setData(android.net.Uri.parse("package:${context.packageName}"))
-                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                        )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                CompactButton(onClick = { viewModel.setVibrationInterval(state.vibrationIntervalMinutes - 1) }) { Text("−") }
+                                Text(
+                                    text = "${state.vibrationIntervalMinutes} min",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                )
+                                CompactButton(onClick = { viewModel.setVibrationInterval(state.vibrationIntervalMinutes + 1) }) { Text("+") }
+                            }
+                        }
+                    }
+
+                    // Exact-alarm permission fallback
+                    if (!state.canScheduleExact) {
+                        item {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Alarms may be delayed. Allow exact alarms for on-time buzzes.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center,
+                                )
+                                CompactButton(onClick = {
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                        runCatching {
+                                            context.startActivity(
+                                                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                                    .setData(android.net.Uri.parse("package:${context.packageName}"))
+                                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                            )
+                                        }
                                     }
-                                }
-                            }) { Text("Allow") }
+                                }) { Text("Allow") }
+                            }
                         }
                     }
                 }
             }
-        }
+    
+ }
     }
 }

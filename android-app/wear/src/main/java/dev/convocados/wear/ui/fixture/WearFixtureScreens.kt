@@ -15,6 +15,8 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
+import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.screen.games.GameChip
 import dev.convocados.wear.util.formatRelativeTime
 
@@ -34,67 +36,81 @@ fun WearGamesFixtureContent(
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
-    ScreenScaffold(scrollState = columnState) { contentPadding ->
-        if (games.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(20.dp)) {
-                    Text(stringResource(if (offline) R.string.offline_cached else R.string.no_games), textAlign = TextAlign.Center)
-                    Spacer(Modifier.height(8.dp))
-                    CompactButton(onClick = onQuickGame) { Text(stringResource(R.string.quick_game)) }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold(scrollState = columnState) { contentPadding ->
+            if (games.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(20.dp)) {
+                        Text(stringResource(if (offline) R.string.offline_cached else R.string.no_games), textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(8.dp))
+                        CompactButton(onClick = onQuickGame) { Text(stringResource(R.string.quick_game))        }
+    }
                 }
-            }
-        } else {
-            TransformingLazyColumn(state = columnState, contentPadding = contentPadding) {
-                item {
-                    ListHeader(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                            .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
-                        transformation = SurfaceTransformation(transformationSpec),
-                    ) {
-                        Text(stringResource(R.string.games_title), style = MaterialTheme.typography.titleMedium)
-                    }
-                }
-                if (pendingSyncCount > 0) {
+            } else {
+                TransformingLazyColumn(modifier = Modifier.fillMaxSize(),
+                    state = columnState, contentPadding = contentPadding) {
                     item {
-                        Text(
-                            stringResource(R.string.pending_sync, pendingSyncCount),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center,
+                        ListHeader(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .transformedHeight(this, transformationSpec)
+                                .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                            transformation = SurfaceTransformation(transformationSpec),
+                        ) {
+                            Text(stringResource(R.string.games_title), style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    if (pendingSyncCount > 0) {
+                        item {
+                            Text(
+                                stringResource(R.string.pending_sync, pendingSyncCount),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    if (offline) {
+                        item {
+                            Text(
+                                stringResource(R.string.offline_cached),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    items(games, key = { it.id }) { game ->
+                        GameChip(
+                            game = game,
+                            isSuggested = false,
+                            canScore = true,
+                            onClick = { onGameSelected(game.id) },
+                            nowOverride = now,
                         )
                     }
-                }
-                if (offline) {
                     item {
-                        Text(
-                            stringResource(R.string.offline_cached),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center,
-                        )
+                        CompactButton(
+                            onClick = onQuickGame,
+                            modifier = Modifier.roundListInset(),
+                        ) { Text(stringResource(R.string.quick_game)) }
+                    }
+                    item {
+                        CompactButton(
+                            onClick = onHistory,
+                            modifier = Modifier.roundListInset(),
+                        ) { Text(stringResource(R.string.history_title)) }
                     }
                 }
-                items(games, key = { it.id }) { game ->
-                    GameChip(
-                        game = game,
-                        isSuggested = false,
-                        canScore = true,
-                        onClick = { onGameSelected(game.id) },
-                        nowOverride = now,
-                    )
-                }
-                item {
-                    CompactButton(onClick = onQuickGame) { Text(stringResource(R.string.quick_game)) }
-                }
-                item {
-                    CompactButton(onClick = onHistory) { Text(stringResource(R.string.history_title)) }
-                }
             }
-        }
+    
+ }
     }
 }
 
@@ -108,37 +124,45 @@ fun WearHistoryFixtureContent(
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
-    ScreenScaffold(scrollState = columnState) { contentPadding ->
-        TransformingLazyColumn(state = columnState, contentPadding = contentPadding) {
-            item {
-                ListHeader(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec)
-                        .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) {
-                    Text(stringResource(R.string.history_title), style = MaterialTheme.typography.titleMedium)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .roundBezelClip(),
+    ) {
+        ScreenScaffold(scrollState = columnState) { contentPadding ->
+            TransformingLazyColumn(modifier = Modifier.fillMaxSize(),
+                    state = columnState, contentPadding = contentPadding) {
+                item {
+                    ListHeader(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                            .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                        transformation = SurfaceTransformation(transformationSpec),
+                    ) {
+                        Text(stringResource(R.string.history_title), style = MaterialTheme.typography.titleMedium)
+                           }
+    }
+                items(histories, key = { it.id }) { history ->
+                    Button(
+                        onClick = {},
+                        modifier = Modifier.fillMaxWidth().roundListInset(),
+                        label = {
+                            Text(
+                                text = "${history.teamOneName} · ${history.teamTwoName}",
+                                maxLines = 1,
+                            )
+                        },
+                        secondaryLabel = {
+                            Text(
+                                text = "${formatRelativeTime(history.dateTime, now)} · ${history.scoreOne ?: 0} – ${history.scoreTwo ?: 0}",
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        },
+                    )
                 }
             }
-            items(histories, key = { it.id }) { history ->
-                Button(
-                    onClick = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        Text(
-                            text = "${history.teamOneName} · ${history.teamTwoName}",
-                            maxLines = 1,
-                        )
-                    },
-                    secondaryLabel = {
-                        Text(
-                            text = "${formatRelativeTime(history.dateTime, now)} · ${history.scoreOne ?: 0} – ${history.scoreTwo ?: 0}",
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    },
-                )
-            }
-        }
+    
+ }
     }
 }
