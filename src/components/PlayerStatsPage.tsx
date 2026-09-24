@@ -28,6 +28,10 @@ interface EventStats {
     attendanceRate: number;
     currentStreak: number;
   } | null;
+  /** Goals scored in this event (Match Events, ADR 0039). */
+  goals?: number;
+  /** Assists in this event (Match Events, ADR 0039). */
+  assists?: number;
 }
 
 interface StatsData {
@@ -40,6 +44,10 @@ interface StatsData {
     avgRating: number;
     bestRating: number;
     eventsPlayed: number;
+    /** Total goals logged via Match Events (ADR 0039). */
+    totalGoals?: number;
+    /** Total assists logged via Match Events (ADR 0039). */
+    totalAssists?: number;
   };
   events: EventStats[];
 }
@@ -168,6 +176,8 @@ export default function PlayerStatsPage() {
                     <StatCard label={t("statsAvgRating")} value={data.summary.avgRating} />
                     <StatCard label={t("statsBestRating")} value={data.summary.bestRating} color={theme.palette.success.main} />
                     <StatCard label={t("statsEventsPlayed")} value={data.summary.eventsPlayed} />
+                    <StatCard label={t("statsGoals")} value={data.summary.totalGoals ?? 0} />
+                    <StatCard label={t("statsAssists")} value={data.summary.totalAssists ?? 0} />
                   </Box>
                 </Paper>
 
@@ -228,6 +238,8 @@ export default function PlayerStatsPage() {
                           <TableCell align="center" sx={{ fontWeight: 700 }}>{t("draws")}</TableCell>
                           <TableCell align="center" sx={{ fontWeight: 700, color: "error.main" }}>{t("losses")}</TableCell>
                           <TableCell align="center" sx={{ fontWeight: 700 }}>{t("statsAttendanceRate")}</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 700 }}>{t("statsGoals")}</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 700 }}>{t("statsAssists")}</TableCell>
                           <TableCell sx={{ width: 48 }} />
                         </TableRow>
                       </TableHead>
@@ -281,6 +293,12 @@ export default function PlayerStatsPage() {
                               ) : (
                                 <Typography variant="body2" color="text.secondary">—</Typography>
                               )}
+                            </TableCell>
+                            <TableCell align="center">
+                              <Typography variant="body2" fontWeight={600}>{ev.goals ?? 0}</Typography>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Typography variant="body2">{ev.assists ?? 0}</Typography>
                             </TableCell>
                             <TableCell>
                               <Button
