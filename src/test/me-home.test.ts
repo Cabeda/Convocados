@@ -242,7 +242,16 @@ describe("GET /api/me/home", () => {
     expect(body.suggestAddGames).toBe(false);
   });
 
-  it("does not suggest adding games for a followed-only event", async () => {
+  it("suggests adding games when the viewer owns no active events", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    await seedEvent({ title: "Someone Else's", ownerId: null });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.suggestAddGames).toBe(true);
+  });
+
+  it("suggests adding games for a followed-only event when the viewer owns nothing", async () => {
     const user = await seedUser();
     authAs(user.id);
     const other = await seedUser("other-user");
@@ -250,6 +259,6 @@ describe("GET /api/me/home", () => {
     await prisma.eventFollow.create({ data: { userId: user.id, eventId: event.id } });
     const res = await GET(ctx());
     const body = await res.json();
-    expect(body.suggestAddGames).toBe(false);
+    expect(body.suggestAddGames).toBe(true);
   });
 });

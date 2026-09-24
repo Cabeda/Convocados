@@ -28,6 +28,9 @@ const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "satur
 
 const DAYS = DAY_CODES.map((value, i) => ({ value, key: DAY_KEYS[i] }));
 
+/** #1166 quick-add cost currencies (mirrors CostSection's list). */
+const QUICK_CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
+
 /** Map JS getDay() (0=Sun) to our DAY_CODES index (0=Mon) */
 function jsDayToDayCode(jsDay: number): string {
   return DAY_CODES[(jsDay + 6) % 7]; // Sun=0 → index 6, Mon=1 → index 0, etc.
@@ -67,6 +70,10 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
   const [customDialogOpen, setCustomDialogOpen] = useState(false);
   const [sport, setSport] = useState("football-5v5");
   const [maxPlayers, setMaxPlayers] = useState("10");
+  // #1166 quick-add cost: optional total, sent to the cost endpoint right
+  // after creation (the creator is the owner, so this is allowed).
+  const [costTotal, setCostTotal] = useState("");
+  const [costCurrency, setCostCurrency] = useState("EUR");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState("");
@@ -148,7 +155,26 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
       return;
     }
 
-    window.location.href = `/events/${json.id}`;
+    // #1166 quick-add cost: the creator is the owner, so seed the event cost
+    // now. Fire-and-forget — creation already succeeded.
+    if (quick) {
+      const parsedCost = parseFloat(costTotal);
+      if (!isNaN(parsedCost) && parsedCost > 0) {
+        try {
+          await fetch(`/api/events/${json.id}/cost`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ totalAmount: parsedCost, currency: costCurrency }),
+          });
+        } catch {
+          // ignore — cost can be set later on the event page
+        }
+      }
+    }
+
+    // Quick-add hands the creator straight to sharing (#1166): the event page
+    // opens the share dialog once when it sees ?created=1.
+    window.location.href = quick ? `/events/${json.id}?created=1` : `/events/${json.id}`;
   };
 
   // Field groups, reflowed by the quick-add density (ticket #1166): in quick
@@ -255,8 +281,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
     </>
   );
 
-  const teamsFields = (
-    <>
+  const teamsFields = (    <>
       <Divider><Chip label={t("teamNames")} size="small" /></Divider>
 
       <Grid container spacing={2}>
@@ -271,6 +296,33 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
             defaultValue="Gunas" fullWidth slotProps={{
             htmlInput: { maxLength: 50 }
           }} />
+        </Grid>
+      </Grid>
+    </>
+  );
+
+  const costFields = (
+    <>
+      <Divider><Chip label={t("totalCost")} size="small" /></Divider>
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <TextField
+            label={t("totalCost")}
+            type="number"
+            value={costTotal}
+            onChange={(e) => setCostTotal(e.target.value)}
+            fullWidth
+            slotProps={{ htmlInput: { min: 0, step: "any" } }}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <FormControl fullWidth>
+            <InputLabel>{t("currency")}</InputLabel>
+            <Select label={t("currency")} value={costCurrency} onChange={(e) => setCostCurrency(e.target.value as string)}>
+              {QUICK_CURRENCIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+            </Select>
+          </FormControl>
         </Grid>
       </Grid>
     </>
@@ -370,6 +422,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
                         {quick && timezoneRecurrence}
                         {!quick && basicsFields}
                         {teamsFields}
+                        {quick && costFields}
                       </Stack>
                     </AccordionDetails>
                   </Accordion>

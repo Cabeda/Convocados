@@ -187,7 +187,7 @@ function ActionCard({ action, locale, t }: { action: HomeAction; locale: string;
     pay_share: { icon: <PaymentsIcon fontSize="small" />, label: t("actionPayShare", { amount: `${(action.amount ?? 0).toFixed(2)} ${action.currency ?? "EUR"}` }), color: "error" },
     vote_mvp: { icon: <HowToVoteIcon fontSize="small" />, label: t("actionVoteMvp"), color: "success" },
   };
-  const m = meta[action.type];
+  const presentation = meta[action.type];
   return (
     <Paper
       elevation={2}
@@ -196,15 +196,15 @@ function ActionCard({ action, locale, t }: { action: HomeAction; locale: string;
       sx={{
         display: "flex", alignItems: "center", gap: 1.5, p: 2, borderRadius: 3,
         textDecoration: "none", color: "inherit",
-        borderLeft: 4, borderColor: `${m.color}.main`,
+        borderLeft: 4, borderColor: `${presentation.color}.main`,
         transition: "transform 0.15s, box-shadow 0.15s",
         "&:hover": { transform: "translateY(-2px)", boxShadow: 6 },
       }}
     >
-      <Box sx={{ color: `${m.color}.main`, display: "flex" }}>{m.icon}</Box>
+      <Box sx={{ color: `${presentation.color}.main`, display: "flex" }}>{presentation.icon}</Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography variant="subtitle2" fontWeight={700} noWrap>{action.eventTitle}</Typography>
-        <Typography variant="body2" color="text.secondary">{m.label}</Typography>
+        <Typography variant="body2" color="text.secondary">{presentation.label}</Typography>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
         {formatKickoff(new Date(action.dateTime), locale, action.timezone)}

@@ -128,16 +128,19 @@ export const GET: APIRoute = async ({ request }) => {
   // pay, vote). Batch, capped, self-clearing. See homeActions.server.ts.
   const actions = await computeHomeActions(userId, now);
 
-  // Growth prompt: the viewer plays in an Event they don't own, so they have
-  // other groups whose games could be added (ticket #1166). Cheap existence check.
-  const playedElsewhere = await prisma.event.count({
-    where: {
-      archivedAt: null,
-      ownerId: { not: userId },
-      eventPlayers: { some: { userId } },
-    },
-  });
-  const suggestAddGames = playedElsewhere > 0;
+  // Growth prompt (#1166): the viewer plays in an Event they don't own (proof
+  // of other groups), or owns no active events at all. Cheap checks.
+  const [playedElsewhere, ownedActive] = await Promise.all([
+    prisma.event.count({
+      where: {
+        archivedAt: null,
+        ownerId: { not: userId },
+        eventPlayers: { some: { userId } },
+      },
+    }),
+    prisma.event.count({ where: { archivedAt: null, ownerId: userId } }),
+  ]);
+  const suggestAddGames = playedElsewhere > 0 || ownedActive === 0;
 
   return Response.json({ upNext, discover, actions, suggestAddGames });
 };

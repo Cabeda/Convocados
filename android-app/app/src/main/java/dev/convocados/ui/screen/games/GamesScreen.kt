@@ -6,6 +6,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +47,7 @@ import dev.convocados.ui.theme.layoutForWidthDp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -88,6 +90,7 @@ class GamesViewModel @Inject constructor(
     private val repository: EventRepository,
     private val api: ConvocadosApi,
     private val tokenStore: dev.convocados.data.auth.TokenStore,
+    private val settingsStore: dev.convocados.data.datastore.SettingsStore,
 ) : ViewModel() {
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
@@ -139,6 +142,27 @@ class GamesViewModel @Inject constructor(
         runCatching { api.fetchHome() }.onSuccess { _home.value = it }
     }
 
+    // #1166: growth prompt — visible when the feed flags it and the viewer
+    // hasn't dismissed it (a session flag for instant hide plus a 30-day
+    // DataStore cooldown so it survives restarts, mirroring the web prompt).
+    private val _addGamesDismissedSession = MutableStateFlow(false)
+    val showAddGamesPrompt: StateFlow<Boolean> = combine(
+        home,
+        settingsStore.addGamesPromptDismissedUntil,
+        _addGamesDismissedSession,
+    ) { h, dismissedUntil, dismissedSession ->
+        (h?.suggestAddGames == true) && !dismissedSession && System.currentTimeMillis() > dismissedUntil
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun dismissAddGamesPrompt() {
+        _addGamesDismissedSession.value = true
+        viewModelScope.launch {
+            settingsStore.setAddGamesPromptDismissedUntil(
+                System.currentTimeMillis() + ADD_GAMES_PROMPT_COOLDOWN_MS,
+            )
+        }
+    }
+
     private suspend fun loadParticipatedEvents() {
         val ownId = runCatching { api.fetchUserInfo().id }.getOrNull() ?: return
         _participatedEvents.value = runCatching { api.fetchUserProfile(ownId) }.getOrNull()?.joined.orEmpty()
@@ -178,6 +202,10 @@ class GamesViewModel @Inject constructor(
     }
 
     fun shareUrl(eventId: String): String = "${tokenStore.getServerUrl()}/events/$eventId"
+
+    companion object {
+        private const val ADD_GAMES_PROMPT_COOLDOWN_MS = 30L * 24 * 60 * 60 * 1000
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -203,8 +231,7 @@ fun GamesScreen(
     val upNext = home?.upNext.orEmpty()
     val discover = home?.discover.orEmpty()
     val actions = home?.actions.orEmpty()
-    val suggestAddGames = home?.suggestAddGames == true
-    var addGamesDismissed by remember { mutableStateOf(false) }
+    val showAddGamesPrompt by viewModel.showAddGamesPrompt.collectAsState()
     var showArchived by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
 
@@ -279,11 +306,11 @@ fun GamesScreen(
                 ) {
 
                 // Ticket #1166: growth prompt — add your other games.
-                if (!showArchived && suggestAddGames && !addGamesDismissed) {
+                if (!showArchived && showAddGamesPrompt) {
                     item(key = "add-games-prompt") {
                         AddGamesPromptCard(
                             onAdd = onCreateClick,
-                            onDismiss = { addGamesDismissed = true },
+                            onDismiss = { viewModel.dismissAddGamesPrompt() },
                         )
                     }
                 }
@@ -606,41 +633,85 @@ fun formatEventDateInTz(iso: String, timezone: String): String = runCatching {
 }.getOrDefault(iso)
 
 /**
- * ADR 0025: "Suggested players for your games" panel. Lists the nearest
- * upcoming managed games with their ranked co-play invite candidates.
+ * ADR 0025, compact: one card for every managed game that has co-play invite
+ * candidates. Each game is a single wrapping chip row (first few visible,
+ * "+N" expands) instead of a full card with one chip per line — the old layout
+ * cost a whole screen of vertical scrolling for three games.
  */
+private const val MAX_VISIBLE_SUGGESTIONS = 4
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SuggestionsPanel(
     games: List<GameSuggestions>,
     onInvite: (eventId: String, userId: String) -> Unit,
     onEventClick: (String) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text(
-            stringResource(R.string.suggested_players_games),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(8.dp))
-        games.forEach { gs ->
-            ElevatedCard(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val total = games.sumOf { it.suggestions.size }
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.suggested_players_games),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "$total",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            games.forEachIndexed { index, gs ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         gs.game.title,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clickable { onEventClick(gs.game.id) },
                     )
-                    Spacer(Modifier.height(8.dp))
-                    gs.suggestions.forEach { s ->
-                        AssistChip(
-                            onClick = { onInvite(gs.game.id, s.userId) },
-                            label = { Text(s.name) },
-                            leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
+                    val isExpanded = expanded[gs.game.id] == true
+                    val visible = if (isExpanded) gs.suggestions else gs.suggestions.take(MAX_VISIBLE_SUGGESTIONS)
+                    val hidden = gs.suggestions.size - visible.size
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        visible.forEach { s ->
+                            AssistChip(
+                                onClick = { onInvite(gs.game.id, s.userId) },
+                                label = { Text(s.name, maxLines = 1) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.PersonAdd,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                },
+                            )
+                        }
+                        if (hidden > 0) {
+                            TextButton(onClick = { expanded[gs.game.id] = true }) {
+                                Text("+$hidden")
+                            }
+                        }
                     }
+                }
+                if (index < games.lastIndex) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }
