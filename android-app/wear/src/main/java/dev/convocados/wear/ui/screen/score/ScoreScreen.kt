@@ -35,6 +35,7 @@ import dev.convocados.wear.ui.scoreContentPadding
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundSafeSize
 import dev.convocados.wear.ui.roundSafeWidth
+import dev.convocados.wear.ui.ongoing.OngoingLaunch
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
 import dev.convocados.wear.ui.ongoing.ongoingScoreText
 import dev.convocados.wear.ui.ongoing.shouldShowLiveGameOngoing
@@ -81,6 +82,7 @@ fun ScoreScreen(
         enabled = shouldShowLiveGameOngoing(isScoring = state.history != null, phase = scorePhase),
         title = state.game?.title ?: stringResource(R.string.ongoing_score_title),
         text = ongoingScoreText(state.teamOneName, state.scoreOne, state.teamTwoName, state.scoreTwo),
+        launch = OngoingLaunch(eventId = eventId),
     )
 
     Box(

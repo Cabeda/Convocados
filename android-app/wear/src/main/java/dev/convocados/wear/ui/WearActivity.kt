@@ -1,6 +1,7 @@
 package dev.convocados.wear.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -21,6 +22,8 @@ import dev.convocados.wear.data.auth.WearTokenStore
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.QuickGameStore
 import dev.convocados.wear.ui.navigation.WearNavigation
+import dev.convocados.wear.ui.ongoing.OngoingLaunch
+import dev.convocados.wear.ui.ongoing.parseOngoingLaunch
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -48,6 +51,14 @@ class WearActivity : ComponentActivity() {
 
     private var isAmbient by mutableStateOf(false)
 
+    /**
+     * Deep-link target carried by the ongoing-activity chip / tile. Bumped with
+     * [ongoingLaunchSeq] on every new intent so a re-tap while the app is alive
+     * still navigates back into the live session.
+     */
+    private var ongoingLaunch by mutableStateOf<OngoingLaunch?>(null)
+    private var ongoingLaunchSeq by mutableStateOf(0)
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -67,6 +78,7 @@ class WearActivity : ComponentActivity() {
 
         ambientObserver = AmbientLifecycleObserver(this, ambientCallback)
         lifecycle.addObserver(ambientObserver)
+        applyLaunchIntent(intent)
         requestNotificationPermissionIfNeeded()
         lifecycleScope.launch {
             restoreCredentialCoordinator.restoreOrCreate(this@WearActivity)
@@ -79,10 +91,30 @@ class WearActivity : ComponentActivity() {
         setContent {
             ConvocadosWearTheme {
                 CompositionLocalProvider(LocalAmbientMode provides isAmbient) {
-                    WearNavigation(tokenStore, googleSignIn, restoreCredentialCoordinator, quickGameStore)
+                    WearNavigation(
+                        tokenStore = tokenStore,
+                        googleSignIn = googleSignIn,
+                        restoreCredentialCoordinator = restoreCredentialCoordinator,
+                        quickGameStore = quickGameStore,
+                        launch = ongoingLaunch,
+                        launchSeq = ongoingLaunchSeq,
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyLaunchIntent(intent)
+    }
+
+    /** Capture the deep link carried by the ongoing chip / tile, if any. */
+    private fun applyLaunchIntent(intent: Intent?) {
+        val launch = parseOngoingLaunch(intent) ?: return
+        ongoingLaunch = launch
+        ongoingLaunchSeq += 1
     }
 
     /**
