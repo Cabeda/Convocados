@@ -387,6 +387,28 @@ export const openApiSpec = {
         responses: { "200": { description: "Unfollowed" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/invitation-opt-out": {
+      post: {
+        summary: "Toggle per-event invite opt-out (ADR 0025)",
+        description:
+          "While set, RSVP pings, recruitment pings, suggestions and PlayerInvite creation are suppressed for this event. Reversible; cleared automatically when the caller rejoins the player list.",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["optOut"],
+                properties: { optOut: { type: "boolean" } },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Opt-out state updated" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/rsvp": {
       post: {
         summary: "Submit RSVP (yes/no/maybe) for an event",

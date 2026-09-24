@@ -50,8 +50,6 @@
     <string name="server_url">URL do servidor</string>
     <string name="language">Idioma</string>
     <string name="notifications_title">Notificações</string>
-    <string name="enable_notifications">Ativar notificações</string>
-    <string name="enable_notifications_desc">Escolhe quando o Convocados pode enviar lembretes e atualizações dos jogos.</string>
     <string name="notifications_subtitle">Gerir preferências de push e email</string>
     <string name="sign_out">Sair</string>
     <string name="edit_name">Editar nome</string>
@@ -216,12 +214,19 @@
     <string name="push_notifications">Notificações push</string>
     <string name="enable_push">Ativar push</string>
     <string name="enable_push_desc">Interruptor geral de todas as notificações push</string>
+    <string name="this_device_title">Este dispositivo</string>
+    <string name="device_push_on">As notificações estão ativas neste dispositivo</string>
+    <string name="device_push_off">As notificações estão desativadas neste dispositivo</string>
+    <string name="device_push_blocked">As notificações estão bloqueadas nas definições do sistema</string>
+    <string name="open_notification_settings">Abrir definições</string>
     <string name="player_activity_desc">Quando jogadores entram ou saem</string>
     <string name="game_reminders_desc">Antes do início do jogo</string>
     <string name="event_updates">Atualizações do evento</string>
     <string name="event_updates_desc">Quando os detalhes do evento mudam</string>
     <string name="payment_reminders">Lembretes de pagamento</string>
     <string name="post_game_results_desc">Resultados e resumo após o jogo terminar</string>
+    <string name="invite_opt_out_label">Não me convides para este jogo</string>
+    <string name="invite_opt_out_desc">Pausa convites, sugestões e lembretes para este jogo. Continuas na lista de jogadores.</string>
     <string name="notification_tiers_title">Como funcionam as notificações</string>
     <string name="notification_tiers_desc">Recebes atualizações do evento (cancelamentos, convites, vagas) para todos os jogos que segues. Detalhes do jogo (atividade de jogadores, lembretes, resultados) só são enviados quando estás a jogar — ou podes ativar \"Todas as atualizações\" por evento.</string>
 

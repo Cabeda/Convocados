@@ -1,5 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
 import { applySecurityHeaders as addSecurityHeaders } from "~/lib/securityHeaders";
+import { isTrackableAppOpen } from "~/lib/appOpen";
 
 /**
  * Security middleware: CSRF protection + security headers (CSP, etc.)
@@ -89,6 +90,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Safe methods don't need CSRF protection
   if (SAFE_METHODS.has(request.method)) {
     const response = await next();
+    // App-open heartbeat: count authenticated page navigations once per UTC
+    // day (drives admin DAU/WAU/MAU + the push-prompt accelerator). Deliberately
+    // fire-and-forget — it must never delay or fail the response.
+    if (isTrackableAppOpen(request, url)) {
+      void import("~/lib/appOpen.server").then((m) => m.trackAppOpen(request));
+    }
     return addSecurityHeaders(response);
   }
 

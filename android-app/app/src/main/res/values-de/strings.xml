@@ -50,8 +50,6 @@
     <string name="server_url">Server-URL</string>
     <string name="language">Sprache</string>
     <string name="notifications_title">Benachrichtigungen</string>
-    <string name="enable_notifications">Benachrichtigungen aktivieren</string>
-    <string name="enable_notifications_desc">Wähle, wann Convocados Erinnerungen und Spiel-Updates senden darf.</string>
     <string name="notifications_subtitle">Push- und E-Mail-Einstellungen verwalten</string>
     <string name="sign_out">Abmelden</string>
     <string name="edit_name">Name bearbeiten</string>
@@ -216,12 +214,19 @@
     <string name="push_notifications">Push-Benachrichtigungen</string>
     <string name="enable_push">Push aktivieren</string>
     <string name="enable_push_desc">Hauptschalter für alle Push-Benachrichtigungen</string>
+    <string name="this_device_title">Dieses Gerät</string>
+    <string name="device_push_on">Benachrichtigungen sind auf diesem Gerät aktiv</string>
+    <string name="device_push_off">Benachrichtigungen sind auf diesem Gerät deaktiviert</string>
+    <string name="device_push_blocked">Benachrichtigungen sind in den Systemeinstellungen blockiert</string>
+    <string name="open_notification_settings">Einstellungen öffnen</string>
     <string name="player_activity_desc">Wenn Spieler beitreten oder gehen</string>
     <string name="game_reminders_desc">Vor Beginn deines Spiels</string>
     <string name="event_updates">Ereignis-Updates</string>
     <string name="event_updates_desc">Wenn sich Ereignisdetails ändern</string>
     <string name="payment_reminders">Zahlungserinnerungen</string>
     <string name="post_game_results_desc">Ergebnisse und Zusammenfassung nach dem Spiel</string>
+    <string name="invite_opt_out_label">Lade mich nicht zu diesem Spiel ein</string>
+    <string name="invite_opt_out_desc">Pausiert Einladungen, Vorschläge und Erinnerungen für dieses Spiel. Du bleibst auf der Spielerliste.</string>
     <string name="notification_tiers_title">So funktionieren Benachrichtigungen</string>
     <string name="notification_tiers_desc">Du erhältst Ereignis-Updates (Absagen, Einladungen, freie Plätze) für alle Spiele, denen du folgst. Spieldetails (Spieleraktivität, Erinnerungen, Ergebnisse) werden nur gesendet, wenn du spielst — oder du aktivierst \"Alle Updates\" pro Ereignis.</string>
 

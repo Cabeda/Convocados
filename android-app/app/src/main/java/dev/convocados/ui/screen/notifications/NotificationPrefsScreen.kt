@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import androidx.annotation.StringRes
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewModelScope
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -26,6 +27,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.NotificationPrefs
+import dev.convocados.data.datastore.SettingsStore
+import dev.convocados.data.push.DevicePushState
+import dev.convocados.data.push.classifyDevicePushState
+import dev.convocados.data.push.openNotificationSettings
 import dev.convocados.data.push.shouldRequestNotificationPermission
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +38,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import android.Manifest
 import android.os.Build
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.core.app.NotificationManagerCompat
 
 data class PrefItem(val key: String, @StringRes val labelRes: Int, @StringRes val descRes: Int? = null)
 data class PrefSection(@StringRes val titleRes: Int, val items: List<PrefItem>)
@@ -61,13 +70,28 @@ val SECTIONS = listOf(
 )
 
 @HiltViewModel
-class NotificationPrefsViewModel @Inject constructor(private val api: ConvocadosApi) : ViewModel() {
+class NotificationPrefsViewModel @Inject constructor(
+    private val api: ConvocadosApi,
+    private val settingsStore: SettingsStore,
+) : ViewModel() {
     private val _prefs = MutableStateFlow<NotificationPrefs?>(null)
     val prefs: StateFlow<NotificationPrefs?> = _prefs
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading
+    private val _permissionRequested = MutableStateFlow(false)
+    val permissionRequested: StateFlow<Boolean> = _permissionRequested
 
-    init { load() }
+    init {
+        load()
+        viewModelScope.launch {
+            settingsStore.notificationPermissionRequested.collect { _permissionRequested.value = it }
+        }
+    }
+
+    /** Record that the runtime dialog was attempted — unlocks BLOCKED detection. */
+    fun markNotificationPermissionRequested() {
+        viewModelScope.launch { settingsStore.markNotificationPermissionRequested() }
+    }
 
     fun load() {
         viewModelScope.launch {
@@ -128,12 +152,32 @@ fun NotificationPrefsScreen(
 ) {
     val prefs by viewModel.prefs.collectAsState()
     val loading by viewModel.loading.collectAsState()
+    val permissionRequested by viewModel.permissionRequested.collectAsState()
+    val context = LocalContext.current
+    var notificationsEnabled by remember {
+        mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
+    }
+    // Refresh when returning from system settings so ON/OFF/BLOCKED stays truthful.
+    LifecycleResumeEffect(Unit) {
+        notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        onPauseOrDispose { }
+    }
 
     val notificationPermissionState = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
     } else {
         null
     }
+
+    val permissionStatus = notificationPermissionState?.status
+    val devicePushState = classifyDevicePushState(
+        notificationsEnabled = notificationsEnabled,
+        canRequestInApp = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
+        permissionGranted = permissionStatus?.isGranted ?: notificationsEnabled,
+        shouldShowRationale = permissionStatus is com.google.accompanist.permissions.PermissionStatus.Denied &&
+            permissionStatus.shouldShowRationale,
+        hasRequested = permissionRequested,
+    )
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
@@ -145,22 +189,26 @@ fun NotificationPrefsScreen(
         val p = prefs ?: return@Scaffold
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            if (notificationPermissionState != null && !notificationPermissionState.status.isGranted) {
-                NotificationPermissionBanner(
-                    onEnable = {
-                        if (shouldRequestNotificationPermission(
-                                sdkInt = Build.VERSION.SDK_INT,
-                                isAuthenticated = isAuthenticated,
-                                isReady = isReady,
-                                isGranted = notificationPermissionState.status.isGranted,
-                                userInitiated = true,
-                            )
-                        ) {
-                            notificationPermissionState.launchPermissionRequest()
-                        }
-                    },
-                )
-            }
+            // Web parity: "This device" state card (DevicePushSection) — on/off/blocked
+            // with an enable or system-settings action. Shown for every state, unlike
+            // the old banner which only appeared while permission was missing.
+            DevicePushCard(
+                state = devicePushState,
+                onEnable = {
+                    if (shouldRequestNotificationPermission(
+                            sdkInt = Build.VERSION.SDK_INT,
+                            isAuthenticated = isAuthenticated,
+                            isReady = isReady,
+                            isGranted = permissionStatus?.isGranted == true,
+                            userInitiated = true,
+                        )
+                    ) {
+                        viewModel.markNotificationPermissionRequested()
+                        notificationPermissionState?.launchPermissionRequest()
+                    }
+                },
+                onOpenSettings = { openNotificationSettings(context) },
+            )
 
             // ADR 0017: Tier explanation
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
@@ -195,35 +243,69 @@ fun NotificationPrefsScreen(
 }
 
 
+/**
+ * Device-level push state for this install — Android counterpart of the web
+ * PWA's DevicePushSection. Native has no in-app unsubscribe (FCM tokens aren't
+ * user-visible), so ON also points at system settings instead of "Turn off".
+ */
 @Composable
-fun NotificationPermissionBanner(onEnable: () -> Unit) {
+fun DevicePushCard(
+    state: DevicePushState,
+    onEnable: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    val container = when (state) {
+        DevicePushState.ON -> MaterialTheme.colorScheme.secondaryContainer
+        DevicePushState.OFF -> MaterialTheme.colorScheme.surface
+        DevicePushState.BLOCKED -> MaterialTheme.colorScheme.errorContainer
+    }
+    val contentColor = when (state) {
+        DevicePushState.ON -> MaterialTheme.colorScheme.onSecondaryContainer
+        DevicePushState.OFF -> MaterialTheme.colorScheme.onSurface
+        DevicePushState.BLOCKED -> MaterialTheme.colorScheme.onErrorContainer
+    }
+    val labelRes = when (state) {
+        DevicePushState.ON -> R.string.device_push_on
+        DevicePushState.OFF -> R.string.device_push_off
+        DevicePushState.BLOCKED -> R.string.device_push_blocked
+    }
+    val icon = when (state) {
+        DevicePushState.ON -> Icons.Default.NotificationsActive
+        DevicePushState.OFF -> Icons.Default.NotificationsOff
+        DevicePushState.BLOCKED -> Icons.Default.Block
+    }
+
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
+        colors = CardDefaults.cardColors(containerColor = container),
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                stringResource(R.string.this_device_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = contentColor.copy(alpha = 0.7f),
+                letterSpacing = 1.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, null, tint = contentColor, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
                 Text(
-                    stringResource(R.string.enable_notifications),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    stringResource(labelRes),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = contentColor,
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.enable_notifications_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            TextButton(onClick = onEnable) {
-                Text(stringResource(R.string.enable_push))
+                if (state == DevicePushState.OFF) {
+                    TextButton(onClick = onEnable) {
+                        Text(stringResource(R.string.enable_push))
+                    }
+                } else {
+                    TextButton(onClick = onOpenSettings) {
+                        Text(stringResource(R.string.open_notification_settings))
+                    }
+                }
             }
         }
     }

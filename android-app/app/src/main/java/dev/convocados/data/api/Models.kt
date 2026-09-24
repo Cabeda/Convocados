@@ -718,6 +718,8 @@ data class FollowStateResponse(
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
+    /** ADR 0025: per-event invite opt-out (EventPlayer.invitationOptOutAt). */
+    val inviteOptedOut: Boolean? = null,
 )
 
 // ── Court Finder ────────────────────────────────────────────────────────────
