@@ -14,6 +14,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchMyGames(): MyGamesResponse = client.get("/api/me/games")
     suspend fun fetchMyStats(): PlayerStats = client.get("/api/me/stats")
     suspend fun fetchUserInfo(): UserProfile = client.get("/api/me/profile")
+
+    /** Native app-open heartbeat (GH #1070) — idempotent per UTC day server-side. */
+    suspend fun reportAppOpen(): Map<String, Boolean> =
+        client.post("/api/me/app-open", emptyMap<String, Boolean>())
     suspend fun fetchNotificationPrefs(): NotificationPrefs = client.get("/api/me/notification-preferences")
     suspend fun updateNotificationPrefs(prefs: Map<String, Boolean>): NotificationPrefs =
         client.put("/api/me/notification-preferences", prefs)

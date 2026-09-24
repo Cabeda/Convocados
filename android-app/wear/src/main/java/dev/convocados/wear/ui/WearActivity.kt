@@ -18,6 +18,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import dev.convocados.wear.data.auth.WearGoogleSignIn
 import dev.convocados.wear.data.auth.WearRestoreCredentialCoordinator
 import dev.convocados.wear.data.auth.WearTokenStore
+import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.QuickGameStore
 import dev.convocados.wear.ui.navigation.WearNavigation
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
@@ -41,6 +42,9 @@ class WearActivity : ComponentActivity() {
 
     @Inject
     lateinit var quickGameStore: QuickGameStore
+
+    @Inject
+    lateinit var api: WearApiClient
 
     private var isAmbient by mutableStateOf(false)
 
@@ -66,6 +70,10 @@ class WearActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
         lifecycleScope.launch {
             restoreCredentialCoordinator.restoreOrCreate(this@WearActivity)
+        }
+        // GH #1070: one app-open heartbeat per launch, only when signed in.
+        if (tokenStore.isAuthenticated.value) {
+            lifecycleScope.launch { runCatching { api.reportAppOpen() } }
         }
 
         setContent {
