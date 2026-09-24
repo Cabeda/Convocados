@@ -23,6 +23,7 @@ export async function getUpcomingReminders(type: "24h" | "2h" | "1h"): Promise<U
 
   const events = await prisma.event.findMany({
     where: {
+      archivedAt: null,
       dateTime: { gte: from, lte: to },
       reminderLogs: { none: { type } },
     },
@@ -55,6 +56,7 @@ export async function getPostGameReminders(): Promise<UpcomingReminder[]> {
 
   const events = await prisma.event.findMany({
     where: {
+      archivedAt: null,
       // Game started at least durationMinutes ago — we can't filter by computed
       // end time in Prisma, so we fetch recent past events and filter in JS
       dateTime: { gte: fourHoursAgo, lte: new Date(now) },

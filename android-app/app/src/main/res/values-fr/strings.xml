@@ -50,8 +50,6 @@
     <string name="server_url">URL du serveur</string>
     <string name="language">Langue</string>
     <string name="notifications_title">Notifications</string>
-    <string name="enable_notifications">Activer les notifications</string>
-    <string name="enable_notifications_desc">Choisissez quand Convocados peut envoyer des rappels et des mises à jour de matchs.</string>
     <string name="notifications_subtitle">Gérer les préférences push et e-mail</string>
     <string name="sign_out">Se déconnecter</string>
     <string name="edit_name">Modifier le nom</string>
@@ -216,12 +214,19 @@
     <string name="push_notifications">Notifications push</string>
     <string name="enable_push">Activer le push</string>
     <string name="enable_push_desc">Interrupteur général de toutes les notifications push</string>
+    <string name="this_device_title">Cet appareil</string>
+    <string name="device_push_on">Les notifications sont activées sur cet appareil</string>
+    <string name="device_push_off">Les notifications sont désactivées sur cet appareil</string>
+    <string name="device_push_blocked">Les notifications sont bloquées dans les réglages du système</string>
+    <string name="open_notification_settings">Ouvrir les réglages</string>
     <string name="player_activity_desc">Quand des joueurs rejoignent ou partent</string>
     <string name="game_reminders_desc">Avant le début de votre match</string>
     <string name="event_updates">Mises à jour de l\'événement</string>
     <string name="event_updates_desc">Quand les détails de l\'événement changent</string>
     <string name="payment_reminders">Rappels de paiement</string>
     <string name="post_game_results_desc">Scores et résumé après le match</string>
+    <string name="invite_opt_out_label">Ne m\'invitez pas à ce match</string>
+    <string name="invite_opt_out_desc">Met en pause invitations, suggestions et rappels pour ce match. Vous restez sur la liste des joueurs.</string>
     <string name="notification_tiers_title">Comment fonctionnent les notifications</string>
     <string name="notification_tiers_desc">Vous recevez les mises à jour de l\'événement (annulations, invitations, places) pour tous les matchs suivis. Les détails du jeu (activité des joueurs, rappels, scores) ne sont envoyés que lorsque vous jouez — ou activez « Toutes les mises à jour » par événement.</string>
 
@@ -420,4 +425,24 @@
     <string name="match_events_team_one">Équipe 1</string>
     <string name="match_events_team_two">Équipe 2</string>
     <string name="match_events_top_scorers">Meilleurs buteurs</string>
+
+    <!-- Linked sign-in methods (ADR 0040) -->
+    <string name="linked_signins">Méthodes de connexion</string>
+    <string name="linked_signins_desc">Mot de passe et comptes sociaux que tu peux utiliser pour te connecter.</string>
+    <string name="credential_password">Mot de passe</string>
+    <string name="credential_google">Google</string>
+    <string name="link_google_btn">Lier Google</string>
+    <string name="unlink_credential_btn">Retirer</string>
+    <string name="credential_unlinked">Méthode de connexion retirée.</string>
+    <string name="credential_unlink_error">Impossible de retirer la méthode de connexion.</string>
+    <string name="credential_load_error">Impossible de charger les méthodes de connexion.</string>
+    <string name="link_google_success">Google lié à ton compte.</string>
+    <string name="link_google_error">Impossible de lier Google. Réessaie.</string>
+    <string name="only_credential_hint">Ceci est ta seule méthode de connexion.</string>
+    <string name="merge_confirm_title">Fusionner les comptes ?</string>
+    <string name="merge_confirm_desc">Cette connexion Google appartient à un autre compte Convocados (%1$s, créé le %2$s). La fusion déplace ses données vers ce compte, déconnecte ses autres appareils et est irréversible.</string>
+    <string name="merge_confirm_btn">Fusionner les comptes</string>
+    <string name="merge_cancel_btn">Annuler</string>
+    <string name="merge_success">Comptes fusionnés.</string>
+    <string name="merge_error">Impossible de fusionner les comptes.</string>
 </resources>
