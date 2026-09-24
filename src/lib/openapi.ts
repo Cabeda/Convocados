@@ -329,6 +329,28 @@ export const openApiSpec = {
         responses: { "200": { description: "Member removed" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/seasons/{seasonId}/crew-proposals": {
+      get: {
+        summary: "List Season Crew proposals and eligible candidates",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Proposals and candidates" }, ...errorResponses },
+      },
+      post: {
+        summary: "Submit a Season Crew proposal",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "201": { description: "Proposal created" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}": {
+      patch: {
+        summary: "Approve or reject a Season Crew proposal (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam, { name: "proposalId", in: "path" as const, required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Proposal reviewed" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/seasons/{seasonId}/crews": {
       post: {
         summary: "Save Season Crews (admin)",

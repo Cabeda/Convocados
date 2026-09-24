@@ -22,6 +22,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
 import dev.convocados.data.api.ApiException
 import dev.convocados.data.api.ConvocadosApi
+import dev.convocados.data.api.CrewProposal
+import dev.convocados.data.api.CrewProposalCandidate
 import dev.convocados.data.api.CrewDraftInput
 import dev.convocados.data.api.SeasonDetail
 import dev.convocados.data.api.SeasonMemberCandidate
@@ -48,6 +50,16 @@ class SeasonDetailViewModel @Inject constructor(
     val crewDrafts: StateFlow<List<CrewDraftInput>> = _crewDrafts
     private val _candidates = MutableStateFlow<List<SeasonMemberCandidate>>(emptyList())
     val candidates: StateFlow<List<SeasonMemberCandidate>> = _candidates
+    private val _proposals = MutableStateFlow<List<CrewProposal>>(emptyList())
+    val proposals: StateFlow<List<CrewProposal>> = _proposals
+    private val _proposalCandidates = MutableStateFlow<List<CrewProposalCandidate>>(emptyList())
+    val proposalCandidates: StateFlow<List<CrewProposalCandidate>> = _proposalCandidates
+    private val _canPropose = MutableStateFlow(false)
+    val canPropose: StateFlow<Boolean> = _canPropose
+    private val _canReview = MutableStateFlow(false)
+    val canReview: StateFlow<Boolean> = _canReview
+    private val _proposerMembershipId = MutableStateFlow<String?>(null)
+    val proposerMembershipId: StateFlow<String?> = _proposerMembershipId
 
     fun load(eventId: String, seasonId: String) {
         viewModelScope.launch {
@@ -56,6 +68,7 @@ class SeasonDetailViewModel @Inject constructor(
             runCatching { api.fetchSeasonDetail(eventId, seasonId) }
                 .onSuccess { _season.value = it.season }
                 .onFailure { _message.value = if (it is ApiException && it.code == 403) null else it.message }
+            loadProposals(eventId, seasonId)
             _loading.value = false
         }
     }
@@ -118,6 +131,37 @@ class SeasonDetailViewModel @Inject constructor(
     fun removeMember(eventId: String, seasonId: String, membershipId: String) =
         action(eventId, seasonId) { api.removeSeasonMember(eventId, seasonId, membershipId) }
 
+    private suspend fun loadProposals(eventId: String, seasonId: String) {
+        runCatching { api.fetchCrewProposals(eventId, seasonId) }
+            .onSuccess {
+                _proposals.value = it.proposals
+                _proposalCandidates.value = it.candidates
+                _canPropose.value = it.canPropose
+                _canReview.value = it.canReview
+                _proposerMembershipId.value = it.proposerMembershipId
+            }
+    }
+
+    fun submitProposal(eventId: String, seasonId: String, name: String, membershipIds: List<String>) {
+        viewModelScope.launch {
+            _busy.value = true
+            runCatching { api.submitCrewProposal(eventId, seasonId, name, membershipIds) }
+                .onSuccess { loadProposals(eventId, seasonId) }
+                .onFailure { _message.value = it.message }
+            _busy.value = false
+        }
+    }
+
+    fun decideProposal(eventId: String, seasonId: String, proposalId: String, decision: String, rejectionReason: String? = null) {
+        viewModelScope.launch {
+            _busy.value = true
+            runCatching { api.decideCrewProposal(eventId, seasonId, proposalId, decision, rejectionReason) }
+                .onSuccess { load(eventId, seasonId) }
+                .onFailure { _message.value = it.message }
+            _busy.value = false
+        }
+    }
+
     fun clearMessage() { _message.value = null }
 }
 
@@ -139,6 +183,16 @@ fun SeasonDetailScreen(
     var editName by remember { mutableStateOf("") }
     var editOpens by remember { mutableStateOf("") }
     var editCloses by remember { mutableStateOf("") }
+    val proposals by viewModel.proposals.collectAsStateWithLifecycle()
+    val proposalCandidates by viewModel.proposalCandidates.collectAsStateWithLifecycle()
+    val canPropose by viewModel.canPropose.collectAsStateWithLifecycle()
+    val canReview by viewModel.canReview.collectAsStateWithLifecycle()
+    var showPropose by remember { mutableStateOf(false) }
+    var proposalName by remember { mutableStateOf("") }
+    val selectedMembers = remember { mutableStateListOf<String>() }
+    val showProposals = canPropose || canReview || proposals.isNotEmpty()
+    var rejectingId by remember { mutableStateOf<String?>(null) }
+    var rejectionReason by remember { mutableStateOf("") }
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -147,6 +201,80 @@ fun SeasonDetailScreen(
     LaunchedEffect(eventId, seasonId) { viewModel.load(eventId, seasonId) }
     LaunchedEffect(message) {
         message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() }
+    }
+
+    if (showPropose) {
+        AlertDialog(
+            onDismissRequest = { showPropose = false },
+            title = { Text(stringResource(R.string.propose_crew)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.propose_crew_description), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(
+                        value = proposalName,
+                        onValueChange = { proposalName = it },
+                        label = { Text(stringResource(R.string.crew_proposal_name)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(stringResource(R.string.select_crew_members), style = MaterialTheme.typography.labelMedium)
+                    LazyColumn(Modifier.heightIn(max = 240.dp)) {
+                        items(proposalCandidates, key = { it.membershipId ?: it.userId ?: it.name }) { candidate ->
+                            val id = candidate.membershipId
+                            val selectable = id != null
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(
+                                    checked = id != null && selectedMembers.contains(id),
+                                    onCheckedChange = { checked ->
+                                        if (id == null) return@Checkbox
+                                        if (checked) { if (selectedMembers.size < 5) selectedMembers.add(id) }
+                                        else selectedMembers.remove(id)
+                                    },
+                                    enabled = selectable,
+                                )
+                                Text(candidate.name, modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.submitProposal(eventId, seasonId, proposalName.trim(), selectedMembers.toList())
+                        showPropose = false
+                    },
+                    enabled = !busy && proposalName.isNotBlank() && selectedMembers.size in 3..5,
+                ) { Text(stringResource(R.string.submit_crew_proposal)) }
+            },
+            dismissButton = { TextButton(onClick = { showPropose = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+
+    if (rejectingId != null) {
+        AlertDialog(
+            onDismissRequest = { rejectingId = null; rejectionReason = "" },
+            title = { Text(stringResource(R.string.reject_proposal)) },
+            text = {
+                OutlinedTextField(
+                    value = rejectionReason,
+                    onValueChange = { rejectionReason = it },
+                    label = { Text(stringResource(R.string.rejection_reason)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = rejectingId ?: return@TextButton
+                    viewModel.decideProposal(eventId, seasonId, id, "reject", rejectionReason.trim().ifBlank { null })
+                    rejectingId = null; rejectionReason = ""
+                }) { Text(stringResource(R.string.reject_proposal)) }
+            },
+            dismissButton = { TextButton(onClick = { rejectingId = null; rejectionReason = "" }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
 
     if (showAdd) {
@@ -270,6 +398,61 @@ fun SeasonDetailScreen(
                     }
                 }
 
+                // Crew proposals (web parity, GH #923)
+                if (showProposals && s.status == "registration") {
+                    item { Text(stringResource(R.string.crew_proposals), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+
+                    if (canReview && proposals.any { it.status == "pending" }) {
+                        item { Text(stringResource(R.string.crew_proposal_review_queue), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+                        items(proposals.filter { it.status == "pending" }, key = { it.id }) { proposal ->
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(proposal.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                        AssistChip(onClick = {}, label = { Text(stringResource(R.string.proposal_status_pending)) })
+                                    }
+                                    Text(proposal.memberNames.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(onClick = { viewModel.decideProposal(eventId, seasonId, proposal.id, "approve") }, enabled = !busy) {
+                                            Text(stringResource(R.string.approve_proposal))
+                                        }
+                                        OutlinedButton(onClick = { rejectingId = proposal.id }, enabled = !busy) {
+                                            Text(stringResource(R.string.reject_proposal))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (proposals.isNotEmpty()) {
+                        item { Text(stringResource(R.string.your_crew_proposals), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+                        items(proposals, key = { it.id }) { proposal ->
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(proposal.name, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                        AssistChip(onClick = {}, label = { Text(statusLabel(proposal.status)) })
+                                    }
+                                    Text(stringResource(R.string.proposal_proposed_by, proposal.proposerName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(proposal.memberNames.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+                                    proposal.rejectionReason?.takeIf { it.isNotBlank() }?.let {
+                                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (canPropose && proposalCandidates.isNotEmpty()) {
+                        item {
+                            OutlinedButton(onClick = { selectedMembers.clear(); proposalName = ""; showPropose = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.propose_crew))
+                            }
+                        }
+                    }
+                }
+
                 // Admin setup (registration only)
                 if (canManage && s.status == "registration") {
                     item { Text(stringResource(R.string.season_manage), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
@@ -331,4 +514,11 @@ fun SeasonDetailScreen(
             }
         }
     }
+}
+
+@Composable
+private fun statusLabel(status: String): String = when (status) {
+    "approved" -> stringResource(R.string.proposal_status_approved)
+    "rejected" -> stringResource(R.string.proposal_status_rejected)
+    else -> stringResource(R.string.proposal_status_pending)
 }

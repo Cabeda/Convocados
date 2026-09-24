@@ -1135,6 +1135,54 @@ data class AddSeasonMemberRequest(val eventPlayerId: String)
 @Serializable
 data class RecommendCrewsRequest(val crewCount: Int)
 
+// ── Crew proposals (web parity, GH #923) ───────────────────────────────────
+
+@Serializable
+data class CrewProposal(
+    val id: String = "",
+    val name: String = "",
+    val status: String = "pending",
+    val proposerName: String = "",
+    val memberNames: List<String> = emptyList(),
+    val rejectionReason: String? = null,
+    val approvedCrewId: String? = null,
+)
+
+@Serializable
+data class CrewProposalCandidate(
+    val membershipId: String? = null,
+    val eventPlayerId: String? = null,
+    val userId: String? = null,
+    val name: String = "",
+    val gamesPlayed: Int = 0,
+)
+
+@Serializable
+data class CrewProposalsResponse(
+    val proposals: List<CrewProposal> = emptyList(),
+    val candidates: List<CrewProposalCandidate> = emptyList(),
+    val excludedUserIds: List<String> = emptyList(),
+    val proposerMembershipId: String? = null,
+    val canPropose: Boolean = false,
+    val canReview: Boolean = false,
+    val closed: Boolean = false,
+)
+
+@Serializable
+data class SubmitCrewProposalRequest(
+    val name: String,
+    val membershipIds: List<String>,
+)
+
+@Serializable
+data class CrewProposalResponse(val proposal: CrewProposal)
+
+@Serializable
+data class CrewProposalDecisionRequest(
+    val decision: String,
+    val rejectionReason: String? = null,
+)
+
 @Serializable
 data class SeasonActionRequest(val action: String)
 
