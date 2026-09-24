@@ -7,9 +7,37 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
+import { parse as parseYaml } from "yaml";
 
 const root = resolve(__dirname, "../..");
 const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
+
+const CLA_ACTION = "contributor-assistant/github-action";
+const CLA_ACTION_REF = `${CLA_ACTION}@v2.6.1`;
+
+/**
+ * Inputs declared by contributor-assistant/github-action@v2.6.1 (its
+ * action.yml). Passing an undeclared key makes the action abort before it can
+ * read the allowlist, so the maintainer exemption silently never applies.
+ * Bumping the action ref below means re-checking this set against its action.yml.
+ */
+const CLA_ACTION_INPUTS = new Set([
+  "path-to-signatures",
+  "branch",
+  "allowlist",
+  "remote-repository-name",
+  "remote-organization-name",
+  "path-to-document",
+  "signed-commit-message",
+  "signed-empty-commit-message",
+  "create-file-commit-message",
+  "custom-notsigned-prcomment",
+  "custom-pr-sign-comment",
+  "custom-allsigned-prcomment",
+  "use-dco-flag",
+  "lock-pullrequest-aftermerge",
+  "suggest-recheck",
+]);
 
 describe("repository governance (GH-1088)", () => {
   it("CLA.md exists and grants copyright + patent rights to the maintainer", () => {
@@ -21,14 +49,34 @@ describe("repository governance (GH-1088)", () => {
     expect(cla).toMatch(/José Cabeda/);
   });
 
-  it("CLA workflow runs on pull requests and allow-lists the maintainer", () => {
+  it("CLA workflow runs on pull requests and allowlists the maintainer", () => {
     expect(existsSync(resolve(root, ".github/workflows/cla.yml"))).toBe(true);
     const wf = read(".github/workflows/cla.yml");
     expect(wf).toMatch(/pull_request_target|pull_request/);
     expect(wf).toMatch(/contributor-assistant\/github-action/);
-    expect(wf).toMatch(/allow-list/);
+    expect(wf).toMatch(/allowlist/);
     expect(wf).toMatch(/Cabeda/);
     expect(wf).toMatch(/CLA\.md/);
+  });
+
+  it("CLA workflow passes only inputs the action declares", () => {
+    const wf = parseYaml(read(".github/workflows/cla.yml"));
+    const steps = wf.jobs.cla.steps as Array<{ uses?: string; with?: Record<string, unknown> }>;
+    const step = steps.find((s) => String(s.uses ?? "").startsWith(CLA_ACTION));
+    expect(step).toBeTruthy();
+    // CLA_ACTION_INPUTS mirrors this exact ref; a bump must re-verify the schema.
+    expect(step!.uses).toBe(CLA_ACTION_REF);
+
+    const withBlock = step!.with ?? {};
+    const keys = Object.keys(withBlock);
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.filter((k) => !CLA_ACTION_INPUTS.has(k))).toEqual([]);
+
+    // The exemption never applied because the key name was wrong (allow-list).
+    expect(String(withBlock.allowlist)).toContain("Cabeda");
+    // Signatures are stored as JSON; a .txt path is the wrong store format.
+    expect(String(withBlock["path-to-signatures"])).toMatch(/\.json$/);
+    expect(withBlock["allow-list"]).toBeUndefined();
   });
 
   it("TRADEMARK.md exists and reserves the Convocados name separately from the code license", () => {
