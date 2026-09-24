@@ -142,9 +142,26 @@ data class GameHistory(
     val teamTwoName: String = "",
     val teamsSnapshot: String? = null,
     val paymentsSnapshot: String? = null,
+    /**
+     * Durable per-game settlement derived from GamePayment rows (ADR 0016).
+     * Preferred over the frozen [paymentsSnapshot]; null for legacy games with
+     * no Game/GamePayment record.
+     */
+    val paymentConfig: HistoryPaymentConfig? = null,
     val createdAt: String = "",
     val source: String = "live",
     val eloUpdates: List<EloUpdate>? = null,
+)
+
+/** Settlement config of a historical game, mirroring `CurrentGameSettlement`. */
+@Serializable
+data class HistoryPaymentConfig(
+    val gameId: String,
+    val mode: String = "tracked",
+    val payerName: String? = null,
+    val payerIsPlayer: Boolean = false,
+    val hasCost: Boolean = false,
+    val rows: List<SettlementRow> = emptyList(),
 )
 
 @Serializable

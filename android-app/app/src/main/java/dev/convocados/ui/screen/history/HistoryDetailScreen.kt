@@ -48,7 +48,14 @@ import kotlinx.serialization.json.*
 import javax.inject.Inject
 
 data class TeamPlayer(val id: String, val name: String)
-data class PaymentEntry(val name: String, val status: String, val amount: Double? = null)
+data class PaymentEntry(
+    val name: String,
+    val status: String,
+    val amount: Double? = null,
+    /** Set for durable (GamePayment-backed) rows; null for snapshot residue. */
+    val eventPlayerId: String? = null,
+    val isPayer: Boolean = false,
+)
 
 @HiltViewModel
 class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi) : ViewModel() {
@@ -93,6 +100,20 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
 
     private fun parseSnapshots(h: GameHistory) {
         h.teamsSnapshot?.let { raw -> runCatching { parseTeamsSnapshot(raw) } }
+        // Durable per-game settlement rows win over the frozen snapshot (ADR 0016).
+        val durable = h.paymentConfig
+        if (durable != null && durable.rows.isNotEmpty()) {
+            _payments.value = durable.rows.map {
+                PaymentEntry(
+                    name = it.name,
+                    status = it.status,
+                    amount = it.amount,
+                    eventPlayerId = it.eventPlayerId,
+                    isPayer = it.isPayer,
+                )
+            }
+            return
+        }
         h.paymentsSnapshot?.let { raw ->
             runCatching {
                 val arr = Json.parseToJsonElement(raw).jsonArray
@@ -132,9 +153,40 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
 
     fun togglePayment(eventId: String, historyId: String, index: Int) {
         val current = _payments.value
-        val updated = current.mapIndexed { i, p -> if (i == index) p.copy(status = if (p.status == "paid") "pending" else "paid") else p }
+        val entry = current.getOrNull(index) ?: return
+        val newStatus = if (entry.status == "paid") "pending" else "paid"
+        val updated = current.mapIndexed { i, p -> if (i == index) p.copy(status = newStatus) else p }
         _payments.value = updated
-        pushSnapshot(eventId, historyId)
+        // Durable rows settle through the GamePayment API; the frozen snapshot
+        // is only rewritten for legacy games that have no durable rows.
+        val durable = _history.value?.paymentConfig
+        val eventPlayerId = entry.eventPlayerId
+        if (durable != null && eventPlayerId != null) {
+            viewModelScope.launch {
+                _saving.value = true
+                runCatching {
+                    if (newStatus == "paid") api.settleShare(eventId, durable.gameId, eventPlayerId)
+                    else api.unsettleShare(eventId, durable.gameId, eventPlayerId)
+                }
+                    .onSuccess { reload(eventId, historyId) }
+                    .onFailure {
+                        _payments.value = current
+                        _error.value = it.message
+                    }
+                _saving.value = false
+            }
+        } else {
+            pushSnapshot(eventId, historyId)
+        }
+    }
+
+    /** Re-fetch the entry so durable rows reflect the server state. */
+    private suspend fun reload(eventId: String, historyId: String) {
+        val entry = runCatching { api.fetchHistoryDetail(eventId, historyId) }.getOrNull()
+        if (entry != null) {
+            _history.value = entry
+            parseSnapshots(entry)
+        }
     }
 
     fun movePlayer(eventId: String, historyId: String, name: String, toTeamTwo: Boolean) {
@@ -415,7 +467,7 @@ fun HistoryDetailScreen(
                                 Box(
                                     Modifier.clip(RoundedCornerShape(50)).background(
                                         if (p.status == "paid") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                    ).clickable { viewModel.togglePayment(eventId, historyId, index) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    ).clickable(enabled = !p.isPayer) { viewModel.togglePayment(eventId, historyId, index) }.padding(horizontal = 12.dp, vertical = 6.dp),
                                 ) {
                                     Text(
                                         if (p.status == "paid") "\u2713 ${stringResource(R.string.paid)}" else stringResource(R.string.pending),
