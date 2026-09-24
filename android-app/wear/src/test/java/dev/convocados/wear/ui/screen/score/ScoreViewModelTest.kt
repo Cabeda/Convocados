@@ -2,7 +2,10 @@ package dev.convocados.wear.ui.screen.score
 
 import app.cash.turbine.test
 import dev.convocados.wear.data.api.ApiException
+import dev.convocados.wear.data.api.PostGameStatus
+import dev.convocados.wear.data.api.SeasonRankMovement
 import dev.convocados.wear.data.api.SetScore
+import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.alarm.GameSettings
 import dev.convocados.wear.data.alarm.GameSettingsStore
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -33,12 +36,15 @@ class ScoreViewModelTest {
     private val scoreRepository = mockk<WearScoreRepository>(relaxed = true)
     private val settingsStore = mockk<GameSettingsStore>(relaxed = true)
     private val workManager = mockk<WorkManager>(relaxed = true)
+    private val client = mockk<WearApiClient>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         every { settingsStore.settings(any()) } returns MutableStateFlow(GameSettings())
+        every { settingsStore.current(any()) } returns GameSettings()
+        every { settingsStore.update(any(), any()) } answers { secondArg<(GameSettings) -> GameSettings>().invoke(GameSettings()) }
     }
 
     @After
@@ -47,14 +53,14 @@ class ScoreViewModelTest {
     }
 
     private fun makeViewModel(): ScoreViewModel {
-        val vm = ScoreViewModel(repository, scoreRepository, settingsStore, workManager)
+        val vm = ScoreViewModel(repository, scoreRepository, settingsStore, workManager, client)
         vm.tickProvider = { flowOf(Instant.now()) }
         return vm
     }
 
     @Test
     fun `initial state is loading`() = runTest {
-        val viewModel = ScoreViewModel(repository, scoreRepository, settingsStore, workManager)
+        val viewModel = ScoreViewModel(repository, scoreRepository, settingsStore, workManager, client)
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -456,6 +462,118 @@ class ScoreViewModelTest {
     fun `structured match is final only when every recorded set is complete`() {
         assertFalse(hasCompletedMatch(listOf(dev.convocados.wear.data.api.SetScore(6, 4), dev.convocados.wear.data.api.SetScore(1, 0))))
         assertTrue(hasCompletedMatch(listOf(dev.convocados.wear.data.api.SetScore(6, 4), dev.convocados.wear.data.api.SetScore(7, 5))))
+    }
+
+    // ── Season Rank tier-up haptic (ADR 0031, pilot: UP only) ────────────
+
+    private fun stubLoadedGame(historyId: String = "h1") {
+        coEvery { repository.getGame("e1") } returns makeGame("e1")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory(historyId, "e1", 0, 0))
+        coEvery { scoreRepository.submitScore(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
+    }
+
+    private fun tierUpStatus(from: Int = 0, to: Int = 1, counted: Boolean = true) = PostGameStatus(
+        seasonRank = SeasonRankMovement(
+            seasonId = "s1",
+            counted = counted,
+            tierBefore = from,
+            tierAfter = to,
+        ),
+    )
+
+    @Test
+    fun `tier-up after submit emits haptic and records celebration`() = runTest {
+        stubLoadedGame()
+        coEvery { client.getPostGameStatus("e1") } returns tierUpStatus(from = 0, to = 1)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        viewModel.tierUp.test {
+            viewModel.incrementScoreOne()
+            advanceUntilIdle()
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        coVerify(atLeast = 1) { client.getPostGameStatus("e1") }
+        coVerify { settingsStore.update("e1", any()) }
+    }
+
+    @Test
+    fun `same tier after submit does not emit haptic`() = runTest {
+        stubLoadedGame()
+        coEvery { client.getPostGameStatus("e1") } returns tierUpStatus(from = 1, to = 1)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        viewModel.tierUp.test {
+            viewModel.incrementScoreOne()
+            advanceUntilIdle()
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `tier-down after submit does not emit haptic`() = runTest {
+        stubLoadedGame()
+        coEvery { client.getPostGameStatus("e1") } returns tierUpStatus(from = 2, to = 1)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        viewModel.tierUp.test {
+            viewModel.incrementScoreOne()
+            advanceUntilIdle()
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `already celebrated tier-up does not emit again`() = runTest {
+        stubLoadedGame()
+        every { settingsStore.current("e1") } returns GameSettings(celebratedTierUp = setOf("h1"))
+        coEvery { client.getPostGameStatus("e1") } returns tierUpStatus(from = 0, to = 1)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        viewModel.tierUp.test {
+            viewModel.incrementScoreOne()
+            advanceUntilIdle()
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        coVerify(exactly = 0) { settingsStore.update("e1", any()) }
+    }
+
+    @Test
+    fun `queued offline submit does not fetch tier status`() = runTest {
+        stubLoadedGame()
+        coEvery { scoreRepository.submitScore(any(), any(), any(), any(), any(), any()) } returns
+            Result.failure(ApiException(0, "offline"))
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        viewModel.tierUp.test {
+            viewModel.incrementScoreOne()
+            advanceUntilIdle()
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        coVerify(exactly = 0) { client.getPostGameStatus(any()) }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

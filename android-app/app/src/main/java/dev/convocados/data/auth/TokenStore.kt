@@ -18,6 +18,12 @@ data class OAuthTokens(
 )
 
 @Singleton
+// androidx.security-crypto (EncryptedSharedPreferences/MasterKey) is deprecated
+// with no drop-in replacement — Google now recommends DataStore plus your own
+// Keystore-managed key, or equivalent. Migrating is a security-sensitive change
+// (it re-homes stored OAuth tokens), so it is tracked separately rather than
+// folded into this warning cleanup. Suppress only at the call sites below.
+@Suppress("DEPRECATION")
 class TokenStore @Inject constructor(@ApplicationContext context: Context) : OAuthTokenStorage {
 
     private val masterKey = MasterKey.Builder(context)

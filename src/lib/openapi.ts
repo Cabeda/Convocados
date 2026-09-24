@@ -226,6 +226,33 @@ export const openApiSpec = {
         responses: { "200": { description: "ELO setting updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/competition": {
+      put: {
+        summary: "Update Competition settings (master enable, rank decay, inactive behavior)",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean" },
+                  rankDecayEnabled: { type: "boolean" },
+                  inactiveRankBehavior: { type: "string", enum: ["freeze", "reset"] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Competition settings updated" },
+          "409": { description: "Locked while a Season is active or under review" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/events/{id}/seasons": {
       get: {
         summary: "List Seasons for an event",
@@ -385,6 +412,28 @@ export const openApiSpec = {
         tags: ["Events"],
         parameters: [eventIdParam],
         responses: { "200": { description: "Unfollowed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/invitation-opt-out": {
+      post: {
+        summary: "Toggle per-event invite opt-out (ADR 0025)",
+        description:
+          "While set, RSVP pings, recruitment pings, suggestions and PlayerInvite creation are suppressed for this event. Reversible; cleared automatically when the caller rejoins the player list.",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["optOut"],
+                properties: { optOut: { type: "boolean" } },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Opt-out state updated" }, ...errorResponses },
       },
     },
     "/api/events/{id}/rsvp": {
@@ -1081,6 +1130,72 @@ export const openApiSpec = {
         summary: "Revoke all calendar tokens",
         tags: ["Calendar"],
         responses: { "200": { description: "Tokens revoked" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/credentials": {
+      get: {
+        summary: "List linked sign-in credentials for the session user",
+        tags: ["Users"],
+        responses: {
+          "200": { description: "Credentials (id, providerId, accountId, issuer, createdAt)" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+      delete: {
+        summary: "Unlink a credential (blocked when it is the only one — ADR 0040)",
+        tags: ["Users"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["accountId"],
+                properties: {
+                  accountId: { type: "string", description: "Credential row id (not the provider account id)" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Credential unlinked" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/me/credentials/pending-merge": {
+      get: {
+        summary: "Get the pending cross-account merge waiting on interstitial confirm",
+        tags: ["Users"],
+        responses: {
+          "200": { description: "Pending merge details, or null" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/api/me/credentials/merge": {
+      post: {
+        summary: "Confirm the pending cross-account merge (ADR 0040)",
+        tags: ["Users"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["confirm"],
+                properties: { confirm: { type: "boolean", enum: [true] } },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Merge completed" },
+          "400": { description: "Confirmation required or no pending merge" },
+          "401": { description: "Unauthorized" },
+          "500": { description: "Merge failed" },
+        },
       },
     },
 
