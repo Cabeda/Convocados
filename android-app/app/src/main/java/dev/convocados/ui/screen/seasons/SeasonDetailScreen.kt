@@ -220,7 +220,7 @@ fun SeasonDetailScreen(
                     item {
                         val isMember = s.viewerMembership?.status == "active"
                         Button(
-                            onClick = { if (isMember) viewModel.leave(eventId, seasonId) else viewModel.join(eventId, seasonId, s.viewerEventPlayerId!!) },
+                            onClick = { if (isMember) viewModel.leave(eventId, seasonId) else viewModel.join(eventId, seasonId, s.viewerEventPlayerId) },
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text(stringResource(if (isMember) R.string.season_leave else R.string.season_join)) }
