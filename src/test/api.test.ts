@@ -1332,6 +1332,20 @@ describe("GET /api/events/public", () => {
     expect(body.data[0].title).toBe("Future Game");
   });
 
+  it("keeps full events in the public listing (joinability is a Discover rule)", async () => {
+    const full = await prisma.event.create({
+      data: {
+        title: "Full Game", location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true, maxPlayers: 1,
+      },
+    });
+    await prisma.player.create({ data: { name: "Alice", eventId: full.id } });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body.data.map((e: { title: string }) => e.title)).toEqual(["Full Game"]);
+  });
+
   it("orders upcoming events soonest-first", async () => {
     await prisma.event.create({
       data: {

@@ -59,11 +59,14 @@ export const GET: APIRoute = async ({ request }) => {
     ],
   };
 
-  const [involved, liveEvents, upcomingEvents] = await Promise.all([
+  const [involved, followed, liveEvents, upcomingEvents] = await Promise.all([
     prisma.event.findMany({
       where: involvedWhere,
       select: { id: true, latitude: true, longitude: true, sport: true },
     }),
+    // Followed-only Events are not Up next, but Discover must skip them too:
+    // the user is already engaged, so they are not "games to join" (ADR 0041).
+    prisma.eventFollow.findMany({ where: { userId }, select: { eventId: true } }),
     // In-progress games have a kickoff in the past, so they need their own query
     // (the upcoming query filters dateTime >= now).
     prisma.event.findMany({
@@ -118,7 +121,9 @@ export const GET: APIRoute = async ({ request }) => {
 
   const discover = await findDiscoverableUpcomingEvents({
     take: DISCOVER_LIMIT,
-    excludeEventIds: involved.map((e) => e.id),
+    excludeEventIds: [
+      ...new Set([...involved.map((e) => e.id), ...followed.map((f) => f.eventId)]),
+    ],
     now,
     origin,
     preferredSports,
