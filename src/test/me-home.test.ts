@@ -206,6 +206,28 @@ describe("GET /api/me/home", () => {
     expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Open"]);
   });
 
+  it("does not count archived legacy Player rows toward spotsLeft", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const event = await seedEvent({
+      title: "Open",
+      isPublic: true,
+      maxPlayers: 4,
+      dateTime: new Date(Date.now() + DAY),
+    });
+    await prisma.player.createMany({
+      data: [
+        { name: "Active", eventId: event.id },
+        { name: "Gone", eventId: event.id, archivedAt: new Date() },
+      ],
+    });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover).toHaveLength(1);
+    expect(body.discover[0].playerCount).toBe(1);
+    expect(body.discover[0].spotsLeft).toBe(3);
+  });
+
   it("caps discover at 3", async () => {
     const user = await seedUser();
     authAs(user.id);

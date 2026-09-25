@@ -10,8 +10,16 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db.server";
 
+/**
+ * A discovery-listed Event with its non-archived Player count.
+ *
+ * Roster counts must exclude archived rows: legacy Player rows accumulate across
+ * recurring occurrences and `getActiveRosterState` (the authoritative accessor,
+ * ADR 0016) filters `archivedAt: null`. Counting all `players` inflates
+ * `playerCount` and under-reports `spotsLeft`.
+ */
 export type DiscoverableEventRow = Prisma.EventGetPayload<{
-  include: { players: true };
+  include: { _count: { select: { players: true } } };
 }>;
 
 export interface DiscoverableEventSummary {
@@ -63,8 +71,8 @@ export function mapDiscoverableEvent(e: DiscoverableEventRow): DiscoverableEvent
     dateTime: e.dateTime.toISOString(),
     timezone: e.timezone,
     maxPlayers: e.maxPlayers,
-    playerCount: e.players.length,
-    spotsLeft: Math.max(0, e.maxPlayers - e.players.length),
+    playerCount: e._count.players,
+    spotsLeft: Math.max(0, e.maxPlayers - e._count.players),
     isRecurring: e.isRecurring,
     source: e.source,
     ownerId: e.ownerId,
@@ -144,15 +152,20 @@ export async function findDiscoverableUpcomingEvents(opts: {
   preferredSports?: string[];
 } = {}): Promise<DiscoverableEventSummary[]> {
   const { take = 3, excludeEventIds = [], now = new Date(), origin, preferredSports = [] } = opts;
+  // Discover only shows Events the user can still join (ADR 0041): a full Event
+  // has no spots remaining. "Fewer active players than maxPlayers" cannot be
+  // expressed as a relation filter, so the joinable check runs here on the
+  // accurate non-archived count. The public listing (`/api/events/public`)
+  // deliberately keeps full Events visible, so this rule does not live in
+  // `discoverableUpcomingWhere`.
   const events = await prisma.event.findMany({
     where: discoverableUpcomingWhere(now, excludeEventIds),
-    include: { players: { orderBy: { order: "asc" } } },
+    include: { _count: { select: { players: { where: { archivedAt: null } } } } },
     orderBy: { dateTime: "asc" },
     take: Math.max(take, RANK_POOL),
   });
-  // Discover only shows Events the user can still join (ADR 0041): a full Event
-  // has no spots remaining. Public listing (`/api/events/public`) keeps full
-  // Events visible, so the filter lives here, not in `discoverableUpcomingWhere`.
-  const joinable = events.map(mapDiscoverableEvent).filter((e) => e.spotsLeft > 0);
+  const joinable = events
+    .filter((e) => e.maxPlayers - e._count.players > 0)
+    .map(mapDiscoverableEvent);
   return rankDiscover(joinable, origin, preferredSports).slice(0, take);
 }
