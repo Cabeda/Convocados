@@ -101,4 +101,14 @@ describe("repository governance (GH-1088)", () => {
     expect(contributing).toMatch(/pull request/i);
     expect(contributing).toMatch(/test/i);
   });
+
+  it("ADR 0041 describes Discover's region ranking, not global soonest-first", () => {
+    const adr = read("docs/adr/0041-signed-in-home-up-next-and-discover.md");
+    // Discover is region-ranked (rankDiscover orders by distance to the inferred
+    // origin). The ADR must record that supersession rather than repeat the
+    // original "soonest-first" wording — the doc and code drifted before.
+    expect(adr).toMatch(/region-first/i);
+    expect(adr).toMatch(/supersedes/i);
+    expect(adr).not.toMatch(/Soonest-first,\s*\n?\s*capped at 3/i);
+  });
 });

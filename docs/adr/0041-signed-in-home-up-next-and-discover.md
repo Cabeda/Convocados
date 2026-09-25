@@ -35,8 +35,8 @@ Turn the signed-in default surface into **Home** (web `/dashboard`, Android
    ascending, capped at 3. Followed-only Events are *not* Up next.
 2. **Discover** — a glimpse of Discoverable Events the user could join: public,
    not archived, kickoff in the future, spots remaining, excluding Events the
-   user is already involved in (playing, organizing, following). Soonest-first,
-   capped at 3, ending with a "Browse all public games" link to `/public`.
+   user is already involved in (playing, organizing, following). Capped at 3,
+   ending with a "Browse all public games" link to `/public`.
 3. **Manage my games** — the previous relationship grouping (owned / admin /
    followed, plus archived) moved into a collapsed section below the fold.
 
@@ -48,6 +48,13 @@ Supporting decisions:
 - **Fix `/api/events/public`** to be future-only and soonest-first via a shared
   `discoverableEvents.server.ts` helper (it previously returned past Events,
   oldest first — a bug).
+- **Discover ranking is region-first, not global soonest-first** (supersedes the
+  "soonest-first" wording above; added after this ADR was first accepted). With
+  public Events across cities, global soonest-first surfaced far-away games. The
+  endpoint infers a home region (centroid of the user's located Events) and
+  preferred sports, then ranks by distance with a 25 km-equivalent bonus for a
+  preferred sport; with no located Events it falls back to preferred-sport-first,
+  then soonest. `/api/events/public` has no viewer, so it stays soonest-first.
 - **Signed-in `/` redirects (client-side) to `/dashboard`**; anonymous visitors
   keep the static landing for SEO. The header logo points at `/dashboard` when a
   session exists. The create-event form is reachable from Home (dialog).
