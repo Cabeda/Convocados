@@ -278,7 +278,10 @@ async function createEvent(args: Record<string, unknown>, ctx: AuthContext) {
   const maxPlayersRaw = parseInt(String(args.maxPlayers ?? "10"), 10);
   const maxPlayers = isNaN(maxPlayersRaw) || maxPlayersRaw < 2 ? 10 : Math.min(maxPlayersRaw, 100);
   const sport = String(args.sport ?? "football-5v5").trim().slice(0, 50) || "football-5v5";
-  const isPublic = Boolean(args.isPublic);
+  // Same discoverability default as POST /api/events: authenticated creators
+  // get a public (discoverable) game unless they explicitly opt out.
+  const isPublic =
+    args.isPublic === undefined || args.isPublic === null ? true : Boolean(args.isPublic);
   const isRecurring = Boolean(args.isRecurring);
 
   if (!title) throw new McpError("Title is required.", -32602, 400);
