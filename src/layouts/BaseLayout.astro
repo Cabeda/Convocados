@@ -37,6 +37,12 @@ interface Props {
    * can discover them without running JS.
    */
   agentLinks?: boolean;
+  /**
+   * Mount the cross-account merge discovery prompt (ADR 0040, GH #1128).
+   * Opt-in per authenticated app surface so anonymous/docs pages never ship
+   * the island. The prompt self-fetches pending-merge and no-ops when none.
+   */
+  mergePrompt?: boolean;
 }
 
 const {
@@ -50,7 +56,9 @@ const {
   mainTransitionName,
   mainClass,
   agentLinks = false,
+  mergePrompt = false,
 } = Astro.props;
+import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
 ---
 
 <!doctype html>
@@ -108,6 +116,7 @@ const {
     >
       <slot />
     </main>
+    {mergePrompt && <MergeDiscoveryPrompt client:only="react" />}
     {agentLinks && (
       <footer
         style="max-width: 960px; margin: 0 auto; padding: 16px; font-family: system-ui, sans-serif; font-size: 0.8rem; opacity: 0.7;"

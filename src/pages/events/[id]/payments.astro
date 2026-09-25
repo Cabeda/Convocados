@@ -7,7 +7,7 @@ const { id } = Astro.params;
 
 <BaseLayout
   title="Payments — Convocados"
-  mainTransitionName={`page-event-${id}`}
+  mainTransitionName={`page-event-${id}`} mergePrompt
 >
   <PaymentsPage client:only="react" eventId={id!} />
 </BaseLayout>
