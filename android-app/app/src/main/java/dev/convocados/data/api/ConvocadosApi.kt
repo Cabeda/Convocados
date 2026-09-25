@@ -1,6 +1,6 @@
 package dev.convocados.data.api
 
-import android.os.BuildConfig
+import dev.convocados.BuildConfig
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton

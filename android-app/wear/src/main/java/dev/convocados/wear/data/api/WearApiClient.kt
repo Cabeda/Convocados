@@ -1,6 +1,6 @@
 package dev.convocados.wear.data.api
 
-import android.os.BuildConfig
+import dev.convocados.wear.BuildConfig
 import dev.convocados.wear.data.auth.OAuthTokens
 import dev.convocados.wear.data.auth.WearTokenStore
 import io.ktor.client.*
