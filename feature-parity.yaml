@@ -41,6 +41,7 @@ create-event:
     custom-team-names: { web: true, android: true, wearos: false }
     location-map-picker: { web: true, android: false, wearos: false }
     quick-add: { web: true, android: false, wearos: false }
+    public-by-default: { web: true, android: true, wearos: false }
 
 event-detail:
   web: true
