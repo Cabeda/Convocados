@@ -174,6 +174,38 @@ describe("GET /api/me/home", () => {
     expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Public Sooner", "Public Later"]);
   });
 
+  it("excludes full public events from discover (no spots remaining)", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const full = await seedEvent({
+      title: "Full",
+      isPublic: true,
+      maxPlayers: 2,
+      dateTime: new Date(Date.now() + DAY),
+    });
+    await prisma.player.createMany({
+      data: [
+        { name: "A", eventId: full.id },
+        { name: "B", eventId: full.id },
+      ],
+    });
+    await seedEvent({ title: "Open", isPublic: true, maxPlayers: 4, dateTime: new Date(Date.now() + 2 * DAY) });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Open"]);
+  });
+
+  it("excludes events the user follows from discover", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const followed = await seedEvent({ title: "Followed", isPublic: true, dateTime: new Date(Date.now() + DAY) });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: followed.id } });
+    await seedEvent({ title: "Open", isPublic: true, dateTime: new Date(Date.now() + 2 * DAY) });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Open"]);
+  });
+
   it("caps discover at 3", async () => {
     const user = await seedUser();
     authAs(user.id);

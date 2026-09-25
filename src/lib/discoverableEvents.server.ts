@@ -150,6 +150,9 @@ export async function findDiscoverableUpcomingEvents(opts: {
     orderBy: { dateTime: "asc" },
     take: Math.max(take, RANK_POOL),
   });
-  const mapped = events.map(mapDiscoverableEvent);
-  return rankDiscover(mapped, origin, preferredSports).slice(0, take);
+  // Discover only shows Events the user can still join (ADR 0041): a full Event
+  // has no spots remaining. Public listing (`/api/events/public`) keeps full
+  // Events visible, so the filter lives here, not in `discoverableUpcomingWhere`.
+  const joinable = events.map(mapDiscoverableEvent).filter((e) => e.spotsLeft > 0);
+  return rankDiscover(joinable, origin, preferredSports).slice(0, take);
 }
