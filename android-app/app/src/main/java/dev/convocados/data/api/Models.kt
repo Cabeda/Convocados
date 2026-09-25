@@ -291,6 +291,34 @@ data class HomeResponse(
     val actions: List<HomeAction> = emptyList(),
     /** Growth prompt (#1166): viewer plays in events they don't own. */
     val suggestAddGames: Boolean = false,
+    /** Pending invitations addressed to the viewer, with an accept/decline choice. */
+    val invitations: List<HomeInvitation> = emptyList(),
+    /** Recent direct roster adds — an acknowledgement to dismiss, not a question. */
+    val rosterAdds: List<HomeRosterAdd> = emptyList(),
+)
+
+/** A pending invite pointed at the viewer: "Rui invited you to play". */
+@Serializable
+data class HomeInvitation(
+    val id: String,
+    val token: String,
+    val eventId: String,
+    val eventTitle: String,
+    val location: String = "",
+    val dateTime: String,
+    val sport: String = "",
+    val invitedByName: String = "",
+)
+
+/** A recent direct add to a roster the viewer doesn't own (nothing to accept). */
+@Serializable
+data class HomeRosterAdd(
+    val id: String,
+    val eventId: String,
+    val eventTitle: String,
+    val location: String = "",
+    val dateTime: String,
+    val sport: String = "",
 )
 
 @Serializable
@@ -382,6 +410,8 @@ data class PostGameStatus(
      * receiver nor a settlement admin. The payment task is then hidden for them.
      */
     val viewerPaymentSettled: Boolean = false,
+    // Whether the Event already recurs — drives the post-game "make it weekly" prompt.
+    val isRecurring: Boolean = false,
     // Result-card fields: the score and team names shown alongside the Rank.
     val scoreOne: Int? = null,
     val scoreTwo: Int? = null,

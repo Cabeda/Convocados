@@ -14,6 +14,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -37,6 +39,8 @@ import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.data.api.CoPlaySuggestion
 import dev.convocados.data.api.HomeResponse
 import dev.convocados.data.api.HomeAction
+import dev.convocados.data.api.HomeInvitation
+import dev.convocados.data.api.HomeRosterAdd
 import dev.convocados.data.api.ProfileEvent
 import dev.convocados.data.api.PublicEvent
 import dev.convocados.data.api.UpNextGame
@@ -48,6 +52,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -163,8 +168,32 @@ class GamesViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadParticipatedEvents() {
-        val ownId = runCatching { api.fetchUserInfo().id }.getOrNull() ?: return
+    // ── Invitations inbox ────────────────────────────────────────────────
+    // Pending invites the viewer can accept/decline, and direct roster adds
+    // that only need acknowledging (they're already on the list).
+    val invitations: StateFlow<List<HomeInvitation>> = home
+        .map { it?.invitations.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val rosterAdds: StateFlow<List<HomeRosterAdd>> = combine(
+        home,
+        settingsStore.rosterAddsAcked,
+    ) { h, acked ->
+        h?.rosterAdds.orEmpty().filter { it.eventId !in acked }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Accept or decline a pending invitation, then refresh so the card clears. */
+    fun respondToHomeInvitation(token: String, action: String) {
+        viewModelScope.launch {
+            runCatching { api.respondToInvite(token, action) }.onSuccess { loadHome() }
+        }
+    }
+
+    fun dismissRosterAdd(eventId: String) {
+        viewModelScope.launch { settingsStore.ackRosterAdd(eventId) }
+    }
+
+    private suspend fun loadParticipatedEvents() {        val ownId = runCatching { api.fetchUserInfo().id }.getOrNull() ?: return
         _participatedEvents.value = runCatching { api.fetchUserProfile(ownId) }.getOrNull()?.joined.orEmpty()
     }
 
@@ -231,6 +260,8 @@ fun GamesScreen(
     val upNext = home?.upNext.orEmpty()
     val discover = home?.discover.orEmpty()
     val actions = home?.actions.orEmpty()
+    val invitations by viewModel.invitations.collectAsState()
+    val rosterAdds by viewModel.rosterAdds.collectAsState()
     val showAddGamesPrompt by viewModel.showAddGamesPrompt.collectAsState()
     var showArchived by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
@@ -304,6 +335,27 @@ fun GamesScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+
+                // Invitations inbox — the most time-sensitive thing on Home.
+                if (!showArchived && (invitations.isNotEmpty() || rosterAdds.isNotEmpty())) {
+                    item(key = "invitations-header") {
+                        SectionHeader(stringResource(R.string.invitations_title))
+                    }
+                    items(invitations, key = { "invitation-${it.id}" }) { invitation ->
+                        HomeInvitationCard(
+                            invitation = invitation,
+                            onAccept = { viewModel.respondToHomeInvitation(invitation.token, "accept") },
+                            onDecline = { viewModel.respondToHomeInvitation(invitation.token, "decline") },
+                        )
+                    }
+                    items(rosterAdds, key = { "roster-add-${it.id}" }) { add ->
+                        HomeRosterAddCard(
+                            add = add,
+                            onOpen = { onEventClick(add.eventId) },
+                            onDismiss = { viewModel.dismissRosterAdd(add.eventId) },
+                        )
+                    }
+                }
 
                 // Ticket #1166: growth prompt — add your other games.
                 if (!showArchived && showAddGamesPrompt) {
@@ -848,6 +900,112 @@ private fun HomeActionCard(action: HomeAction, onClick: () -> Unit) {
 
 private fun formatAmount(amount: Double?, currency: String?): String =
     "%.2f %s".format(amount ?: 0.0, currency ?: "EUR")
+
+/**
+ * A pending invitation: "Rui invited you to play" with a real choice. The user
+ * should not have to find the original push notification to answer.
+ */
+@Composable
+private fun HomeInvitationCard(
+    invitation: HomeInvitation,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth().testTag("home_invitation_${invitation.id}"),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.invite_invited_by, invitation.invitedByName),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                invitation.eventTitle,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                formatEventDateInTz(invitation.dateTime, "UTC") +
+                    if (invitation.location.isNotBlank()) " · ${invitation.location}" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier.testTag("home_invitation_accept_${invitation.id}"),
+                ) {
+                    Icon(Icons.Default.Check, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.invite_accept))
+                }
+                OutlinedButton(
+                    onClick = onDecline,
+                    modifier = Modifier.testTag("home_invitation_decline_${invitation.id}"),
+                ) {
+                    Icon(Icons.Default.Close, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.invite_decline))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A direct add: the manager already put the viewer on the list, so this is an
+ * acknowledgement ("you were added"), not a question. Dismissible only.
+ */
+@Composable
+private fun HomeRosterAddCard(
+    add: HomeRosterAdd,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth().testTag("home_roster_add_${add.id}"),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.PersonAdd, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Text(
+                    stringResource(R.string.roster_added_you),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                add.eventTitle,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                formatEventDateInTz(add.dateTime, "UTC") +
+                    if (add.location.isNotBlank()) " · ${add.location}" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOpen) { Text(stringResource(R.string.invite_view_game)) }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("home_roster_add_dismiss_${add.id}"),
+                ) {
+                    Text(stringResource(R.string.dismiss))
+                }
+            }
+        }
+    }
+}
 
 /** ADR 0041: a discoverable game the user could join. */
 @Composable
