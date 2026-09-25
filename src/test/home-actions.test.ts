@@ -130,6 +130,20 @@ describe("computeHomeActions", () => {
     expect(await computeHomeActions(user.id)).toEqual([]);
   });
 
+  it("does not return pay_share for a future game", async () => {
+    const user = await seedUser();
+    const event = await seedEvent({ dateTime: new Date(Date.now() + 2 * DAY) });
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 30, currency: "EUR" } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: user.id } });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() + 2 * DAY), status: "upcoming" },
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Alice", amount: 15, status: "pending" },
+    });
+    expect(await computeHomeActions(user.id)).toEqual([]);
+  });
+
   it("returns vote_mvp for a participant who hasn't voted, and clears after voting", async () => {
     const user = await seedUser();
     const event = await seedEvent({ dateTime: new Date(Date.now() - 2 * HOUR) });

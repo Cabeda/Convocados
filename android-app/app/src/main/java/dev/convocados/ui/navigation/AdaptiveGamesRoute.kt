@@ -47,6 +47,7 @@ import kotlin.math.roundToInt
 @Composable
 fun AdaptiveGamesRoute(
     onCompactEventClick: (String) -> Unit,
+    onPayments: (String) -> Unit,
     onCreateClick: () -> Unit,
     onPublicClick: () -> Unit,
     onOpenSettings: (String) -> Unit,
@@ -114,6 +115,7 @@ fun AdaptiveGamesRoute(
         when (mode) {
             EventSceneMode.FullScreen -> GamesScreen(
                 onEventClick = onEventClick,
+                onPayments = onPayments,
                 onCreateClick = onCreateClick,
                 onPublicClick = onPublicClick,
                 onOpenSettings = onOpenSettings,
@@ -124,6 +126,7 @@ fun AdaptiveGamesRoute(
             EventSceneMode.ListOnly -> Box(Modifier.fillMaxSize().then(tabletopListModifier)) {
                 GamesScreen(
                     onEventClick = onEventClick,
+                    onPayments = onPayments,
                     onCreateClick = onCreateClick,
                     onPublicClick = onPublicClick,
                     onOpenSettings = onOpenSettings,
@@ -143,6 +146,7 @@ fun AdaptiveGamesRoute(
                     Box(Modifier.weight(0.45f)) {
                         GamesScreen(
                             onEventClick = onEventClick,
+                            onPayments = onPayments,
                             onCreateClick = onCreateClick,
                             onPublicClick = onPublicClick,
                             onOpenSettings = onOpenSettings,
@@ -158,6 +162,7 @@ fun AdaptiveGamesRoute(
                     Box(Modifier.width(Dp(hingeWidths.left / density.density))) {
                         GamesScreen(
                             onEventClick = onEventClick,
+                            onPayments = onPayments,
                             onCreateClick = onCreateClick,
                             onPublicClick = onPublicClick,
                             onOpenSettings = onOpenSettings,

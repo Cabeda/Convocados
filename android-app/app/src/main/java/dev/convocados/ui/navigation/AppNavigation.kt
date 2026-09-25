@@ -174,6 +174,7 @@ fun AppNavigation(
                                 if (shouldOpenPayment) "?action=pay" else ""
                             navController.navigate(route)
                         },
+                        onPayments = { navController.navigate(Route.EventPayments.create(it)) },
                         onCreateClick = { navController.navigate(Route.CreateEvent.route) },
                         onPublicClick = { navController.navigate(Route.PublicGames.route) },
                         onOpenSettings = { navController.navigate(Route.EventSettings.create(it)) },

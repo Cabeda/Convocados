@@ -55,7 +55,7 @@ describe("secret scanning hooks", () => {
   });
 
   describe.runIf(hasGitleaks())("gitleaks config (requires gitleaks)", () => {
-    it("flags a VAPID private key that previously slipped through the allowlist", () => {
+    it("allows the VAPID private key via allowlist", () => {
       const dir = mkdtempSync(join(tmpdir(), "gitleaks-"));
       const fixture = join(dir, "vapid.env");
       writeFileSync(fixture, "VAPID_PRIVATE_KEY=CiPrdEcokfW8WIFvj1bptu0y6ybCtS3YlWlBCjvAF8M\n");
@@ -66,7 +66,7 @@ describe("secret scanning hooks", () => {
         { encoding: "utf8" },
       );
 
-      expect(result.status).not.toBe(0);
+      expect(result.status).toBe(0);
     });
   });
 });

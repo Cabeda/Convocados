@@ -1,5 +1,6 @@
 package dev.convocados.wear.data.api
 
+import dev.convocados.util.Version
 import dev.convocados.wear.data.auth.OAuthTokens
 import dev.convocados.wear.data.auth.WearTokenStore
 import io.ktor.client.*
@@ -161,7 +162,7 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 
     /** Native app-open heartbeat (GH #1070) — idempotent per UTC day server-side. */
     suspend fun reportAppOpen() {
-        authenticatedRequest(HttpMethod.Post, "/api/me/app-open", mapOf("platform" to "android"))
+        authenticatedRequest(HttpMethod.Post, "/api/me/app-open", mapOf("platform" to "android", "appVersion" to Version.NAME))
     }
 
     suspend fun getMvp(eventId: String, historyId: String): MvpResponse =

@@ -1,5 +1,6 @@
 package dev.convocados.data.api
 
+import dev.convocados.util.Version
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +21,7 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     /** Native app-open heartbeat (GH #1070) — idempotent per UTC day server-side. */
     suspend fun reportAppOpen(): Map<String, Boolean> =
-        client.post("/api/me/app-open", mapOf("platform" to "android"))
+        client.post("/api/me/app-open", mapOf("platform" to "android", "appVersion" to Version.NAME))
     suspend fun fetchNotificationPrefs(): NotificationPrefs = client.get("/api/me/notification-preferences")
     suspend fun updateNotificationPrefs(prefs: Map<String, Boolean>): NotificationPrefs =
         client.put("/api/me/notification-preferences", prefs)
