@@ -63,6 +63,13 @@ const {
     {canonical && <link rel="canonical" href={canonical} />}
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    {/*
+      iOS names the home-screen icon (and, with it, the sender label on web-push
+      notifications) after `apple-mobile-web-app-title` when present, otherwise
+      it falls back to <title>. Per-page <title>s carry the event name, which
+      would leak into the installed app name; pin it to the product name.
+    */}
+    <meta name="apple-mobile-web-app-title" content="Convocados" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content={themeColor} />
     {metaTags.map((tag) => <meta property={tag.property} content={tag.content} />)}
