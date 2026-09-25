@@ -474,12 +474,13 @@ export async function recordAppOpen(
   userId: string,
   at: Date = new Date(),
   platform: "web" | "android" | "ios" | null = null,
+  appVersion: string | null = null,
 ) {
   const day = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()));
   await prisma.userAppOpen.upsert({
     where: { userId_day: { userId, day } },
-    create: { userId, day, platform },
-    // First writer of the day wins; a later writer only fills a null platform
+    create: { userId, day, platform, appVersion },
+    // First writer of the day wins; a later writer only fills null fields
     // (e.g. pre-existing web row upgraded by a native heartbeat).
     update: {},
   });
@@ -487,6 +488,12 @@ export async function recordAppOpen(
     await prisma.userAppOpen.updateMany({
       where: { userId, day, platform: null },
       data: { platform },
+    });
+  }
+  if (appVersion) {
+    await prisma.userAppOpen.updateMany({
+      where: { userId, day, appVersion: null },
+      data: { appVersion },
     });
   }
 }
