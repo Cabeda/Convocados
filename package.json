@@ -1,6 +1,6 @@
 {
   "name": "convocados",
-  "version": "3.222.2",
+  "version": "3.222.3",
   "private": true,
   "type": "module",
   "scripts": {
