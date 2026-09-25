@@ -7,13 +7,26 @@ import { test, expect } from "@playwright/test";
  * <title>, so without the explicit meta the icon gets named after whichever
  * event it was installed from (prod bug: "Ninjas da Areosa — Convocados").
  */
+
+// Mutations are rate limited per IP (30/min). The suite already creates events
+// from the default IP, so give this spec its own to stay independent of
+// ordering. Mirrors e2e/notifications.spec.ts.
+let ipCounter = 300;
+function uniqueIp(): string {
+  ipCounter++;
+  return `10.97.${Math.floor(ipCounter / 256)}.${ipCounter % 256}`;
+}
+
 test.describe("PWA home-screen app name", () => {
   test("event page pins the app name to Convocados, not the event title", async ({ request }) => {
+    const headers = { "X-Forwarded-For": uniqueIp() };
+
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(20, 0, 0, 0);
 
     const createRes = await request.post("/api/events", {
+      headers,
       data: {
         title: "PWA App Name Game",
         dateTime: tomorrow.toISOString(),
@@ -24,7 +37,7 @@ test.describe("PWA home-screen app name", () => {
     expect(createRes.status()).toBe(200);
     const { id } = await createRes.json();
 
-    const res = await request.get(`/events/${id}`);
+    const res = await request.get(`/events/${id}`, { headers });
     expect(res.status()).toBe(200);
     const html = await res.text();
 
