@@ -4,28 +4,29 @@ import path from "path";
 const PRISMA_DIR = path.resolve(__dirname, "../../prisma");
 const TEST_DB_BASE = path.join(PRISMA_DIR, "test.db");
 
+// Scope the per-worker DB by process id as well as pool id: Vitest runs test
+// workers in separate processes, and `VITEST_POOL_ID` is only unique within a
+// process. Without the pid, two project processes that both use pool 1 would
+// share `test-worker-1.db` and corrupt each other's writes.
 function resolveWorkerDbPath(): string {
   const workerId = process.env.VITEST_POOL_ID ?? "0";
-  return path.join(PRISMA_DIR, `test-worker-${workerId}.db`);
+  return path.join(PRISMA_DIR, `test-worker-${process.pid}-${workerId}.db`);
 }
 
 const TEST_DB_PATH = resolveWorkerDbPath();
-const MARKER = `${TEST_DB_PATH}.initialized`;
 
-if (!fs.existsSync(MARKER)) {
-  fs.copyFileSync(TEST_DB_BASE, TEST_DB_PATH);
-  for (const suffix of ["-wal", "-shm"]) {
-    const f = `${TEST_DB_PATH}${suffix}`;
-    if (fs.existsSync(f)) {
-      try {
-        fs.unlinkSync(f);
-      } catch {
-        // best effort
-      }
-    }
+// Always start from the schema-only base. Vitest can reuse a pid across runs,
+// so reusing a leftover DB file (the old marker-file shortcut) risked carrying
+// test data from a previous run into a new one. The copy is ~1 MB and runs in
+// a fresh process per test file, so there is nothing to cache.
+for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+  try {
+    fs.unlinkSync(`${TEST_DB_PATH}${suffix}`);
+  } catch {
+    // best effort — file may not exist
   }
-  fs.writeFileSync(MARKER, new Date().toISOString());
 }
+fs.copyFileSync(TEST_DB_BASE, TEST_DB_PATH);
 
 process.env.DATABASE_URL = `file:./prisma/${path.basename(TEST_DB_PATH)}`;
 process.env.NODE_ENV = "test";

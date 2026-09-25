@@ -18,6 +18,8 @@
 *.db-journal
 *.db-wal
 *.db-shm
+*.db.initialized
+*.db.tmp-*
 
 # per-worktree preview port cache (see scripts/dev.sh)
 .dev-port

@@ -5,25 +5,7 @@ import Database from "better-sqlite3";
 
 const PRISMA_DIR = path.resolve(process.cwd(), "prisma");
 const MIGRATIONS_DIR = path.join(PRISMA_DIR, "migrations");
-
-function cleanTestDb() {
-  for (const file of fs.readdirSync(PRISMA_DIR)) {
-    if (
-      /^test-base\.db/.test(file) ||
-      /^test-worker-\d+\.db/.test(file) ||
-      file === "test.db" ||
-      file === "test.db-journal" ||
-      file === "test.db-wal" ||
-      file === "test.db-shm"
-    ) {
-      try {
-        fs.unlinkSync(path.join(PRISMA_DIR, file));
-      } catch {
-        // best effort
-      }
-    }
-  }
-}
+const BASE_DB = path.join(PRISMA_DIR, "test.db");
 
 function applyMigrations(db: Database.Database) {
   const dirs = fs
@@ -85,11 +67,60 @@ function seedMigrationHistory(db: Database.Database) {
   }
 }
 
-export async function setup() {
-  cleanTestDb();
+/**
+ * Best-effort cleanup of DB files left behind by runs that crashed before
+ * teardown. Age-gated so a live concurrent run's files are never removed.
+ */
+function sweepStaleTestDbs(maxAgeMs = 60 * 60 * 1000) {
+  const cutoff = Date.now() - maxAgeMs;
+  let files: string[];
+  try {
+    files = fs.readdirSync(PRISMA_DIR);
+  } catch {
+    return;
+  }
+  for (const file of files) {
+    if (
+      file === "test.db" ||
+      file.startsWith("test.db-") ||
+      file.startsWith("test.db.tmp-") ||
+      /^test-worker-.*\.db(-wal|-shm)?(\.initialized)?$/.test(file) ||
+      /^test-base-.*\.db(-wal|-shm)?$/.test(file)
+    ) {
+      const full = path.join(PRISMA_DIR, file);
+      try {
+        if (fs.statSync(full).mtimeMs < cutoff) fs.unlinkSync(full);
+      } catch {
+        // best effort
+      }
+    }
+  }
+}
 
-  const dbPath = path.join(PRISMA_DIR, "test.db");
-  const db = new Database(dbPath);
+/**
+ * Rebuild the shared schema-only `test.db` that each worker copies from.
+ *
+ * Vitest runs `globalSetup` once per project process, so this can run
+ * concurrently with another project's worker copying `test.db`. Never delete
+ * the file in place and never unlink it during a run: build the DB at a
+ * pid-scoped temp path, then atomically rename it over `test.db`. A concurrent
+ * `copyFileSync` either opens the old or the new complete inode — never a
+ * missing or half-written file (which previously produced ENOENT and
+ * SQLITE_CORRUPT under `vitest run --coverage`).
+ */
+export async function setup() {
+  sweepStaleTestDbs();
+
+  const tmp = path.join(PRISMA_DIR, `test.db.tmp-${process.pid}`);
+  for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+    try {
+      fs.unlinkSync(`${tmp}${suffix}`);
+    } catch {
+      // best effort
+    }
+  }
+
+  const db = new Database(tmp);
   try {
     applyMigrations(db);
     seedMigrationHistory(db);
@@ -97,9 +128,13 @@ export async function setup() {
     db.close();
   }
 
+  fs.renameSync(tmp, BASE_DB);
   process.env.DATABASE_URL = `file:./test.db`;
 }
 
 export function teardown() {
-  cleanTestDb();
+  // Intentionally does NOT delete test.db / worker DBs: other project
+  // processes may still be reading them. Stale files are swept on the next
+  // setup() once they age out.
+  sweepStaleTestDbs();
 }
