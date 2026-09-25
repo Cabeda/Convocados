@@ -28,6 +28,7 @@ import {
   PasswordPrompt,
   useCountdown,
   AddPlayerConfirmDialog,
+  CreatedShareNudge,
   InviteShareDialog,
   InviteBanner,
   type AddPlayerIntent,
@@ -1340,6 +1341,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
           url={inviteShare?.url ?? ""}
           onClose={() => setInviteShare(null)}
         />
+
+        <CreatedShareNudge title={event.title} />
       </ResponsiveLayout>
     </ThemeModeProvider>
   );

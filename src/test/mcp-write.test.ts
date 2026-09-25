@@ -99,6 +99,30 @@ describe("MCP write tools — create_event", () => {
     expect(event?.ownerId).toBe(owner.id);
   });
 
+  it("defaults an agent-created event to public (discoverable)", async () => {
+    const owner = await createOwner();
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["create:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_create_event", {
+      title: "Agent Public", dateTime: new Date(Date.now() + 86400_000).toISOString(),
+    })));
+    expect(res.status).toBe(200);
+    const data = JSON.parse((await res.json()).result.content[0].text);
+    const event = await prisma.event.findUnique({ where: { id: data.id } });
+    expect(event?.isPublic).toBe(true);
+  });
+
+  it("honours an explicit isPublic: false from an agent", async () => {
+    const owner = await createOwner();
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["create:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_create_event", {
+      title: "Agent Private", dateTime: new Date(Date.now() + 86400_000).toISOString(), isPublic: false,
+    })));
+    expect(res.status).toBe(200);
+    const data = JSON.parse((await res.json()).result.content[0].text);
+    const event = await prisma.event.findUnique({ where: { id: data.id } });
+    expect(event?.isPublic).toBe(false);
+  });
+
   it("rejects create_event when scope is missing (403)", async () => {
     const owner = await createOwner();
     mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });

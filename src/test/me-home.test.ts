@@ -106,6 +106,7 @@ describe("GET /api/me/home", () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.upNext.map((g: { title: string }) => g.title)).toEqual(["My Owned"]);
+    expect(Array.isArray(body.actions)).toBe(true);
   });
 
   it("includes events the user plays (EventPlayer.userId) and admins", async () => {
@@ -173,6 +174,60 @@ describe("GET /api/me/home", () => {
     expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Public Sooner", "Public Later"]);
   });
 
+  it("excludes full public events from discover (no spots remaining)", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const full = await seedEvent({
+      title: "Full",
+      isPublic: true,
+      maxPlayers: 2,
+      dateTime: new Date(Date.now() + DAY),
+    });
+    await prisma.player.createMany({
+      data: [
+        { name: "A", eventId: full.id },
+        { name: "B", eventId: full.id },
+      ],
+    });
+    await seedEvent({ title: "Open", isPublic: true, maxPlayers: 4, dateTime: new Date(Date.now() + 2 * DAY) });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Open"]);
+  });
+
+  it("excludes events the user follows from discover", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const followed = await seedEvent({ title: "Followed", isPublic: true, dateTime: new Date(Date.now() + DAY) });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: followed.id } });
+    await seedEvent({ title: "Open", isPublic: true, dateTime: new Date(Date.now() + 2 * DAY) });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Open"]);
+  });
+
+  it("does not count archived legacy Player rows toward spotsLeft", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const event = await seedEvent({
+      title: "Open",
+      isPublic: true,
+      maxPlayers: 4,
+      dateTime: new Date(Date.now() + DAY),
+    });
+    await prisma.player.createMany({
+      data: [
+        { name: "Active", eventId: event.id },
+        { name: "Gone", eventId: event.id, archivedAt: new Date() },
+      ],
+    });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.discover).toHaveLength(1);
+    expect(body.discover[0].playerCount).toBe(1);
+    expect(body.discover[0].spotsLeft).toBe(3);
+  });
+
   it("caps discover at 3", async () => {
     const user = await seedUser();
     authAs(user.id);
@@ -219,5 +274,45 @@ describe("GET /api/me/home", () => {
     const res = await GET(ctx());
     const body = await res.json();
     expect(body.discover.map((g: { title: string }) => g.title)).toEqual(["Sooner", "Later"]);
+  });
+
+  it("suggests adding games when the viewer plays in an event they don't own", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const other = await seedUser("other-user");
+    const event = await seedEvent({ title: "Someone Else's", ownerId: other.id });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Home User", userId: user.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.suggestAddGames).toBe(true);
+  });
+
+  it("does not suggest adding games when the viewer only owns games", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    await seedEvent({ title: "Mine", ownerId: user.id });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.suggestAddGames).toBe(false);
+  });
+
+  it("suggests adding games when the viewer owns no active events", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    await seedEvent({ title: "Someone Else's", ownerId: null });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.suggestAddGames).toBe(true);
+  });
+
+  it("suggests adding games for a followed-only event when the viewer owns nothing", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const other = await seedUser("other-user");
+    const event = await seedEvent({ title: "Followed", ownerId: other.id });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: event.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.suggestAddGames).toBe(true);
   });
 });

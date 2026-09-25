@@ -35,8 +35,8 @@ Turn the signed-in default surface into **Home** (web `/dashboard`, Android
    ascending, capped at 3. Followed-only Events are *not* Up next.
 2. **Discover** — a glimpse of Discoverable Events the user could join: public,
    not archived, kickoff in the future, spots remaining, excluding Events the
-   user is already involved in (playing, organizing, following). Soonest-first,
-   capped at 3, ending with a "Browse all public games" link to `/public`.
+   user is already involved in (playing, organizing, following). Capped at 3,
+   ending with a "Browse all public games" link to `/public`.
 3. **Manage my games** — the previous relationship grouping (owned / admin /
    followed, plus archived) moved into a collapsed section below the fold.
 
@@ -48,11 +48,37 @@ Supporting decisions:
 - **Fix `/api/events/public`** to be future-only and soonest-first via a shared
   `discoverableEvents.server.ts` helper (it previously returned past Events,
   oldest first — a bug).
+- **Discover ranking is region-first, not global soonest-first** (supersedes the
+  "soonest-first" wording above; added after this ADR was first accepted). With
+  public Events across cities, global soonest-first surfaced far-away games. The
+  endpoint infers a home region (centroid of the user's located Events) and
+  preferred sports, then ranks by distance with a 25 km-equivalent bonus for a
+  preferred sport; with no located Events it falls back to preferred-sport-first,
+  then soonest. `/api/events/public` has no viewer, so it stays soonest-first.
 - **Signed-in `/` redirects (client-side) to `/dashboard`**; anonymous visitors
   keep the static landing for SEO. The header logo points at `/dashboard` when a
   session exists. The create-event form is reachable from Home (dialog).
 - **iOS and Wear are out of scope** this round (iOS follow-up filed; Wear has no
   public-discover affordance).
+- **New games are public by default** (supply follow-up). Discover is only as
+  good as its pool, so a signed-in organiser's game is created discoverable
+  unless they explicitly set `isPublic: false`. Anonymous creations stay
+  unlisted: they have no owner, and an ownerless *public* Event cannot be
+  mutated until adopted, so defaulting them public would strand the creator
+  with an uneditable game.
+- **Recurring games stay discoverable while they run.** `Event.dateTime` is the
+  current occurrence and only advances on the lazy reset, so a strictly
+  `dateTime >= now` filter dropped a recurring game from Discover the moment it
+  kicked off. The where-clause now also admits public recurring Events whose
+  `nextResetAt` is still ahead — a game in progress.
+
+  A recurring Event whose occurrence has *fully* ended is deliberately **not**
+  discoverable again until the lazy reset rolls `dateTime` forward. Rolling
+  recurrence from a discovery read would mutate state on a hot path and risk
+  double-firing reminders; the game returns to the pool on the next visit. The
+  residual gap (a recurring game can be absent from Discover between its end and
+  the next visit) is a known limit of the lazy-reset design, not of this filter.
+  One-off Events remain future-only.
 
 ## Considered Options
 
@@ -82,4 +108,5 @@ Supporting decisions:
 - `CONTEXT.md` gains **Home**, **Up next**, and **Discover**; the old
   "My games dashboard" term is retired (the grouping survives as Manage).
 - `feature-parity.yaml` gains a top-level `home` entry (`up-next`,
-  `discover-strip`); Wear is `false`.
+  `discover-strip`); Wear is `false`. `create-event` gains
+  `public-by-default` (web + Android; Wear is `false`).

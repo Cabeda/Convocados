@@ -5,6 +5,7 @@ import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
 import { getActiveRosterState } from "../../../lib/roster.server";
 import { findDiscoverableUpcomingEvents } from "../../../lib/discoverableEvents.server";
+import { computeHomeActions } from "../../../lib/homeActions.server";
 
 /** Signed-in Home: the soonest few games the user plays/organizes, plus a
  *  glimpse of Discoverable Events they could join. See ADR 0041. */
@@ -58,11 +59,14 @@ export const GET: APIRoute = async ({ request }) => {
     ],
   };
 
-  const [involved, liveEvents, upcomingEvents] = await Promise.all([
+  const [involved, followed, liveEvents, upcomingEvents] = await Promise.all([
     prisma.event.findMany({
       where: involvedWhere,
       select: { id: true, latitude: true, longitude: true, sport: true },
     }),
+    // Followed-only Events are not Up next, but Discover must skip them too:
+    // the user is already engaged, so they are not "games to join" (ADR 0041).
+    prisma.eventFollow.findMany({ where: { userId }, select: { eventId: true } }),
     // In-progress games have a kickoff in the past, so they need their own query
     // (the upcoming query filters dateTime >= now).
     prisma.event.findMany({
@@ -117,11 +121,31 @@ export const GET: APIRoute = async ({ request }) => {
 
   const discover = await findDiscoverableUpcomingEvents({
     take: DISCOVER_LIMIT,
-    excludeEventIds: involved.map((e) => e.id),
+    excludeEventIds: [
+      ...new Set([...involved.map((e) => e.id), ...followed.map((f) => f.eventId)]),
+    ],
     now,
     origin,
     preferredSports,
   });
 
-  return Response.json({ upNext, discover });
+  // "Needs you" — the viewer's own actionable items (fill spots, settle,
+  // pay, vote). Batch, capped, self-clearing. See homeActions.server.ts.
+  const actions = await computeHomeActions(userId, now);
+
+  // Growth prompt (#1166): the viewer plays in an Event they don't own (proof
+  // of other groups), or owns no active events at all. Cheap checks.
+  const [playedElsewhere, ownedActive] = await Promise.all([
+    prisma.event.count({
+      where: {
+        archivedAt: null,
+        ownerId: { not: userId },
+        eventPlayers: { some: { userId } },
+      },
+    }),
+    prisma.event.count({ where: { archivedAt: null, ownerId: userId } }),
+  ]);
+  const suggestAddGames = playedElsewhere > 0 || ownedActive === 0;
+
+  return Response.json({ upNext, discover, actions, suggestAddGames });
 };

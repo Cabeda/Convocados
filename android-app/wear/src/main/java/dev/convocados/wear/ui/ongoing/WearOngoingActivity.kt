@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.wear.ongoing.OngoingActivity
+import androidx.wear.ongoing.Status
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.WearActivity
 import dev.convocados.wear.util.GameScorePhase
@@ -32,24 +33,76 @@ internal fun shouldShowQuickGameOngoing(kickoffMs: Long?, durationMinutes: Int, 
 }
 
 /**
+ * Where the ongoing activity's chip and the quick-game tile should return the
+ * user. Without this, both opened [WearActivity] at the games list instead of
+ * the live session, which is the "reopened and it didn't open in the game"
+ * complaint (and part of Play's ongoing-activity gate).
+ */
+data class OngoingLaunch(
+    val eventId: String? = null,
+    val quickGame: Boolean = false,
+)
+
+/**
+ * Reads the deep-link target from an activity launch [Intent]. Returns null for
+ * a plain launcher open (no target).
+ */
+fun parseOngoingLaunch(intent: Intent?): OngoingLaunch? {
+    intent ?: return null
+    val eventId = intent.getStringExtra(WearOngoingActivity.EXTRA_EVENT_ID)
+    val quickGame = intent.getBooleanExtra(WearOngoingActivity.EXTRA_QUICK_GAME, false)
+    return when {
+        !eventId.isNullOrBlank() -> OngoingLaunch(eventId = eventId)
+        quickGame -> OngoingLaunch(quickGame = true)
+        else -> null
+    }
+}
+
+/** The launch intent for the ongoing activity's touch target, carrying the deep link. */
+internal fun ongoingLaunchIntent(context: Context, launch: OngoingLaunch): Intent =
+    Intent(context, WearActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        launch.eventId?.let { putExtra(WearOngoingActivity.EXTRA_EVENT_ID, it) }
+        if (launch.quickGame) putExtra(WearOngoingActivity.EXTRA_QUICK_GAME, true)
+    }
+
+/**
+ * The Ongoing Activity status rendered on the watch-face chip and recents
+ * surface. For a live score, the text *is* the score, so a glance is enough
+ * instead of reopening the app.
+ */
+internal fun ongoingStatus(text: String): Status = Status.forPart(Status.TextPart(text))
+
+/**
+ * Whether leaving composition should clear the ongoing activity. Only a session
+ * that is no longer live may clear it: navigating to Teams/Save mid-game must
+ * not drop the indicator Play and the user expect to persist.
+ */
+internal fun shouldClearOngoing(enabled: Boolean): Boolean = !enabled
+
+/**
  * Posts (and clears) the Wear OS Ongoing Activity that backs the live score.
  *
  * Play's "Wear App Quality Guidelines: Missing ongoing activity" policy requires
  * an ongoing score session to surface itself on the watch face and recent-apps
  * chip. Pairing an ongoing notification with an [OngoingActivity] is what makes
- * the device render those indicators. The tile-side reference required by the
- * same policy lives in [dev.convocados.wear.tile.QuickGameTileService]: the
- * whole tile is tappable and fires a LaunchAction into WearActivity — the same
- * entry point as the touch intent below — so a user on the tile carousel can
- * always return to the live session.
+ * the device render those indicators, and [OngoingLaunch] ensures tapping the
+ * chip resumes the live session rather than the games list.
  */
 object WearOngoingActivity {
     const val NOTIFICATION_ID = 7447
     const val CHANNEL_ID = "ongoing_game"
+    const val EXTRA_EVENT_ID = "dev.convocados.wear.EXTRA_ONGOING_EVENT_ID"
+    const val EXTRA_QUICK_GAME = "dev.convocados.wear.EXTRA_ONGOING_QUICK_GAME"
 
-    fun show(context: Context, title: String, text: String) {
+    fun show(
+        context: Context,
+        title: String,
+        text: String,
+        launch: OngoingLaunch = OngoingLaunch(),
+    ) {
         ensureChannel(context)
-        val touchIntent = touchIntent(context)
+        val touchIntent = touchIntent(context, launch)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_ongoing_game)
             .setContentTitle(title)
@@ -67,6 +120,8 @@ object WearOngoingActivity {
         OngoingActivity.Builder(context, NOTIFICATION_ID, builder)
             .setStaticIcon(R.drawable.ic_ongoing_game)
             .setTouchIntent(touchIntent)
+            .setStatus(ongoingStatus(text))
+            .setContentDescription(text)
             .build()
             .apply(context)
 
@@ -92,31 +147,33 @@ object WearOngoingActivity {
         )
     }
 
-    private fun touchIntent(context: Context): PendingIntent {
-        val intent = Intent(context, WearActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        return PendingIntent.getActivity(
+    private fun touchIntent(context: Context, launch: OngoingLaunch): PendingIntent =
+        PendingIntent.getActivity(
             context,
             0,
-            intent,
+            ongoingLaunchIntent(context, launch),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-    }
 }
 
 /**
  * Keeps an Ongoing Activity in sync with the current score while [enabled], and
- * clears it when the session ends or the screen leaves composition.
+ * clears it only when the session stops. Leaving the screen while the game is
+ * still live deliberately leaves the indicator in place.
  */
 @Composable
-fun RememberOngoingActivity(enabled: Boolean, title: String, text: String) {
+fun RememberOngoingActivity(
+    enabled: Boolean,
+    title: String,
+    text: String,
+    launch: OngoingLaunch,
+) {
     val context = LocalContext.current
-    LaunchedEffect(enabled, title, text) {
-        if (enabled) WearOngoingActivity.show(context, title, text)
+    LaunchedEffect(enabled, title, text, launch) {
+        if (enabled) WearOngoingActivity.show(context, title, text, launch)
     }
     DisposableEffect(enabled) {
-        if (!enabled) WearOngoingActivity.stop(context)
-        onDispose { WearOngoingActivity.stop(context) }
+        if (shouldClearOngoing(enabled)) WearOngoingActivity.stop(context)
+        onDispose { if (shouldClearOngoing(enabled)) WearOngoingActivity.stop(context) }
     }
 }

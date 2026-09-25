@@ -6,6 +6,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +36,7 @@ import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.data.api.CoPlaySuggestion
 import dev.convocados.data.api.HomeResponse
+import dev.convocados.data.api.HomeAction
 import dev.convocados.data.api.ProfileEvent
 import dev.convocados.data.api.PublicEvent
 import dev.convocados.data.api.UpNextGame
@@ -45,6 +47,7 @@ import dev.convocados.ui.theme.layoutForWidthDp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -63,6 +66,11 @@ import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.SportsCricket
 import androidx.compose.material.icons.filled.SportsMartialArts
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.GroupAdd
+import androidx.compose.material.icons.filled.Scoreboard
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.HowToVote
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Stadium
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -82,6 +90,7 @@ class GamesViewModel @Inject constructor(
     private val repository: EventRepository,
     private val api: ConvocadosApi,
     private val tokenStore: dev.convocados.data.auth.TokenStore,
+    private val settingsStore: dev.convocados.data.datastore.SettingsStore,
 ) : ViewModel() {
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
@@ -133,6 +142,27 @@ class GamesViewModel @Inject constructor(
         runCatching { api.fetchHome() }.onSuccess { _home.value = it }
     }
 
+    // #1166: growth prompt — visible when the feed flags it and the viewer
+    // hasn't dismissed it (a session flag for instant hide plus a 30-day
+    // DataStore cooldown so it survives restarts, mirroring the web prompt).
+    private val _addGamesDismissedSession = MutableStateFlow(false)
+    val showAddGamesPrompt: StateFlow<Boolean> = combine(
+        home,
+        settingsStore.addGamesPromptDismissedUntil,
+        _addGamesDismissedSession,
+    ) { h, dismissedUntil, dismissedSession ->
+        (h?.suggestAddGames == true) && !dismissedSession && System.currentTimeMillis() > dismissedUntil
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun dismissAddGamesPrompt() {
+        _addGamesDismissedSession.value = true
+        viewModelScope.launch {
+            settingsStore.setAddGamesPromptDismissedUntil(
+                System.currentTimeMillis() + ADD_GAMES_PROMPT_COOLDOWN_MS,
+            )
+        }
+    }
+
     private suspend fun loadParticipatedEvents() {
         val ownId = runCatching { api.fetchUserInfo().id }.getOrNull() ?: return
         _participatedEvents.value = runCatching { api.fetchUserProfile(ownId) }.getOrNull()?.joined.orEmpty()
@@ -172,6 +202,10 @@ class GamesViewModel @Inject constructor(
     }
 
     fun shareUrl(eventId: String): String = "${tokenStore.getServerUrl()}/events/$eventId"
+
+    companion object {
+        private const val ADD_GAMES_PROMPT_COOLDOWN_MS = 30L * 24 * 60 * 60 * 1000
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -196,6 +230,8 @@ fun GamesScreen(
     val home by viewModel.home.collectAsState()
     val upNext = home?.upNext.orEmpty()
     val discover = home?.discover.orEmpty()
+    val actions = home?.actions.orEmpty()
+    val showAddGamesPrompt by viewModel.showAddGamesPrompt.collectAsState()
     var showArchived by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
 
@@ -269,6 +305,16 @@ fun GamesScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
 
+                // Ticket #1166: growth prompt — add your other games.
+                if (!showArchived && showAddGamesPrompt) {
+                    item(key = "add-games-prompt") {
+                        AddGamesPromptCard(
+                            onAdd = onCreateClick,
+                            onDismiss = { viewModel.dismissAddGamesPrompt() },
+                        )
+                    }
+                }
+
                 // ADR 0041: Up next — games the user plays or organizes.
                 if (!showArchived) {
                     item(key = "up-next-header") {
@@ -286,6 +332,16 @@ fun GamesScreen(
                         items(upNext, key = { "upnext-${it.id}" }) { game ->
                             UpNextCard(game = game, onClick = { onEventClick(game.id) })
                         }
+                    }
+                }
+
+                // ADR 0041: Needs you — the viewer's own actionable items.
+                if (!showArchived && actions.isNotEmpty()) {
+                    item(key = "needs-you-header") {
+                        SectionHeader(stringResource(R.string.needs_you))
+                    }
+                    items(actions, key = { "action-${it.type}-${it.eventId}" }) { action ->
+                        HomeActionCard(action = action, onClick = { onEventClick(action.eventId) })
                     }
                 }
 
@@ -577,41 +633,85 @@ fun formatEventDateInTz(iso: String, timezone: String): String = runCatching {
 }.getOrDefault(iso)
 
 /**
- * ADR 0025: "Suggested players for your games" panel. Lists the nearest
- * upcoming managed games with their ranked co-play invite candidates.
+ * ADR 0025, compact: one card for every managed game that has co-play invite
+ * candidates. Each game is a single wrapping chip row (first few visible,
+ * "+N" expands) instead of a full card with one chip per line — the old layout
+ * cost a whole screen of vertical scrolling for three games.
  */
+private const val MAX_VISIBLE_SUGGESTIONS = 4
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SuggestionsPanel(
     games: List<GameSuggestions>,
     onInvite: (eventId: String, userId: String) -> Unit,
     onEventClick: (String) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text(
-            stringResource(R.string.suggested_players_games),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(8.dp))
-        games.forEach { gs ->
-            ElevatedCard(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val total = games.sumOf { it.suggestions.size }
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.suggested_players_games),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "$total",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            games.forEachIndexed { index, gs ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         gs.game.title,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clickable { onEventClick(gs.game.id) },
                     )
-                    Spacer(Modifier.height(8.dp))
-                    gs.suggestions.forEach { s ->
-                        AssistChip(
-                            onClick = { onInvite(gs.game.id, s.userId) },
-                            label = { Text(s.name) },
-                            leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
+                    val isExpanded = expanded[gs.game.id] == true
+                    val visible = if (isExpanded) gs.suggestions else gs.suggestions.take(MAX_VISIBLE_SUGGESTIONS)
+                    val hidden = gs.suggestions.size - visible.size
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        visible.forEach { s ->
+                            AssistChip(
+                                onClick = { onInvite(gs.game.id, s.userId) },
+                                label = { Text(s.name, maxLines = 1) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.PersonAdd,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                },
+                            )
+                        }
+                        if (hidden > 0) {
+                            TextButton(onClick = { expanded[gs.game.id] = true }) {
+                                Text("+$hidden")
+                            }
+                        }
                     }
+                }
+                if (index < games.lastIndex) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }
@@ -665,6 +765,89 @@ private fun UpNextCard(game: UpNextGame, onClick: () -> Unit) {
         }
     }
 }
+
+/** Ticket #1166: growth prompt nudging players to add their other games. */
+@Composable
+private fun AddGamesPromptCard(onAdd: () -> Unit, onDismiss: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.GroupAdd, contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.add_games_prompt_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    stringResource(R.string.add_games_prompt_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row {
+                    TextButton(onClick = onAdd) { Text(stringResource(R.string.add_games_cta)) }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.dismiss)) }
+                }
+            }
+        }
+    }
+}
+
+/** ADR 0041: a "Needs you" actionable item, deep-linking to its event. */
+@Composable
+private fun HomeActionCard(action: HomeAction, onClick: () -> Unit) {
+    val (icon, label, tint) = when (action.type) {
+        "fill_spots" -> Triple(
+            Icons.Default.GroupAdd,
+            stringResource(R.string.action_fill_spots, action.spotsLeft ?: 0),
+            MaterialTheme.colorScheme.primary,
+        )
+        "settle_score" -> Triple(
+            Icons.Default.Scoreboard,
+            stringResource(R.string.action_settle_score),
+            MaterialTheme.colorScheme.tertiary,
+        )
+        "pay_share" -> Triple(
+            Icons.Default.Payments,
+            stringResource(R.string.action_pay_share, formatAmount(action.amount, action.currency)),
+            MaterialTheme.colorScheme.error,
+        )
+        "vote_mvp" -> Triple(
+            Icons.Default.HowToVote,
+            stringResource(R.string.action_vote_mvp),
+            MaterialTheme.colorScheme.secondary,
+        )
+        else -> Triple(Icons.Default.Info, "", MaterialTheme.colorScheme.primary)
+    }
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    action.eventTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+private fun formatAmount(amount: Double?, currency: String?): String =
+    "%.2f %s".format(amount ?: 0.0, currency ?: "EUR")
 
 /** ADR 0041: a discoverable game the user could join. */
 @Composable

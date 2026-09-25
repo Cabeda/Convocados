@@ -1,17 +1,26 @@
 /**
  * Shared accessor for *Discoverable Events that are still joinable*.
  *
- * A Discoverable Event (isPublic = true, see CONTEXT.md) only belongs in a
- * "games to join" surface while it is upcoming — a past kickoff is not
- * joinable. Both the public listing (`GET /api/events/public`) and the signed-in
- * Home discover strip (`GET /api/me/home`) must agree on that filter, so it
- * lives here instead of being re-derived per route.
+ * A Discoverable Event (isPublic = true, see CONTEXT.md) belongs in a "games to
+ * join" surface while it still has a joinable occurrence: upcoming, in progress,
+ * or recurring with a next occurrence still to come. Both the public listing
+ * (`GET /api/events/public`) and the signed-in Home discover strip
+ * (`GET /api/me/home`) must agree on that filter, so it lives here instead of
+ * being re-derived per route. See [isDiscoverableAt] for the exact test.
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db.server";
 
+/**
+ * A discovery-listed Event with its non-archived Player count.
+ *
+ * Roster counts must exclude archived rows: legacy Player rows accumulate across
+ * recurring occurrences and `getActiveRosterState` (the authoritative accessor,
+ * ADR 0016) filters `archivedAt: null`. Counting all `players` inflates
+ * `playerCount` and under-reports `spotsLeft`.
+ */
 export type DiscoverableEventRow = Prisma.EventGetPayload<{
-  include: { players: true };
+  include: { _count: { select: { players: true } } };
 }>;
 
 export interface DiscoverableEventSummary {
@@ -34,9 +43,21 @@ export interface DiscoverableEventSummary {
 }
 
 /**
- * Prisma where-clause for Events that are public, not archived and whose next
- * occurrence (Event.dateTime) is at or after `now`. Callers layer their own
- * exclusions (e.g. "not already involved") and pagination on top.
+ * Prisma where-clause for Events that are public, not archived and still
+ * joinable at [now]. Exact — no post-query filtering is required, so it is safe
+ * on paginated read paths.
+ *
+ * Joinable means:
+ *   - the current occurrence has not started yet (`dateTime >= now`), or
+ *   - the Event recurs and its current occurrence is still running or its next
+ *     one is armed (`nextResetAt > now`). `nextResetAt` is the current
+ *     occurrence's end, advanced by the lazy reset, so this covers a game in
+ *     progress.
+ *
+ * A recurring Event whose occurrence has fully ended is *not* joinable until its
+ * lazy reset rolls `dateTime` forward — deliberately: rolling recurrence from a
+ * discovery read would mutate state and could double-fire reminders. One-off
+ * Events whose time has passed are never joinable.
  */
 export function discoverableUpcomingWhere(
   now: Date = new Date(),
@@ -45,7 +66,10 @@ export function discoverableUpcomingWhere(
   return {
     isPublic: true,
     archivedAt: null,
-    dateTime: { gte: now },
+    OR: [
+      { dateTime: { gte: now } },
+      { isRecurring: true, recurrenceRule: { not: null }, nextResetAt: { gt: now } },
+    ],
     ...(excludeEventIds.length > 0 ? { id: { notIn: excludeEventIds } } : {}),
   };
 }
@@ -63,8 +87,8 @@ export function mapDiscoverableEvent(e: DiscoverableEventRow): DiscoverableEvent
     dateTime: e.dateTime.toISOString(),
     timezone: e.timezone,
     maxPlayers: e.maxPlayers,
-    playerCount: e.players.length,
-    spotsLeft: Math.max(0, e.maxPlayers - e.players.length),
+    playerCount: e._count.players,
+    spotsLeft: Math.max(0, e.maxPlayers - e._count.players),
     isRecurring: e.isRecurring,
     source: e.source,
     ownerId: e.ownerId,
@@ -144,12 +168,20 @@ export async function findDiscoverableUpcomingEvents(opts: {
   preferredSports?: string[];
 } = {}): Promise<DiscoverableEventSummary[]> {
   const { take = 3, excludeEventIds = [], now = new Date(), origin, preferredSports = [] } = opts;
+  // Discover only shows Events the user can still join (ADR 0041): a full Event
+  // has no spots remaining. "Fewer active players than maxPlayers" cannot be
+  // expressed as a relation filter, so the joinable check runs here on the
+  // accurate non-archived count. The public listing (`/api/events/public`)
+  // deliberately keeps full Events visible, so this rule does not live in
+  // `discoverableUpcomingWhere`.
   const events = await prisma.event.findMany({
     where: discoverableUpcomingWhere(now, excludeEventIds),
-    include: { players: { orderBy: { order: "asc" } } },
+    include: { _count: { select: { players: { where: { archivedAt: null } } } } },
     orderBy: { dateTime: "asc" },
     take: Math.max(take, RANK_POOL),
   });
-  const mapped = events.map(mapDiscoverableEvent);
-  return rankDiscover(mapped, origin, preferredSports).slice(0, take);
+  const joinable = events
+    .filter((e) => e.maxPlayers - e._count.players > 0)
+    .map(mapDiscoverableEvent);
+  return rankDiscover(joinable, origin, preferredSports).slice(0, take);
 }

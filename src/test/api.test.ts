@@ -120,6 +120,44 @@ describe("POST /api/events", () => {
     expect(res.status).toBe(400);
   });
 
+  it("defaults a signed-in organiser's new event to public (discoverable)", async () => {
+    await prisma.user.create({
+      data: { id: "user-1", name: "Org", email: "org@test.com", emailVerified: true },
+    });
+    mockGetSession.mockResolvedValueOnce({ user: { id: "user-1", name: "Org" } } as any);
+    const res = await createEvent(ctx({}, {
+      title: "Open Game", location: "Pitch", dateTime: future,
+    }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.isPublic).toBe(true);
+  });
+
+  it("keeps an anonymous new event unlisted (ownerless-public is not editable)", async () => {
+    const res = await createEvent(ctx({}, {
+      title: "Anonymous Game", location: "Pitch", dateTime: future,
+    }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.isPublic).toBe(false);
+  });
+
+  it("honours an explicit isPublic: false from a signed-in organiser", async () => {
+    await prisma.user.create({
+      data: { id: "user-1", name: "Org", email: "org@test.com", emailVerified: true },
+    });
+    mockGetSession.mockResolvedValueOnce({ user: { id: "user-1", name: "Org" } } as any);
+    const res = await createEvent(ctx({}, {
+      title: "Private Game", location: "Pitch", dateTime: future, isPublic: false,
+    }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.isPublic).toBe(false);
+  });
+
   it("creates a recurring event with recurrenceRule", async () => {
     const res = await createEvent(ctx({}, {
       title: "Weekly Game", location: "Pitch C", dateTime: future,
@@ -1330,6 +1368,20 @@ describe("GET /api/events/public", () => {
     const body = await res.json();
     expect(body.data).toHaveLength(1);
     expect(body.data[0].title).toBe("Future Game");
+  });
+
+  it("keeps full events in the public listing (joinability is a Discover rule)", async () => {
+    const full = await prisma.event.create({
+      data: {
+        title: "Full Game", location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true, maxPlayers: 1,
+      },
+    });
+    await prisma.player.create({ data: { name: "Alice", eventId: full.id } });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body.data.map((e: { title: string }) => e.title)).toEqual(["Full Game"]);
   });
 
   it("orders upcoming events soonest-first", async () => {

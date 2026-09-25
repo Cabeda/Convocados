@@ -35,7 +35,15 @@ export const POST: APIRoute = async ({ request }) => {
   const maxPlayersRaw = parseInt(String(body.maxPlayers ?? "10"), 10);
   const maxPlayers = isNaN(maxPlayersRaw) || maxPlayersRaw < 2 ? 10 : Math.min(maxPlayersRaw, 100);
   const sport = String(body.sport ?? "football-5v5").trim().slice(0, 50) || "football-5v5";
-  const isPublic = Boolean(body.isPublic);
+  // Discoverability default: a signed-in organiser's new game is public
+  // (discoverable) unless they explicitly opt out — an absent isPublic means
+  // "on". Anonymous creations stay unlisted: they have no owner, and an
+  // ownerless *public* Event cannot be mutated until adopted, so defaulting
+  // them public would make an anonymous game uneditable by its creator.
+  const isPublic =
+    body.isPublic === undefined || body.isPublic === null
+      ? Boolean(session?.user?.id)
+      : Boolean(body.isPublic);
   const isRecurring = Boolean(body.isRecurring);
   const VALID_FREQS = ["daily", "weekly", "monthly", "yearly"] as const;
   const rawFreq = body.recurrenceFreq ?? null;
