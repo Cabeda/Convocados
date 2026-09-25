@@ -92,7 +92,7 @@ export async function computeHomeActions(
         archivedAt: null,
         status: { in: ["pending", "sent"] },
         eventPlayer: { userId },
-        game: { status: { not: "cancelled" }, dateTime: { gte: paySince } },
+        game: { status: { not: "cancelled" }, dateTime: { gte: paySince, lte: now } },
       },
       select: {
         amount: true,

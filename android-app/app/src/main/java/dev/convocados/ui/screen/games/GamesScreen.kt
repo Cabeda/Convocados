@@ -212,6 +212,7 @@ class GamesViewModel @Inject constructor(
 @Composable
 fun GamesScreen(
     onEventClick: (String) -> Unit,
+    onPayments: (String) -> Unit,
     onCreateClick: () -> Unit,
     onPublicClick: () -> Unit,
     onOpenSettings: (String) -> Unit = {},
@@ -341,7 +342,8 @@ fun GamesScreen(
                         SectionHeader(stringResource(R.string.needs_you))
                     }
                     items(actions, key = { "action-${it.type}-${it.eventId}" }) { action ->
-                        HomeActionCard(action = action, onClick = { onEventClick(action.eventId) })
+                        val onClick = if (action.type == "pay_share") { onPayments(action.eventId) } else { onEventClick(action.eventId) }
+                        HomeActionCard(action = action, onClick = onClick)
                     }
                 }
 

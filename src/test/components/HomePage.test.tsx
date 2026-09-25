@@ -224,6 +224,26 @@ describe("HomePage — Up next + Discover (ADR 0041)", () => {
     expect(screen.getByText(/You owe 12.50 EUR/)).toBeInTheDocument();
   });
 
+  it("links pay_share action to /events/{id}/payments", async () => {
+    buildFetch();
+    renderWithTheme(<HomePage />);
+    await waitFor(() => {
+      expect(screen.getByText("Needs you")).toBeInTheDocument();
+    });
+    const oweLink = screen.getByText(/You owe 12.50 EUR/).closest("a");
+    expect(oweLink).toHaveAttribute("href", "/events/evt-play-2/payments");
+  });
+
+  it("links fill_spots action to /events/{id}", async () => {
+    buildFetch();
+    renderWithTheme(<HomePage />);
+    await waitFor(() => {
+      expect(screen.getByText("Needs you")).toBeInTheDocument();
+    });
+    const inviteLink = screen.getByText(/invite players/i).closest("a");
+    expect(inviteLink).toHaveAttribute("href", "/events/evt-play-1");
+  });
+
   it("falls back to a create CTA when there is nothing to show", async () => {    buildFetch({ upNext: [], discover: [] });
     renderWithTheme(<HomePage />);
     await waitFor(() => {

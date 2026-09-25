@@ -181,18 +181,18 @@ function UpNextCard({ game, locale, t }: { game: UpNextGame; locale: string; t: 
 
 /** A single "Needs you" card — one actionable item, deep-linking to the event. */
 function ActionCard({ action, locale, t }: { action: HomeAction; locale: string; t: TFunction }) {
-  const meta: Record<HomeAction["type"], { icon: React.ReactElement; label: string; color: string }> = {
-    fill_spots: { icon: <GroupAddIcon fontSize="small" />, label: t("actionFillSpots", { n: action.spotsLeft ?? 0 }), color: "primary" },
-    settle_score: { icon: <ScoreboardIcon fontSize="small" />, label: t("actionSettleScore"), color: "warning" },
-    pay_share: { icon: <PaymentsIcon fontSize="small" />, label: t("actionPayShare", { amount: `${(action.amount ?? 0).toFixed(2)} ${action.currency ?? "EUR"}` }), color: "error" },
-    vote_mvp: { icon: <HowToVoteIcon fontSize="small" />, label: t("actionVoteMvp"), color: "success" },
+  const meta: Record<HomeAction["type"], { icon: React.ReactElement; label: string; color: string; href: string }> = {
+    fill_spots: { icon: <GroupAddIcon fontSize="small" />, label: t("actionFillSpots", { n: action.spotsLeft ?? 0 }), color: "primary", href: `/events/${action.eventId}` },
+    settle_score: { icon: <ScoreboardIcon fontSize="small" />, label: t("actionSettleScore"), color: "warning", href: `/events/${action.eventId}` },
+    pay_share: { icon: <PaymentsIcon fontSize="small" />, label: t("actionPayShare", { amount: `${(action.amount ?? 0).toFixed(2)} ${action.currency ?? "EUR"}` }), color: "error", href: `/events/${action.eventId}/payments` },
+    vote_mvp: { icon: <HowToVoteIcon fontSize="small" />, label: t("actionVoteMvp"), color: "success", href: `/events/${action.eventId}` },
   };
   const presentation = meta[action.type];
   return (
     <Paper
       elevation={2}
       component="a"
-      href={`/events/${action.eventId}`}
+      href={presentation.href}
       sx={{
         display: "flex", alignItems: "center", gap: 1.5, p: 2, borderRadius: 3,
         textDecoration: "none", color: "inherit",
