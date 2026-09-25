@@ -122,6 +122,8 @@
     <string name="invite_accepted">Ti sei unito alla partita!</string>
     <string name="invite_declined">Hai rifiutato questo invito.</string>
     <string name="invite_cancelled">Questo invito è stato annullato.</string>
+    <string name="invitations_title">Inviti</string>
+    <string name="roster_added_you">Sei stato aggiunto a</string>
     <string name="invite_invited_by">%1$s ti ha invitato a giocare</string>
     <string name="invite_accept">Accetta</string>
     <string name="invite_decline">Rifiuta</string>
@@ -137,6 +139,13 @@
     <string name="sport">Sport</string>
     <string name="location_optional">Luogo (facoltativo)</string>
     <string name="location_placeholder">es. Campo sul fiume, Campo 2</string>
+    <string name="recurrence_prompt_title">Di nuovo la prossima settimana?</string>
+    <string name="recurrence_prompt_body">Ripeti questa partita automaticamente ogni settimana — giocatori e squadre restano.</string>
+    <string name="recurrence_make_weekly">Ripeti ogni settimana</string>
+    <string name="recurrence_already_on">Questo evento si ripete ogni settimana</string>
+    <string name="location_usual_venues">I tuoi luoghi abituali</string>
+    <string name="location_use_my_location">Usa la mia posizione</string>
+    <string name="location_pinned">Posizione fissata sulla mappa</string>
     <string name="pick_on_map">Scegli sulla mappa</string>
     <string name="date_time">Data e ora</string>
     <string name="max_players">Giocatori max</string>

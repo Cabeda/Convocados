@@ -14,6 +14,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
 import { MvpVotingCard } from "./MvpVotingCard";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
+import { RecurrencePrompt } from "./RecurrencePrompt";
 import { SeasonRankReveal } from "./rank/SeasonRankReveal";
 import type { SeasonRankMovement, SeasonRankStanding } from "~/lib/rankExplainer";
 import { summarizePayments } from "~/lib/paymentSummary";
@@ -53,6 +54,8 @@ export interface PostGameStatus {
   seasonRank?: SeasonRankMovement | null;
   /** The viewer's current Rank Standing — present before this Game is scored. */
   rankStanding?: SeasonRankStanding | null;
+  /** Whether the Event already recurs — drives the post-game recurrence prompt. */
+  isRecurring?: boolean;
   /**
    * True when the viewer already paid their own share and is neither the
    * receiver nor a settlement admin. The payment task is then hidden for them.
@@ -638,6 +641,17 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
             {t("postGameProgress").replace("{done}", String(completedCount)).replace("{total}", String(taskTotal))}
           </Typography>
             </>
+          )}
+
+          {/* Growth loop: once the game is wrapped up, offer the Owner a
+              one-tap "same again next week" instead of making them rebuild
+              the Event by hand (recurrence was create-time-only before). */}
+          {isManager && (
+            <RecurrencePrompt
+              eventId={eventId}
+              isRecurring={!!status?.isRecurring}
+              complete={!!status?.allComplete}
+            />
           )}
         </Stack>
       </Box>

@@ -5,6 +5,7 @@ import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { expirePendingInvites, acceptPlayerInvite, declinePlayerInvite } from "~/lib/invite.server";
 import { addPlayerToTeams, validateTeams } from "~/lib/teamFormation.server";
 import { syncGamePayments } from "~/lib/settlement.server";
+import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
 
 /**
  * ADR 0025 — invite-by-link.
@@ -48,6 +49,18 @@ export const GET: APIRoute = async ({ params, request }) => {
     viewerName = (await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } }))?.name ?? null;
   }
 
+  // Social proof for the "X invited you" landing: who is already in, and how
+  // many spots remain. Pending invitees are roster ghosts (ADR 0025) so they
+  // are excluded from both the names and the count, same as the roster math.
+  const active = await prisma.gameParticipant.findMany({
+    where: activeParticipantsWhere(invite.gameId),
+    include: { eventPlayer: { select: { name: true } } },
+    orderBy: { order: "asc" },
+  });
+  const guests = active.map((p) => p.eventPlayer.name);
+  const maxPlayers = invite.eventPlayer.event.maxPlayers;
+  const spotsLeft = Math.max(0, maxPlayers - guests.length);
+
   return Response.json({
     valid: true,
     status: fresh?.status ?? invite.status,
@@ -60,12 +73,14 @@ export const GET: APIRoute = async ({ params, request }) => {
     inviteeName: invite.eventPlayer.name,
     invitedByName: invite.invitedBy.name,
     gameId: invite.gameId,
+    spotsLeft,
+    guests,
     game: {
       id: invite.eventPlayer.event.id,
       title: invite.eventPlayer.event.title,
       location: invite.eventPlayer.event.location,
       dateTime: invite.eventPlayer.event.dateTime,
-      maxPlayers: invite.eventPlayer.event.maxPlayers,
+      maxPlayers,
     },
   });
 };

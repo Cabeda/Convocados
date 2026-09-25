@@ -364,6 +364,23 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateLocationWithCoords(eventId: String, location: String, latitude: Double, longitude: Double): OkResponse =
         client.put("/api/events/$eventId/location", LocationWithCoordsRequest(location, latitude, longitude))
 
+    // ── Recurrence (post-game "same again next week?") ────────────────────
+    suspend fun setRecurrence(eventId: String, isRecurring: Boolean, freq: String? = null, interval: Int = 1): RecurrenceResponse =
+        client.put("/api/events/$eventId/recurrence", RecurrenceRequest(isRecurring, freq, interval))
+
+    // ── Places (location autocomplete + reverse geocode) ──────────────────
+    suspend fun searchPlaces(query: String, latitude: Double? = null, longitude: Double? = null): PlaceSearchResponse {
+        val q = java.net.URLEncoder.encode(query, "UTF-8")
+        val bias = if (latitude != null && longitude != null) "&lat=$latitude&lng=$longitude" else ""
+        return client.get("/api/places?q=$q$bias")
+    }
+
+    suspend fun reversePlace(latitude: Double, longitude: Double): PlaceReverseResponse =
+        client.get("/api/places?lat=$latitude&lng=$longitude")
+
+    // ── Usual venues (create-game location defaults) ──────────────────────
+    suspend fun fetchMyLocations(): MyLocationsResponse = client.get("/api/me/locations")
+
     // ── Share URL ─────────────────────────────────────────────────────────
     fun getShareUrl(eventId: String): String =
         "${client.getLoginUrl("").substringBefore("/api")}/events/$eventId"
@@ -479,6 +496,9 @@ data class CreateEventRequest(
     val isRecurring: Boolean = false,
     val recurrenceFreq: String? = null,
     val recurrenceInterval: Int? = null,
+    // Explicit pin from the map picker; when set the server skips geocoding.
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 )
 
 @Serializable data class AddPlayerRequest(val name: String, val linkToAccount: Boolean = true, val email: String? = null)
@@ -535,6 +555,13 @@ data class CreateEventRequest(
 @Serializable data class ReorderPlayersRequest(val playerIds: List<String>)
 @Serializable data class CostOverrideRequest(val playerName: String, val amount: Double)
 @Serializable data class LocationWithCoordsRequest(val location: String, val latitude: Double, val longitude: Double)
+@Serializable data class RecurrenceRequest(val isRecurring: Boolean, val recurrenceFreq: String? = null, val recurrenceInterval: Int = 1)
+@Serializable data class RecurrenceResponse(val isRecurring: Boolean = false, val recurrenceRule: String? = null, val nextResetAt: String? = null)
+@Serializable data class PlaceSuggestion(val label: String = "", val name: String = "", val latitude: Double = 0.0, val longitude: Double = 0.0, val isSport: Boolean = false)
+@Serializable data class PlaceSearchResponse(val suggestions: List<PlaceSuggestion> = emptyList())
+@Serializable data class PlaceReverseResponse(val name: String? = null)
+@Serializable data class UsualLocation(val location: String = "", val latitude: Double? = null, val longitude: Double? = null, val count: Int = 0)
+@Serializable data class MyLocationsResponse(val locations: List<UsualLocation> = emptyList())
 
 @Serializable
 data class FollowOverridesRequest(

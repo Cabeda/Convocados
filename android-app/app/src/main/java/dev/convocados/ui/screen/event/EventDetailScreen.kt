@@ -795,8 +795,28 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
-    /** Cycle a past-game player's payment status (pending <-> paid) locally. */
-    fun togglePostGamePayment(playerName: String) {
+    /**
+     * Post-game "same again next week?": turn this one-off Event into a weekly
+     * recurring one, then refresh the post-game status so the prompt settles.
+     * Mirrors the web RecurrencePrompt.
+     */
+    fun makeWeekly(eventId: String, onResult: (success: Boolean, message: String?) -> Unit) {
+        viewModelScope.launch {
+            runCatching { api.setRecurrence(eventId, isRecurring = true, freq = "weekly", interval = 1) }
+                .onSuccess { resp ->
+                    val pg = _state.value.postGame
+                    if (pg != null) _state.value = _state.value.copy(postGame = pg.copy(isRecurring = resp.isRecurring))
+                    onResult(resp.isRecurring, null)
+                }
+                .onFailure { e ->
+                    val msg = parseApiErrorMessage(e) ?: "Failed to save recurrence"
+                    _state.value = _state.value.copy(error = msg)
+                    onResult(false, msg)
+                }
+        }
+    }
+
+    /** Cycle a past-game player's payment status (pending <-> paid) locally. */    fun togglePostGamePayment(playerName: String) {
         val current = _state.value.postGamePayments ?: return
         val updated = current.map {
             if (it.playerName == playerName)
@@ -2127,6 +2147,60 @@ private fun HeroWrapUp(
                 }
 
                 Text(stringResource(R.string.post_game_progress, completedCount, taskTotal), style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.CenterHorizontally))
+
+                // Growth loop: once the wrap-up is done, offer the Owner a one-tap
+                // "same again next week" (recurrence was create-time-only before).
+                val isOwner = user?.id != null && state.event?.ownerId == user.id
+                if (isOwner && pg.allComplete) {
+                    RecurrencePrompt(eventId, pg.isRecurring, viewModel)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Post-game weekly-recurrence offer — Android parity with the web
+ * `RecurrencePrompt`. Shows the settled state when the Event already repeats.
+ */
+@Composable
+private fun RecurrencePrompt(eventId: String, isRecurring: Boolean, viewModel: EventDetailViewModel) {
+    var done by remember(isRecurring) { mutableStateOf(isRecurring) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (done) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Repeat, null, tint = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.recurrence_already_on), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Text(stringResource(R.string.recurrence_prompt_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.recurrence_prompt_body), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (error != null) {
+                    Text(error!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+                Button(
+                    onClick = {
+                        busy = true
+                        error = null
+                        viewModel.makeWeekly(eventId) { success, message ->
+                            busy = false
+                            if (success) done = true else error = message
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Repeat, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.recurrence_make_weekly), fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

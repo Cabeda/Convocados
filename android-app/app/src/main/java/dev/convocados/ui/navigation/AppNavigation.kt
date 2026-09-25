@@ -223,7 +223,13 @@ fun AppNavigation(
                         onCourtWatches = { navController.navigate(Route.CourtWatches.route) },
                     )
                 }
-                composable(Route.CreateEvent.route) {
+                composable(Route.CreateEvent.route) { backStackEntry ->
+                    // The map picker returns its pin through this entry's
+                    // savedStateHandle; without reading it back the chosen
+                    // coordinates were silently dropped (#map-picker bug).
+                    val pickedLat = backStackEntry.savedStateHandle.get<Double>("pickedLat")
+                    val pickedLng = backStackEntry.savedStateHandle.get<Double>("pickedLng")
+                    val pickedPlace = backStackEntry.savedStateHandle.get<String>("pickedPlace")
                     CreateEventScreen(
                         onCreated = { id ->
                             navController.navigate(Route.EventDetail.create(id)) {
@@ -231,12 +237,33 @@ fun AppNavigation(
                             }
                         },
                         onBack = { navController.popBackStack() },
-                        onPickMap = { navController.navigate(Route.MapPicker.route) },
+                        onPickMap = { lat, lng -> navController.navigate(Route.MapPicker.create(lat, lng)) },
+                        pickedLat = pickedLat,
+                        pickedLng = pickedLng,
+                        pickedPlaceName = pickedPlace,
                     )
                 }
-                composable(Route.MapPicker.route) {
+                composable(
+                    Route.MapPicker().route,
+                    arguments = listOf(
+                        navArgument("lat") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument("lng") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    ),
+                ) { entry ->
+                    val startLat = entry.arguments?.getString("lat")?.toDoubleOrNull()
+                    val startLng = entry.arguments?.getString("lng")?.toDoubleOrNull()
                     MapPickerScreen(
-                        onLocationPicked = { _, _ -> navController.popBackStack() },
+                        initialLat = startLat ?: 38.7223,
+                        initialLng = startLng ?: -9.1393,
+                        centerOnUserStart = startLat == null,
+                        onLocationPicked = { lat, lng, name ->
+                            navController.previousBackStackEntry?.savedStateHandle?.apply {
+                                set("pickedLat", lat)
+                                set("pickedLng", lng)
+                                set("pickedPlace", name)
+                            }
+                            navController.popBackStack()
+                        },
                         onBack = { navController.popBackStack() },
                     )
                 }
