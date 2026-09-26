@@ -34,6 +34,30 @@ Gradle multi-module project — `:app` (phone/tablet) and `:wear` (Wear OS).
 - **Package**: `com.cabeda.Convocados` / namespace `dev.convocados.wear`
 - **Distribution**: dedicated Wear OS track in Play Console (form-factor opt-in required)
 
+## Mission
+
+**Convocados exists so a group of friends can actually play the game.**
+
+Three pillars, in priority order:
+
+- **Simple to run** — the organizer needs almost no head-knowledge. No setup guide, no
+  admin ritual, no "it depends on the app" instructions.
+- **Fun and engaging** — people want to come back. Showing up should feel good.
+- **Management-free** — whatever an organizer has to think about must **shrink**, never
+  grow, as the group gets busier. Every feature that adds ceremony is a bug.
+
+One question judges every change, at every altitude:
+
+> **Does this let people play more, with less administration?**
+
+If a proposal cannot answer that question in one sentence, it does not ship — no matter how
+good the code is. The three pillars are the terms a reviewer cites when it blocks a Change,
+and the terms an Explorer must name when it files an issue. An issue that serves no pillar
+is not filed.
+
+**Where we strive**: every change lands as a *ready-to-prod* Change — green CI, independently
+reviewed, evidence attached, one human click from merging. Nothing reaches `main` by machine.
+
 ## Core Principles
 
 ### 1. Test-Driven Development (TDD)
@@ -78,12 +102,39 @@ forbidden.
 - Lowering any threshold requires explicit written justification **and** the user's
   approval, stated in the PR description. Absent that, a lowered threshold is a bug.
 
+### 6. Metric Integrity (Never Cheat a Benchmark)
+Any measured number — coverage, k6 latency, Lighthouse budget, mutation score, bundle
+size, PR diff size — is a **gate, not a suggestion**. The same rules that govern the
+coverage ratchet govern every other metric:
+
+- **NEVER** make a metric pass by changing the measurement instead of the code. Weakening
+  an assertion, lowering a threshold, reducing a load, shortening a scenario, relaxing a
+  budget, or deleting the measurement are all the same defect.
+- **NEVER** run benchmarks or measurements in parallel. They contend for resources and
+  the numbers are invalid. Run them sequentially, on an idle machine.
+- **NEVER** reach for an unfair comparison to claim a win: a smaller input, a warmer
+  cache, a different configuration, or a hand-rolled harness in place of the committed one.
+- When optimising against a target, the target must be **pass/fail and modest** ("at least
+  1.2x faster on the named scenario"), and the **baseline must be recorded first, with
+  zero changes** (`pnpm k6:load`, LHCI, or the committed config for that metric).
+- Correctness is not negotiable against a speed target: a Change that regresses tests,
+  coverage, mutation score, or any existing budget is a regression, not an optimisation.
+- **Stop** when an iteration buys a statistically insignificant gain (~<5%) while adding
+  disproportionate code. The trade is not worth it.
+- Speedups that arrive with a suspicious magnitude are a bug report, not an achievement.
+  Expect agents to "optimise" by disabling the thing being measured. If it looks too good,
+  read the diff line by line.
+
+`docs/factory/` holds the per-metric harnesses and the recorded baselines. If a number in
+there is stale, refreshing it is its own Change — do not update a baseline in the same
+Change that consumes it.
+
 ## Development Workflow
 
 ### First-time setup
 After cloning, install the git hooks to catch CI failures before they reach the pipeline:
 ```bash
-npm run setup-hooks
+pnpm setup-hooks
 ```
 This installs:
 - a **pre-commit** hook that runs `gitleaks` over staged changes and blocks the commit if a
@@ -118,11 +169,11 @@ docs: update AGENTS.md
 1. Create feature branch from `main`
 2. Write failing tests
 3. Implement feature
-4. Ensure all tests pass (`npm run test`)
-5. Run type checking (`npm run typecheck`)
+4. Ensure all tests pass (`pnpm test`)
+5. Run type checking (`pnpm typecheck`)
 6. Create PR with descriptive title and summary
 7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
-8. **Before merging**, always run the full test suite (`npm run test`) and type checking (`npm run typecheck`) to ensure the build will succeed in CI/CD
+8. **Before merging**, always run the full test suite (`pnpm test`) and type checking (`pnpm typecheck`) to ensure the build will succeed in CI/CD
 
 **CRITICAL: ALL changes MUST go through PRs.** Never push directly to `main`. This includes:
 - Bug fixes (even one-liners)
@@ -142,6 +193,70 @@ Never `git push origin main` directly. Always:
 3. Open a PR
 4. Wait for CI
 5. Merge only when user confirms
+
+### Merge Authority
+
+`.github/CODEOWNERS` is `* @Cabeda`. Every file in the repo is owned by Cabeda, so **no
+Change can reach `main` without Cabeda's review** — this is branch protection, not a
+convention, and it is the one guarantee the Delivery Factory depends on.
+
+Because GitHub never lets a PR author satisfy their own review requirement, **the factory
+must never push under the `Cabeda` identity**: it would author every one of its own
+Changes and permanently block them. The factory authenticates as a GitHub App
+(`convocados-factory[bot]`) which is deliberately **not** a code owner, and holds no
+approve, merge, or workflow-edit permission.
+
+Consequence worth internalising: **merging a Change deploys it.** `release.yml` fires on
+CI green against `main` and then bumps the version, tags, releases, deploys Fly, publishes
+Android to the Play internal track, and deploys the scheduler. One click is production.
+
+## The Delivery Factory
+
+The factory turns `ready-for-agent` Issues into ready-to-prod Changes without being asked,
+and proposes improvements nobody asked for. It never merges.
+
+**Roles** (each is an opencode agent; see `docs/factory/`):
+
+| Role | Trigger | Does | Never |
+|---|---|---|---|
+| **Factory** | Issue labelled `ready-for-agent` | Implements, gates, opens the Change, iterates on red | Merge, release, self-label |
+| **Reviewer** | Any open PR | Independent review; pushes fixes to `factory/*` | Approve, touch a human branch |
+| **Explorer** | Schedule / dependency event | Files well-evidenced Issues (Design, Bugs, Security, Performance) | Write code, self-label |
+| **Sentinel** | Unhealthy production signals | Files the incident, drafts the postmortem, pages the human | Remediate anything |
+
+**Gates.** GATE 1 is local and equals the pre-push hook, plus what CI cannot cheaply
+repeat: `pnpm lint`, `pnpm typecheck`, `pnpm vitest run --coverage`, `pnpm
+test:route-coverage`, `pnpm sync:feature-parity-docs`, Gradle `assembleDebug` for `:app`
+and `:wear`, and `pnpm audit --audit-level high`. Playwright runs only when the diff
+touches `src/pages/**` or `e2e/**`. GATE 2 is GitHub CI. A Change over **400 changed lines
+or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate.
+
+`pnpm audit` sits in GATE 1 deliberately: a fresh CVE in a transitive dependency is not
+repairable by editing our code, so it must fail fast as Blocked instead of burning the CI
+loop.
+
+**Budgets.** 3 Attempts per gate, 6 per Issue, 500k tokens per Issue, 5M per day. Exceeding
+any budget ends the run as **Blocked**, with the evidence attached.
+
+**Handoff.** The Factory's terminal state is **awaiting-human**, never "done". It labels
+the Change `factory:review` and comments a summary: what changed, linked Issue, gates
+passed, coverage delta, and the full transcript. Blocking state is `factory:blocked`; a
+Blocked Issue stays out of the queue until a human clears it.
+
+**Rules for anything in this repository's factory, human or machine:**
+
+- **Only Cabeda applies or removes `ready-for-agent`.** Explorers may not label their own
+  output, and the Factory may not pull work that was not offered.
+- **Only Cabeda merges.** No agent merges, ever, including after approval.
+- **The factory branches from `origin/main` only** — never from a local checkout or another
+  feature branch, so no Change inherits half-finished work.
+- **`FACTORY_PAUSED=true` (a repo variable) stops everything** at every entry point. No
+  machine may set or clear it.
+- **Agents may edit this file, but the edit ships as its own PR**, flagged in the
+  description. A machine that edits its own constitution is unauditable.
+
+See `docs/factory/` for the runbooks, `docs/factory/CONTEXT.md` for the vocabulary, and
+`CONTEXT-MAP.md` for how the two contexts relate.
 
 ## Testing Guidelines
 
@@ -257,26 +372,26 @@ android-app/               # Native Android app (Gradle multi-module: :app, :wea
 
 ```bash
 # Development
-npm run dev          # Start dev server
+pnpm dev              # Start dev server
 
 # Testing
-npm run test         # Run all tests
-npm run test -- src/test/api.test.ts  # Run specific test file
+pnpm test             # Run all tests
+pnpm test src/test/api.test.ts   # Run specific test file
 
 # Type Checking
-npm run typecheck    # Check TypeScript types
+pnpm typecheck        # Check TypeScript types
 
 # Database
-npm run db:generate  # Generate Prisma client
-npm run db:migrate   # Run migrations
-npm run db:studio    # Open Prisma Studio
+pnpm db:generate      # Generate Prisma client
+pnpm db:migrate       # Run migrations
+pnpm db:studio        # Open Prisma Studio
 ```
 
 ## Dev Server Management (for AI agents)
 
 ### Parallel previews / worktrees
 
-`npm run dev` runs `scripts/dev.sh`, which makes every checkout self-contained so
+`pnpm dev` runs `scripts/dev.sh`, which makes every checkout self-contained so
 several previews can run at once (the main clone plus any number of
 `.worktrees/*`) without port collisions or a shared database:
 
@@ -295,7 +410,7 @@ servers in the *same* directory.
 
 ```bash
 # Start a preview for this worktree (prints http://localhost:<port>)
-nohup npm run dev > /tmp/convocados-dev.log 2>&1 &
+nohup pnpm dev > /tmp/convocados-dev.log 2>&1 &
 echo $! > /tmp/convocados-dev.pid
 
 # Wait for server to be ready (read the port the script chose)
@@ -439,10 +554,13 @@ export function MyComponent() {
 ## Reviewing Checklist
 
 Before submitting a PR:
-- [ ] Lint passes (`npm run lint -- --max-warnings 259`)
-- [ ] All tests pass (`npm run test`)
-- [ ] Type checking passes (`npm run typecheck`)
+- [ ] Answers the mission question: does this let people play more, with less administration?
+- [ ] Lint passes (`pnpm lint --max-warnings 259`)
+- [ ] All tests pass (`pnpm test`)
+- [ ] Type checking passes (`pnpm typecheck`)
 - [ ] Coverage thresholds only raised, never lowered (see Core Principle 5)
+- [ ] No metric gamed to pass — thresholds, loads, budgets and assertions unchanged (Core Principle 6)
+- [ ] Within 400 changed lines and 20 files, or the issue was split
 - [ ] i18n strings added to all 6 locales
 - [ ] Platform parity considered (web ↔ Android apps)
 - [ ] Database migrations included (if schema changed)
@@ -470,6 +588,22 @@ dex sync               # Push tasks to GitHub Issues
 - Use `dex` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
 - GitHub sync is enabled with `on_change = true` (auto-sync on every mutation)
 - Tasks are stored at `.dex/tasks.jsonl` (committed to repo) and synced to GitHub Issues
+
+### Two ledgers, and the machine exception
+
+| Ledger | Owner | Holds |
+|---|---|---|
+| **dex** (`.dex/tasks.jsonl`) | Humans | Plans, follow-ups, postmortem actions |
+| **GitHub labels + comments** | The factory | Runtime state: queue, Claim, Handoff, Blocked |
+
+`dex` is a local CLI and is **not installed on the GitHub runner**, so machine-written
+issues cannot be dex tasks. The one exception to "use dex for ALL task tracking":
+
+> **Explorers and the Sentinel file GitHub issues directly**, labelled `factory:explored`,
+> and commit their reasoning to `docs/explorations/`. Humans keep dex.
+
+An Explorer never applies `ready-for-agent` to its own issue. Promotion from
+`factory:explored` to `ready-for-agent` is the human's decision, always.
 
 ## Session Completion
 
