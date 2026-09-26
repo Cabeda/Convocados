@@ -1,12 +1,12 @@
 #!/bin/sh
 # Pre-push hook: run lint, typecheck and tests before pushing to catch CI failures early
-# Install: npm run setup-hooks (or run scripts/install-hooks.sh)
+# Install: pnpm setup-hooks (or run scripts/install-hooks.sh)
 
 echo "Running pre-push checks..."
 
 # Lint (zero errors allowed; warnings tracked but not blocking)
 echo "→ Linting..."
-npx eslint src/ --max-warnings 259
+pnpm lint --max-warnings 259
 
 if [ $? -ne 0 ]; then
   echo "✗ Lint failed. Push aborted."
@@ -35,7 +35,7 @@ fi
 
 # Type check
 echo "→ Type checking..."
-npm run typecheck
+pnpm typecheck
 if [ $? -ne 0 ]; then
   echo "✗ Type check failed. Push aborted."
   exit 1
@@ -43,7 +43,7 @@ fi
 
 # Tests with coverage
 echo "→ Running tests with coverage..."
-npx vitest run --coverage
+pnpm vitest run --coverage
 if [ $? -ne 0 ]; then
   echo "✗ Tests failed. Push aborted."
   echo ""
@@ -53,7 +53,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Mutation testing is no longer a pre-push gate. It is run on-demand:
-#   - locally:  npm run test:mutation  (slow, ~1-2h)
+#   - locally:  pnpm test:mutation  (slow, ~1-2h)
 #   - CI:       manually via the "Mutation" workflow_dispatch job
 # It was removed from the pre-push hook because the Stryker run takes 1-2 hours
 # and gets OOM-killed in normal worktrees, blocking every push.
