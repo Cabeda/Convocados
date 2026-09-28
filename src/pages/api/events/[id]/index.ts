@@ -1,11 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { parseRecurrenceRule, nextOccurrence } from "../../../../lib/recurrence";
-import { fireWebhooks } from "../../../../lib/webhook.server";
-import { autoPriorityEnroll } from "../../../../lib/priority.server";
+import { advanceDueRecurringEvent } from "../../../../lib/advanceOccurrence.server";
 import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
 import { checkAccess } from "../../../../lib/eventAccess";
-import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
 import { computePostGameStatus } from "../../../../lib/postgame.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 
@@ -74,160 +71,21 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   let wasReset = false;
 
-  // Lazy recurrence reset — optimistic lock via compare-and-swap on nextResetAt.
-  // Only the request that wins the updateMany (count=1) proceeds; concurrent
-  // requests get count=0 and skip, preventing double-snapshots.
-  // Archived events are frozen: never advance their recurrence, never re-arm
-  // reminders. Without this guard an archived recurring event keeps rolling
-  // forward on each visit and re-sends its notification cycle forever.
-  if (!event.archivedAt && event.isRecurring && event.nextResetAt && event.nextResetAt <= new Date()) {
-    const rule = parseRecurrenceRule(event.recurrenceRule);
-    if (rule) {
-      const currentNextResetAt = event.nextResetAt;
-      const newDateTime = nextOccurrence(event.dateTime, rule, new Date());
-      const newNextResetAt = new Date(newDateTime.getTime() + event.durationMinutes * 60 * 1000);
-
-      // Atomically claim the reset — only one concurrent request will get count=1
-      const claimed = await prisma.event.updateMany({
-        where: { id: event.id, nextResetAt: currentNextResetAt },
-        data: { nextResetAt: newNextResetAt },
-      });
-
-      if (claimed.count === 1) {
-        const teamsSnapshot = event.teamResults.length > 0
-          ? JSON.stringify(event.teamResults.map((tr) => ({
-              team: tr.name,
-              formation: tr.formation,
-              players: tr.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot })),
-            })))
-          : null;
-
-        // Snapshot payments before reset
-        const eventCost = await prisma.eventCost.findUnique({
-          where: { eventId: event.id },
-          include: { payments: true },
-        });
-        const paymentsSnapshot = eventCost && eventCost.payments.length > 0
-          ? JSON.stringify(eventCost.payments.map((p) => ({
-              playerName: p.playerName,
-              amount: p.amount,
-              status: p.status,
-              method: p.method,
-            })))
-          : null;
-
-        // ADR 0016: mark old Game as played + create new Game + swap pointer
-        // Payment overhaul: carry paymentMode to the next occurrence; carry the
-        // payer only if they were an active participant of the previous game.
-        const oldGameId = event.currentGameId;
-        let inheritMode: string | null = null;
-        let inheritPayerId: string | null = null;
-        if (oldGameId) {
-          const oldGame = await prisma.game.findUnique({
-            where: { id: oldGameId },
-            select: { paymentMode: true, payerEventPlayerId: true },
-          });
-          inheritMode = oldGame?.paymentMode ?? null;
-          if (oldGame?.payerEventPlayerId) {
-            const payerStillActive = await prisma.gameParticipant.findFirst({
-              where: { gameId: oldGameId, eventPlayerId: oldGame.payerEventPlayerId, archivedAt: null },
-              select: { id: true },
-            });
-            if (payerStillActive) inheritPayerId = oldGame.payerEventPlayerId;
-          }
-        }
-        const newGame = await prisma.game.create({
-          data: {
-            eventId: event.id,
-            dateTime: newDateTime,
-            status: "upcoming",
-            paymentMode: inheritMode,
-            payerEventPlayerId: inheritPayerId,
-          },
-        });
-        if (oldGameId) {
-          await prisma.game.update({
-            where: { id: oldGameId },
-            data: { status: "played" },
-          });
-        }
-        await prisma.event.update({
-          where: { id: event.id },
-          data: { currentGameId: newGame.id },
-        });
-
-        // Payment overhaul: reconcile the new game's payment rows (no-op until
-        // the roster is populated, but keeps carried-over payments in sync).
-        import("../../../../lib/settlement.server")
-          .then(({ syncGamePayments }) => syncGamePayments(newGame.id, event.id))
-          .catch(() => {});
-
-        // ADR 0016: keep GameHistory for backward compat (read-only fallback),
-        // but NO destructive deletes. Players/Teams/RSVPs stay intact on the old Game.
-        // Guard against a duplicate snapshot: one may already exist if a score was
-        // saved on the played Game before the reset ran (history PATCH materialises
-        // a GameHistory on demand).
-        const existingSnapshot = await prisma.gameHistory.findFirst({
-          where: { eventId: event.id, dateTime: event.dateTime },
-        });
-        await prisma.$transaction([
-          ...(existingSnapshot
-            ? []
-            : [prisma.gameHistory.create({
-                data: {
-                  eventId: event.id,
-                  dateTime: event.dateTime,
-                  teamOneName: event.teamOneName,
-                  teamTwoName: event.teamTwoName,
-                  teamsSnapshot,
-                  paymentsSnapshot,
-                },
-              })]),
-          // Clear per-occurrence payments (PlayerPayment is still current-game-scoped until GamePayment migration)
-          ...(eventCost ? [
-            prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } }),
-            prisma.eventCost.update({ where: { id: eventCost.id }, data: { tempPaymentMethods: null, tempPaymentDetails: null } }),
-          ] : []),
-          // Clear team members for the new game (teams are snapshotted in GameHistory above)
-          ...event.teamResults.map((tr) =>
-            prisma.teamMember.deleteMany({ where: { teamResultId: tr.id } }),
-          ),
-          prisma.event.update({
-            where: { id: event.id },
-            data: { dateTime: newDateTime, rsvpCutoffSent: false, recruitment48hSent: false, recruitment24hSent: false },
-          }),
-        ]);
-
-        wasReset = true;
-
-        // Fire game_reset webhook (non-blocking)
-        fireWebhooks(event.id, "game_reset", {
-          newDateTime: newDateTime.toISOString(),
-        }).catch(() => {});
-
-        // Auto-enroll priority players for the new occurrence (non-blocking)
-        autoPriorityEnroll(event.id).catch(() => {});
-
-        // ADR 0018: Auto-confirm regulars for the new occurrence (non-blocking)
-        import("../../../../lib/autoConfirm.server")
-          .then(({ applyAutoConfirm }) => applyAutoConfirm(event.id))
-          .catch(() => {});
-
-        // Schedule reminder jobs for the new occurrence (non-blocking)
-        cancelEventJobs(event.id)
-          .then(() => scheduleEventReminders(event.id, newDateTime, event.durationMinutes))
-          .catch(() => {});
-      }
-
-      const fresh = await prisma.event.findUnique({
-        where: { id: event.id },
-        include: {
-          players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
-          teamResults: { include: { members: { orderBy: { order: "asc" } } } },
-        },
-      });
-      if (fresh) Object.assign(event, fresh);
-    }
+  // Lazy recurrence reset — the CAS advance lives in advanceDueRecurringEvent,
+  // shared with the cron sweep (issue #1176) so visits aren't the only trigger.
+  const advance = await advanceDueRecurringEvent(event);
+  if (advance !== "not-due") {
+    if (advance === "advanced") wasReset = true;
+    // Reload so the response reflects the new occurrence — also when a
+    // concurrent caller won the CAS (state already moved under us).
+    const fresh = await prisma.event.findUnique({
+      where: { id: event.id },
+      include: {
+        players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
+        teamResults: { include: { members: { orderBy: { order: "asc" } } } },
+      },
+    });
+    if (fresh) Object.assign(event, fresh);
   }
 
   // Check if current user is an admin of this event
