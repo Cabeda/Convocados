@@ -1,6 +1,6 @@
 #!/bin/sh
 # Install git hooks from scripts/ into the git hooks directory.
-# Run this once after cloning: npm run setup-hooks
+# Run this once after cloning: pnpm setup-hooks
 # Uses --git-path hooks so it works in worktrees too (resolves to the shared
 # hooks dir git actually reads from).
 
