@@ -1,6 +1,34 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { createLogger } from "./logger.server";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
+
+const log = createLogger("mergePlayer");
+
+/** Minimal shape needed to decide which duplicate payment row survives. */
+interface CollapsiblePayment {
+  amount: number;
+  status: string;
+}
+
+/**
+ * Which row survives when the collapsed source name and its target both own a
+ * `GamePayment` for the same game.
+ *
+ * - A `paid` row means the game was settled for this person; keeping a pending
+ *   duplicate over it would resurrect money that was already paid.
+ * - Otherwise the larger obligation wins — never silently discard the bigger
+ *   debt. Equal amounts are almost always the same debt recorded twice, so the
+ *   target's row (the identity being kept) wins the tie.
+ */
+export function shouldKeepSourcePayment(
+  source: CollapsiblePayment,
+  target: CollapsiblePayment,
+): boolean {
+  if (target.status === "paid") return false;
+  if (source.status === "paid") return true;
+  return source.amount > target.amount;
+}
 
 /**
  * Collapse one player name into another *within a single event* (ADR 0016:
@@ -131,17 +159,25 @@ async function reassignEventPlayerChildren(
   targetId: string,
   mergedUserId: string | null,
 ): Promise<void> {
-  const [sourceParticipants, sourceRsvps, sourcePayments, targetParticipantGameIds, targetRsvpRows] =
+  const [sourceParticipants, sourceRsvps, sourcePayments, targetParticipantGameIds, targetRsvpRows, targetPayments] =
     await Promise.all([
       tx.gameParticipant.findMany({ where: { eventPlayerId: sourceId }, select: { id: true, gameId: true } }),
       tx.rsvp.findMany({ where: { eventPlayerId: sourceId }, select: { id: true, gameId: true } }),
-      tx.gamePayment.findMany({ where: { eventPlayerId: sourceId }, select: { id: true } }),
+      tx.gamePayment.findMany({
+        where: { eventPlayerId: sourceId },
+        select: { id: true, gameId: true, amount: true, status: true },
+      }),
       tx.gameParticipant.findMany({ where: { eventPlayerId: targetId }, select: { gameId: true } }),
       tx.rsvp.findMany({ where: { eventPlayerId: targetId }, select: { gameId: true } }),
+      tx.gamePayment.findMany({
+        where: { eventPlayerId: targetId },
+        select: { id: true, gameId: true, amount: true, status: true },
+      }),
     ]);
 
   const targetGameIds = new Set(targetParticipantGameIds.map((g) => g.gameId));
   const targetRsvpGameIds = new Set(targetRsvpRows.map((r) => r.gameId));
+  const targetPaymentByGame = new Map(targetPayments.map((p) => [p.gameId, p]));
 
   for (const p of sourceParticipants) {
     if (targetGameIds.has(p.gameId)) {
@@ -158,7 +194,32 @@ async function reassignEventPlayerChildren(
     }
   }
   for (const p of sourcePayments) {
-    await tx.gamePayment.update({ where: { id: p.id }, data: { eventPlayerId: targetId } });
+    const existing = targetPaymentByGame.get(p.gameId);
+    if (!existing) {
+      await tx.gamePayment.update({ where: { id: p.id }, data: { eventPlayerId: targetId } });
+      continue;
+    }
+    // Both names already own a row for this game. unique(gameId, eventPlayerId)
+    // can hold only one, so merge the rows instead of repointing: a blind
+    // update aborts the whole collapse (and, via the backfill job, the merge).
+    const keepSource = shouldKeepSourcePayment(p, existing);
+    if (keepSource) {
+      await tx.gamePayment.delete({ where: { id: existing.id } });
+      await tx.gamePayment.update({ where: { id: p.id }, data: { eventPlayerId: targetId } });
+    } else {
+      await tx.gamePayment.delete({ where: { id: p.id } });
+    }
+    const kept = keepSource ? p : existing;
+    const dropped = keepSource ? existing : p;
+    log.warn(
+      {
+        eventPlayerId: targetId,
+        gameId: p.gameId,
+        kept: { id: kept.id, amount: kept.amount, status: kept.status },
+        dropped: { id: dropped.id, amount: dropped.amount, status: dropped.status },
+      },
+      "merged duplicate GamePayment rows while collapsing player identity",
+    );
   }
   await tx.game.updateMany({
     where: { payerEventPlayerId: sourceId },
