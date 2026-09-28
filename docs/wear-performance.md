@@ -2,16 +2,18 @@
 
 How to tell whether `:wear` is hitting 60fps on a real watch, and what the
 numbers actually mean. Written from a Perfetto investigation on a Galaxy
-Watch7 (`SM-R870`, 450×450, 340dpi).
+Watch 4 44mm (`SM-R870`, 450×450, 340dpi).
 
 ## TL;DR
 
 - **Measure a release build.** Debug is not a proxy — it is a different program.
-- The watch panel is locked to 60Hz (`mRefreshRateChangeable: false`), so every
-  dropped frame is the app's, not the display's.
-- As of this investigation `:wear` scrolls the games list at **~46fps / 31ms per
-  frame** in release, and the remaining cost is in the render pipeline
-  (`postAndWait` + `dequeueBuffer`), not in Compose recomposition.
+- The panel is 60Hz and *only* 60Hz (`supportedRefreshRates [60.000004]`,
+  `mRefreshRateChangeable: false`), and the Watch 4 is a 60fps-capable device.
+  So **~46fps is a real gap in our app, not a hardware ceiling** — there is no
+  device excuse available for it.
+- `:wear` scrolls the games list at **~46fps / 31ms per frame** in release, and
+  the remaining cost is in the render pipeline (`postAndWait` +
+  `dequeueBuffer`), not in Compose recomposition.
 
 ## Prerequisites
 
@@ -155,10 +157,29 @@ them — an early version of this analysis chased them as if they were work.
 
 ## Open questions
 
-- Is ~46fps this device's ceiling for this harness? Needs the Settings-app
-  control run to separate "our app" from "watch + synthetic gestures".
+- ~~Is ~46fps this device's ceiling for this harness?~~ **No.** The Watch 4 is a
+  60fps device and the panel is 60Hz-only, so the gap is ours. The Settings-app
+  control run is still worth having, to confirm the harness itself is not
+  capping the measurement.
+- Which render-side change closes it? The candidates are layer/raster reduction,
+  not composable work. **Elevation shadows on the list chips are untested** —
+  Wear M3 `Button` draws a shadow layer per tile, and shadows are exactly the
+  kind of pass that costs GPU time at 450×450. Next experiment should ablate
+  chip elevation and re-measure before anything else.
 - `:wear` has no baseline profile. The `baselineprofile` module targets `:app`
   only (`targetProjectPath = ":app"`). Worth adding for `:wear` — it mostly
   helps cold start, which is currently 58% janky with a 150ms p50.
 - `GamesScreen` auto-navigating on every launch is questionable UX in its own
   right, independent of performance.
+
+### Getting the watch to stay awake long enough to measure
+
+Wear OS dozes when the watch is off-wrist, and doze disables WiFi, so the device
+disappears from `adb` entirely. `screen_off_timeout` does **not** prevent this —
+it is wrist-detection doze, not the screen timeout. A measurement run needs
+roughly 25-30s of continuous connectivity, so the watch must be **worn** for the
+duration, and `screen_off_timeout` should be raised anyway:
+
+```bash
+adb shell settings put system screen_off_timeout 1800000
+```
