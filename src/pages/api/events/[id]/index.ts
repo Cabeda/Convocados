@@ -194,7 +194,7 @@ export const GET: APIRoute = async ({ params, request }) => {
           ),
           prisma.event.update({
             where: { id: event.id },
-            data: { dateTime: newDateTime, rsvpCutoffSent: false, recruitment48hSent: false, recruitment24hSent: false },
+            data: { dateTime: newDateTime, rsvpCutoffSent: false, rsvpSummarySent: false, recruitment48hSent: false, recruitment24hSent: false },
           }),
         ]);
 
