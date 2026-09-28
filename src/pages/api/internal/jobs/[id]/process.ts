@@ -13,8 +13,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   try {
-    await processJob(jobId);
-    return Response.json({ ok: true });
+    const outcome = await processJob(jobId);
+    return Response.json({ ok: true, outcome });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Job processing failed";
     return Response.json({ ok: false, error: message }, { status: 500 });

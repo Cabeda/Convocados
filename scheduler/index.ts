@@ -65,6 +65,9 @@ const COURT_WATCH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 /** Interval for SQLite maintenance — PRAGMA optimize (daily, per SQLite docs) */
 const DB_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+/** Interval for the eager recurring-occurrence advance sweep (issue #1176) */
+const RECURRING_ADVANCE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 /** UTC hours the Open Pickup sweep runs (ADR-0021: twice daily) */
 const PICKUP_SWEEP_HOURS = [9, 21];
 
@@ -128,12 +131,30 @@ async function triggerPickupSweep(): Promise<void> {
   console.log("[scheduler] Pickup sweep completed:", JSON.stringify(body));
 }
 
+async function triggerRecurringAdvance(): Promise<void> {
+  const res = await fetch(`${APP_URL}/api/cron/advance-recurring`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${CRON_SECRET}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Recurring advance cron failed: ${res.status} ${res.statusText}`);
+  }
+
+  const body = await res.json() as Record<string, unknown>;
+  if (Number(body.advanced ?? 0) > 0 || Number(body.failed ?? 0) > 0) {
+    console.log("[scheduler] Recurring advance completed:", JSON.stringify(body));
+  }
+}
+
 async function runLoop() {
   let pollInterval = POLL_IDLE_MS;
   let lastMaintenance = 0;
   let lastCourtWatch = 0;
   let lastDbMaintenance = 0;
   let lastPickupSweep = 0;
+  let lastRecurringAdvance = 0;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -178,6 +199,18 @@ async function runLoop() {
         lastPickupSweep = start;
       } catch (err) {
         console.error("[scheduler] Pickup sweep error:", err);
+      }
+    }
+
+    // Eager recurring-occurrence advance (issue #1176) — keeps recurring
+    // events listed on Discover and next-occurrence reminders armed without
+    // waiting for someone to open the event page.
+    if (start - lastRecurringAdvance >= RECURRING_ADVANCE_INTERVAL_MS) {
+      try {
+        await triggerRecurringAdvance();
+        lastRecurringAdvance = start;
+      } catch (err) {
+        console.error("[scheduler] Recurring advance error:", err);
       }
     }
 

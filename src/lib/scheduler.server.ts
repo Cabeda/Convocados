@@ -79,31 +79,82 @@ export async function cancelEventJobs(eventId: string) {
 }
 
 /**
- * Get all jobs that are due (runAt <= now) and not yet processed or failed.
+ * How long a claim is honored before the job becomes claimable again.
+ * Must exceed the worker's fetch timeout (30s) so a live claim is never
+ * stolen, while a crashed worker's job is redelivered within minutes.
  */
-export async function getDueJobs() {
+export const CLAIM_LEASE_MS = 2 * 60 * 1000;
+
+/** Exponential backoff base: retry after 10s, then 20s, then dead at 3rd. */
+const RETRY_BASE_MS = 10_000;
+const MAX_ATTEMPTS = 3;
+
+/** Default bound for due-job fetches; callers may pass a smaller take. */
+export const DEFAULT_DUE_LIMIT = 50;
+
+/** Jobs whose claim lapsed (dead worker) are claimable again. */
+function claimableWhere(now: Date) {
+  return {
+    processedAt: null,
+    failedAt: null,
+    OR: [{ claimedAt: null }, { claimedAt: { lt: new Date(now.getTime() - CLAIM_LEASE_MS) } }],
+  };
+}
+
+/**
+ * Atomically claim a job before running side effects (guarded updateMany —
+ * only one concurrent caller wins). Returns the claimed row, or null if the
+ * job is already processed/failed or held under an active lease elsewhere.
+ */
+export async function claimJob(jobId: string) {
+  const now = new Date();
+  const token = `${process.pid}:${now.getTime()}:${Math.random().toString(36).slice(2, 10)}`;
+  const won = await prisma.scheduledJob.updateMany({
+    where: { id: jobId, ...claimableWhere(now) },
+    data: { claimedAt: now, claimedBy: token },
+  });
+  if (won.count === 0) return null;
+  return prisma.scheduledJob.findFirst({ where: { id: jobId, claimedBy: token } });
+}
+
+/** Dead-lettered jobs (retry exhausted) — surfaced via /api/health. */
+export async function countFailedJobs(): Promise<number> {
+  return prisma.scheduledJob.count({ where: { failedAt: { not: null } } });
+}
+
+/**
+ * Get jobs that are due (runAt <= now), unprocessed, unfailed and not held
+ * under an active claim — bounded by `limit` so one poll can't flood workers.
+ */
+export async function getDueJobs(limit = DEFAULT_DUE_LIMIT) {
+  const now = new Date();
   return prisma.scheduledJob.findMany({
     where: {
-      runAt: { lte: new Date() },
-      processedAt: null,
-      failedAt: null,
+      runAt: { lte: now },
+      ...claimableWhere(now),
     },
     orderBy: { runAt: "asc" },
+    take: limit,
   });
 }
 
 /**
  * Process a single scheduled job.
- * Handles reminder and post-game jobs.
+ * Claims the job first (one winner per job even under concurrency), then
+ * runs the side effect. Failure releases the claim and pushes runAt forward
+ * exponentially; the third failure dead-letters the job.
+ * Returns "processed" or "skipped" (lost claim / already done / missing).
  */
-export async function processJob(jobId: string): Promise<void> {
-  const job = await prisma.scheduledJob.findUnique({ where: { id: jobId } });
+export async function processJob(jobId: string): Promise<"processed" | "skipped"> {
+  const job = await claimJob(jobId);
   if (!job) {
-    log.warn({ jobId }, "Scheduled job not found");
-    return;
-  }
-  if (job.processedAt || job.failedAt) {
-    return;
+    const existing = await prisma.scheduledJob.findUnique({ where: { id: jobId } });
+    if (!existing) {
+      log.warn({ jobId }, "Scheduled job not found");
+    } else if (!existing.processedAt && !existing.failedAt) {
+      log.info({ jobId }, "Scheduled job claim lost — skipping duplicate delivery");
+    }
+    return "skipped";
   }
 
   try {
@@ -119,24 +170,29 @@ export async function processJob(jobId: string): Promise<void> {
 
     await prisma.scheduledJob.update({
       where: { id: jobId },
-      data: { processedAt: new Date() },
+      data: { processedAt: new Date(), claimedAt: null, claimedBy: null },
     });
+    return "processed";
   } catch (err) {
     log.error({ jobId, type: job.type, err }, "Failed to process scheduled job");
     const nextRetry = job.retryCount + 1;
-    if (nextRetry >= 3) {
+    if (nextRetry >= MAX_ATTEMPTS) {
       await prisma.scheduledJob.update({
         where: { id: jobId },
-        data: { failedAt: new Date(), processedAt: null },
+        data: { failedAt: new Date(), processedAt: null, claimedAt: null, claimedBy: null },
       });
-      throw err;
     } else {
       await prisma.scheduledJob.update({
         where: { id: jobId },
-        data: { retryCount: nextRetry },
+        data: {
+          retryCount: nextRetry,
+          runAt: new Date(Date.now() + RETRY_BASE_MS * 2 ** (nextRetry - 1)),
+          claimedAt: null,
+          claimedBy: null,
+        },
       });
-      throw err;
     }
+    throw err;
   }
 }
 
