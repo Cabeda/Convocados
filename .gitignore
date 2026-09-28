@@ -110,3 +110,6 @@ src/lib/__generated__/
 
 # iOS build artifacts
 /ios-app/build/
+
+# Factory Gate 1 logs (scripts/factory/gate.sh)
+.factory-gate/
