@@ -113,21 +113,95 @@ export async function getAdminStats() {
   };
 }
 
-export async function listUsers({ page, pageSize, search }: { page: number; pageSize: number; search?: string }) {
+export type UserListSort = "name" | "email" | "createdAt" | "role" | "pushPlatform" | "appVersion";
+export type UserListOrder = "asc" | "desc";
+export type UserListFilter = {
+  hasPushToken?: boolean;
+  pushPlatform?: "android" | "ios" | "web" | null;
+};
+
+export async function listUsers({
+  page,
+  pageSize,
+  search,
+  sort = "createdAt",
+  order = "desc",
+  filter,
+}: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  sort?: UserListSort;
+  order?: UserListOrder;
+  filter?: UserListFilter;
+}) {
   const where = search
     ? { OR: [{ name: { contains: search } }, { email: { contains: search } }, { id: { contains: search } }] }
     : {};
+
+  // Build push token filter
+  const pushTokenWhere = filter?.hasPushToken !== undefined || filter?.pushPlatform
+    ? {
+        appPushTokens: {
+          some: {
+            ...(filter.pushPlatform ? { platform: filter.pushPlatform } : {}),
+          },
+        },
+      }
+    : {};
+
+  const combinedWhere = { ...where, ...pushTokenWhere };
+
   const [users, total] = await Promise.all([
     prisma.user.findMany({
-      where,
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      where: combinedWhere,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        appPushTokens: {
+          select: { platform: true, appVersion: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      orderBy: { createdAt: "desc" },
+      orderBy: sort === "pushPlatform" || sort === "appVersion"
+        ? { appPushTokens: { _count: order } } // fallback - will sort in memory
+        : { [sort]: order },
     }),
-    prisma.user.count({ where }),
+    prisma.user.count({ where: combinedWhere }),
   ]);
-  return { users, total };
+
+  // Post-process to add push token info and handle sorting by push fields
+  const usersWithPush = users.map((u) => ({
+    ...u,
+    pushPlatform: u.appPushTokens[0]?.platform ?? null,
+    appVersion: u.appPushTokens[0]?.appVersion ?? null,
+    hasPushToken: u.appPushTokens.length > 0,
+    appPushTokens: undefined,
+  }));
+
+  // Sort in memory for push fields
+  let sortedUsers = usersWithPush;
+  if (sort === "pushPlatform") {
+    sortedUsers = [...usersWithPush].sort((a, b) => {
+      const av = a.pushPlatform ?? "";
+      const bv = b.pushPlatform ?? "";
+      return order === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  } else if (sort === "appVersion") {
+    sortedUsers = [...usersWithPush].sort((a, b) => {
+      const av = a.appVersion ?? "";
+      const bv = b.appVersion ?? "";
+      return order === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }
+
+  return { users: sortedUsers, total };
 }
 
 export async function deleteUser(userId: string): Promise<boolean> {

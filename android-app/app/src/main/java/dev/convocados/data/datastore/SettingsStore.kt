@@ -101,4 +101,29 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
     suspend fun setAddGamesPromptDismissedUntil(epochMs: Long) {
         context.dataStore.edit { it[ADD_GAMES_PROMPT_DISMISSED_UNTIL_KEY] = epochMs }
     }
+
+    // Invitations inbox: direct roster adds the viewer has acknowledged. Stored
+    // as a comma-joined Event-id set, mirroring the web's localStorage flag.
+    private val ROSTER_ADDS_ACKED_KEY = stringPreferencesKey("roster_adds_acked")
+
+    val rosterAddsAcked: Flow<Set<String>> =
+        context.dataStore.data.map { prefs ->
+            prefs[ROSTER_ADDS_ACKED_KEY]
+                ?.split(",")
+                ?.filter { it.isNotBlank() }
+                ?.toSet()
+                .orEmpty()
+        }
+
+    suspend fun ackRosterAdd(eventId: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[ROSTER_ADDS_ACKED_KEY]
+                ?.split(",")
+                ?.filter { it.isNotBlank() }
+                ?.toMutableSet()
+                ?: mutableSetOf()
+            current.add(eventId)
+            prefs[ROSTER_ADDS_ACKED_KEY] = current.joinToString(",")
+        }
+    }
 }

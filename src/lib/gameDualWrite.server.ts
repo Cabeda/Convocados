@@ -85,7 +85,17 @@ export async function applyTeamsSnapshotToGame(
   });
 
   const syncedIds: string[] = [];
-  let fallbackOrder = 0;
+  // Snapshot player.order is the WITHIN-TEAM index (teams patch pushes order: i
+  // per team), so writing it onto GameParticipant duplicated the queue
+  // (0,0,1,1,...) and reshuffled the roster — ties then came back from the API
+  // in physical row order, changing on every fetch. Queue order is assigned at
+  // join (ADR 0020) and must survive team edits: keep it on update, append at
+  // the end only when this game has no row for the player yet.
+  const maxOrder = await db.gameParticipant.aggregate({
+    where: { gameId: game.id, archivedAt: null, status: { not: "pending" } },
+    _max: { order: true },
+  });
+  let nextOrder = (maxOrder._max.order ?? -1) + 1;
   for (const team of teams) {
     for (const player of team.players ?? []) {
       const name = player.name?.trim();
@@ -97,7 +107,7 @@ export async function applyTeamsSnapshotToGame(
         create: {
           gameId: game.id,
           eventPlayerId,
-          order: player.order ?? fallbackOrder,
+          order: nextOrder++,
           team: team.team ?? null,
           slot: player.slot ?? null,
           status: "active",
@@ -105,10 +115,8 @@ export async function applyTeamsSnapshotToGame(
         update: {
           team: team.team ?? null,
           slot: player.slot ?? null,
-          ...(!isNil(player.order) ? { order: player.order } : {}),
         },
       });
-      fallbackOrder++;
     }
   }
 

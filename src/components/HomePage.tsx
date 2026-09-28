@@ -22,6 +22,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PushPromptBanner } from "./PushPromptBanner";
 import { AddGamesPrompt } from "./AddGamesPrompt";
 import CreateEventForm from "./CreateEventForm";
+import { InvitationsSection, type HomeInvitation, type HomeRosterAdd } from "./InvitationsSection";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { useCountdown } from "./event/useCountdown";
@@ -82,6 +83,9 @@ interface HomeData {
   actions?: HomeAction[];
   /** Growth prompt: the viewer plays in events they don't own (#1166). */
   suggestAddGames?: boolean;
+  /** Pending invitations addressed to the viewer, and direct-add acknowledgements. */
+  invitations?: HomeInvitation[];
+  rosterAdds?: HomeRosterAdd[];
 }
 
 interface DashboardData {
@@ -451,9 +455,12 @@ export default function HomePage() {
   const upNext = home?.upNext ?? [];
   const discover = home?.discover ?? [];
   const actions = home?.actions ?? [];
+  const invitations = home?.invitations ?? [];
+  const rosterAdds = home?.rosterAdds ?? [];
   const allArchived = [...(games?.archivedOwned ?? []), ...(games?.archivedAdmin ?? [])];
   const hasActive = !!games && (games.owned.length > 0 || games.admin.length > 0 || games.followed.length > 0);
-  const nothingToShow = !homeLoading && upNext.length === 0 && discover.length === 0 && actions.length === 0;
+  const nothingToShow = !homeLoading && upNext.length === 0 && discover.length === 0
+    && actions.length === 0 && invitations.length === 0 && rosterAdds.length === 0;
 
   return (
     <ThemeModeProvider>
@@ -478,6 +485,9 @@ export default function HomePage() {
             />
 
             {home?.suggestAddGames && <AddGamesPrompt onAdd={() => setCreateOpen(true)} />}
+
+            {/* Invitations inbox — the most time-sensitive thing on Home. */}
+            <InvitationsSection invitations={invitations} rosterAdds={rosterAdds} locale={locale} />
 
             {(homeLoading || isLoading) && !home ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>

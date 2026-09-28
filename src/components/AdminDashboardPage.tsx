@@ -6,6 +6,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   InputAdornment, Chip, ToggleButtonGroup, ToggleButton, useTheme,
   IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
+  FormControl, InputLabel, Select, MenuItem, Tooltip, TableSortLabel,
 } from "@mui/material";
 import PeopleIcon from "@mui/icons-material/People";
 import EventIcon from "@mui/icons-material/Event";
@@ -14,6 +15,9 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PublicIcon from "@mui/icons-material/Public";
 import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
+import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
+import IosShareIcon from "@mui/icons-material/IosShare";
+import LanguageIcon from "@mui/icons-material/Language";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -44,6 +48,9 @@ interface UserRow {
   email: string;
   role: string;
   createdAt: string;
+  pushPlatform: "android" | "ios" | "web" | null;
+  appVersion: string | null;
+  hasPushToken: boolean;
 }
 
 interface GrowthPoint {
@@ -69,6 +76,8 @@ interface UsagePoint {
 }
 
 type GrowthRange = "30d" | "1y" | "all";
+type UserListSort = "name" | "email" | "createdAt" | "role" | "pushPlatform" | "appVersion";
+type UserListOrder = "asc" | "desc";
 
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   const theme = useTheme();
@@ -191,6 +200,11 @@ export default function AdminDashboardPage() {
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [usageTimeline, setUsageTimeline] = useState<UsagePoint[]>([]);
   const [loadingUsage, setLoadingUsage] = useState(false);
+  // Sort & filter state
+  const [sort, setSort] = useState<UserListSort>("createdAt");
+  const [order, setOrder] = useState<UserListOrder>("desc");
+  const [filterHasPushToken, setFilterHasPushToken] = useState<"true" | "false" | "all">("all");
+  const [filterPushPlatform, setFilterPushPlatform] = useState<"android" | "ios" | "web" | "all">("all");
 
   const PAGE_SIZE = 20;
 
@@ -228,6 +242,10 @@ export default function AdminDashboardPage() {
     setLoadingUsers(true);
     const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE) });
     if (q) params.set("search", q);
+    if (sort !== "createdAt") params.set("sort", sort);
+    if (order !== "desc") params.set("order", order);
+    if (filterHasPushToken !== "all") params.set("hasPushToken", filterHasPushToken);
+    if (filterPushPlatform !== "all") params.set("pushPlatform", filterPushPlatform);
     const r = await fetch(`/api/admin/users?${params}`);
     if (r.ok) {
       const data = await r.json();
@@ -235,12 +253,26 @@ export default function AdminDashboardPage() {
       setUserTotal(data.total);
     }
     setLoadingUsers(false);
-  }, []);
+  }, [sort, order, filterHasPushToken, filterPushPlatform]);
 
   useEffect(() => {
     if (!session?.user || forbidden) return;
     fetchUsers(page, search);
   }, [session?.user, page, search, forbidden, fetchUsers]);
+
+  const handleSort = (field: UserListSort) => {
+    if (sort === field) {
+      setOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSort(field);
+      setOrder("asc");
+    }
+    setPage(1);
+  };
+
+  const handleFilterChange = () => {
+    setPage(1);
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
@@ -442,15 +474,46 @@ export default function AdminDashboardPage() {
                 {/* User list */}
                 <Paper elevation={1} sx={{ p: 3 }}>
                   <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminUserList")}</Typography>
-                  <TextField
-                    size="small"
-                    placeholder={t("adminSearchUsers")}
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-                    sx={{ mb: 2, maxWidth: 360 }}
-                    fullWidth
-                  />
+                  
+                  {/* Filter controls */}
+                  <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: "wrap", alignItems: "center" }}>
+                    <TextField
+                      size="small"
+                      placeholder={t("adminSearchUsers")}
+                      value={search}
+                      onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                      slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+                      sx={{ maxWidth: 300 }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 160 }}>
+                      <InputLabel id="push-token-filter-label">{t("adminFilterPushToken")}</InputLabel>
+                      <Select
+                        labelId="push-token-filter-label"
+                        value={filterHasPushToken}
+                        label={t("adminFilterPushToken")}
+                        onChange={(e) => { setFilterHasPushToken(e.target.value as "true" | "false" | "all"); handleFilterChange(); }}
+                      >
+                        <MenuItem value="all">{t("adminFilterAll")}</MenuItem>
+                        <MenuItem value="true">{t("adminFilterHasToken")}</MenuItem>
+                        <MenuItem value="false">{t("adminFilterNoToken")}</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControl size="small" sx={{ minWidth: 160 }}>
+                      <InputLabel id="push-platform-filter-label">{t("adminFilterPlatform")}</InputLabel>
+                      <Select
+                        labelId="push-platform-filter-label"
+                        value={filterPushPlatform}
+                        label={t("adminFilterPlatform")}
+                        onChange={(e) => { setFilterPushPlatform(e.target.value as "android" | "ios" | "web" | "all"); handleFilterChange(); }}
+                      >
+                        <MenuItem value="all">{t("adminFilterAll")}</MenuItem>
+                        <MenuItem value="android"><PhoneAndroidIcon fontSize="small" sx={{ mr: 1 }} /> Android</MenuItem>
+                        <MenuItem value="ios"><IosShareIcon fontSize="small" sx={{ mr: 1 }} /> iOS</MenuItem>
+                        <MenuItem value="web"><LanguageIcon fontSize="small" sx={{ mr: 1 }} /> Web</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Stack>
+
                   {loadingUsers ? (
                     <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}><CircularProgress size={24} /></Box>
                   ) : users.length === 0 ? (
@@ -461,10 +524,52 @@ export default function AdminDashboardPage() {
                         <Table size="small">
                           <TableHead>
                             <TableRow>
-                              <TableCell>{t("name")}</TableCell>
-                              <TableCell>{t("email")}</TableCell>
-                              <TableCell>Joined</TableCell>
-                              <TableCell />
+                              <TableCell>
+                                <TableSortLabel
+                                  active={sort === "name"}
+                                  direction={sort === "name" ? order : "asc"}
+                                  onClick={() => handleSort("name")}
+                                >
+                                  {t("name")}
+                                </TableSortLabel>
+                              </TableCell>
+                              <TableCell>
+                                <TableSortLabel
+                                  active={sort === "email"}
+                                  direction={sort === "email" ? order : "asc"}
+                                  onClick={() => handleSort("email")}
+                                >
+                                  {t("email")}
+                                </TableSortLabel>
+                              </TableCell>
+                              <TableCell>
+                                <TableSortLabel
+                                  active={sort === "createdAt"}
+                                  direction={sort === "createdAt" ? order : "asc"}
+                                  onClick={() => handleSort("createdAt")}
+                                >
+                                  Joined
+                                </TableSortLabel>
+                              </TableCell>
+                              <TableCell>
+                                <TableSortLabel
+                                  active={sort === "pushPlatform"}
+                                  direction={sort === "pushPlatform" ? order : "asc"}
+                                  onClick={() => handleSort("pushPlatform")}
+                                >
+                                  {t("adminPushPlatform")}
+                                </TableSortLabel>
+                              </TableCell>
+                              <TableCell>
+                                <TableSortLabel
+                                  active={sort === "appVersion"}
+                                  direction={sort === "appVersion" ? order : "asc"}
+                                  onClick={() => handleSort("appVersion")}
+                                >
+                                  {t("adminAppVersion")}
+                                </TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right" />
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -482,6 +587,31 @@ export default function AdminDashboardPage() {
                                 </TableCell>
                                 <TableCell>{u.email}</TableCell>
                                 <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                                <TableCell>
+                                  {u.pushPlatform && (
+                                    <Chip
+                                      size="small"
+                                      variant="outlined"
+                                      label={
+                                        <>
+                                          {u.pushPlatform === "android" && <PhoneAndroidIcon fontSize="small" sx={{ mr: 0.5 }} />}
+                                          {u.pushPlatform === "ios" && <IosShareIcon fontSize="small" sx={{ mr: 0.5 }} />}
+                                          {u.pushPlatform === "web" && <LanguageIcon fontSize="small" sx={{ mr: 0.5 }} />}
+                                          {u.pushPlatform}
+                                        </>
+                                      }
+                                    />
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {u.appVersion ? (
+                                    <Tooltip title={t("adminAppVersionTooltip")}>
+                                      <Chip size="small" variant="outlined" label={`v${u.appVersion}`} color="primary" />
+                                    </Tooltip>
+                                  ) : (
+                                    <Typography variant="body2" color="text.disabled">—</Typography>
+                                  )}
+                                </TableCell>
                                 <TableCell align="right">
                                   {u.id !== session?.user?.id && (
                                     <IconButton

@@ -147,6 +147,8 @@
     <string name="invite_accepted">You\'ve joined the game!</string>
     <string name="invite_declined">You declined this invite.</string>
     <string name="invite_cancelled">This invite was cancelled.</string>
+    <string name="invitations_title">Invitations</string>
+    <string name="roster_added_you">You were added to</string>
     <string name="invite_invited_by">%1$s invited you to play</string>
     <string name="invite_accept">Accept</string>
     <string name="invite_decline">Decline</string>
@@ -163,6 +165,13 @@
     <string name="sport">Sport</string>
     <string name="location_optional">Location (optional)</string>
     <string name="location_placeholder">e.g. Riverside Astro, Pitch 2</string>
+    <string name="recurrence_prompt_title">Same again next week?</string>
+    <string name="recurrence_prompt_body">Repeat this game automatically every week — players and teams stay put.</string>
+    <string name="recurrence_make_weekly">Make it weekly</string>
+    <string name="recurrence_already_on">This event repeats every week</string>
+    <string name="location_usual_venues">Your usual venues</string>
+    <string name="location_use_my_location">Use my location</string>
+    <string name="location_pinned">Location pinned on map</string>
     <string name="pick_on_map">Pick on map</string>
     <string name="date_time">Date &amp; time</string>
     <string name="max_players">Max players</string>

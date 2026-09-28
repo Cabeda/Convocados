@@ -18,6 +18,10 @@ interface InviteData {
   inviteeName: string;
   invitedByName: string;
   gameId: string;
+  /** Roster names already in this Game (active only), for social proof. */
+  guests?: string[];
+  /** Open slots remaining, so "N spots left" is real, never theatre. */
+  spotsLeft?: number;
   game: {
     id: string;
     title: string;
@@ -191,7 +195,26 @@ export function InvitePage({ token }: { token: string }) {
           <Chip size="small" label={new Intl.DateTimeFormat(undefined, {
             weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
           }).format(new Date(data.game.dateTime))} variant="outlined" />
+          {typeof data.spotsLeft === "number" && data.spotsLeft > 0 && (
+            <Chip
+              size="small"
+              color="success"
+              label={t("inviteSpotsLeft").replace("{n}", String(data.spotsLeft))}
+            />
+          )}
         </Stack>
+        {data.guests && data.guests.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="caption" color="text.secondary">
+              {t("inviteWhoIsIn")}
+            </Typography>
+            <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: "wrap", gap: 0.5 }}>
+              {data.guests.map((name) => (
+                <Chip key={name} size="small" label={name} variant="outlined" />
+              ))}
+            </Stack>
+          </Box>
+        )}
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     </>

@@ -315,4 +315,94 @@ describe("GET /api/me/home", () => {
     const body = await res.json();
     expect(body.suggestAddGames).toBe(true);
   });
+
+  it("surfaces pending invitations addressed to the viewer", async () => {
+    const user = await seedUser();
+    const owner = await seedUser("inviter-user");
+    authAs(user.id);
+    const event = await prisma.event.findUniqueOrThrow({ where: { id: (await seedEvent({ title: "Invited Me", ownerId: owner.id, status: "upcoming" })).id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Home User", userId: user.id } });
+    await prisma.playerInvite.create({
+      data: {
+        gameId: event.currentGameId!,
+        eventPlayerId: ep.id,
+        invitedByUserId: owner.id,
+        token: "tok-invite-1",
+        status: "pending",
+      },
+    });
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.invitations).toHaveLength(1);
+    expect(body.invitations[0].eventId).toBe(event.id);
+    expect(body.invitations[0].eventTitle).toBe("Invited Me");
+    expect(body.invitations[0].token).toBe("tok-invite-1");
+    expect(body.invitations[0].invitedByName).toBe(owner.name);
+  });
+
+  it("omits invitations for other people and accepted ones", async () => {
+    const user = await seedUser();
+    const owner = await seedUser("inviter-user");
+    const someone = await seedUser("someone-else");
+    authAs(user.id);
+    const event = await prisma.event.findUniqueOrThrow({ where: { id: (await seedEvent({ title: "Not Mine", ownerId: owner.id, status: "upcoming" })).id } });
+    const otherEp = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Someone", userId: someone.id } });
+    await prisma.playerInvite.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: otherEp.id, invitedByUserId: owner.id, token: "tok-other", status: "pending" },
+    });
+    const mineEp = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Home User", userId: user.id } });
+    await prisma.playerInvite.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: mineEp.id, invitedByUserId: owner.id, token: "tok-mine", status: "accepted" },
+    });
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.invitations).toEqual([]);
+  });
+
+  it("reports recent direct roster adds so the viewer notices them", async () => {
+    const user = await seedUser();
+    const owner = await seedUser("adder-user");
+    authAs(user.id);
+    const event = await prisma.event.findUniqueOrThrow({ where: { id: (await seedEvent({ title: "Added Me", ownerId: owner.id, status: "upcoming" })).id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Home User", userId: user.id } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "active" },
+    });
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.rosterAdds.map((r: { eventId: string }) => r.eventId)).toContain(event.id);
+    expect(body.rosterAdds[0].eventTitle).toBe("Added Me");
+  });
+
+  it("does not report pending invitees as direct roster adds", async () => {
+    const user = await seedUser();
+    const owner = await seedUser("adder-user");
+    authAs(user.id);
+    const event = await prisma.event.findUniqueOrThrow({ where: { id: (await seedEvent({ title: "Pending Only", ownerId: owner.id, status: "upcoming" })).id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Home User", userId: user.id } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "pending" },
+    });
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.rosterAdds).toEqual([]);
+  });
+
+  it("does not report the viewer's own events as roster adds", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const event = await prisma.event.findUniqueOrThrow({ where: { id: (await seedEvent({ title: "My Own", ownerId: user.id, status: "upcoming" })).id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Home User", userId: user.id } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "active" },
+    });
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.rosterAdds).toEqual([]);
+  });
 });

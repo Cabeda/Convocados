@@ -11,6 +11,10 @@ import { computeHomeActions } from "../../../lib/homeActions.server";
  *  glimpse of Discoverable Events they could join. See ADR 0041. */
 const UP_NEXT_LIMIT = 3;
 const DISCOVER_LIMIT = 3;
+/** Invitations + direct-add acknowledgements shown on Home. */
+const INBOX_LIMIT = 5;
+/** A direct add is "worth noticing" for this long before it stops appearing. */
+const ROSTER_ADD_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 const upNextSelect = {
   id: true,
@@ -133,6 +137,78 @@ export const GET: APIRoute = async ({ request }) => {
   // pay, vote). Batch, capped, self-clearing. See homeActions.server.ts.
   const actions = await computeHomeActions(userId, now);
 
+  // Invitations inbox: pending PlayerInvites pointed at the viewer, so a
+  // "come play" never depends on finding the original push notification.
+  const pendingInvites = await prisma.playerInvite.findMany({
+    where: {
+      status: "pending",
+      eventPlayer: { userId },
+      game: { dateTime: { gt: now } },
+    },
+    select: {
+      id: true,
+      token: true,
+      gameId: true,
+      invitedBy: { select: { name: true } },
+      eventPlayer: {
+        select: {
+          event: {
+            select: { id: true, title: true, location: true, dateTime: true, sport: true, ownerId: true },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: INBOX_LIMIT,
+  });
+
+  const invitations = pendingInvites.map((inv) => ({
+    id: inv.id,
+    token: inv.token,
+    eventId: inv.eventPlayer.event.id,
+    eventTitle: inv.eventPlayer.event.title,
+    location: inv.eventPlayer.event.location,
+    dateTime: inv.eventPlayer.event.dateTime.toISOString(),
+    sport: inv.eventPlayer.event.sport,
+    invitedByName: inv.invitedBy.name,
+  }));
+
+  // Direct adds: a manager put the viewer straight onto the roster (no invite,
+  // nothing to accept). Recent, not-own, not-pending entries surface as an
+  // acknowledgement the viewer can dismiss.
+  const recentAdds = await prisma.gameParticipant.findMany({
+    where: {
+      status: "active",
+      createdAt: { gt: new Date(now.getTime() - ROSTER_ADD_WINDOW_MS) },
+      eventPlayer: {
+        userId,
+        event: { ownerId: { not: userId }, archivedAt: null },
+      },
+      game: { dateTime: { gt: now } },
+    },
+    select: {
+      id: true,
+      gameId: true,
+      createdAt: true,
+      eventPlayer: {
+        select: {
+          event: { select: { id: true, title: true, location: true, dateTime: true, sport: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: INBOX_LIMIT,
+  });
+
+  const rosterAdds = recentAdds.map((p) => ({
+    id: p.id,
+    eventId: p.eventPlayer.event.id,
+    eventTitle: p.eventPlayer.event.title,
+    location: p.eventPlayer.event.location,
+    dateTime: p.eventPlayer.event.dateTime.toISOString(),
+    sport: p.eventPlayer.event.sport,
+  }));
+
   // Growth prompt (#1166): the viewer plays in an Event they don't own (proof
   // of other groups), or owns no active events at all. Cheap checks.
   const [playedElsewhere, ownedActive] = await Promise.all([
@@ -147,5 +223,5 @@ export const GET: APIRoute = async ({ request }) => {
   ]);
   const suggestAddGames = playedElsewhere > 0 || ownedActive === 0;
 
-  return Response.json({ upNext, discover, actions, suggestAddGames });
+  return Response.json({ upNext, discover, actions, suggestAddGames, invitations, rosterAdds });
 };

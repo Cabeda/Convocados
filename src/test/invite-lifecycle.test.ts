@@ -682,6 +682,25 @@ describe("GET /api/invite/[token]", () => {
     expect(body.valid).toBe(false);
   });
 
+  it("exposes spots left and the visible guest list for social proof", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    // Two confirmed players already in the game, so the invitee sees "who's in".
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: (await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Ana" } })).id, status: "active", order: 0 },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: (await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Rui" } })).id, status: "active", order: 1 },
+    });
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+
+    const res = await inviteLookup(ctx({ token: invite.token }));
+    const body = await res.json();
+    expect(body.spotsLeft).toBe(Math.max(0, body.game.maxPlayers - 2));
+    expect(body.guests).toEqual(expect.arrayContaining(["Ana", "Rui"]));
+  });
+
   it("reports isInvitee false for an authenticated stranger", async () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Invitee");

@@ -791,4 +791,57 @@ class EventDetailViewModelTest {
         coVerify(exactly = 0) { api.updateHistoryPayments(any(), any(), any()) }
     }
 
+    @Test
+    fun `makeWeekly sets recurrence and reports success`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.fetchPostGameStatus(eventId) } returns
+            PostGameStatus(gameEnded = true, hasScore = true, allPaid = true, allComplete = true, isRecurring = false)
+        coEvery { api.setRecurrence(eventId, true, "weekly", 1) } returns
+            RecurrenceResponse(isRecurring = true, recurrenceRule = "{\"freq\":\"weekly\"}")
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            assertEquals(false, expectMostRecentItem().postGame?.isRecurring)
+
+            var reported: Pair<Boolean, String?>? = null
+            viewModel.makeWeekly(eventId) { ok, msg -> reported = ok to msg }
+            advanceUntilIdle()
+
+            assertEquals(true, expectMostRecentItem().postGame?.isRecurring)
+            assertEquals(true to null, reported)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify { api.setRecurrence(eventId, true, "weekly", 1) }
+    }
+
+    @Test
+    fun `makeWeekly surfaces an API failure and leaves recurrence off`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.fetchPostGameStatus(eventId) } returns
+            PostGameStatus(gameEnded = true, hasScore = true, allPaid = true, allComplete = true, isRecurring = false)
+        coEvery { api.setRecurrence(eventId, true, "weekly", 1) } throws ApiException(403, "Only the event owner can do this.")
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            expectMostRecentItem()
+
+            var reported: Pair<Boolean, String?>? = null
+            viewModel.makeWeekly(eventId) { ok, msg -> reported = ok to msg }
+            advanceUntilIdle()
+
+            val state = expectMostRecentItem()
+            assertEquals(false, state.postGame?.isRecurring)
+            assertEquals(false, reported?.first)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
 }

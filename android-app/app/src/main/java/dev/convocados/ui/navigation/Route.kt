@@ -8,7 +8,17 @@ sealed class Route(val route: String) {
     data object CreateEvent : Route("create")
     data object PublicGames : Route("public-games")
     data object NotificationPrefs : Route("notification-prefs")
-    data object MapPicker : Route("map-picker")
+    data class MapPicker(val lat: Double? = null, val lng: Double? = null) : Route("map-picker?lat={lat}&lng={lng}") {
+        companion object {
+            /**
+             * Open the map centred on the currently-selected location when there
+             * is one, so "Pick on map" starts where the user already pointed
+             * instead of the default city.
+             */
+            fun create(lat: Double?, lng: Double?): String =
+                if (lat != null && lng != null) "map-picker?lat=$lat&lng=$lng" else "map-picker"
+        }
+    }
     data class EventDetail(val id: String = "{eventId}") : Route("event/{eventId}") {
         companion object { fun create(id: String) = "event/$id" }
     }

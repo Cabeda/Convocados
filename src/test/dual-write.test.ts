@@ -362,6 +362,42 @@ describe("teams assignment dual-write to Game", () => {
     expect(snapshot[1].team).toBe("Tigers");
   });
 
+  it("keeps the GameParticipant queue order when a teams snapshot carries per-team orders", async () => {
+    const event = await seedEvent({ maxPlayers: 4 });
+    const game = await seedGame(event.id, { status: "upcoming" });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    await seedRoster(event.id, game.id, ["Alice", "Bob", "Cara", "Dan"]);
+
+    // Per-team order (what a team edit writes): 0,1 within each team.
+    const res = await PUT_TEAMS(
+      ctx(
+        { id: event.id },
+        {
+          matches: [
+            { team: "Lions", players: [{ name: "Alice", order: 0, slot: 0 }, { name: "Dan", order: 1, slot: 1 }] },
+            { team: "Tigers", players: [{ name: "Bob", order: 0, slot: 0 }, { name: "Cara", order: 1, slot: 1 }] },
+          ],
+        },
+        "PUT",
+      ),
+    );
+    expect(res.status).toBe(200);
+
+    const rows = await prisma.gameParticipant.findMany({
+      where: { gameId: game.id },
+      include: { eventPlayer: true },
+      orderBy: { order: "asc" },
+    });
+    // Writing the snapshot order used to collapse this to 0,0,1,1 — ties that
+    // the API returned in physical row order, reshuffling the roster.
+    expect(rows.map((r) => `${r.order}:${r.eventPlayer.name}`)).toEqual([
+      "0:Alice",
+      "1:Bob",
+      "2:Cara",
+      "3:Dan",
+    ]);
+  });
+
   it("randomize syncs GameParticipant team and Game formations", async () => {
     const event = await seedEvent({ maxPlayers: 4 });
     const game = await seedGame(event.id, { status: "upcoming" });

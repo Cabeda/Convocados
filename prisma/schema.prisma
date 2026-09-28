@@ -169,6 +169,9 @@ model Event {
   recruitment48hSent Boolean @default(false)
   recruitment24hSent Boolean @default(false)
 
+  // #457 RSVP — T-24h organizer summary dedup (fires once per occurrence)
+  rsvpSummarySent Boolean @default(false)
+
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 
@@ -641,14 +644,18 @@ model ReminderLog {
 model ScheduledJob {
   id          String    @id @default(cuid())
   eventId     String?
-  type        String    // "reminder_24h" | "reminder_2h" | "reminder_1h" | "post_game" | ...
-  payload     String    @default("{}") // JSON
+  type        String
+  payload     String    @default("{}")
   runAt       DateTime
   processedAt DateTime?
   failedAt    DateTime?
   retryCount  Int       @default(0)
+  /// Atomic claim: set by the winner of the guarded update before side
+  /// effects run; cleared on completion/failure. Lease-based — a claim older
+  /// than CLAIM_LEASE_MS belongs to a dead worker and is claimable again.
+  claimedAt   DateTime?
+  claimedBy   String?
   createdAt   DateTime  @default(now())
-
   @@index([runAt, processedAt])
   @@index([eventId])
 }
@@ -846,6 +853,7 @@ model AppPushToken {
   token     String   @unique  // Expo push token or FCM/APNs token
   platform  String            // "ios" | "android"
   locale    String   @default("en") // User's preferred locale for push messages
+  appVersion String?           // App version (e.g. "1.2.0") from native client heartbeat
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1361,14 +1369,17 @@ model Rsvp {
 
 // #457 daily heartbeat for "≥3 app-open days in rolling 7d" re-prompt rule.
 model UserAppOpen {
-  id     String   @id @default(cuid())
-  userId String
-  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  day    DateTime // truncated to date (UTC)
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day        DateTime // truncated to date (UTC)
   // Which client produced this heartbeat: "web" (middleware page navigation),
   // "android" or "ios" (native POST /api/me/app-open). Null for rows written
   // before this column existed.
-  platform String?
+  platform   String?
+  // App version (e.g. "1.2.0") from native clients. Null for web or older clients.
+  // Not PII — version string only. Helps diagnose issues like missing push tokens.
+  appVersion String?
 
   @@unique([userId, day])
   @@index([userId, day])

@@ -1,5 +1,6 @@
 package dev.convocados.ui.screen.create
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
@@ -8,6 +9,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -22,6 +26,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.CreateEventRequest
+import dev.convocados.data.api.PlaceSuggestion
+import dev.convocados.data.api.UsualLocation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -72,10 +79,21 @@ class CreateEventViewModel @Inject constructor(private val api: ConvocadosApi) :
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    // Venues the user already plays at — offered as defaults before they type.
+    private val _usualLocations = MutableStateFlow<List<UsualLocation>>(emptyList())
+    val usualLocations: StateFlow<List<UsualLocation>> = _usualLocations
+
+    init {
+        viewModelScope.launch {
+            _usualLocations.value = runCatching { api.fetchMyLocations().locations }.getOrDefault(emptyList())
+        }
+    }
+
     fun create(
         title: String, location: String, dateTime: Instant, sport: String,
         maxPlayers: Int, teamOneName: String, teamTwoName: String,
         isRecurring: Boolean, recurrenceFreq: String?,
+        latitude: Double? = null, longitude: Double? = null,
         onSuccess: (String) -> Unit,
     ) {
         viewModelScope.launch {
@@ -92,12 +110,18 @@ class CreateEventViewModel @Inject constructor(private val api: ConvocadosApi) :
                     isRecurring = isRecurring,
                     recurrenceFreq = if (isRecurring) recurrenceFreq else null,
                     recurrenceInterval = if (isRecurring) 1 else null,
+                    latitude = latitude,
+                    longitude = longitude,
                 ))
             }.onSuccess { onSuccess(it.id) }
                 .onFailure { _error.value = it.message }
             _creating.value = false
         }
     }
+
+    /** Location autocomplete. Failures degrade to "no suggestions", never an error. */
+    suspend fun searchPlaces(query: String, latitude: Double? = null, longitude: Double? = null): List<PlaceSuggestion> =
+        runCatching { api.searchPlaces(query, latitude, longitude).suggestions }.getOrDefault(emptyList())
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,17 +129,34 @@ class CreateEventViewModel @Inject constructor(private val api: ConvocadosApi) :
 fun CreateEventScreen(
     onCreated: (String) -> Unit,
     onBack: () -> Unit,
-    onPickMap: () -> Unit = {},
+    onPickMap: (lat: Double?, lng: Double?) -> Unit = { _, _ -> },
+    pickedLat: Double? = null,
+    pickedLng: Double? = null,
+    pickedPlaceName: String? = null,
     viewModel: CreateEventViewModel = hiltViewModel(),
 ) {
     val creating by viewModel.creating.collectAsState()
     val error by viewModel.error.collectAsState()
+    val usualLocations by viewModel.usualLocations.collectAsState()
 
     // Parity with web CreateEventForm: seed a random fun title on open and
     // let the dice button (Casino icon) reroll it.
     val titleLocale = remember { RandomTitles.resolveSupportedLocale(Locale.getDefault()) }
     var title by remember { mutableStateOf(RandomTitles.getRandomTitle(titleLocale)) }
     var location by remember { mutableStateOf("") }
+    // Coordinates from the map picker (if the user chose a pin) travel with the
+    // create request so the game is geocoded exactly where it was dropped.
+    var latitude by remember(pickedLat) { mutableStateOf(pickedLat) }
+    var longitude by remember(pickedLng) { mutableStateOf(pickedLng) }
+    // Name of an autocompleted pick — used to avoid re-searching our own text.
+    var pickedName by remember(pickedPlaceName) { mutableStateOf(pickedPlaceName) }
+    // A pin dropped on the map writes its reverse-geocoded name into the box.
+    LaunchedEffect(pickedPlaceName, pickedLat, pickedLng) {
+        if (pickedPlaceName != null && pickedLat != null && pickedLng != null) {
+            location = pickedPlaceName
+            pickedName = pickedPlaceName
+        }
+    }
     // #454: keep the current minutes/seconds — don't snap to the top of the hour.
     // The user must be able to pick 18:30, 19:45, etc.
     var dateTime by remember { mutableStateOf(Instant.now().plusSeconds(3600)) }
@@ -126,6 +167,41 @@ fun CreateEventScreen(
     var teamTwoName by remember { mutableStateOf("Gunas") }
     var isRecurring by remember { mutableStateOf(false) }
     var recurrenceFreq by remember { mutableStateOf("weekly") }
+
+    // Best-effort location bias for autocomplete, so "campo" offers the pitch
+    // down the road before one in Brazil. Asking is deliberate: without it,
+    // search results are global and feel wrong. Denial degrades to no bias.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var biasLat by remember { mutableStateOf<Double?>(null) }
+    var biasLng by remember { mutableStateOf<Double?>(null) }
+
+    fun readLastKnownLocation() {
+        val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
+            ?: return
+        val loc = runCatching {
+            lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                ?: lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+        }.getOrNull() ?: return
+        biasLat = loc.latitude
+        biasLng = loc.longitude
+    }
+
+    fun hasLocationPermission(): Boolean =
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.ACCESS_FINE_LOCATION,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) readLastKnownLocation() }
+
+    LaunchedEffect(Unit) {
+        if (hasLocationPermission()) readLastKnownLocation()
+        else locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+    }
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
@@ -176,13 +252,43 @@ fun CreateEventScreen(
             }
 
             Label(stringResource(R.string.location_optional))
-            OutlinedTextField(
-                value = location, onValueChange = { location = it },
-                placeholder = { Text(stringResource(R.string.location_placeholder)) },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                colors = textFieldColors(),
+            LocationAutocompleteField(
+                value = location,
+                onValueChange = { text ->
+                    location = text
+                    // Typing freely invalidates a previously selected place.
+                    if (pickedName != null && text != pickedName) {
+                        latitude = null
+                        longitude = null
+                        pickedName = null
+                    }
+                },
+                onPick = { suggestion ->
+                    location = suggestion.name
+                    latitude = suggestion.latitude
+                    longitude = suggestion.longitude
+                    pickedName = suggestion.name
+                },
+                pickedName = pickedName,
+                defaults = usualLocations,
+                onPickDefault = { venue ->
+                    location = venue.location
+                    pickedName = venue.location
+                    latitude = venue.latitude
+                    longitude = venue.longitude
+                },
+                // Bias autocomplete toward the user's area so their local
+                // pitches outrank similar-sounding places elsewhere.
+                search = { q -> viewModel.searchPlaces(q, biasLat, biasLng) },
             )
-            TextButton(onClick = onPickMap) { Text(stringResource(R.string.pick_on_map), color = MaterialTheme.colorScheme.primary) }
+            TextButton(onClick = { onPickMap(latitude, longitude) }) { Text(stringResource(R.string.pick_on_map), color = MaterialTheme.colorScheme.primary) }
+            if (latitude != null && longitude != null) {
+                Text(
+                    stringResource(R.string.location_pinned),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
 
             Label(stringResource(R.string.date_time))
             // #454: tap the displayed time to open a Material 3 TimePicker dialog
@@ -274,7 +380,12 @@ fun CreateEventScreen(
             Button(
                 onClick = {
                     val mp = maxPlayers.toIntOrNull() ?: 10
-                    viewModel.create(title.trim(), location.trim(), dateTime, sport, mp, teamOneName.trim(), teamTwoName.trim(), isRecurring, recurrenceFreq, onCreated)
+                    viewModel.create(
+                        title.trim(), location.trim(), dateTime, sport, mp,
+                        teamOneName.trim(), teamTwoName.trim(), isRecurring, recurrenceFreq,
+                        latitude = latitude, longitude = longitude,
+                        onSuccess = onCreated,
+                    )
                 },
                 enabled = title.isNotBlank() && !creating,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -297,8 +408,127 @@ private fun Label(text: String) {
 @Composable
 private fun textFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-    focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
     cursorColor = MaterialTheme.colorScheme.primary,
     focusedPlaceholderColor = MaterialTheme.colorScheme.outline, unfocusedPlaceholderColor = MaterialTheme.colorScheme.outline,
-    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+    // Material 3 outlined fields sit on the surface, not on a filled slab —
+    // the old surfaceVariant fill is what made the form read as boxy.
+    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
 )
+
+/**
+ * Location field with Google-Maps-style autocomplete.
+ *
+ * Suggestions come from `/api/places`, which ranks sports facilities
+ * (pitches, courts, sports centres) ahead of unrelated places, so typing
+ * "areosa" offers the pitch before the restaurant. Picking a suggestion writes
+ * its bare name into the field and hands the exact coordinates to the caller.
+ */
+@Composable
+private fun LocationAutocompleteField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onPick: (PlaceSuggestion) -> Unit,
+    pickedName: String? = null,
+    defaults: List<UsualLocation> = emptyList(),
+    onPickDefault: (UsualLocation) -> Unit = {},
+    search: suspend (String) -> List<PlaceSuggestion> = { emptyList() },
+    modifier: Modifier = Modifier,
+) {
+    var suggestions by remember { mutableStateOf<List<PlaceSuggestion>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(false) }
+
+    // Debounced search: wait for a typing pause before hitting the proxy, which
+    // keeps us well inside Photon's usage policy. A value that came from a pick
+    // is not re-searched — otherwise choosing "Campo da Areosa" would reopen
+    // the dropdown listing other places of the same name.
+    LaunchedEffect(value) {
+        val query = value.trim()
+        if (query.length < 2 || query == pickedName) {
+            suggestions = emptyList()
+            open = false
+            return@LaunchedEffect
+        }
+        delay(300)
+        loading = true
+        val results = search(query)
+        loading = false
+        suggestions = results
+        open = results.isNotEmpty()
+    }
+
+    Column(modifier = modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { onValueChange(it); open = true },
+            placeholder = { Text(stringResource(R.string.location_placeholder)) },
+            leadingIcon = { Icon(Icons.Filled.LocationOn, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            trailingIcon = {
+                if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = MaterialTheme.shapes.medium,
+            colors = textFieldColors(),
+        )
+
+        // Default recommendations: the venues this user already plays at, so
+        // the common case is one tap without typing or opening the map.
+        if (value.isBlank() && defaults.isNotEmpty() && suggestions.isEmpty()) {
+            Text(
+                stringResource(R.string.location_usual_venues),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                defaults.forEach { venue ->
+                    AssistChip(
+                        onClick = { onPickDefault(venue) },
+                        label = { Text(venue.location) },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Place, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        },
+                    )
+                }
+            }
+        }
+
+        if (open && suggestions.isNotEmpty()) {
+            // A plain elevated card reads as a dropdown without fighting the
+            // scrolling parent the way a nested ExposedDropdownMenuBox would.
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Column {
+                    suggestions.forEach { s ->
+                        ListItem(
+                            headlineContent = { Text(s.label, maxLines = 1) },
+                            leadingContent = {
+                                Icon(
+                                    // Sports venues get a distinct, primary-tinted icon
+                                    // so the "court first" ranking is visible at a glance.
+                                    if (s.isSport) Icons.Filled.SportsSoccer else Icons.Filled.Place,
+                                    contentDescription = null,
+                                    tint = if (s.isSport) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+                            modifier = Modifier.clickable {
+                                onPick(s)
+                                open = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

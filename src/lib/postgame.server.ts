@@ -56,6 +56,8 @@ export interface PostGameStatusPayload {
    * hidden for them, while the receiver/admin keep it open until everyone paid.
    */
   viewerPaymentSettled: boolean;
+  /** Whether the Event already recurs — drives the post-game "make it recurring" prompt. */
+  isRecurring: boolean;
 }
 
 export async function computePostGameStatus(
@@ -64,7 +66,7 @@ export async function computePostGameStatus(
 ): Promise<PostGameStatusPayload | null> {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true, currentGameId: true },
+    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true, currentGameId: true, isRecurring: true },
   });
 
   if (!event) return null;
@@ -91,6 +93,7 @@ export async function computePostGameStatus(
       teamOneName: event.teamOneName, teamTwoName: event.teamTwoName,
       gamePayments: null, gameConfig: null, seasonRank: null,
       rankStanding: null, viewerPaymentSettled: false,
+      isRecurring: event.isRecurring ?? false,
     };
   }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
@@ -393,5 +396,6 @@ export async function computePostGameStatus(
     seasonRank,
     rankStanding,
     viewerPaymentSettled,
+    isRecurring: event.isRecurring ?? false,
   };
 }

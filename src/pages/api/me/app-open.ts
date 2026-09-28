@@ -23,11 +23,15 @@ export const POST: APIRoute = async ({ request }) => {
   // Platform drives the admin Android/iOS/Web split. Body is optional: older
   // clients send none and are attributed to "android" (the only native client
   // when this endpoint shipped); iOS sends "ios".
+  // appVersion (e.g. "1.2.0") is optional and stored for diagnostics.
   let platform: "android" | "ios" = "android";
-  const body = await request.json().catch(() => null) as { platform?: unknown } | null;
-  const raw = typeof body?.platform === "string" ? body.platform.trim().toLowerCase() : "";
-  if (raw === "ios") platform = "ios";
+  let appVersion: string | null = null;
+  const body = await request.json().catch(() => null) as { platform?: unknown; appVersion?: unknown } | null;
+  const rawPlatform = typeof body?.platform === "string" ? body.platform.trim().toLowerCase() : "";
+  if (rawPlatform === "ios") platform = "ios";
+  const rawVersion = typeof body?.appVersion === "string" ? body.appVersion.trim() : "";
+  if (rawVersion) appVersion = rawVersion.slice(0, 20); // cap length
 
-  await recordAppOpen(authCtx.userId, new Date(), platform);
+  await recordAppOpen(authCtx.userId, new Date(), platform, appVersion);
   return Response.json({ ok: true });
 };

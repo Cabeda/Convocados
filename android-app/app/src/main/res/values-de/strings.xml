@@ -122,6 +122,8 @@
     <string name="invite_accepted">Du bist dem Spiel beigetreten!</string>
     <string name="invite_declined">Du hast diese Einladung abgelehnt.</string>
     <string name="invite_cancelled">Diese Einladung wurde storniert.</string>
+    <string name="invitations_title">Einladungen</string>
+    <string name="roster_added_you">Du wurdest hinzugefügt zu</string>
     <string name="invite_invited_by">%1$s hat dich zum Spielen eingeladen</string>
     <string name="invite_accept">Annehmen</string>
     <string name="invite_decline">Ablehnen</string>
@@ -137,6 +139,13 @@
     <string name="sport">Sportart</string>
     <string name="location_optional">Ort (optional)</string>
     <string name="location_placeholder">z. B. Flussplatz, Feld 2</string>
+    <string name="recurrence_prompt_title">Nächste Woche wieder?</string>
+    <string name="recurrence_prompt_body">Dieses Spiel automatisch jede Woche wiederholen — Spieler und Teams bleiben erhalten.</string>
+    <string name="recurrence_make_weekly">Wöchentlich wiederholen</string>
+    <string name="recurrence_already_on">Diese Veranstaltung wiederholt sich jede Woche</string>
+    <string name="location_usual_venues">Deine üblichen Orte</string>
+    <string name="location_use_my_location">Meinen Standort verwenden</string>
+    <string name="location_pinned">Standort auf der Karte markiert</string>
     <string name="pick_on_map">Auf Karte wählen</string>
     <string name="date_time">Datum &amp; Uhrzeit</string>
     <string name="max_players">Max. Spieler</string>

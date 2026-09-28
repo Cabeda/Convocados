@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { mergeUsers } from "~/lib/merge.server";
 import { findSplitIdentities, collapseSplitIdentities, reconcilePaymentNames } from "~/lib/backfillMergedIdentity.server";
+import { shouldKeepSourcePayment } from "~/lib/mergePlayer.server";
 
 const testPrisma = new PrismaClient();
 
@@ -175,6 +176,25 @@ describe("mergeUsers collapses name-keyed player identity", () => {
   });
 });
 
+describe("shouldKeepSourcePayment — which duplicate row survives a collapse", () => {
+  it("keeps a paid target over a pending source (never resurrect a settled debt)", () => {
+    expect(shouldKeepSourcePayment({ amount: 5, status: "pending" }, { amount: 5, status: "paid" })).toBe(false);
+  });
+
+  it("keeps a paid source over a pending target", () => {
+    expect(shouldKeepSourcePayment({ amount: 5, status: "paid" }, { amount: 5, status: "pending" })).toBe(true);
+  });
+
+  it("keeps the larger unpaid obligation", () => {
+    expect(shouldKeepSourcePayment({ amount: 12, status: "pending" }, { amount: 5, status: "pending" })).toBe(true);
+    expect(shouldKeepSourcePayment({ amount: 5, status: "pending" }, { amount: 12, status: "pending" })).toBe(false);
+  });
+
+  it("breaks equal-amount ties in favour of the target (the identity being kept)", () => {
+    expect(shouldKeepSourcePayment({ amount: 5, status: "pending" }, { amount: 5, status: "pending" })).toBe(false);
+  });
+});
+
 describe("collapseSplitIdentities (backfill for already-merged accounts)", () => {
   it("collapses multiple name-keyed rows for one user into the account name", async () => {
     const user = await seedUser("Cabeda", "cabeda@proton.me");
@@ -203,6 +223,67 @@ describe("collapseSplitIdentities (backfill for already-merged accounts)", () =>
 
     const found = await findSplitIdentities(testPrisma);
     expect(found).toHaveLength(0);
+  });
+
+  // Regression (production backfill dead-lettered twice on this): both names
+  // owned a GamePayment for the same game, so repointing the source row at the
+  // target violated unique(gameId, eventPlayerId) and aborted the whole
+  // collapse — taking the backfill (and any real merge) down with it.
+  it("merges duplicate payments instead of repointing into the unique key", async () => {
+    const user = await seedUser("Cabeda", "cabeda@proton.me");
+    const event = await seedEvent("ev-pay-clash", user.id);
+    const target = await testPrisma.eventPlayer.create({ data: { eventId: event.id, name: "Cabeda", userId: user.id } });
+    const source = await testPrisma.eventPlayer.create({ data: { eventId: event.id, name: "José Cabeda", userId: user.id } });
+    const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: new Date(), status: "played" } });
+    // Production shape: target settled as payer, source left a stale pending
+    // soft-archived duplicate.
+    const targetPay = await testPrisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: target.id, playerName: "Cabeda", amount: 5, status: "paid", method: "payer", paidAt: new Date() },
+    });
+    const sourcePay = await testPrisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: source.id, playerName: "José Cabeda", amount: 5, status: "pending", archivedAt: new Date() },
+    });
+
+    const found = await findSplitIdentities(testPrisma);
+    expect(found).toHaveLength(1);
+    await expect(collapseSplitIdentities(testPrisma, found)).resolves.toBe(1);
+
+    // One row survives, on the target player, and it is the settled one:
+    // re-adding a pending debt over a paid game would resurrect money owed.
+    const pays = await testPrisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(pays).toHaveLength(1);
+    expect(pays[0].id).toBe(targetPay.id);
+    expect(pays[0].eventPlayerId).toBe(target.id);
+    expect(pays[0].status).toBe("paid");
+    await testPrisma.gamePayment.findUnique({ where: { id: sourcePay.id } }).then((r) => expect(r).toBeNull());
+
+    // The source player is gone, its children merged.
+    expect(await testPrisma.eventPlayer.findUnique({ where: { id: source.id } })).toBeNull();
+  });
+
+  it("keeps the outstanding (larger) obligation when neither payment is paid", async () => {
+    const user = await seedUser("Duo", "duo@proton.me");
+    const event = await seedEvent("ev-pay-unpaid", user.id);
+    const target = await testPrisma.eventPlayer.create({ data: { eventId: event.id, name: "Duo", userId: user.id } });
+    const source = await testPrisma.eventPlayer.create({ data: { eventId: event.id, name: "Duo B", userId: user.id } });
+    const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: new Date(), status: "played" } });
+    const targetPay = await testPrisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: target.id, playerName: "Duo", amount: 5, status: "pending" },
+    });
+    const sourcePay = await testPrisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: source.id, playerName: "Duo B", amount: 12, status: "pending" },
+    });
+
+    const found = await findSplitIdentities(testPrisma);
+    await collapseSplitIdentities(testPrisma, found);
+
+    const pays = await testPrisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(pays).toHaveLength(1);
+    // The bigger debt survives (repointed onto the target), the smaller is dropped.
+    expect(pays[0].id).toBe(sourcePay.id);
+    expect(pays[0].eventPlayerId).toBe(target.id);
+    expect(pays[0].amount).toBe(12);
+    await testPrisma.gamePayment.findUnique({ where: { id: targetPay.id } }).then((r) => expect(r).toBeNull());
   });
 
   it("reconciles denormalized payment names that drifted from the linked player", async () => {

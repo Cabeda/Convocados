@@ -153,6 +153,31 @@ export const openApiSpec = {
         responses: { "200": { description: "Sport updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/recurrence": {
+      put: {
+        summary: "Set or clear an event's recurrence (post-game repeat / make it recurring)",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  isRecurring: { type: "boolean" },
+                  recurrenceFreq: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"] },
+                  recurrenceInterval: { type: "integer", minimum: 1 },
+                  recurrenceByDay: { type: "string" },
+                },
+                required: ["isRecurring"],
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Recurrence updated" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/visibility": {
       put: {
         summary: "Toggle event public/private visibility",
@@ -1081,6 +1106,25 @@ export const openApiSpec = {
         summary: "List people the caller has co-played with (all events, ranked by frequency)",
         tags: ["Users"],
         responses: { "200": { description: "Co-play list" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/locations": {
+      get: {
+        summary: "Venues the caller plays at, most frequent first (create-game location suggestions)",
+        tags: ["Users"],
+        responses: { "200": { description: "Ranked venue list" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/places": {
+      get: {
+        summary: "Place lookup for location pickers: autocomplete (?q=) or reverse geocode (?lat=&lng=)",
+        tags: ["Events"],
+        parameters: [
+          { name: "q", in: "query", required: false, schema: { type: "string" } },
+          { name: "lat", in: "query", required: false, schema: { type: "number" } },
+          { name: "lng", in: "query", required: false, schema: { type: "number" } },
+        ],
+        responses: { "200": { description: "Ranked suggestions or a place name" }, "401": { description: "Unauthorized" } },
       },
     },
     "/api/me/stats": {

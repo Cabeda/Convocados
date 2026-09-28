@@ -6,6 +6,7 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 beforeEach(async () => {
   await prisma.schedulerHeartbeat.deleteMany();
+  await prisma.scheduledJob.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
   await prisma.session.deleteMany();
@@ -116,7 +117,35 @@ describe("GET /api/health", () => {
       const res = await GET(ctx());
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.scheduler).toEqual({ running: true });
+      expect(body.scheduler).toEqual({ running: true, failedJobs: 0 });
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("reports dead-lettered scheduled jobs in production", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      await prisma.schedulerHeartbeat.upsert({
+        where: { id: "scheduler" },
+        create: { id: "scheduler", lastSeenAt: new Date() },
+        update: { lastSeenAt: new Date() },
+      });
+      await prisma.scheduledJob.create({
+        data: {
+          type: "reminder_24h",
+          runAt: new Date(Date.now() - 3600_000),
+          failedAt: new Date(),
+          retryCount: 2,
+        },
+      });
+      const res = await GET(ctx());
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      // Dead letters don't fail the health check, but they must be visible.
+      expect(body.scheduler).toEqual({ running: true, failedJobs: 1 });
+      expect(body.degraded).toBeUndefined();
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
     }
@@ -138,7 +167,7 @@ describe("GET /api/health", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.status).toBe("ok");
-      expect(body.scheduler).toEqual({ running: false });
+      expect(body.scheduler).toEqual({ running: false, failedJobs: 0 });
       expect(body.degraded).toBe(true);
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
@@ -153,7 +182,7 @@ describe("GET /api/health", () => {
       const res = await GET(ctx());
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.scheduler).toEqual({ running: false });
+      expect(body.scheduler).toEqual({ running: false, failedJobs: 0 });
       expect(body.degraded).toBe(true);
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
