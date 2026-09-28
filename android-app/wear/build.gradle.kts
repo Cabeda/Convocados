@@ -80,6 +80,9 @@ android {
             "WEAR_DEV_PASSWORD",
             "\"${wearEnv.getProperty("WEAR_DEV_PASSWORD", "")}\""
         )
+        // Per-composable atrace markers for Perfetto attribution.
+        // Enable with: ./gradlew :wear:installDebug -PcomposeTracing
+        buildConfigField("boolean", "COMPOSE_TRACING", project.hasProperty("composeTracing").toString())
     }
 
     testOptions {
@@ -116,6 +119,19 @@ android {
         stabilityConfigurationFiles.add(
             rootProject.layout.projectDirectory.file("wear/stability-config.txt"),
         )
+        // Skippability/restartability instrumentation, opt-in only:
+        //   ./gradlew :wear:compileDebugKotlin -PcomposeMetrics
+        // Writes to wear/build/compose_compiler/{app-debug.txt,app-debug.csv,...}
+        if (project.hasProperty("composeMetrics")) {
+            metricsDestination = project.layout.buildDirectory.dir("compose_compiler")
+            reportsDestination = project.layout.buildDirectory.dir("compose_compiler")
+        }
+        // Emit one atrace marker per composable so Perfetto can attribute
+        // Recomposer time to individual composables. Inert unless a tracer is
+        // also installed at runtime, which WearApp does for -PcomposeTracing.
+        if (project.hasProperty("composeTracing")) {
+            includeTraceMarkers.set(true)
+        }
     }
 }
 
