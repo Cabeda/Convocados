@@ -168,6 +168,7 @@ export async function advanceDueRecurringEvent(
       data: {
         dateTime: newDateTime,
         rsvpCutoffSent: false,
+        rsvpSummarySent: false,
         recruitment48hSent: false,
         recruitment24hSent: false,
       },

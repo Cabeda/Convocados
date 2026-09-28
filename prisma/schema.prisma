@@ -169,6 +169,9 @@ model Event {
   recruitment48hSent Boolean @default(false)
   recruitment24hSent Boolean @default(false)
 
+  // #457 RSVP — T-24h organizer summary dedup (fires once per occurrence)
+  rsvpSummarySent Boolean @default(false)
+
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 
@@ -641,14 +644,18 @@ model ReminderLog {
 model ScheduledJob {
   id          String    @id @default(cuid())
   eventId     String?
-  type        String    // "reminder_24h" | "reminder_2h" | "reminder_1h" | "post_game" | ...
-  payload     String    @default("{}") // JSON
+  type        String
+  payload     String    @default("{}")
   runAt       DateTime
   processedAt DateTime?
   failedAt    DateTime?
   retryCount  Int       @default(0)
+  /// Atomic claim: set by the winner of the guarded update before side
+  /// effects run; cleared on completion/failure. Lease-based — a claim older
+  /// than CLAIM_LEASE_MS belongs to a dead worker and is claimable again.
+  claimedAt   DateTime?
+  claimedBy   String?
   createdAt   DateTime  @default(now())
-
   @@index([runAt, processedAt])
   @@index([eventId])
 }

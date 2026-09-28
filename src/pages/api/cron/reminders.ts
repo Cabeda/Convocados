@@ -16,6 +16,7 @@ import {
   getRsvpRecipients,
   getRsvpSummary,
   markRsvpCutoffSent,
+  markRsvpSummarySent,
   markRecruitment48hSent,
   markRecruitment24hSent,
 } from "~/lib/rsvp.server";
@@ -245,6 +246,9 @@ export const POST: APIRoute = async ({ request }) => {
 
     const summaryEvents = await getEventsNeedingRsvpSummary();
     for (const e of summaryEvents) {
+      // Mark FIRST: the T-24h window is 2h wide and the cron ticks every few
+      // minutes, so without dedup the summary re-fires on every tick (spam).
+      await markRsvpSummarySent(e.id);
       if (!e.ownerId) continue;
       const summary = await getRsvpSummary(e.id);
       // Skip if organizer is the only recipient (no point)
