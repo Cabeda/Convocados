@@ -371,7 +371,9 @@ export async function getEventsNeedingRsvpPing(now: Date = new Date()) {
   });
 }
 
-/** Events whose (dateTime - 24h) is in the next 1h window — organizer summary tick. */
+/** Events whose (dateTime - 24h) is in the next 1h window — organizer summary tick.
+ *  Deduped by `rsvpSummarySent` so the summary fires exactly once per occurrence,
+ *  not on every cron tick inside the 2-hour window (spam bug). */
 export async function getEventsNeedingRsvpSummary(now: Date = new Date()) {
   const windowStart = new Date(now.getTime() + (RSVP_SUMMARY_HOURS - 1) * 3600_000);
   const windowEnd = new Date(now.getTime() + (RSVP_SUMMARY_HOURS + 1) * 3600_000);
@@ -380,6 +382,7 @@ export async function getEventsNeedingRsvpSummary(now: Date = new Date()) {
       archivedAt: null,
       dateTime: { gte: windowStart, lte: windowEnd },
       rsvpCutoffSent: true, // only after the 48h fanout actually fired
+      rsvpSummarySent: false, // dedup — fire once per occurrence
     },
     select: { id: true, title: true, dateTime: true, location: true, ownerId: true },
   });
@@ -391,6 +394,14 @@ export async function markRsvpCutoffSent(eventId: string) {
     data: { rsvpCutoffSent: true },
   });
   log.info({ eventId }, "RSVP 48h cutoff marked sent");
+}
+
+export async function markRsvpSummarySent(eventId: string) {
+  await prisma.event.update({
+    where: { id: eventId },
+    data: { rsvpSummarySent: true },
+  });
+  log.info({ eventId }, "RSVP 24h summary marked sent");
 }
 
 // ─── Recruitment dedup (#538 follow-up) ────────────────────────────────────
