@@ -1,0 +1,106 @@
+# The Factory: one Change per ready-for-agent Issue.
+#
+# The trigger is the label, and the label is Cabeda's alone — that is the whole
+# human gate in the queue. The agent may not label, so it cannot re-queue itself.
+name: "factory: issue"
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to work (it must be labelled ready-for-agent)"
+        required: true
+        type: string
+
+# One run per Issue. A second run must wait, not race the first.
+concurrency:
+  group: factory-issue-${{ github.event.issue.number || inputs.issue }}
+  cancel-in-progress: false
+
+jobs:
+  factory:
+    # Scheduled and dispatch runs have no user to permission-check against, so
+    # the scopes are explicit here (ADR 0048).
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    if: >-
+      vars.FACTORY_PAUSED != 'true' &&
+      ((github.event_name == 'workflow_dispatch') ||
+       contains(github.event.label.name, 'ready-for-agent'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check the pause switch
+        run: |
+          if [ "${{ vars.FACTORY_PAUSED }}" = "true" ]; then
+            echo "FACTORY_PAUSED=true — the factory is stopped. Exiting." >&2
+            exit 0
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Least privilege, stated per run: contents to push factory/*,
+          # pull-requests to open Changes and comment, issues to file the
+          # evidence. No workflows permission, so the factory cannot edit the
+          # workflows that run it.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - name: Run the Factory
+        uses: anomalyco/opencode/github@latest
+        env:
+          # Our own App's installation token, minted per run (ADR 0048) — not
+          # the opencode App's OIDC exchange, whose scopes would be a third
+          # party's promise instead of the deny-list we can audit (ADR 0046).
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Provider credentials for vars.FACTORY_MODEL. The unset ones are empty
+          # strings, which is harmless: opencode picks the one the model needs.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: ${{ vars.FACTORY_MODEL }}
+          agent: factory
+          # A shared session publishes the transcript, and a transcript of a
+          # failing run can quote a DATABASE_URL or a token. Permanently off.
+          share: "false"
+          use_github_token: true
+          prompt: |
+            Work the Issue in this event as the Delivery Factory.
+
+            Issue: ${{ github.event.issue.number || inputs.issue }}
+
+            Follow `.opencode/agents/factory.md`. Branch `factory/<issue-number>-<slug>` from
+            origin/main, TDD the change, run `bash scripts/factory/gate.sh` (add
+            `--skip-android` only if the diff cannot touch Kotlin), push that branch, open the
+            Change linked to the Issue, and end at Handoff (`factory:review` plus a summary
+            comment) or Blocked (`factory:blocked` plus the evidence).
+
+            Do not merge, do not label, do not touch a human branch. If the Issue has no
+            verifiable acceptance criterion, that is Blocked, not a licence to improvise.

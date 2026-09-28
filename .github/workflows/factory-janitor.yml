@@ -1,0 +1,81 @@
+# The janitor: keeps the factory's own ledger true (ADR 0043).
+#
+# The most privileged workflow in the repository, because a schedule has no user
+# to permission-check against (ADR 0048). It is also the least interesting one:
+# it changes no product code and opens no Issues.
+name: "factory: janitor"
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write # deletes orphaned factory/* branches
+  pull-requests: write
+  issues: write
+
+jobs:
+  janitor:
+    if: vars.FACTORY_PAUSED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check the pause switch
+        run: |
+          if [ "${{ vars.FACTORY_PAUSED }}" = "true" ]; then
+            echo "FACTORY_PAUSED=true — the factory is stopped. Exiting." >&2
+            exit 0
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Least privilege, stated per run: contents to push factory/*,
+          # pull-requests to open Changes and comment, issues to file the
+          # evidence. No workflows permission, so the factory cannot edit the
+          # workflows that run it.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - name: Housekeeping
+        uses: anomalyco/opencode/github@latest
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Provider credentials for vars.FACTORY_MODEL. The unset ones are empty
+          # strings, which is harmless: opencode picks the one the model needs.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: ${{ vars.FACTORY_MODEL }}
+          agent: janitor
+          share: "false"
+          use_github_token: true
+          prompt: |
+            Run one janitor pass over the factory's runtime state, following
+            `.opencode/agents/janitor.md`: reclaim stale Claims, nudge Blocked Issues awaiting a
+            decision, delete `factory/*` branches whose Change is merged or closed, and comment on
+            `factory:review` Changes that have gone stale. Do nothing when there is nothing to do.
+            Never touch a human branch, never merge, never open an Issue.

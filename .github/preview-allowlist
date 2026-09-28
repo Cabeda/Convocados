@@ -1,0 +1,10 @@
+# Usernames allowed to request a preview deployment on their own pull request.
+#
+# This list is deliberately NOT .github/CODEOWNERS. Ownership answers "who must
+# review this code"; the allowlist answers "whose PR code may run on our
+# infrastructure". Coupling them means every reviewer added to the project
+# silently gains the right to execute code, which is a different decision with a
+# different blast radius. ADR 0022.
+#
+# Usernames only — teams and email addresses are not resolved by the gate.
+@Cabeda
