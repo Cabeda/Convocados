@@ -10,7 +10,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     include: {
-      players: { where: { archivedAt: null }, orderBy: { order: "asc" }, include: { user: { select: { image: true } } } },
+      players: { where: { archivedAt: null }, orderBy: [{ order: "asc" }, { createdAt: "asc" }], include: { user: { select: { image: true } } } },
       teamResults: { include: { members: { orderBy: { order: "asc" } } } },
       owner: { select: { id: true, name: true } },
     },
@@ -81,7 +81,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     const fresh = await prisma.event.findUnique({
       where: { id: event.id },
       include: {
-        players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
+        players: { where: { archivedAt: null }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] },
         teamResults: { include: { members: { orderBy: { order: "asc" } } } },
       },
     });
@@ -112,16 +112,18 @@ export const GET: APIRoute = async ({ params, request }) => {
       prisma.gameParticipant.findMany({
         where: activeParticipantsWhere(event.currentGameId),
         include: { eventPlayer: true },
-        orderBy: { order: "asc" },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       }),
       prisma.gameParticipant.findMany({
         where: { gameId: event.currentGameId, archivedAt: null, status: "pending" },
         include: { eventPlayer: true },
-        orderBy: { order: "asc" },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       }),
     ]);
     pendingParticipants = pendingRows;
-    const participants = [...activeParticipants, ...pendingRows].sort((a, b) => a.order - b.order);
+    const participants = [...activeParticipants, ...pendingRows].sort(
+      (a, b) => a.order - b.order || a.createdAt.getTime() - b.createdAt.getTime(),
+    );
 
     // ponytail: EventPlayer.userId may be stale (null) if the player rejoined
     // after a reset and the upsert didn't update it. Fall back to the event-level
