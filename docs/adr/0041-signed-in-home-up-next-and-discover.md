@@ -80,6 +80,15 @@ Supporting decisions:
   the next visit) is a known limit of the lazy-reset design, not of this filter.
   One-off Events remain future-only.
 
+  **Amended (#1176, 2026-09-28):** the residual gap is now closed by an eager
+  sweep instead of a read-path mutation. `POST /api/cron/advance-recurring`
+  (every 5 minutes from the scheduler worker) drives the same CAS advance
+  (`advanceDueRecurringEvent`, shared with the lazy reset) so a recurring game
+  returns to the pool within minutes of its occurrence ending and its
+  next-occurrence reminders/webhooks are re-armed without a visit. The lazy
+  reset remains as the read-path fallback; the double-advance risk between the
+  two triggers is absorbed by the `nextResetAt` compare-and-swap.
+
 ## Considered Options
 
 - **New `/home` route** — rejected: churns robots, canonical URLs, i18n, and
