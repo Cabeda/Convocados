@@ -21,4 +21,8 @@ regexes = [
   '''mtBHItJI5svbpC7sc9axQiA''',
   '''test-trusted-.*''',
   '''test-secret''',
+  # VAPID private key (historical commits, allowed for push notification tests)
+  '''CiPrdEcokfW8WIFvj1bptu0y6ybCtS3YlWlBCjvAF8M''',
+  # BETTER_AUTH_SECRET (historical commit)
+  '''k9x2mP7qR4wL8nJ5vB3yT6hA1dF0gC9sE2uI7oN4xZ''',
 ]
