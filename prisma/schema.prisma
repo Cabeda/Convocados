@@ -169,6 +169,9 @@ model Event {
   recruitment48hSent Boolean @default(false)
   recruitment24hSent Boolean @default(false)
 
+  // #457 RSVP — T-24h organizer summary dedup (fires once per occurrence)
+  rsvpSummarySent Boolean @default(false)
+
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 

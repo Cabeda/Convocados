@@ -152,7 +152,7 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
 
         await prisma.event.update({
           where: { id: event.id },
-          data: { dateTime: newDateTime, rsvpCutoffSent: false, recruitment48hSent: false, recruitment24hSent: false },
+          data: { dateTime: newDateTime, rsvpCutoffSent: false, rsvpSummarySent: false, recruitment48hSent: false, recruitment24hSent: false },
         });
 
         fireWebhooks(event.id, "game_reset", {
