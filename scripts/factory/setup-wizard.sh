@@ -215,6 +215,58 @@ elif [ -n "$KEY_ENV" ]; then
   warn "no key captured — set it manually: gh secret set $KEY_ENV"
 fi
 
+# Signs a short-lived JWT with the App's own key and asks GitHub who it is.
+#
+# This is the difference between "the field was filled in" and "the identity
+# works". It catches a wrong App ID, a key belonging to a different App, and the
+# failure that actually bit us: an App that was created but never installed,
+# which no amount of correct configuration can fix.
+verify_app_identity() {
+  local app_id="${FACTORY_APP_ID:-}"
+  if [[ -z "$app_id" ]]; then
+    warn "no App ID to verify against"
+    return 0
+  fi
+  if ! command -v openssl >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+    warn "openssl or python3 missing — skipping the identity check"
+    return 0
+  fi
+
+  local jwt
+  jwt=$(FACTORY_APP_ID="$app_id" FACTORY_PEM="$PEM_PATH" python3 -c '
+import base64, json, os, subprocess, time
+b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+now = int(time.time())
+head = b64(json.dumps({"alg": "RS256", "typ": "JWT"}, separators=(",", ":")).encode())
+body = b64(json.dumps({"iat": now - 60, "exp": now + 540,
+                       "iss": os.environ["FACTORY_APP_ID"]}, separators=(",", ":")).encode())
+sig = subprocess.run(["openssl", "dgst", "-sha256", "-sign", os.environ["FACTORY_PEM"], "-binary"],
+                     input=f"{head}.{body}".encode(), capture_output=True).stdout
+print(f"{head}.{body}.{b64(sig)}", end="")
+' 2>/dev/null || true)
+  if [[ -z "$jwt" ]]; then
+    warn "could not sign a JWT locally — skipping the identity check"
+    return 0
+  fi
+
+  local slug count
+  slug=$(gh api /app --jq '.slug' -H "Authorization: Bearer $jwt" 2>/dev/null)
+  if [[ -z "$slug" ]]; then
+    warn "GitHub rejected the identity: this App ID and this key are not a pair."
+    warn "  check General → App ID on the same App the .pem came from"
+    return 0
+  fi
+  note "identity verified: $slug"
+
+  count=$(gh api /app/installations --jq '.installations | length' -H "Authorization: Bearer $jwt" 2>/dev/null)
+  if [[ "$count" == "0" ]]; then
+    warn "the App is NOT installed on any account, so CI cannot mint a token yet."
+    warn "  open https://github.com/settings/apps/$slug → Install App → Convocados"
+  else
+    note "installed on $count account(s)"
+  fi
+}
+
 # ── 2 ───────────────────────────────────────────────────────────────────────
 stage "Create the convoyados-factory App"
 say "Our own App, not the opencode App: ADR 0048 keeps the blast radius ours to audit."
@@ -244,13 +296,12 @@ pause "Press Enter once the App exists and is installed on Cabeda/Convocados."
 # ── 3 ───────────────────────────────────────────────────────────────────────
 stage "App id and private key"
 open_url "https://github.com/settings/apps"
-step "Open your App → General → 'App ID' near the top of the page. It is NUMERIC."
-warn "Do not copy the Client ID, the App slug, or anything from 'OAuth Apps':"
-warn "  the numeric App ID is the only value the token action accepts."
-ask FACTORY_APP_ID "App ID (digits only):"
-if ! [[ "$FACTORY_APP_ID" =~ ^[0-9]+$ ]]; then
-  warn "that is not a numeric App ID (got '$FACTORY_APP_ID') — not setting the variable"
-  warn "copy the digits from General → App ID and re-run: gh variable set FACTORY_APP_ID --body <digits>"
+step "Open your App → General → 'App ID' near the top of the page."
+note "GitHub issues two shapes and both are valid: a numeric id (5120869) for"
+note "  older Apps, and a string id (Iv23liiCQiPKY7puYnzQ) for current ones."
+ask FACTORY_APP_ID "App ID:"
+if [[ -z "$FACTORY_APP_ID" ]]; then
+  warn "no App ID given — the previous value is left alone"
 else
   set_var FACTORY_APP_ID "$FACTORY_APP_ID"
 fi
@@ -265,11 +316,12 @@ if [ -f "$PEM_PATH" ] && grep -q "BEGIN" "$PEM_PATH" && grep -q "PRIVATE KEY" "$
   # The whole file, exactly as generated: BEGIN/END lines included.
   if gh secret set FACTORY_APP_KEY < "$PEM_PATH" >/dev/null 2>&1; then
     note "set GitHub secret FACTORY_APP_KEY from $PEM_PATH"
-    rm -f "$PEM_PATH" && note "removed the downloaded key file (it is in the secret now)"
   else
     warn "could not set FACTORY_APP_KEY — set it manually:"
     warn "  gh secret set FACTORY_APP_KEY < $PEM_PATH"
   fi
+  verify_app_identity
+  rm -f "$PEM_PATH" && note "removed the downloaded key file (the secret holds it now)"
 else
   warn "no usable PEM at '$PEM_PATH' — nothing set."
   warn "check the path, then: gh secret set FACTORY_APP_KEY < /full/path/to/key.pem"
