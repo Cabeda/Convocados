@@ -20,8 +20,13 @@ permissions:
 
 jobs:
   repairer:
+    # The factory is inert until its identity exists: no App id and no model
+    # means step 2 is not finished, and an unconfigured run is a red run that
+    # teaches nobody anything. The wizard sets both, and that is the activation.
     if: >-
       vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_APP_ID != '' &&
+      vars.FACTORY_MODEL != '' &&
       ((github.event_name == 'workflow_dispatch') ||
        (github.event.action == 'completed' &&
         github.event.check_suite.conclusion == 'failure' &&
