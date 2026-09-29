@@ -244,22 +244,35 @@ pause "Press Enter once the App exists and is installed on Cabeda/Convocados."
 # ── 3 ───────────────────────────────────────────────────────────────────────
 stage "App id and private key"
 open_url "https://github.com/settings/apps"
-step "Open your App → General → it shows App ID near the top. Copy it."
-ask FACTORY_APP_ID "App ID (numeric):"
-step "Private keys → 'Generate a private key' → GitHub emails/downloads a .pem."
-note "The email step is optional; you can also generate one from the App settings page."
-step "Paste the whole PEM below, BEGIN and END lines included. It is stored encrypted"
-step "  as the FACTORY_APP_KEY secret and used only to mint per-run tokens."
-ask_secret APP_PEM "Private key PEM:"
-if [ -n "$FACTORY_APP_ID" ]; then
+step "Open your App → General → 'App ID' near the top of the page. It is NUMERIC."
+warn "Do not copy the Client ID, the App slug, or anything from 'OAuth Apps':"
+warn "  the numeric App ID is the only value the token action accepts."
+ask FACTORY_APP_ID "App ID (digits only):"
+if ! [[ "$FACTORY_APP_ID" =~ ^[0-9]+$ ]]; then
+  warn "that is not a numeric App ID (got '$FACTORY_APP_ID') — not setting the variable"
+  warn "copy the digits from General → App ID and re-run: gh variable set FACTORY_APP_ID --body <digits>"
+else
   set_var FACTORY_APP_ID "$FACTORY_APP_ID"
 fi
-if [ -n "$APP_PEM" ]; then
-  printf '%s' "$APP_PEM" | gh secret set FACTORY_APP_KEY >/dev/null 2>&1 \
-    && note "set GitHub secret FACTORY_APP_KEY" \
-    || warn "could not set FACTORY_APP_KEY — set it manually: gh secret set FACTORY_APP_KEY"
+
+step "Private keys → 'Generate a private key'. GitHub downloads a .pem (and emails a link)."
+note "Do NOT paste the PEM into a prompt. It is many lines, a one-line prompt reads"
+note "  only the first of them, and the rest is silently eaten by the next question."
+step "Leave the file where GitHub put it, then type its path here."
+ask PEM_PATH "Path to the .pem file (or just its name if it is in ~/Downloads):"
+[[ "$PEM_PATH" != /* ]] && PEM_PATH="$HOME/Downloads/$PEM_PATH"
+if [ -f "$PEM_PATH" ] && grep -q "BEGIN" "$PEM_PATH" && grep -q "PRIVATE KEY" "$PEM_PATH"; then
+  # The whole file, exactly as generated: BEGIN/END lines included.
+  if gh secret set FACTORY_APP_KEY < "$PEM_PATH" >/dev/null 2>&1; then
+    note "set GitHub secret FACTORY_APP_KEY from $PEM_PATH"
+    rm -f "$PEM_PATH" && note "removed the downloaded key file (it is in the secret now)"
+  else
+    warn "could not set FACTORY_APP_KEY — set it manually:"
+    warn "  gh secret set FACTORY_APP_KEY < $PEM_PATH"
+  fi
 else
-  warn "no PEM captured — set it manually: gh secret set FACTORY_APP_KEY < your-key.pem"
+  warn "no usable PEM at '$PEM_PATH' — nothing set."
+  warn "check the path, then: gh secret set FACTORY_APP_KEY < /full/path/to/key.pem"
 fi
 
 # ── 4 ───────────────────────────────────────────────────────────────────────
