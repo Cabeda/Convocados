@@ -26,6 +26,9 @@ jobs:
       vars.FACTORY_APP_ID != '' &&
       vars.FACTORY_MODEL != ''
     runs-on: ubuntu-latest
+    # A stuck agent must not burn an hour of runner time. Below this cap the
+    # step's non-zero exit is absorbed by continue-on-error, which is what keeps
+    # a factory timeout from ever turning a human's PR red.
     timeout-minutes: 20
     steps:
       - name: Check the pause switch
@@ -67,6 +70,8 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Housekeeping
+        # Advisory, not a gate: see factory-issue.yml for why.
+        continue-on-error: true
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

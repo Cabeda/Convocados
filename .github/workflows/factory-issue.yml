@@ -36,6 +36,9 @@ jobs:
       ((github.event_name == 'workflow_dispatch') ||
        contains(github.event.label.name, 'ready-for-agent'))
     runs-on: ubuntu-latest
+    # A stuck agent must not burn an hour of runner time. Below this cap the
+    # step's non-zero exit is absorbed by continue-on-error, which is what keeps
+    # a factory timeout from ever turning a human's PR red.
     timeout-minutes: 120
     steps:
       - name: Check the pause switch
@@ -77,6 +80,11 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Run the Factory
+        # Advisory, not a gate. The factory reviews and proposes; it never blocks
+        # a human's Change. Without this, an agent that wanders until the timeout
+        # below turns every PR it touches red — which is the factory sabotaging
+        # the very Gates it exists to serve.
+        continue-on-error: true
         uses: anomalyco/opencode/github@latest
         env:
           # Our own App's installation token, minted per run (ADR 0048) — not
