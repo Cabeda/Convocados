@@ -403,7 +403,10 @@ jobs:
     name: Android Build
     runs-on: ubuntu-latest
     needs: check-android
-    if: needs.check-android.outputs.android == 'true' || github.event_name == 'workflow_dispatch'
+    # main always compiles, whatever the diff: a push that does not touch
+    # android-app/ used to skip this job, and `skipped` passed ci-gate, so
+    # main could sit broken until some unrelated PR happened to touch Android.
+    if: needs.check-android.outputs.android == 'true' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
 
     steps:
       - uses: actions/checkout@v7
@@ -441,7 +444,7 @@ jobs:
     name: Wear OS Build
     runs-on: ubuntu-latest
     needs: check-android
-    if: needs.check-android.outputs.android == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.check-android.outputs.android == 'true' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
 
     steps:
       - uses: actions/checkout@v7
@@ -488,5 +491,13 @@ jobs:
           if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             echo "One or more required jobs were cancelled"
             exit 1
+          fi
+          # On main the Android jobs are mandatory, so a skip is a silent hole
+          # rather than an optimisation — fail loudly instead of going green.
+          if [[ "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}" == "true" ]]; then
+            if [[ "${{ needs.android.result }}" == "skipped" || "${{ needs['android-wear'].result }}" == "skipped" ]]; then
+              echo "Android Build / Wear OS Build were skipped on main — main must compile"
+              exit 1
+            fi
           fi
           echo "All required jobs passed"
