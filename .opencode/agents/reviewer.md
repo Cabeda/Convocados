@@ -2,7 +2,9 @@
 description: Reviews every open Change against the Mission and Core Principles, argues in a comment, fixes what it can on factory branches. Never approves.
 mode: primary
 temperature: 0.2
-steps: 80
+# 45 iterations, chosen to fit the 25-minute step budget: at ~80 the agent
+# outran the clock on a repo this size and the run was abandoned unread.
+steps: 45
 permission:
   # The run holds a live App token in its environment. Nothing here needs
   # the network: the API is reachable through gh, so outbound HTTP is only

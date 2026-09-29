@@ -24,10 +24,10 @@ jobs:
       vars.FACTORY_APP_ID != '' &&
       vars.FACTORY_MODEL != ''
     runs-on: ubuntu-latest
-    # A stuck agent must not burn an hour of runner time. Below this cap the
-    # step's non-zero exit is absorbed by continue-on-error, which is what keeps
-    # a factory timeout from ever turning a human's PR red.
-    timeout-minutes: 30
+    # Backstop only. The wall clock that matters is on the agent step below: a
+    # *job* timeout kills the job and no continue-on-error can absorb that,
+    # which is how a stuck agent ends up reddening a human's Change.
+    timeout-minutes: 40
     steps:
       - name: Check the pause switch
         run: |
@@ -68,6 +68,9 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Review the Change
+        # The real budget. A step that times out exits non-zero, and this absorbs
+        # it, so the job — and therefore the Change's check list — stays green.
+        timeout-minutes: 25
         # Advisory, not a gate: see factory-issue.yml for why.
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
