@@ -1,0 +1,100 @@
+# The Repairer: CI went red on a Change the Factory made.
+#
+# Scoped to factory/* branches on purpose: a red check on a human branch belongs
+# to a human. check_suite carries the branch, so the filter needs no API call.
+name: "factory: repair"
+
+on:
+  check_suite: completed
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number to repair"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  repairer:
+    # The factory is inert until its identity exists: no App id and no model
+    # means step 2 is not finished, and an unconfigured run is a red run that
+    # teaches nobody anything. The wizard sets both, and that is the activation.
+    if: >-
+      vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_APP_ID != '' &&
+      vars.FACTORY_MODEL != '' &&
+      ((github.event_name == 'workflow_dispatch') ||
+       (github.event.action == 'completed' &&
+        github.event.check_suite.conclusion == 'failure' &&
+        startsWith(github.event.check_suite.head_branch, 'factory/')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check the pause switch
+        run: |
+          if [ "${{ vars.FACTORY_PAUSED }}" = "true" ]; then
+            echo "FACTORY_PAUSED=true — the factory is stopped. Exiting." >&2
+            exit 0
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Least privilege, stated per run: contents to push factory/*,
+          # pull-requests to open Changes and comment, issues to file the
+          # evidence. No workflows permission, so the factory cannot edit the
+          # workflows that run it.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Repair the red Gate
+        uses: anomalyco/opencode/github@latest
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Provider credentials for vars.FACTORY_MODEL. The unset ones are empty
+          # strings, which is harmless: opencode picks the one the model needs.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: ${{ vars.FACTORY_MODEL }}
+          agent: repairer
+          share: "false"
+          use_github_token: true
+          prompt: |
+            Repair the red Gate on pull request #${{ github.event.pull_request.number || inputs.pr }},
+            following `.opencode/agents/repairer.md`.
+
+            Read the failing Gate's log before forming a theory. Check the budget first:
+            `node scripts/factory/attempt.ts <pr> <gate>`; if the 3 Attempts for that Gate are
+            spent, label the Issue `factory:blocked` with the evidence and stop.
+
+            Fix the cause. Never make a Gate pass by changing the measurement: no deleted or
+            skipped tests, no lowered thresholds, no loosened assertions, no new coverage
+            excludes. Re-run that Gate locally before pushing to the same `factory/*` branch.

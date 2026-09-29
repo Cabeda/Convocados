@@ -1,8 +1,8 @@
-# Default code ownership.
+# Default code ownership. Every file in this repository is owned by Cabeda, so
+# no Change reaches main without their review — branch protection, not
+# convention, and the one guarantee the Delivery Factory depends on.
 #
-# This file doubles as the allowlist for preview deployments
-# (.github/workflows/preview.yml): any GitHub username listed here may request
-# `/preview` deployments on their pull requests, alongside the repository
-# owner. Usernames only — teams and email addresses are not resolved by the
-# preview gate.
+# This file is NOT the preview-deploy allowlist: that list lives in
+# .github/preview-allowlist, because being able to review code and being able
+# to run someone's PR on our infrastructure are different permissions.
 * @Cabeda

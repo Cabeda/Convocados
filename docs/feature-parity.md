@@ -65,6 +65,7 @@
 | Custom Team Names | ✅ | ✅ | ❌ |
 | Location Map Picker | ✅ | ❌ | ❌ |
 | Quick Add | ✅ | ❌ | ❌ |
+| Public By Default | ✅ | ✅ | ❌ |
 
 ### Event Detail
 

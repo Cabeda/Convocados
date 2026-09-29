@@ -11,7 +11,7 @@
 #   access to secrets, so every request passes an authorization gate BEFORE any
 #   untrusted PR code is checked out.
 # - Gate = strict allowlist: repository OWNER association OR a username listed
-#   in .github/CODEOWNERS (usernames only; teams/emails are not resolved).
+#   in .github/preview-allowlist (usernames only; teams/emails are not resolved).
 # - BOTH the PR author AND the commenter must pass the gate — a trusted
 #   maintainer cannot be social-engineered into deploying untrusted fork code.
 # - Deployment happens in preview-deploy.yml, triggered via
@@ -52,7 +52,7 @@ jobs:
       command: ${{ steps.cmd.outputs.command }}
       pr_number: ${{ steps.cmd.outputs.pr_number }}
     steps:
-      # Base branch checkout only — trusted CODEOWNERS source. No PR code yet.
+      # Base branch checkout only — trusted allowlist source. No PR code yet.
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -88,7 +88,7 @@ jobs:
             while IFS= read -r entry; do
               entry="${entry#@}"
               [ "${entry,,}" = "${user,,}" ] && return 0
-            done < <(grep -vE '^\s*#' .github/CODEOWNERS | grep -oE '@[a-zA-Z0-9][a-zA-Z0-9_-]*' | sort -fu)
+            done < <(grep -vE '^\s*#' .github/preview-allowlist | grep -oE '@[a-zA-Z0-9][a-zA-Z0-9_-]*' | sort -fu)
             return 1
           }
           ALLOWED=false
@@ -127,7 +127,7 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body: ':no_entry: Preview deployments are limited to the repository ' +
-                    'owner and members listed in `.github/CODEOWNERS`. Ask a maintainer ' +
+                    'owner and usernames listed in `.github/preview-allowlist`. Ask a maintainer ' +
                     'to add you there to unlock `/preview`.',
             });
 

@@ -8,7 +8,7 @@
 # fork-refusal does not fire here, so forked contributors' PRs are reachable.
 #
 # Defense in depth: the allowlist gate is re-run inside this workflow against
-# fresh CODEOWNERS before any untrusted code is fetched.
+# a fresh allowlist before any untrusted code is fetched.
 #
 # See ADR 0022 and docs/runbooks/preview-deployments.md.
 
@@ -35,7 +35,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Trusted checkout of the default branch — provides CODEOWNERS and the
+      # Trusted checkout of the default branch — provides the allowlist and the
       # shared gate script. Untrusted code is fetched only after this.
       - uses: actions/checkout@v7
         with:

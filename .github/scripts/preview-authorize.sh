@@ -2,7 +2,7 @@
 # Shared authorization gate for preview deployments (ADR 0022).
 #
 # Allowlist: the repository owner, or any username listed in
-# .github/CODEOWNERS (usernames only — teams and emails are not resolved).
+# .github/preview-allowlist (usernames only — teams and emails are not resolved).
 #
 # Usage environment:
 #   PR_NUMBER              - pull request number to authorize
@@ -29,7 +29,7 @@ allowed_by() {
     if [ "$user" = "$owner" ]; then
         return 0
     fi
-    entries="$(grep -vE '^[[:space:]]*#' .github/CODEOWNERS 2>/dev/null |
+    entries="$(grep -vE '^[[:space:]]*#' .github/preview-allowlist 2>/dev/null |
         grep -oE '@[a-zA-Z0-9][a-zA-Z0-9_-]*' |
         tr -d '@' | tr '[:upper:]' '[:lower:]' | sort -u)"
     printf '%s\n' "$entries" | grep -qx -- "$user"
@@ -43,6 +43,6 @@ if allowed_by "$author" && allowed_by "$REQUESTED_BY"; then
     echo "app_url=https://convocados-pr-$PR_NUMBER.fly.dev" >> "$GITHUB_OUTPUT"
     echo "[preview-gate] authorized author=$author requester=$REQUESTED_BY"
 else
-    echo "::error::[preview-gate] denied: author=$author requester=$REQUESTED_BY (see .github/CODEOWNERS)"
+    echo "::error::[preview-gate] denied: author=$author requester=$REQUESTED_BY (see .github/preview-allowlist)"
     exit 1
 fi
