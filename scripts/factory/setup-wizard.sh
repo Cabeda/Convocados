@@ -189,18 +189,22 @@ banner "Delivery Factory: identity, model and the pause switch"
 
 # ── 1 ───────────────────────────────────────────────────────────────────────
 stage "The model the factory runs on"
-say "Every role runs unattended, so this is a cost decision, not a preference."
-say "The factory pins one provider so a run cannot quietly pick an unbudgeted one."
-note "The model id is a repository *variable* (FACTORY_MODEL); the API key is a *secret*."
-step "Choose a model id, e.g. anthropic/claude-sonnet-4-5 — or the provider you already pay for."
+say "The factory pins one model, so a run can never quietly pick something else."
+note "The model id is a repository *variable* (FACTORY_MODEL); the key is a *secret*."
+step "Press Enter to accept the pinned model, or type another provider/model id."
+# Seeded first: `ask` defaults to the value already in .env, and that is how
+# "press Enter" keeps the model this repo actually runs on.
+write_env FACTORY_MODEL "${FACTORY_MODEL:-opencode-go/space-bunny-free}"
 ask FACTORY_MODEL "Model id (provider/model):"
 if [ -z "$FACTORY_MODEL" ]; then
   warn "no model given; the workflows will pass an empty model and the action will fail loudly"
 fi
-step "Create a provider API key for that model (Anthropic, OpenAI, or your gateway)."
+step "Create a provider API key for that model."
 step "The secret must be named for the env the provider reads, because the workflows"
 step "  pass ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENCODE_API_KEY through."
-ask KEY_ENV "Which env does your provider read? (e.g. ANTHROPIC_API_KEY):"
+note "For opencode-go / opencode Zen that env is OPENCODE_API_KEY."
+ask KEY_ENV "Which env does your provider read? (default OPENCODE_API_KEY):"
+KEY_ENV="${KEY_ENV:-OPENCODE_API_KEY}"
 ask_secret PROVIDER_KEY "Provider API key:"
 set_var FACTORY_MODEL "$FACTORY_MODEL"
 if [ -n "$PROVIDER_KEY" ] && [ -n "$KEY_ENV" ]; then
@@ -217,10 +221,20 @@ say "Our own App, not the opencode App: ADR 0048 keeps the blast radius ours to 
 warn "GitHub never lets a PR author approve their own PR, so the factory must NOT"
 warn "push as @Cabeda — it would permanently block its own Changes."
 open_url "https://github.com/settings/apps/new"
-step "App name: convocarados-factory"
-step "Homepage URL: https://github.com/Cabeda/Convocados"
-step "Callback URL: https://github.com/Cabeda/Convocados"
-step "Webhook URL: leave blank — the factory polls, it does not receive webhooks."
+# These are printed one per line, with no bullet, so a copy lands clean. The
+# previous version wrapped them inside a numbered step, and GitHub rejected the
+# paste with "must be a valid URL".
+copy_value() { printf '      %s\n' "$1"; }
+
+step "App name — copy exactly:"
+copy_value "convocados-factory"
+step "Homepage URL — copy exactly, nothing else on the line:"
+copy_value "https://github.com/Cabeda/Convocados"
+step "Callback URL — copy exactly, nothing else on the line:"
+copy_value "https://github.com/Cabeda/Convocados"
+step "Webhook URL is mandatory in GitHub's form. Put the same value: it is inert,"
+step "  because no events are subscribed and the factory polls instead."
+copy_value "https://github.com/Cabeda/Convocados"
 step "Repository permissions: Contents = Read & write, Pull requests = Read & write,"
 step "  Issues = Read & write, Metadata = Read-only. Everything else = No access."
 warn "Do NOT grant: Workflows, Administration, Secrets, Pages, or Merge queues."
