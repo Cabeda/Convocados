@@ -189,18 +189,22 @@ banner "Delivery Factory: identity, model and the pause switch"
 
 # ── 1 ───────────────────────────────────────────────────────────────────────
 stage "The model the factory runs on"
-say "Every role runs unattended, so this is a cost decision, not a preference."
-say "The factory pins one provider so a run cannot quietly pick an unbudgeted one."
-note "The model id is a repository *variable* (FACTORY_MODEL); the API key is a *secret*."
-step "Choose a model id, e.g. anthropic/claude-sonnet-4-5 — or the provider you already pay for."
+say "The factory pins one model, so a run can never quietly pick something else."
+note "The model id is a repository *variable* (FACTORY_MODEL); the key is a *secret*."
+step "Press Enter to accept the pinned model, or type another provider/model id."
+# Seeded first: `ask` defaults to the value already in .env, and that is how
+# "press Enter" keeps the model this repo actually runs on.
+write_env FACTORY_MODEL "${FACTORY_MODEL:-opencode-go/space-bunny-free}"
 ask FACTORY_MODEL "Model id (provider/model):"
 if [ -z "$FACTORY_MODEL" ]; then
   warn "no model given; the workflows will pass an empty model and the action will fail loudly"
 fi
-step "Create a provider API key for that model (Anthropic, OpenAI, or your gateway)."
+step "Create a provider API key for that model."
 step "The secret must be named for the env the provider reads, because the workflows"
 step "  pass ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENCODE_API_KEY through."
-ask KEY_ENV "Which env does your provider read? (e.g. ANTHROPIC_API_KEY):"
+note "For opencode-go / opencode Zen that env is OPENCODE_API_KEY."
+ask KEY_ENV "Which env does your provider read? (default OPENCODE_API_KEY):"
+KEY_ENV="${KEY_ENV:-OPENCODE_API_KEY}"
 ask_secret PROVIDER_KEY "Provider API key:"
 set_var FACTORY_MODEL "$FACTORY_MODEL"
 if [ -n "$PROVIDER_KEY" ] && [ -n "$KEY_ENV" ]; then
