@@ -394,8 +394,10 @@ fun GamesScreen(
                         SectionHeader(stringResource(R.string.needs_you))
                     }
                     items(actions, key = { "action-${it.type}-${it.eventId}" }) { action ->
-                        val onClick = if (action.type == "pay_share") { onPayments(action.eventId) } else { onEventClick(action.eventId) }
-                        HomeActionCard(action = action, onClick = onClick)
+                        HomeActionCard(
+                            action = action,
+                            onClick = homeActionClick(action, onEventClick, onPayments),
+                        )
                     }
                 }
 
@@ -850,6 +852,20 @@ private fun AddGamesPromptCard(onAdd: () -> Unit, onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+/**
+ * ADR 0041: where tapping a "Needs you" card goes. `pay_share` opens settlement
+ * for the event, every other action opens the event itself.
+ */
+internal fun homeActionClick(
+    action: HomeAction,
+    onEventClick: (String) -> Unit,
+    onPayments: (String) -> Unit,
+): () -> Unit = if (action.type == "pay_share") {
+    { onPayments(action.eventId) }
+} else {
+    { onEventClick(action.eventId) }
 }
 
 /** ADR 0041: a "Needs you" actionable item, deep-linking to its event. */
