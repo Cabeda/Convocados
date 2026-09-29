@@ -8,10 +8,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
-permissions:
-  contents: write # pushes fixes to factory/* only
-  pull-requests: write # the review comment
-  issues: write # a Hard Block finding becomes an Issue
+# Everything flows through the App token minted in the job below. The
+# default GITHUB_TOKEN needs no scope and must not carry one: it sits in
+# the runner environment for the whole run, so its scopes are blast radius
+# we never asked for (ADR 0046).
+permissions: {}
 
 jobs:
   reviewer:

@@ -7,6 +7,11 @@ permission:
   # No human is attached to a factory run: a question stalls until the workflow
   # times out, so asking is always the wrong move.
   question: deny
+  # The run holds a live App token in its environment. Nothing here needs
+  # the network: the API is reachable through gh, so outbound HTTP is only
+  # ever an exfiltration path (a prompt injection in repo content could
+  # otherwise ship the token to a host it names).
+  webfetch: deny
   # Keep every run inside its own checkout — a run must not reach a sibling
   # worktree or runner scratch space.
   external_directory: deny
@@ -35,6 +40,10 @@ permission:
     # main is human-owned; factory work goes to factory/<issue>.
     "git push origin main*": deny
     "git push origin refs/heads/main*": deny
+    # Deny every push, then allow exactly one destination. Last match wins, so
+    # a human branch is not pushable even though it is not named above.
+    "git push origin *": deny
+    "git push origin factory/*": allow
     # Label state is the Factory's memory, and only Cabeda writes the queue.
     "gh label*": deny
     "gh issue edit*--add-label*": deny

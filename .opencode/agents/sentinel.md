@@ -4,6 +4,11 @@ mode: primary
 temperature: 0.1
 steps: 40
 permission:
+  # The run holds a live App token in its environment. Nothing here needs
+  # the network: the API is reachable through gh, so outbound HTTP is only
+  # ever an exfiltration path (a prompt injection in repo content could
+  # otherwise ship the token to a host it names).
+  webfetch: deny
   question: deny
   external_directory: deny
   doom_loop: deny

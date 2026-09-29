@@ -13,10 +13,11 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+# Everything flows through the App token minted in the job below. The
+# default GITHUB_TOKEN needs no scope and must not carry one: it sits in
+# the runner environment for the whole run, so its scopes are blast radius
+# we never asked for (ADR 0046).
+permissions: {}
 
 jobs:
   repairer:

@@ -21,12 +21,11 @@ concurrency:
 
 jobs:
   factory:
-    # Scheduled and dispatch runs have no user to permission-check against, so
-    # the scopes are explicit here (ADR 0048).
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
+    # Everything flows through the App token minted below. The default
+    # GITHUB_TOKEN needs no scope here, and must not carry one: it lives in the
+    # runner's environment for the whole job, so its scopes are blast radius we
+    # do not need (ADR 0046).
+    permissions: {}
     # The factory is inert until its identity exists: no App id and no model
     # means step 2 is not finished, and an unconfigured run is a red run that
     # teaches nobody anything. The wizard sets both, and that is the activation.
