@@ -13,10 +13,11 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+# Everything flows through the App token minted in the job below. The
+# default GITHUB_TOKEN needs no scope and must not carry one: it sits in
+# the runner environment for the whole run, so its scopes are blast radius
+# we never asked for (ADR 0046).
+permissions: {}
 
 jobs:
   repairer:
@@ -32,7 +33,10 @@ jobs:
         github.event.check_suite.conclusion == 'failure' &&
         startsWith(github.event.check_suite.head_branch, 'factory/')))
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Backstop only. The wall clock that matters is on the agent step below: a
+    # *job* timeout kills the job and no continue-on-error can absorb that,
+    # which is how a stuck agent ends up reddening a human's Change.
+    timeout-minutes: 70
     steps:
       - name: Check the pause switch
         run: |
@@ -74,6 +78,11 @@ jobs:
           permission-issues: write
 
       - name: Repair the red Gate
+        # The real budget. A step that times out exits non-zero, and this absorbs
+        # it, so the job — and therefore the Change's check list — stays green.
+        timeout-minutes: 50
+        # Advisory, not a gate: see factory-issue.yml for why.
+        continue-on-error: true
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
