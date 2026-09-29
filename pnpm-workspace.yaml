@@ -36,7 +36,15 @@ overrides:
   deepmerge-ts@<8.0.0: '>=8.0.0'
   devalue@>=5.6.3 <=5.8.0: '>=5.8.1'
   effect@<3.20.0: '>=3.20.0'
-  fast-uri@>=3.0.0 <3.1.6: '>=3.1.6'
+  # ajv asks for fast-uri ^3.0.1. An open-ended '>=3.1.6' override let pnpm
+  # resolve that to the 4.x line, which carries the authority-injection
+  # advisory below — so the upper bound is part of the fix, not decoration.
+  fast-uri@>=3.0.0 <3.1.6: '>=3.1.6 <4.0.0'
+  # fast-uri 4.x: authority injection via an unvalidated port in serialize.
+  # Reached only through dev tooling (ajv -> Stryker, and @prisma/streams-local
+  # -> prisma CLI), but the audit gate covers dev dependencies too. Kept as the
+  # guard for any future dependency that requests 4.x directly.
+  fast-uri@>=4.0.0 <4.1.4: '>=4.1.4'
   ip-address@<=10.3.0: '>=10.3.1'
   js-yaml@>=3.0.0 <3.15.2: '>=3.15.2'
   kysely@>=0.26.0 <0.28.17: '>=0.28.17'
