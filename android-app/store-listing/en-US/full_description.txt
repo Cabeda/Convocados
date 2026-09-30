@@ -1,0 +1,18 @@
+Convocados keeps your games on your wrist: score, teams and results for the matches you actually play.
+
+It is a standalone Wear OS app. Sign in with Google on the watch, or let your phone sign in for you, and your games come with you. Scoring keeps working when you are out of coverage — the watch queues changes and syncs them when you are back online.
+
+QUICK GAME TILE
+Add the "Quick game" tile to the tile carousel on your watch. When no game is running it shows a Start button; while a quick game is live it shows the running score and the sport. Tap the tile and you land in the game, not on a list.
+
+LIVE SCORE ON THE WATCH FACE
+While a game is being scored, Convocados posts an ongoing activity. The watch face shows the live indicator and the running score, and the recent-apps chip takes you back into the match with one tap.
+
+WHAT YOU CAN DO ON THE WATCH
+- Quick Game: start a match in seconds and score it on the watch. Tennis, padel or a plain match, with sets and a tiebreak when you need one.
+- Live games: keep the score, split the teams, add players and vote MVP.
+- History: finished games with their results and MVP votes.
+- Game alarm: a distinctive triple-pulse vibration before kickoff, so you are not the one who arrives late.
+- Round and square watches: the layout adapts to the shape of your watch.
+
+The phone app covers the rest of your group — attendance, payments, invitations, seasons and stats. The watch is for the part of the game that happens while you are playing it.

@@ -100,7 +100,9 @@ if [ "$SKIP_ANDROID" -eq 0 ]; then
     log="$LOG_DIR/$(printf '%02d' "$step")-gradle-assembleDebug.log"
     echo "── Gate 1 [$step] gradle-assembleDebug (:app + :wear)"
     # Both modules, one invocation: assembleDebug builds the whole project.
-    if (cd android-app && ./gradlew assembleDebug) >"$log" 2>&1; then
+    # syncPlayListingText is cheap (no dependencies) and fails the gate when the
+    # committed store listing omits a Wear surface the app ships.
+    if (cd android-app && ./gradlew assembleDebug syncPlayListingText) >"$log" 2>&1; then
       echo "   green  ($log)"
     else
       code=$?
