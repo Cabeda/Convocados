@@ -31,7 +31,15 @@ overrides:
   basic-ftp@<=5.3.0: '>=5.3.1'
   better-auth@<1.6.2: '>=1.6.2'
   body-parser@<1.20.6: '>=1.20.6'
-  brace-expansion@>=3.0.0 <5.0.7: '>=5.0.7'
+  # minimatch/glob ask for brace-expansion ^4 and ^2. An open-ended '>=5.0.7'
+  # override let pnpm satisfy a ^2 request with 4.x, which is now the vulnerable
+  # line (GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p: DoS via uncontrolled
+  # recursion). The upper bound is the fix: 5.0.11 is patched, 4.x is not.
+  brace-expansion@>=3.0.0 <5.0.7: '>=5.0.7 <6.0.0'
+  # 5.0.9 was still resolving through minimatch (Stryker). Two fresh advisories
+  # cover it; the fix is the same shape — a patched version exists, so constrain
+  # the range rather than ignore the advisory.
+  brace-expansion@>=5.0.0 <5.0.11: '>=5.0.11 <6.0.0'
   browserslist@<=4.28.6: '>=4.28.7'
   deepmerge-ts@<8.0.0: '>=8.0.0'
   devalue@>=5.6.3 <=5.8.0: '>=5.8.1'
