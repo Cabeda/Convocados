@@ -55,14 +55,16 @@ run_gate() {
 
 # ── Scope: split-and-hand-back ───────────────────────────────────────────────
 # Measured before anything else, because a Change too big to read should never
-# spend the Gate's time.
+# spend the Gate's time. Diffed against the working tree, not just HEAD: an
+# agent that forgets to commit must still be measured, or the cap silently
+# measures nothing.
 git fetch --quiet origin "$BASE" || true
-if git diff --quiet "origin/$BASE...HEAD" 2>/dev/null; then
+if git diff --quiet "origin/$BASE" -- . 2>/dev/null; then
   echo "── Gate 1 [0] scope: no diff against origin/$BASE"
   exit 0
 fi
-changed_files=$(git diff --name-only "origin/$BASE...HEAD" | wc -l | tr -d ' ')
-changed_lines=$(git diff --numstat "origin/$BASE...HEAD" | awk '{a+=$1; d+=$2} END {print a+d+0}')
+changed_files=$(git diff --name-only "origin/$BASE" -- . | wc -l | tr -d ' ')
+changed_lines=$(git diff --numstat "origin/$BASE" -- . | awk '{a+=$1; d+=$2} END {print a+d+0}')
 echo "── Gate 1 [0] scope: $changed_lines changed lines across $changed_files files (max $MAX_LINES lines / $MAX_FILES files)"
 if [ "$changed_lines" -gt "$MAX_LINES" ] || [ "$changed_files" -gt "$MAX_FILES" ]; then
   cat >&2 <<EOF
@@ -86,7 +88,7 @@ run_gate audit pnpm audit --audit-level high || exit 1
 
 # Playwright only when the diff can change a page: running it otherwise wastes
 # minutes and teaches nothing.
-if [ "$SKIP_E2E" -eq 0 ] && git diff --name-only "origin/$BASE...HEAD" | grep -qE '^(src/pages/|e2e/)'; then
+if [ "$SKIP_E2E" -eq 0 ] && git diff --name-only "origin/$BASE" -- . | grep -qE '^(src/pages/|e2e/)'; then
   run_gate e2e pnpm test:e2e || exit 1
 else
   echo "── Gate 1 [skip] e2e: diff does not touch src/pages/** or e2e/**"

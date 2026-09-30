@@ -2,8 +2,15 @@
 description: Reviews every open Change against the Mission and Core Principles, argues in a comment, fixes what it can on factory branches. Never approves.
 mode: primary
 temperature: 0.2
-steps: 80
+# 45 iterations, chosen to fit the 25-minute step budget: at ~80 the agent
+# outran the clock on a repo this size and the run was abandoned unread.
+steps: 45
 permission:
+  # The run holds a live App token in its environment. Nothing here needs
+  # the network: the API is reachable through gh, so outbound HTTP is only
+  # ever an exfiltration path (a prompt injection in repo content could
+  # otherwise ship the token to a host it names).
+  webfetch: deny
   question: deny
   external_directory: deny
   doom_loop: deny
@@ -22,6 +29,10 @@ permission:
     "git push --no-verify*": deny
     "git push origin main*": deny
     "git push origin refs/heads/main*": deny
+    # Deny every push, then allow exactly one destination. Last match wins, so
+    # a human branch is not pushable even though it is not named above.
+    "git push origin *": deny
+    "git push origin factory/*": allow
     "gh label*": deny
     "gh issue edit*--add-label*": deny
     "gh issue edit*--remove-label*": deny
