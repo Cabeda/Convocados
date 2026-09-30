@@ -1,0 +1,97 @@
+# The Sweeper: finds open Changes nobody is advancing.
+#
+# A schedule, deliberately, and not a `pull_request` trigger: a run started by a
+# Dependabot PR gets no repository secrets, so the App token could not be
+# minted and the Sweeper would fail on exactly the machine-authored Changes it
+# most needs to see. A scheduled run has secrets and reads the same list.
+name: "factory: sweep"
+
+on:
+  schedule:
+    - cron: "13,43 * * * *" # off the hour: the janitor already uses :00/:30
+  workflow_dispatch:
+
+# Nothing here is a gate. It runs on its own clock and touches no Change's check
+# list, but the caps keep a bad sweep from burning an hour of runner.
+permissions: {}
+
+concurrency:
+  group: factory-sweep
+  cancel-in-progress: true
+
+jobs:
+  sweeper:
+    if: vars.FACTORY_PAUSED != 'true' && vars.FACTORY_APP_ID != '' && vars.FACTORY_MODEL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check the pause switch
+        run: |
+          if [ "${{ vars.FACTORY_PAUSED }}" = "true" ]; then
+            echo "FACTORY_PAUSED=true — the factory is stopped. Exiting." >&2
+            exit 0
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Read the code, comment on Changes, file Issues. Nothing else: the
+          # Sweeper's whole authority is observation plus one Issue per stuck
+          # Change (ADR 0046).
+          permission-contents: read
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Sweep the open Changes
+        timeout-minutes: 20
+        continue-on-error: true
+        uses: anomalyco/opencode/github@latest
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: ${{ vars.FACTORY_MODEL }}
+          agent: sweeper
+          share: "false"
+          use_github_token: true
+          prompt: |
+            Run one Sweeper pass over the open Changes in Cabeda/Convocados, following
+            `.opencode/agents/sweeper.md`.
+
+            A Change is stuck when a check is failing, or it is BEHIND its base, or nobody has
+            touched it for three days. It is not stuck when its head branch starts with
+            `factory/` (the Repairer owns those), when it was touched in the last 24 hours, or when
+            it is green and merely waiting for review.
+
+            For each genuinely stuck Change, after checking nobody already knows — no open Issue
+            mentions it, no open `factory/*` Change references it, and you have not filed for it in
+            the last seven days — file one Issue with the evidence and an acceptance criterion, label
+            it `factory:explored`, and leave one comment on the Change pointing at the Issue. Oldest
+            first.
+
+            You have no authority over any branch and no authority to queue work: you do not push, do
+            not modify or close Changes, do not review, and never apply `ready-for-agent`. Promotion
+            is Cabeda's decision alone. If nothing is stuck, file nothing.
