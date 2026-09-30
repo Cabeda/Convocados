@@ -121,6 +121,18 @@ large target invites reckless rewrites and metric-gaming. Reaching a Target is n
 convergence — see the stop rule in Core Principle 6.
 _Avoid_: goal (a Target is measurable, a goal need not be), objective, KPI, budget (taken)
 
+## Sweeper
+The agent that looks at the open Changes and notices the ones nobody is advancing: a red check, a
+Change that fell behind its base, three days of silence. Its output is one evidenced Issue per stuck
+Change and a single comment on the Change itself.
+
+It is an Explorer pointed at Changes rather than at the codebase — the vocabulary is the same, the
+subject is not. What separates it from the Repairer is authority rather than subject: the Repairer
+repairs a Change the Factory opened, while the Sweeper can do nothing to any Change at all, because
+most Changes it sees belong to humans. It files; a human decides.
+_Avoid*: janitor (that is the factory's own runtime state), triage (a judgement, which it does not
+deliver), reaper (implies closing things, which it never does)
+
 ## Sentinel
 The agent that watches production and reports what it finds. On unhealthy signals it files
 the incident, drafts the postmortem, and pages a human. It has no authority to change

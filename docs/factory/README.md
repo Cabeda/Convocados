@@ -37,11 +37,19 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 | `explorer-bugs` | schedule (weekly) | read, file Issues | edit code, label Issues |
 | `explorer-security` | dependency event + schedule | read, file Issues | edit code, label Issues |
 | `explorer-design` | schedule (monthly) | read, screenshot, file Issues | edit code, label Issues |
+| `sweeper` | schedule (30 min) | read the open Change list, file one evidenced Issue per stuck Change, comment once | edit code, push, adopt work, queue anything |
 | `sentinel` | schedule (15 min) | read Fly + `/api/health`, file incident, page | **change anything in production** |
 
 `repairer` is the same agent as `factory` with a lower `steps` budget. Separate file,
 identical permissions, so a repair cannot quietly inherit more authority than an
 implementation.
+
+`sweeper` is the inverse of `repairer`: it finds broken Changes instead of fixing them, and its
+authority stops at an Issue. It runs on a schedule rather than a `pull_request` trigger on purpose —
+a run started by a Dependabot PR receives no repository secrets, so the App token could not be
+minted and the role would fail on precisely the machine-authored Changes it exists to notice. It
+also does not queue what it finds: it labels `factory:explored`, and promoting that to
+`ready-for-agent` stays Cabeda's decision.
 
 ## Files
 
