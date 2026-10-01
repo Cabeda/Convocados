@@ -38,8 +38,9 @@ implementation of the rules would stay green while the real gate decayed, so the
 one.
 
 The gate also requires all three text fields per language and enforces Play's own limits:
-Play replaces the whole listing resource, so a partial listing clears fields rather than
-leaving them alone. What it does *not* do is invent a required language set — the app ships
+The upload sends only what the layout holds, so a partial listing leaves the store page in a
+state this repo cannot inspect or repair afterwards — whether Play clears an absent field or
+leaves the old one is not something to bet a release on. What it does *not* do is invent a required language set — the app ships
 six locales, the Play listing is en-US, and adding a Play locale is a copy decision someone
 makes deliberately. Every language directory that exists is held to the full standard; the
 gate cannot notice a locale that was never added.

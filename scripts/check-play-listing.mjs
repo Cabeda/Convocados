@@ -9,8 +9,8 @@
  * (ADR 0049, `android-app/PLAY_STORE_PUBLISHING.md`).
  *
  * It rejects two classes of failure: an incomplete listing (every language needs
- * all three fields, non-empty, within Play's limit — Play replaces the whole
- * listing resource, so an absent field is cleared), and a Wear surface the app
+ * all three fields, non-empty, within Play's limit — the upload sends only what
+ * the layout holds, so an absent field is not ours to explain), and a Wear surface the app
  * ships but the description does not mention. Each obligation is detected from
  * the wear module rather than asserted from a list of features, but the set of
  * detectable surfaces is fixed below and is not self-extending: a surface outside
@@ -105,7 +105,7 @@ export function checkListing({ listingDir, wearDir }) {
         errors.push(
           `Missing ${language}/${file}. Every language must carry all of ` +
             `${FIELDS.map((f) => f.file).join(", ")}: Play's listing update ` +
-            `replaces the whole resource, so an absent field is cleared.`,
+            `is ours to send, and Play is not told we meant to.`,
         );
         continue;
       }
@@ -144,17 +144,26 @@ export function checkListing({ listingDir, wearDir }) {
 }
 
 function main() {
+  const args = process.argv.slice(2);
+  const flag = (name) => {
+    const at = args.indexOf(`--${name}`);
+    return at >= 0 ? args[at + 1] : undefined;
+  };
   const root = process.env.PLAY_LISTING_ROOT ?? "android-app";
-  const errors = checkListing({
-    listingDir: join(root, "store-listing"),
-    wearDir: join(root, "wear"),
-  });
+  // --listing points the gate at the *staged* layout Gradle Play Publisher
+  // uploads (android-app/<module>/src/main/play/listings), not just the source.
+  // Those are different directories, and the staged copy is what reaches Play, so
+  // a staging defect must be caught here too.
+  const listingDir = flag("listing") ?? join(root, "store-listing");
+  const wearDir = flag("wear") ?? join(root, "wear");
+
+  const errors = checkListing({ listingDir, wearDir });
   if (errors.length > 0) {
-    console.error(`Play store listing is not compliant:\n`);
+    console.error(`Play store listing is not compliant (${listingDir}):\n`);
     for (const error of errors) console.error(`  - ${error}`);
     process.exit(1);
   }
-  console.log("Play store listing mentions every Wear surface the app ships.");
+  console.log(`Play store listing mentions every Wear surface the app ships (${listingDir}).`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

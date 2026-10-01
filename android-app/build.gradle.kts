@@ -67,12 +67,18 @@ tasks.register("syncPlayListingText") {
             modules.forEach { module ->
                 val targetDir = project.file("$module/src/main/play/listings/$language")
                 targetDir.mkdirs()
-                // Clear stale text — a language or field removed from the source
-                // must not linger in the layout, or publishListing uploads it.
-                // Only *.txt: graphics/ belongs to the sibling tasks.
+                // Clear stale text — a field removed from the source must not linger
+                // in the layout, or publishListing uploads it. Only *.txt, and
+                // never the directory: the graphics tasks stage into
+                // .../listings/en-US/graphics/ and hardcode that language, so
+                // deleting a language directory here could delete screenshots.
                 targetDir.listFiles()
                     ?.filter { it.isFile && it.extension == "txt" }
-                    ?.forEach { it.delete() }
+                    ?.filter { it.name !in files }
+                    ?.forEach { stale ->
+                        stale.delete()
+                        println("removed stale listing text $module/$language/${stale.name}")
+                    }
                 files.forEach { name ->
                     targetDir.resolve(name).writeText(sourceDir.resolve(name).readText().trim())
                 }
@@ -80,17 +86,27 @@ tasks.register("syncPlayListingText") {
             println("store-listing/$language -> ${modules.joinToString()} (${files.size} text files)")
         }
 
-        // A language dropped from the source is never visited above, so its staged
-        // text would survive and publishListing would keep uploading it. Remove
-        // those directories entirely — they hold no graphics, because a language
-        // with no source text has no graphics task either.
+        // A language dropped from the source is never visited above. Clear its
+        // text the same way — per file, never the directory — so a removed locale
+        // stops being uploaded without touching a sibling task's screenshots.
         modules.forEach { module ->
             val listingsRoot = project.file("$module/src/main/play/listings")
             listingsRoot.listFiles()
                 ?.filter { it.isDirectory && it.name !in languages }
-                ?.forEach { stale ->
-                    stale.deleteRecursively()
-                    println("removed stale listing $module/${stale.name} (no source text)")
+                ?.forEach { staleLanguage ->
+                    staleLanguage.listFiles()
+                        ?.filter { it.isFile && it.extension == "txt" }
+                        ?.forEach { stale ->
+                            stale.delete()
+                            println("removed stale listing text $module/${staleLanguage.name}/${stale.name}")
+                        }
+                    // Remove the directory only if it is now empty. A directory
+                    // that still holds graphics/ is not empty, so this can never
+                    // take a sibling task's screenshots with it.
+                    if (staleLanguage.listFiles().isNullOrEmpty()) {
+                        staleLanguage.delete()
+                        println("removed empty listing directory $module/${staleLanguage.name}")
+                    }
                 }
         }
     }

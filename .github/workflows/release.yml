@@ -604,6 +604,16 @@ jobs:
         working-directory: android-app
         run: ./gradlew syncPlayListings --no-daemon
 
+      # Check the *staged* copy, after syncPlayListings has produced it and
+      # before publishListing uploads it. The earlier step checks the source;
+      # this one checks the artifact, which is a different directory.
+      - name: Check staged Play listing
+        run: |
+          node scripts/check-play-listing.mjs \
+            --listing android-app/app/src/main/play/listings --wear android-app/wear
+          node scripts/check-play-listing.mjs \
+            --listing android-app/wear/src/main/play/listings --wear android-app/wear
+
       # Explicit per-variant tasks: the :app:publishListing lifecycle fans out to
       # the baseline-profile build types too, triple-uploading the same images.
       - name: Publish Play listings (phone + wear screenshots)

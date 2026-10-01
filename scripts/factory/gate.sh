@@ -99,9 +99,10 @@ if [ "$SKIP_ANDROID" -eq 0 ]; then
   if [ -x android-app/gradlew ]; then
     step=$((step + 1))
     log="$LOG_DIR/$(printf '%02d' "$step")-gradle-assembleDebug.log"
-    echo "── Gate 1 [$step] gradle-assembleDebug (:app + :wear)"
+    echo "── Gate 1 [$step] gradle-assembleDebug (:app + :wear) + syncPlayListingText"
     # Both modules, one invocation: assembleDebug builds the whole project.
-    if (cd android-app && ./gradlew assembleDebug) >"$log" 2>&1; then
+    # syncPlayListingText stages the listing text Gradle Play Publisher uploads.
+    if (cd android-app && ./gradlew assembleDebug syncPlayListingText) >"$log" 2>&1; then
       echo "   green  ($log)"
     else
       code=$?
@@ -109,6 +110,16 @@ if [ "$SKIP_ANDROID" -eq 0 ]; then
       tail -n 40 "$log" >&2
       exit 1
     fi
+
+    # Validate the *staged* copy, not just the source: those are different
+    # directories, and the staged one is what Play receives. A staging defect
+    # would otherwise ship with every gate green.
+    run_gate play-listing-staged \
+      node scripts/check-play-listing.mjs \
+      --listing android-app/app/src/main/play/listings --wear android-app/wear || exit 1
+    run_gate play-listing-staged-wear \
+      node scripts/check-play-listing.mjs \
+      --listing android-app/wear/src/main/play/listings --wear android-app/wear || exit 1
   else
     echo "── Gate 1 [skip] android: no android-app/gradlew in this checkout"
   fi

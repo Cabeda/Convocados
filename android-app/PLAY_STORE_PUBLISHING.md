@@ -169,8 +169,10 @@ bundles are published, deliberately: a copy problem should not block a release,
 and Play rejects an undocumented tile days later rather than during CI. It fails
 the job before any *listing* is uploaded, and enforces two rules:
 
-- **All three fields, every language.** Play's listing update replaces the whole
-  resource, so a missing field does not stay as it is — it is cleared.
+- **All three fields, every language.** The upload sends only what the layout
+  holds, so a field missing here is either silently left stale on the store page
+  or cleared, depending on how Play treats an absent field in the request — either
+  way it is not something this repo can fix after the fact.
 - **Every Wear surface the app ships is described.** Each obligation is detected
   from the wear module — its manifest and its Kotlin sources — rather than
   asserted from a list of features, but the set of detectable surfaces is **fixed

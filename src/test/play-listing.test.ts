@@ -158,4 +158,17 @@ describe("degenerate inputs", () => {
 
     expect(errors.join("\n")).toMatch(/Wear manifest is missing/);
   });
+
+  it("holds the staged layout to the same rules as the source", () => {
+    // The staged copy is a different directory and is what Play receives, so the
+    // rules must bite there too — a half-staged field has to fail.
+    const staged = mkdtempSync(join(tmpdir(), "play-staged-"));
+    fixtureDirs.push(staged);
+    cpSync(join(listingDir, "en-US"), join(staged, "en-US"), { recursive: true });
+    rmSync(join(staged, "en-US/title.txt"));
+
+    expect(checkListing({ listingDir: staged, wearDir }).join("\n")).toMatch(
+      /Missing en-US\/title\.txt/,
+    );
+  });
 });
