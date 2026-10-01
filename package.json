@@ -12,6 +12,7 @@
     "lint": "eslint src/",
     "typecheck": "tsc",
     "test": "vitest run",
+    "check:play-listing": "node scripts/check-play-listing.mjs",
     "test:mutation": "node scripts/run-mutation.mjs",
     "test:route-coverage": "bash scripts/route-coverage.sh",
     "test:e2e": "npx playwright test",

@@ -588,6 +588,14 @@ jobs:
           sh ../scripts/play-gradle.sh ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track production --release-status draft --release-name "$VERSION" --no-daemon
           sh ../scripts/play-gradle.sh ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:production --release-status draft --release-name "$VERSION" --no-daemon
 
+      # The listing must describe every Wear surface the app ships before
+      # anything is uploaded — Play rejects an undocumented tile or ongoing
+      # activity, and the rejection lands days after the release, not here.
+      # Plain `node`, not pnpm: this job sets up no Node toolchain, and the
+      # checker uses only built-ins.
+      - name: Check Play listing compliance
+        run: node scripts/check-play-listing.mjs
+
       # Refresh Play Store screenshots from the committed Roborazzi sources and
       # upload them. Runs last so a listing failure never blocks the bundles,
       # promotions, or production draft above — listings retry on next release.

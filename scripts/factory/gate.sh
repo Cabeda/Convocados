@@ -84,6 +84,7 @@ run_gate typecheck pnpm typecheck || exit 1
 run_gate vitest-coverage pnpm vitest run --coverage || exit 1
 run_gate route-coverage pnpm test:route-coverage || exit 1
 run_gate feature-parity pnpm sync:feature-parity-docs || exit 1
+run_gate play-listing pnpm check:play-listing || exit 1
 run_gate audit pnpm audit --audit-level high || exit 1
 
 # Playwright only when the diff can change a page: running it otherwise wastes
@@ -100,9 +101,7 @@ if [ "$SKIP_ANDROID" -eq 0 ]; then
     log="$LOG_DIR/$(printf '%02d' "$step")-gradle-assembleDebug.log"
     echo "── Gate 1 [$step] gradle-assembleDebug (:app + :wear)"
     # Both modules, one invocation: assembleDebug builds the whole project.
-    # syncPlayListingText is cheap (no dependencies) and fails the gate when the
-    # committed store listing omits a Wear surface the app ships.
-    if (cd android-app && ./gradlew assembleDebug syncPlayListingText) >"$log" 2>&1; then
+    if (cd android-app && ./gradlew assembleDebug) >"$log" 2>&1; then
       echo "   green  ($log)"
     else
       code=$?

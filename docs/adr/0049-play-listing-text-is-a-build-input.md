@@ -18,20 +18,30 @@ weeks later. Listing text therefore becomes committed source at
 asset. Play Console stops being the source of truth for text, and a hand-edit there is
 overwritten by the next release.
 
-The rule that matters is the gate. The task reads the Wear manifest and build file: a
-declared `BIND_TILE_PROVIDER` tile service, or the `wear-ongoing` dependency behind the
-live-score indicator, obliges the full description to mention "tile" / "ongoing". Adding a
-Wear surface costs a sentence, and forgetting it costs a red release in review — the same
-task runs in GATE 1 — instead of a policy rejection in production. The obligation is
-*derived* from where a feature is declared rather than kept in a hand-written checklist,
-because a checklist is precisely the artefact that drifts. The task also requires all
-three text fields per language and enforces Play's own limits: Play replaces the whole
-listing resource, so a partial listing clears fields instead of leaving them alone.
+The rule that matters is the gate. `scripts/check-play-listing.mjs` reads the wear module —
+its manifest and its Kotlin sources — and a surface that exists in code obliges a line in
+the description: a tile (`BIND_TILE_PROVIDER` or a `TileService`) requires the word "tile",
+an ongoing activity (`OngoingActivity`) requires "ongoing". Adding a Wear surface costs a
+sentence, and forgetting it costs a red release in review — the check runs in GATE 1 and
+in the Play publish job, before anything is uploaded — instead of a policy rejection days
+later. The obligation is *derived from the implementation* rather than kept in a
+hand-written checklist, because a checklist is precisely the artefact that drifts, and it is
+derived from the sources rather than from a dependency line so that restyling a
+`build.gradle.kts` cannot silently disarm it. `src/test/play-listing.test.ts` drives the
+failing paths through that same module — a second implementation of the rules would stay
+green while the real gate decayed, so there is only one.
+
+The gate also requires all three text fields per language and enforces Play's own limits:
+Play replaces the whole listing resource, so a partial listing clears fields rather than
+leaving them alone. What it does *not* do is invent a required language set — the app ships
+six locales, the Play listing is en-US, and adding a Play locale is a copy decision someone
+makes deliberately. Every language directory that exists is held to the full standard; the
+gate cannot notice a locale that was never added.
 
 Both modules publish under the same `applicationId`, so the phone and Wear store pages
-render one listing, and the description has to serve both: Wear-only surfaces are described
-explicitly, and the phone-only work (attendance, payments, seasons) is named as such rather
-than implied. Adding a Wear tile, complication or watch face means editing
-`android-app/store-listing/<lang>/full_description.txt` in the same PR as the feature. That
-friction is the point — it is a Play requirement, not ceremony. The listing remains en-US
-only, and every language the app is published in is obliged the same way.
+render one listing, and the description has to serve both: it leads with what the product
+does for anyone, then documents the Wear surfaces explicitly. The staging task never
+deletes `.../listings/<lang>/`, because the sibling graphics tasks stage screenshots into
+`.../listings/<lang>/graphics/` and Gradle guarantees no order between them — wiping the
+directory would discard screenshots the same build had just staged, silently, with both
+tasks reporting success.

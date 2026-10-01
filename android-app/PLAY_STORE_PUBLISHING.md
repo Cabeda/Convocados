@@ -151,25 +151,34 @@ what Play shows on both store pages, and a Wear screen that the phone does not
 have still has to be described here. `syncPlayListingText` stages that text into
 both modules' Play listing layout, and `release.yml` runs it via
 `syncPlayListings` before `:app:publishListing` / `:wear:publishListing`, so
-every release ships the reviewed copy.
+every release ships the reviewed copy. The staging task only copies files — it
+deliberately does not touch `.../listings/<lang>/graphics/`, which the sibling
+graphics tasks own.
 
 Read the live listing back in Play Console (Store presence → Main store listing)
 when you need to know what is actually published, and copy it into
 `android-app/store-listing/` — do not edit it in place there, or the next release
 overwrites your change.
 
-Two rules the sync task enforces, and fails the release over:
+The gate is `pnpm check:play-listing` (`scripts/check-play-listing.mjs`). It runs
+in GATE 1 and as a step in the Play publish job, before anything is uploaded,
+and enforces two rules:
 
 - **All three fields, every language.** Play's listing update replaces the whole
   resource, so a missing field does not stay as it is — it is cleared.
-- **Every Wear surface is described.** The task reads the Wear manifest and
-  build file: if they declare a `BIND_TILE_PROVIDER` tile service, or the
-  `wear-ongoing` dependency behind the live-score indicator, the full
-  description must contain "tile" / "ongoing". This is not hypothetical — the
-  quick-game tile shipped while the description never mentioned it and Play
-  rejected the release under the Wear App Quality Guidelines. Adding a Wear
-  surface means adding a line to the description, and the release fails until it
-  does. See [ADR 0049](../docs/adr/0049-play-listing-text-is-a-build-input.md).
+- **Every Wear surface the app ships is described.** The obligations are derived
+  from the wear module — its manifest and its Kotlin sources — not kept in a
+  checklist, so adding a surface adds the obligation automatically. A tile
+  (`BIND_TILE_PROVIDER` or a `TileService`) obliges the description to mention
+  "tile"; an ongoing activity (`OngoingActivity`) obliges "ongoing". This is not
+  hypothetical — the quick-game tile shipped while the description never mentioned
+  it and Play rejected the release under the Wear App Quality Guidelines.
+  `src/test/play-listing.test.ts` drives the failing paths through the same
+  module, so the gate cannot decay into a no-op unnoticed. See
+  [ADR 0049](../docs/adr/0049-play-listing-text-is-a-build-input.md).
+
+To add a Wear surface: edit `android-app/store-listing/en-US/full_description.txt`
+in the same PR as the feature. The gate will tell you which word is missing.
 
 `android-app/store-listing/` is edited like any other source file. Do not edit
 listing text in Play Console: the next release overwrites it.
