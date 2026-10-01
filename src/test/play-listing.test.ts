@@ -53,11 +53,11 @@ function wearFixture(kotlin: string): string {
 }
 
 function fullDescription() {
-  return readFileSync(join(listingDir, "en-US/full_description.txt"), "utf8");
+  return readFileSync(join(listingDir, "en-US/full-description.txt"), "utf8");
 }
 
 function setFullDescription(value: string) {
-  writeFileSync(join(listingDir, "en-US/full_description.txt"), value, "utf8");
+  writeFileSync(join(listingDir, "en-US/full-description.txt"), value, "utf8");
 }
 
 beforeEach(() => {
@@ -75,8 +75,20 @@ describe("committed Play listing", () => {
     expect(check()).toEqual([]);
   });
 
-  it("carries all three text fields", () => {
-    for (const field of ["title.txt", "short_description.txt", "full_description.txt"]) {
+  it("rejects a field file Gradle Play Publisher would not read", () => {
+    // The bug this catches: GPP reads `full-description.txt`, not
+    // `full_description.txt`. The underscored file looked published, the gate
+    // passed, and Play rejected the commit with "This app has no short
+    // description" — the listing shipped with a title and nothing else.
+    writeFileSync(join(listingDir, "en-US/full_description.txt"), "Convocados\n", "utf8");
+
+    expect(check().join("\n")).toMatch(
+      /full_description\.txt is not a file Gradle Play Publisher reads/,
+    );
+  });
+
+  it("carries all three text fields under the names the uploader reads", () => {
+    for (const field of ["title.txt", "short-description.txt", "full-description.txt"]) {
       expect(() => readFileSync(join(committedListing, "en-US", field), "utf8")).not.toThrow();
     }
   });
@@ -116,9 +128,9 @@ describe("Wear surfaces the gate derives from android-app/wear", () => {
 
 describe("Play's per-field requirements", () => {
   it("fails when a language is missing a field, because it would not be sent", () => {
-    rmSync(join(listingDir, "en-US/short_description.txt"));
+    rmSync(join(listingDir, "en-US/short-description.txt"));
 
-    expect(check().join("\n")).toMatch(/Missing en-US\/short_description\.txt/);
+    expect(check().join("\n")).toMatch(/Missing en-US\/short-description\.txt/);
   });
 
   it("fails when a field is empty", () => {
@@ -129,8 +141,8 @@ describe("Play's per-field requirements", () => {
 
   it.each([
     ["title.txt", 31],
-    ["short_description.txt", 81],
-    ["full_description.txt", 4001],
+    ["short-description.txt", 81],
+    ["full-description.txt", 4001],
   ])("fails when %s exceeds Play's limit", (field, length) => {
     writeFileSync(join(listingDir, `en-US/${field}`), "x".repeat(length), "utf8");
 
@@ -139,7 +151,7 @@ describe("Play's per-field requirements", () => {
 
   it("checks every language directory, not just the first", () => {
     mkdirSync(join(listingDir, "pt-BR"));
-    for (const field of ["title.txt", "short_description.txt", "full_description.txt"]) {
+    for (const field of ["title.txt", "short-description.txt", "full-description.txt"]) {
       writeFileSync(join(listingDir, `pt-BR/${field}`), "Convocados", "utf8");
     }
 

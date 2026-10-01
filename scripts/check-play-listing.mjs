@@ -24,11 +24,21 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-/** Play's per-field character limits (Android Publisher `Listings` resource). */
+/**
+ * Play's per-field character limits (Android Publisher `Listings` resource).
+ *
+ * The filenames are Gradle Play Publisher's, not ours: GPP 4.1.1 reads
+ * `title.txt`, `short-description.txt`, `full-description.txt` and
+ * `video-url.txt` (com/github/triplet/gradle/play/internal/ListingDetail). They
+ * are hyphenated. Underscored names are silently ignored by the uploader, which
+ * then commits a listing with a title and no description — an empty field Play
+ * refuses to accept, so the whole edit fails with "This app has no short
+ * description". Rename one of these and the gate says so.
+ */
 const FIELDS = [
   { file: "title.txt", limit: 30 },
-  { file: "short_description.txt", limit: 80 },
-  { file: "full_description.txt", limit: 4000 },
+  { file: "short-description.txt", limit: 80 },
+  { file: "full-description.txt", limit: 4000 },
 ];
 
 /**
@@ -114,7 +124,21 @@ export function checkListing({ listingDir, wearDir }) {
       else if (value.length > limit) {
         errors.push(`${language}/${file} is ${value.length} characters; Play allows ${limit}`);
       }
-      if (file === "full_description.txt") descriptions.set(language, value.toLowerCase());
+      if (file === "full-description.txt") descriptions.set(language, value.toLowerCase());
+    }
+
+    // A file the uploader does not read is worse than a missing one: it looks
+    // like it is being published, and the gate would pass. This is exactly how
+    // `full_description.txt` shipped and Play rejected the commit with "This app
+    // has no short description".
+    const known = new Set(FIELDS.map((f) => f.file));
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".txt")) continue;
+      if (known.has(entry.name)) continue;
+      errors.push(
+        `${language}/${entry.name} is not a file Gradle Play Publisher reads ` +
+          `(${[...known].join(", ")}), so it would be uploaded as nothing`,
+      );
     }
   }
 

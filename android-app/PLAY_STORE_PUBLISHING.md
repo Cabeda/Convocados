@@ -142,7 +142,7 @@ cd android-app
 Text is **committed**, not hand-edited. Source of truth:
 
 ```
-android-app/store-listing/<lang>/{title,short_description,full_description}.txt
+android-app/store-listing/<lang>/{title.txt,short-description.txt,full-description.txt}
 ```
 
 Both modules publish under the same `applicationId` (`com.cabeda.Convocados`),
@@ -198,7 +198,7 @@ and enforces two rules:
   module, so the gate cannot decay into a no-op unnoticed. See
   [ADR 0049](../docs/adr/0049-play-listing-text-is-a-build-input.md).
 
-To add a Wear surface: edit `android-app/store-listing/en-US/full_description.txt`
+To add a Wear surface: edit `android-app/store-listing/en-US/full-description.txt`
 in the same PR as the feature. The gate will tell you which word is missing.
 
 `android-app/store-listing/` is edited like any other source file. Do not edit
