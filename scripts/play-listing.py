@@ -28,6 +28,7 @@ import base64
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -165,15 +166,40 @@ def fetch(package: str, token: str) -> dict[str, dict]:
 
 
 def write_out(listings: dict[str, dict], out: pathlib.Path) -> None:
-    for language, listing in sorted(listings.items()):
-        directory = out / language
-        directory.mkdir(parents=True, exist_ok=True)
+    """Write the dump, and leave it in `out` only once the gate accepts it.
+
+    The dump is staged beside `out` and promoted after `verify_out` passes, so a
+    live listing that fails the gate cannot overwrite a directory that holds
+    something worth keeping — `--out android-app/store-listing` would otherwise
+    destroy the committed source of truth with the very text the gate rejects,
+    leaving it recoverable only through git.
+    """
+    out.parent.mkdir(parents=True, exist_ok=True)
+    staging = pathlib.Path(tempfile.mkdtemp(prefix=".play-listing-", dir=out.parent))
+    try:
+        for language, listing in sorted(listings.items()):
+            directory = staging / language
+            directory.mkdir(parents=True, exist_ok=True)
+            for field in FIELDS:
+                value = listing.get(field, "")
+                target = directory / FIELD_FILES[field]
+                target.write_text(value, encoding="utf-8")
+                print(f"wrote {target} ({len(value)} chars)", flush=True)
+        verify_out(staging)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+    # Promote field by field, and only the fields this tool wrote. Anything else
+    # in the destination is not ours to delete: a dump reads three text fields,
+    # so it knows nothing about the files that sit beside them.
+    for language in sorted(listings):
         for field in FIELDS:
-            value = listing.get(field, "")
-            target = directory / FIELD_FILES[field]
-            target.write_text(value, encoding="utf-8")
-            print(f"wrote {target} ({len(value)} chars)", flush=True)
-    verify_out(out)
+            source = staging / language / FIELD_FILES[field]
+            destination = out / language / FIELD_FILES[field]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+    shutil.rmtree(staging, ignore_errors=True)
 
 
 def verify_out(out: pathlib.Path) -> None:
@@ -181,20 +207,26 @@ def verify_out(out: pathlib.Path) -> None:
 
     The gate is the single source of truth for the field names and the Wear
     surface obligations. Running it here means a dump can never quietly produce a
-    layout that would not publish — the failure mode that cost a release.
+    layout that would not publish — the failure mode that cost a release. So the
+    paths are resolved from this file rather than the working directory, and a
+    missing gate is fatal: skipping the check from the wrong directory would
+    reintroduce the silent gap this tool exists to close.
     """
-    gate = pathlib.Path("scripts/check-play-listing.mjs")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    gate = root / "scripts/check-play-listing.mjs"
+    wear = root / "android-app/wear"
     if not gate.is_file():
-        print(f"note: {gate} not found; skipping the gate check on {out}")
-        return
+        sys.exit(f"Cannot verify {out}: the listing gate is missing at {gate}.")
+    if not wear.is_dir():
+        sys.exit(f"Cannot verify {out}: the Wear module is missing at {wear}.")
     completed = subprocess.run(
-        ["node", str(gate), "--listing", str(out), "--wear", "android-app/wear"],
+        ["node", str(gate), "--listing", str(out), "--wear", str(wear)],
         check=False,
     )
     if completed.returncode != 0:
         sys.exit(
-            f"The dump in {out} does not satisfy the listing gate. Fix the names "
-            f"or the copy before using it."
+            f"The dump staged for {out} does not satisfy the listing gate. Fix "
+            f"the names or the copy before using it; nothing was written to {out}."
         )
 
 
