@@ -81,8 +81,11 @@ Mission and Core Principles rather than against the Gates — the Gates already 
 re-running them is not review. It holds no approval authority: its job is to argue in a
 comment and to fix what it can on a factory branch.
 
-It watches **every** open Change, including human-authored ones, because a review that
-only inspects machine work is a rubber stamp.
+It watches every open Change **it can reach**, including human-authored ones, because a
+review that only inspects machine work is a rubber stamp. Reach is bounded by two facts rather
+than by judgement: a workflow runs from the Change's own branch, so a Change predating it never
+triggers a review; and a Dependabot-started run has no repository secrets, so no role that mints a
+token can run on a machine-authored Change. The Sweeper covers that ground from a schedule.
 _Avoid_: approver, gatekeeper, QA, linter
 
 ## Hard Block
