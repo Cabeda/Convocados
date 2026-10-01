@@ -27,8 +27,11 @@ minimumReleaseAgeExclude:
   - playwright-core@1.62.0
   - playwright@1.62.0
 overrides:
-  basic-ftp@<=5.2.2: '>=5.3.0'
-  basic-ftp@<=5.3.0: '>=5.3.1'
+  # Quadratic-time CPU DoS in basic-ftp's Client.list() parser (GHSA-c475-qrg2-pj4r),
+  # reached through @lhci/cli -> lighthouse -> puppeteer-core -> proxy-agent.
+  # Patched in 6.2.1. This single entry replaces the older version-scoped
+  # basic-ftp pins, which shadowed it and left the vulnerable 6.0.1 resolved.
+  basic-ftp: '>=6.2.1'
   better-auth@<1.6.2: '>=1.6.2'
   body-parser@<1.20.6: '>=1.20.6'
   # minimatch/glob ask for brace-expansion ^4 and ^2. An open-ended '>=5.0.7'
