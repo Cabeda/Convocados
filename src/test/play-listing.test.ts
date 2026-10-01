@@ -76,6 +76,18 @@ describe("Wear surfaces the gate derives from android-app/wear", () => {
 
     expect(check().join("\n")).toMatch(/Wear tile \(BIND_TILE_PROVIDER \/ TileService\)/);
   });
+
+  it.each(["complication"])(
+    "leaves the %s obligation dormant while the app ships none",
+    (keyword) => {
+      // A detector that fired on today's module would make the gate
+      // unsatisfiable. This asserts the negative for the surface the app does
+      // not have, and it starts failing the moment one is added — which is the
+      // point: adding the feature obliges the copy.
+      expect(fullDescription().toLowerCase()).not.toContain(keyword);
+      expect(check()).toEqual([]);
+    },
+  );
 });
 
 describe("Play's per-field requirements", () => {

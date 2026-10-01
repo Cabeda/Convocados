@@ -67,6 +67,12 @@ tasks.register("syncPlayListingText") {
             modules.forEach { module ->
                 val targetDir = project.file("$module/src/main/play/listings/$language")
                 targetDir.mkdirs()
+                // Clear stale text — a language or field removed from the source
+                // must not linger in the layout, or publishListing uploads it.
+                // Only *.txt: graphics/ belongs to the sibling tasks.
+                targetDir.listFiles()
+                    ?.filter { it.isFile && it.extension == "txt" }
+                    ?.forEach { it.delete() }
                 files.forEach { name ->
                     targetDir.resolve(name).writeText(sourceDir.resolve(name).readText().trim())
                 }

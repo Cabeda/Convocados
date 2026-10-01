@@ -32,13 +32,18 @@ const FIELDS = [
 
 /**
  * Wear surfaces Play expects the listing to describe. `detect` reads the module
- * rather than the listing, so adding a surface to the app adds the obligation
- * without touching this file.
+ * rather than the listing, so adding one of these surfaces to the app adds the
+ * obligation without touching this file.
  *
- * Each entry pairs a keyword the description must contain with a detector over
- * (manifest, kotlin sources). The detectors favour over-triggering: a false
- * positive costs a sentence of copy, a false negative is the rejection this
- * script exists to prevent.
+ * The list is bounded by Play's Wear App Quality Guidelines, which name tiles,
+ * complications and watch faces. A watch face is deliberately not detected: the
+ * copy legitimately says "watch face" when it describes the ongoing-activity
+ * indicator, so the keyword would be trivially satisfied. The list is therefore
+ * **not** self-extending — a surface outside these three is caught in review,
+ * which is why adding a Wear surface means editing the description in the same PR.
+ *
+ * The detectors favour over-triggering: a false positive costs a sentence of copy,
+ * a false negative is the rejection this script exists to prevent.
  */
 const WEAR_SURFACES = [
   {
@@ -51,6 +56,11 @@ const WEAR_SURFACES = [
     keyword: "ongoing",
     label: "a live-score ongoing activity (OngoingActivity)",
     detect: ({ kotlin }) => /OngoingActivity\b/.test(kotlin),
+  },
+  {
+    keyword: "complication",
+    label: "a watch face complication (ComplicationProvider)",
+    detect: ({ kotlin }) => /ComplicationProvider|ComplicationSlot/.test(kotlin),
   },
 ];
 

@@ -21,15 +21,21 @@ overwritten by the next release.
 The rule that matters is the gate. `scripts/check-play-listing.mjs` reads the wear module —
 its manifest and its Kotlin sources — and a surface that exists in code obliges a line in
 the description: a tile (`BIND_TILE_PROVIDER` or a `TileService`) requires the word "tile",
-an ongoing activity (`OngoingActivity`) requires "ongoing". Adding a Wear surface costs a
-sentence, and forgetting it costs a red release in review — the check runs in GATE 1 and
-in the Play publish job, before anything is uploaded — instead of a policy rejection days
-later. The obligation is *derived from the implementation* rather than kept in a
-hand-written checklist, because a checklist is precisely the artefact that drifts, and it is
-derived from the sources rather than from a dependency line so that restyling a
-`build.gradle.kts` cannot silently disarm it. `src/test/play-listing.test.ts` drives the
-failing paths through that same module — a second implementation of the rules would stay
-green while the real gate decayed, so there is only one.
+an ongoing activity (`OngoingActivity`) requires "ongoing", a complication requires
+"complication". Adding one of those to the app adds the obligation without touching the
+script, and forgetting the line costs a red release in review — the check runs in GATE 1 and
+in the Play publish job — instead of a policy rejection days later.
+
+The obligation is derived from the *sources*, not from a dependency line, so restyling a
+`build.gradle.kts` cannot silently disarm it. It is not self-extending, and saying so is
+part of the decision: the detector list is bounded by the three surfaces Play's guidelines
+name, a watch face is excluded because the copy legitimately says "watch face" when it
+describes the live-score indicator, and anything outside that set is caught by review —
+which is why adding a Wear surface means editing the description in the same PR. A gate that
+claimed to cover the unknown would be a gate nobody could trust.
+`src/test/play-listing.test.ts` drives the failing paths through that same module — a second
+implementation of the rules would stay green while the real gate decayed, so there is only
+one.
 
 The gate also requires all three text fields per language and enforces Play's own limits:
 Play replaces the whole listing resource, so a partial listing clears fields rather than
