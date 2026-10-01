@@ -2,29 +2,22 @@
 /**
  * Play store listing gate.
  *
- * Google Play rejected the Wear app under the Wear App Quality Guidelines because
- * the listing did not mention the quick-game tile, though the tile had shipped for
- * months. Nothing in the repo recorded the listing text, so nothing noticed. The
- * text is committed at `android-app/store-listing/<lang>/` and this is the gate that
- * keeps it honest — see ADR 0049 and `android-app/PLAY_STORE_PUBLISHING.md`.
+ * Google Play rejected the Wear app because the listing did not mention the
+ * quick-game tile, though the tile had shipped for months — nothing in the repo
+ * recorded the text, so nothing noticed. The text is committed at
+ * `android-app/store-listing/<lang>/`; this is the gate that keeps it honest
+ * (ADR 0049, `android-app/PLAY_STORE_PUBLISHING.md`).
  *
- * Two classes of failure:
+ * It rejects two classes of failure: an incomplete listing (every language needs
+ * all three fields, non-empty, within Play's limit — Play replaces the whole
+ * listing resource, so an absent field is cleared), and a Wear surface the app
+ * ships but the description does not mention. The obligations below are derived
+ * from the wear module, not kept in a checklist, so adding a surface adds the
+ * obligation automatically.
  *
- * 1. **Incomplete text.** Every language must carry all three fields, none empty,
- *    each within Play's limit. Play replaces the whole listing resource per
- *    language, so a missing field is not "unchanged" — it is cleared.
- * 2. **An undocumented Wear surface.** The obligations below are *derived from the
- *    wear module* — its manifest and its Kotlin sources — not kept in a checklist.
- *    A surface that exists in code obliges a line in the description, so the next
- *    tile, complication or watch face cannot ship undocumented.
- *
- * This is the only implementation of these rules. `pnpm check:play-listing` runs
- * it in GATE 1 and on every release; `src/test/play-listing.test.ts` exercises the
- * failing paths through this same module, so the gate cannot decay into a no-op
- * unnoticed.
- *
- * Usage: node scripts/check-play-listing.mjs
- * Exit code 1 with one message per problem.
+ * One implementation, on purpose. `src/test/play-listing.test.ts` drives the
+ * failing paths through this module; a second copy of the rules would stay green
+ * while this one decayed into a no-op.
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";

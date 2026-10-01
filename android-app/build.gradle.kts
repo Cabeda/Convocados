@@ -26,17 +26,18 @@ tasks.register("syncPlayListings") {
 
 // Store listing *text* is committed (store-listing/<lang>/) and staged into both
 // modules' Play listing layout, so the copy that ships is reviewable in a diff
-// instead of hand-edited in Play Console. `publishListing` then uploads it with
+// instead of hand-edited in Play Console. `publishListing` uploads it alongside
 // the screenshots.
 //
 // Staging only. The rules about what the text must contain live in
-// `scripts/check-play-listing.mjs` (`pnpm check:play-listing`), which is the one
-// implementation CI tests; duplicating them here would give two answers.
+// `scripts/check-play-listing.mjs` (`pnpm check:play-listing`): one
+// implementation, tested, run by both gates. Duplicating them here would give two
+// answers.
 //
 // This task must NOT delete `.../listings/<lang>`: the sibling graphics tasks
 // stage PNGs into `.../listings/<lang>/graphics/`, and Gradle guarantees no order
 // between them, so wiping the directory would discard screenshots this same build
-// just staged — silently, with both tasks printing success.
+// just staged — silently, with both tasks reporting success.
 val playListingModules = listOf("app", "wear")
 
 tasks.register("syncPlayListingText") {
