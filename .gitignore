@@ -60,6 +60,7 @@ challenges/.venv/
 challenges/__pycache__/
 challenges/**/__pycache__/
 challenges/.pytest_cache/
+scripts/__pycache__/
 
 # Android app
 android-app/.gradle/
