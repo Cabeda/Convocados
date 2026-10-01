@@ -50,15 +50,25 @@ An open Change is stuck when **any** of these is true:
 - a check is failing — `CI`, `Android Build`, `Wear OS Build` and the sharded test legs;
 - it is **BEHIND** its base (`mergeStateStatus: BEHIND`), which is how a Change rots: it was green
   once, then `main` moved and nobody came back;
-- nobody has touched it for **3 days** — no new commits, no comments.
+- no new **commit** landed for 3 days, whatever the comments say;
+- the most recent event is a **comment** and no commit has followed it for 24 hours.
+
+That last one is the subtle case, and it is why the first version of this rule was wrong. #1182 sat
+failing and `BEHIND` for five days while a human asked Dependabot to rebase it and Dependabot
+refused. Every timestamp said "touched today", so the sweep decided the Change was attended-to and
+filed nothing. **Asking for help is not progress.** A comment resets the appearance of activity and
+changes nothing about the state of the Change, so it must not buy a Change another day of silence.
 
 And it is **not** stuck when:
 
 - its head branch starts with `factory/` — the Repairer owns those, and filing a second Issue for a
   red Factory Change is a duplicate, not a finding;
-- it was created or last pushed within the last **24 hours** — humans need a day to finish a thing
-  before a machine calls it abandoned;
+- a **commit** landed within the last 24 hours — a human is demonstrably working on it. Count
+  commits, not comments, when deciding this;
 - a green, up-to-date Change that is simply waiting for review. Waiting is not stuck.
+
+When you judge this, read `gh pr view <n> --json commits,updatedAt,comments` and ask what actually
+changed, not when something last said something.
 
 ## Dedupe is the whole job
 
