@@ -588,12 +588,31 @@ jobs:
           sh ../scripts/play-gradle.sh ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track production --release-status draft --release-name "$VERSION" --no-daemon
           sh ../scripts/play-gradle.sh ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:production --release-status draft --release-name "$VERSION" --no-daemon
 
+      # The listing must describe every Wear surface the app ships. Runs here, after
+      # the bundles are published, because a copy problem should not block a
+      # release: it fails the publish job before any listing is uploaded, and Play
+      # rejects an undocumented tile days later rather than here.
+      # Plain `node`, not pnpm: this job sets up no Node toolchain, and the
+      # checker uses only built-ins.
+      - name: Check Play listing compliance
+        run: node scripts/check-play-listing.mjs
+
       # Refresh Play Store screenshots from the committed Roborazzi sources and
       # upload them. Runs last so a listing failure never blocks the bundles,
       # promotions, or production draft above — listings retry on next release.
       - name: Sync Play listing graphics
         working-directory: android-app
         run: ./gradlew syncPlayListings --no-daemon
+
+      # Check the *staged* copy, after syncPlayListings has produced it and
+      # before publishListing uploads it. The earlier step checks the source;
+      # this one checks the artifact, which is a different directory.
+      - name: Check staged Play listing
+        run: |
+          node scripts/check-play-listing.mjs \
+            --listing android-app/app/src/main/play/listings --wear android-app/wear
+          node scripts/check-play-listing.mjs \
+            --listing android-app/wear/src/main/play/listings --wear android-app/wear
 
       # Explicit per-variant tasks: the :app:publishListing lifecycle fans out to
       # the baseline-profile build types too, triple-uploading the same images.

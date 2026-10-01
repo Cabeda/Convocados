@@ -122,22 +122,87 @@ renders at natural device dp (e.g. 411x891 phone), but the Play images API
 rejects anything with a side under 1080px (max side 7680, max aspect 2.3), so
 the sync step upscales each PNG by the smallest integer factor clearing the
 minimum (phone 3x to 1233x2673, foldable/tablet 2x, watch 3x to 1170x1170)
-and fails the release if the result still falls outside Play's limits. Text listings
-(title, descriptions) are still managed by hand in Play Console; the automation
-only touches graphics. The listing upload runs **last**, after bundles,
-promotions, and the production draft, so a screenshot failure never blocks a
-release — it retries on the next one.
+and fails the release if the result still falls outside Play's limits. The
+listing upload runs **last**, after bundles, promotions, and the production
+draft, so a listing failure never blocks a release — it retries on the next one.
+
+Note: adaptive layout probes (`adaptive_light/dark`) are regression goldens
+under `src/test/screenshots/goldens/`, not store assets — Play caps each slot
+at 8 images.
 
 Local preview:
 
 ```bash
 cd android-app
-./gradlew syncPlayListings  # validates + stages graphics under src/main/play/listings/
+./gradlew syncPlayListings  # validates + stages graphics + text under src/main/play/listings/
 ```
 
-Note: adaptive layout probes (`adaptive_light/dark`) are regression goldens
-under `src/test/screenshots/goldens/`, not store assets — Play caps each slot
-at 8 images.
+## Store listing text (title, short description, full description)
+
+Text is **committed**, not hand-edited. Source of truth:
+
+```
+android-app/store-listing/<lang>/{title,short_description,full_description}.txt
+```
+
+Both modules publish under the same `applicationId` (`com.cabeda.Convocados`),
+so the phone and the Wear OS app share **one** Play listing: the text below is
+what Play shows on both store pages, and a Wear screen that the phone does not
+have still has to be described here. `syncPlayListingText` stages that text into
+both modules' Play listing layout, and `release.yml` runs it via
+`syncPlayListings` before `:app:publishListing` / `:wear:publishListing`, so
+every release ships the reviewed copy. Staging clears stale text: any `*.txt` in a
+language directory that the source no longer provides, whether because a single
+field was removed or because the whole locale was dropped — otherwise
+`publishListing` would keep uploading it. It never deletes a language directory
+while that directory still holds anything, so it cannot take
+`.../listings/<lang>/graphics/` with it, which the sibling graphics tasks own: the
+two sibling tasks share that tree with no guaranteed order, so wiping it would
+discard screenshots the same build had just staged.
+
+Read the live listing back in Play Console (Store presence → Main store listing)
+when you need to know what is actually published, and copy it into
+`android-app/store-listing/` — do not edit it in place there, or the next release
+overwrites your change.
+
+The gate is `pnpm check:play-listing` (`scripts/check-play-listing.mjs`). It runs
+three times per change: over the committed source in GATE 1, and over each
+module's **staged** layout in GATE 1 and again in the Play publish job. The staged
+passes exist because `syncPlayListingText` writes a *different, gitignored*
+directory, and that copy — not the source — is what `publishListing` uploads. A
+staging defect would otherwise ship with every gate green. The staged check runs
+after `syncPlayListings` and before `publishListing`.
+
+The publish-job step sits *after* the bundles are published, deliberately: a copy
+problem should not block a release, and Play rejects an undocumented tile days
+later rather than during CI. It fails the job before any *listing* is uploaded,
+and enforces two rules:
+
+- **All three fields, every language.** The upload sends only what the layout
+  holds, so a field missing here is either silently left stale on the store page
+  or cleared, depending on how Play treats an absent field in the request — either
+  way it is not something this repo can fix after the fact.
+- **Every Wear surface the app ships is described.** Each obligation is detected
+  from the wear module — its manifest and its Kotlin sources — rather than
+  asserted from a list of features, but the set of detectable surfaces is **fixed
+  and not self-extending**: a tile (`BIND_TILE_PROVIDER` or a `TileService`)
+  obliges "tile", an ongoing activity (`OngoingActivity`) obliges "ongoing", a
+  complication (`ComplicationProvider`) obliges "complication". A watch face is
+  excluded on purpose, because the copy legitimately says "watch face" when it
+  describes the live-score indicator. **Anything outside those three is caught in
+  review, not by the script** — which is why adding a Wear surface means editing
+  the description in the same PR. This is not hypothetical: the quick-game tile
+  shipped while the description never mentioned it, and Play rejected the release
+  under the Wear App Quality Guidelines.
+  `src/test/play-listing.test.ts` drives the failing paths through the same
+  module, so the gate cannot decay into a no-op unnoticed. See
+  [ADR 0049](../docs/adr/0049-play-listing-text-is-a-build-input.md).
+
+To add a Wear surface: edit `android-app/store-listing/en-US/full_description.txt`
+in the same PR as the feature. The gate will tell you which word is missing.
+
+`android-app/store-listing/` is edited like any other source file. Do not edit
+listing text in Play Console: the next release overwrites it.
 
 ## Promoting releases
 
