@@ -104,8 +104,8 @@ export function checkListing({ listingDir, wearDir }) {
       if (!existsSync(path)) {
         errors.push(
           `Missing ${language}/${file}. Every language must carry all of ` +
-            `${FIELDS.map((f) => f.file).join(", ")}: Play's listing update ` +
-            `is ours to send, and Play is not told we meant to.`,
+            `${FIELDS.map((f) => f.file).join(", ")}: the upload sends only ` +
+            `what the layout holds, so this field would not be sent at all.`,
         );
         continue;
       }
@@ -143,19 +143,41 @@ export function checkListing({ listingDir, wearDir }) {
   return errors;
 }
 
+/** Flags the gate accepts. Anything else is an error, never a silent default. */
+const FLAGS = ["listing", "wear"];
+
+function parseArgs(args) {
+  const parsed = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg.startsWith("--")) die(`unexpected argument "${arg}"`);
+    const name = arg.slice(2);
+    if (!FLAGS.includes(name)) {
+      die(`unknown flag "--${name}" (expected ${FLAGS.map((f) => `--${f}`).join(" or ")})`);
+    }
+    const value = args[++i];
+    if (value === undefined || value.startsWith("--")) die(`--${name} needs a directory`);
+    parsed[name] = value;
+  }
+  return parsed;
+}
+
+function die(message) {
+  // Fail closed. A mistyped flag must never fall back to the default paths and
+  // report success for a directory nobody asked about.
+  console.error(`check-play-listing: ${message}`);
+  process.exit(2);
+}
+
 function main() {
-  const args = process.argv.slice(2);
-  const flag = (name) => {
-    const at = args.indexOf(`--${name}`);
-    return at >= 0 ? args[at + 1] : undefined;
-  };
+  const parsed = parseArgs(process.argv.slice(2));
   const root = process.env.PLAY_LISTING_ROOT ?? "android-app";
   // --listing points the gate at the *staged* layout Gradle Play Publisher
   // uploads (android-app/<module>/src/main/play/listings), not just the source.
   // Those are different directories, and the staged copy is what reaches Play, so
   // a staging defect must be caught here too.
-  const listingDir = flag("listing") ?? join(root, "store-listing");
-  const wearDir = flag("wear") ?? join(root, "wear");
+  const listingDir = parsed.listing ?? join(root, "store-listing");
+  const wearDir = parsed.wear ?? join(root, "wear");
 
   const errors = checkListing({ listingDir, wearDir });
   if (errors.length > 0) {

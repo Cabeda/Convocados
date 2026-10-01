@@ -13,6 +13,7 @@
  * exercised against a fixture module instead, in both directions.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { spawnSync } from "child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
@@ -114,7 +115,7 @@ describe("Wear surfaces the gate derives from android-app/wear", () => {
 });
 
 describe("Play's per-field requirements", () => {
-  it("fails when a language is missing a field, because Play would clear it", () => {
+  it("fails when a language is missing a field, because it would not be sent", () => {
     rmSync(join(listingDir, "en-US/short_description.txt"));
 
     expect(check().join("\n")).toMatch(/Missing en-US\/short_description\.txt/);
@@ -170,5 +171,33 @@ describe("degenerate inputs", () => {
     expect(checkListing({ listingDir: staged, wearDir }).join("\n")).toMatch(
       /Missing en-US\/title\.txt/,
     );
+  });
+});
+describe("the CLI fails closed", () => {
+  const cli = (args: string[]) =>
+    spawnSync(process.execPath, [join(root, "scripts/check-play-listing.mjs"), ...args], {
+      encoding: "utf8",
+    });
+
+  it.each([
+    [["--listng", "android-app/store-listing"], "unknown flag"],
+    [["--listing"], "needs a directory"],
+    [["--listing", "--wear", "x"], "needs a directory"],
+    [["stray"], "unexpected argument"],
+    [["--listing=android-app/store-listing"], "unknown flag"],
+  ])("rejects %j instead of falling back to the defaults", (args, expected) => {
+    // A mistyped flag must never silently check a different directory and report
+    // success — that is the failure this whole gate exists to prevent.
+    const result = cli(args as string[]);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(expected as string);
+  });
+
+  it("accepts the documented invocation", () => {
+    const result = cli([]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("android-app/store-listing");
   });
 });

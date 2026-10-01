@@ -151,11 +151,13 @@ what Play shows on both store pages, and a Wear screen that the phone does not
 have still has to be described here. `syncPlayListingText` stages that text into
 both modules' Play listing layout, and `release.yml` runs it via
 `syncPlayListings` before `:app:publishListing` / `:wear:publishListing`, so
-every release ships the reviewed copy. Staging clears stale text: `*.txt` in each
-language directory, and any language directory with no source text at all (a
-dropped locale would otherwise keep uploading). It never touches
-`.../listings/<lang>/graphics/`, which the sibling graphics tasks own — the two
-sibling tasks share that directory with no guaranteed order, so wiping it would
+every release ships the reviewed copy. Staging clears stale text: any `*.txt` in a
+language directory that the source no longer provides, whether because a single
+field was removed or because the whole locale was dropped — otherwise
+`publishListing` would keep uploading it. It never deletes a language directory
+while that directory still holds anything, so it cannot take
+`.../listings/<lang>/graphics/` with it, which the sibling graphics tasks own: the
+two sibling tasks share that tree with no guaranteed order, so wiping it would
 discard screenshots the same build had just staged.
 
 Read the live listing back in Play Console (Store presence → Main store listing)
@@ -164,10 +166,17 @@ when you need to know what is actually published, and copy it into
 overwrites your change.
 
 The gate is `pnpm check:play-listing` (`scripts/check-play-listing.mjs`). It runs
-in GATE 1 and as a step in the Play publish job. That step sits *after* the
-bundles are published, deliberately: a copy problem should not block a release,
-and Play rejects an undocumented tile days later rather than during CI. It fails
-the job before any *listing* is uploaded, and enforces two rules:
+three times per change: over the committed source in GATE 1, and over each
+module's **staged** layout in GATE 1 and again in the Play publish job. The staged
+passes exist because `syncPlayListingText` writes a *different, gitignored*
+directory, and that copy — not the source — is what `publishListing` uploads. A
+staging defect would otherwise ship with every gate green. The staged check runs
+after `syncPlayListings` and before `publishListing`.
+
+The publish-job step sits *after* the bundles are published, deliberately: a copy
+problem should not block a release, and Play rejects an undocumented tile days
+later rather than during CI. It fails the job before any *listing* is uploaded,
+and enforces two rules:
 
 - **All three fields, every language.** The upload sends only what the layout
   holds, so a field missing here is either silently left stale on the store page
