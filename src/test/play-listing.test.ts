@@ -87,6 +87,25 @@ describe("committed Play listing", () => {
     );
   });
 
+  it("accepts video-url.txt, which the uploader reads but does not require", () => {
+    // The allowlist has to be what GPP reads, not what this gate requires. Get
+    // that wrong and the gate denies the promo video while telling the
+    // contributor GPP ignores it — which is how the next person renames the file
+    // back and re-arms the original bug.
+    writeFileSync(join(listingDir, "en-US/video-url.txt"), "https://youtu.be/abc\n", "utf8");
+
+    expect(check()).toEqual([]);
+  });
+
+  it("still names video-url.txt among the files it knows about", () => {
+    // A gate that is right by accident is not right. The message is what the
+    // contributor believes about the uploader, so the uploader's own list has to
+    // appear in it.
+    writeFileSync(join(listingDir, "en-US/full_description.txt"), "Convocados\n", "utf8");
+
+    expect(check().join("\n")).toMatch(/video-url\.txt/);
+  });
+
   it("carries all three text fields under the names the uploader reads", () => {
     for (const field of ["title.txt", "short-description.txt", "full-description.txt"]) {
       expect(() => readFileSync(join(committedListing, "en-US", field), "utf8")).not.toThrow();

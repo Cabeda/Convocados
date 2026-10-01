@@ -8,9 +8,11 @@
  * `android-app/store-listing/<lang>/`; this is the gate that keeps it honest
  * (ADR 0049, `android-app/PLAY_STORE_PUBLISHING.md`).
  *
- * It rejects two classes of failure: an incomplete listing (every language needs
+ * It rejects three classes of failure: an incomplete listing (every language needs
  * all three fields, non-empty, within Play's limit — the upload sends only what
- * the layout holds, so an absent field is not ours to explain), and a Wear surface the app
+ * the layout holds, so an absent field is not ours to explain); a field file
+ * named in a way the uploader does not read, which would ship as nothing while
+ * the gate passed; and a Wear surface the app
  * ships but the description does not mention. Each obligation is detected from
  * the wear module rather than asserted from a list of features, but the set of
  * detectable surfaces is fixed below and is not self-extending: a surface outside
@@ -34,12 +36,25 @@ import { join } from "node:path";
  * then commits a listing with a title and no description — an empty field Play
  * refuses to accept, so the whole edit fails with "This app has no short
  * description". Rename one of these and the gate says so.
+ *
+ * The uploader reads a file; only three of them are required, and the gate owes
+ * a different answer about each. So the two sets are kept apart below: FIELDS is
+ * what must be present and non-empty, UPLOADED is everything the uploader reads.
+ * Collapsing them would make the gate reject `video-url.txt` while claiming GPP
+ * ignores it — a false claim about the uploader is worse than no claim, because
+ * the false one is what the next contributor believes.
  */
 const FIELDS = [
   { file: "title.txt", limit: 30 },
   { file: "short-description.txt", limit: 80 },
   { file: "full-description.txt", limit: 4000 },
 ];
+
+/** Files GPP reads from a language directory that carry no character limit. */
+const OPTIONAL_FIELDS = ["video-url.txt"];
+
+/** Everything `ListingDetail` uploads. The allowlist and its error message. */
+const UPLOADED = new Set([...FIELDS.map((f) => f.file), ...OPTIONAL_FIELDS]);
 
 /**
  * Wear surfaces Play expects the listing to describe. `detect` reads the module
@@ -130,14 +145,14 @@ export function checkListing({ listingDir, wearDir }) {
     // A file the uploader does not read is worse than a missing one: it looks
     // like it is being published, and the gate would pass. This is exactly how
     // `full_description.txt` shipped and Play rejected the commit with "This app
-    // has no short description".
-    const known = new Set(FIELDS.map((f) => f.file));
+    // has no short description". The allowlist is UPLOADED, not FIELDS, so a
+    // promo video named the way GPP reads it is accepted rather than denied.
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (!entry.isFile() || !entry.name.endsWith(".txt")) continue;
-      if (known.has(entry.name)) continue;
+      if (UPLOADED.has(entry.name)) continue;
       errors.push(
         `${language}/${entry.name} is not a file Gradle Play Publisher reads ` +
-          `(${[...known].join(", ")}), so it would be uploaded as nothing`,
+          `(${[...UPLOADED].join(", ")}), so it would be uploaded as nothing`,
       );
     }
   }

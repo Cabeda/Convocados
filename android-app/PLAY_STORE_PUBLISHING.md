@@ -176,7 +176,17 @@ after `syncPlayListings` and before `publishListing`.
 The publish-job step sits *after* the bundles are published, deliberately: a copy
 problem should not block a release, and Play rejects an undocumented tile days
 later rather than during CI. It fails the job before any *listing* is uploaded,
-and enforces two rules:
+and enforces three rules:
+
+- **Every field is named the way Gradle Play Publisher reads it.** GPP 4.1.1 uploads
+  `title.txt`, `short-description.txt`, `full-description.txt` and `video-url.txt`
+  (constants in `com/github/triplet/gradle/play/internal/ListingDetail`) — hyphenated.
+  Any other `*.txt` in a language directory is rejected, because a name the uploader
+  does not read is worse than a missing file: it looks published while uploading as
+  nothing. This is not hypothetical. Release 3.231.2 shipped `short_description.txt`
+  and `full_description.txt`, both gates passed over them, and Play refused the edit
+  with *"This app has no short description (promotional text) for language en-US"* —
+  leaving the store page serving the description the previous release had rejected.
 
 - **All three fields, every language.** The upload sends only what the layout
   holds, so a field missing here is either silently left stale on the store page
