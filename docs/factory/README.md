@@ -32,7 +32,7 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 |---|---|---|---|
 | `factory` | Issue labelled `ready-for-agent` | edit, commit, push `factory/*`, open Change | merge, release, label, touch a human branch |
 | `repairer` | Gate red | same as factory, budget 3 | exceed its Attempt budget |
-| `reviewer` | `pull_request` opened/synchronize | comment, push fixes to `factory/*` | approve; edit a human branch |
+| `reviewer` | `pull_request` opened/synchronize | comment, push fixes to `factory/*` | approve; edit a human branch; review a Change it cannot reach |
 | `explorer-performance` | schedule (nightly) | read, run committed benchmarks, file Issues | edit code, label Issues |
 | `explorer-bugs` | schedule (weekly) | read, file Issues | edit code, label Issues |
 | `explorer-security` | dependency event + schedule | read, file Issues | edit code, label Issues |

@@ -220,9 +220,22 @@ and proposes improvements nobody asked for. It never merges.
 | Role | Trigger | Does | Never |
 |---|---|---|---|
 | **Factory** | Issue labelled `ready-for-agent` | Implements, gates, opens the Change, iterates on red | Merge, release, self-label |
-| **Reviewer** | Any open PR | Independent review; pushes fixes to `factory/*` | Approve, touch a human branch |
+| **Reviewer** | Any open PR a human branch can trigger it on | Independent review; pushes fixes to `factory/*` | Approve, touch a human branch |
+| **Sweeper** | Schedule (30 min) | Files one evidenced Issue per stuck open Change; comments once | Edit code, push, adopt work, queue anything |
 | **Explorer** | Schedule / dependency event | Files well-evidenced Issues (Design, Bugs, Security, Performance) | Write code, self-label |
 | **Sentinel** | Unhealthy production signals | Files the incident, drafts the postmortem, pages the human | Remediate anything |
+
+**Reach, and the two gaps in it.** Two limits are structural rather than matters of policy, so
+they are recorded here rather than discovered later:
+
+- A `pull_request` workflow runs the workflow files **on the Change's own branch**, so a Change
+  opened before a workflow existed never triggers it.
+- A run started by **Dependabot** receives no repository secrets and a read-only `GITHUB_TOKEN`, so
+  no role that mints an App token can run on a machine-authored Change.
+
+Together those mean the Reviewer does **not** reach every open Change: it misses machine-authored
+ones, and any Change predating a workflow. The Sweeper exists for that ground — it runs on a
+schedule, where secrets are available, and reports what it finds as Issues rather than reviews.
 
 **Gates.** GATE 1 is local and equals the pre-push hook, plus what CI cannot cheaply
 repeat: `pnpm lint`, `pnpm typecheck`, `pnpm vitest run --coverage`, `pnpm
