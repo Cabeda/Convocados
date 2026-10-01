@@ -23,6 +23,17 @@ export default tseslint.config(
   // ── Base JS recommended ─────────────────────────────────────────────────────
   js.configs.recommended,
 
+  // The Play listing gate runs on bare Node — the publish job that calls it has
+  // no bundler and no toolchain — so it gets Node globals rather than the
+  // browser ones src/ gets. It is linted explicitly (`pnpm lint`) because it
+  // fails releases, which is a different bar from the other scripts.
+  {
+    files: ["scripts/check-play-listing.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly" },
+    },
+  },
+
   // ── TypeScript recommended ──────────────────────────────────────────────────
   ...tseslint.configs.recommended,
 

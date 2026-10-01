@@ -79,6 +79,20 @@ tasks.register("syncPlayListingText") {
             }
             println("store-listing/$language -> ${modules.joinToString()} (${files.size} text files)")
         }
+
+        // A language dropped from the source is never visited above, so its staged
+        // text would survive and publishListing would keep uploading it. Remove
+        // those directories entirely — they hold no graphics, because a language
+        // with no source text has no graphics task either.
+        modules.forEach { module ->
+            val listingsRoot = project.file("$module/src/main/play/listings")
+            listingsRoot.listFiles()
+                ?.filter { it.isDirectory && it.name !in languages }
+                ?.forEach { stale ->
+                    stale.deleteRecursively()
+                    println("removed stale listing $module/${stale.name} (no source text)")
+                }
+        }
     }
 }
 

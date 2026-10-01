@@ -6,10 +6,11 @@
  * and these tests drive *that module* rather than re-implementing its rules: a
  * second implementation would stay green while the real gate decayed.
  *
- * The fixtures deliberately point at the real `android-app/wear`, so the
- * obligations are derived from the module as it is today. Adding a tile or an
- * ongoing activity tomorrow adds an obligation here automatically — and these
- * tests would fail until the description covers it.
+ * Most fixtures point at the real `android-app/wear`, so those obligations are
+ * derived from the module as it is today. The set of *detectable* surfaces is
+ * fixed in the checker and is not self-extending — a surface outside it is caught
+ * in review — so a surface the app does not have yet (a complication) is
+ * exercised against a fixture module instead, in both directions.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
@@ -25,8 +26,29 @@ const wearDir = join(root, "android-app/wear");
 /** A copy of the committed listing the test can damage. */
 let listingDir: string;
 
+/** Throwaway wear modules, so a detector can be exercised for a surface the real app lacks. */
+const fixtureDirs: string[] = [];
+
 function check() {
   return checkListing({ listingDir, wearDir });
+}
+
+function checkAgainst(wearDir: string) {
+  return checkListing({ listingDir, wearDir });
+}
+
+/**
+ * A minimal wear module containing `kotlin`. No manifest intent filters and no
+ * `OngoingActivity`, so only the detector under test can fire.
+ */
+function wearFixture(kotlin: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "play-wear-"));
+  fixtureDirs.push(dir);
+  const main = join(dir, "src/main");
+  mkdirSync(join(main, "java/dev/convocados/wear/fake"), { recursive: true });
+  writeFileSync(join(main, "AndroidManifest.xml"), "<manifest />\n", "utf8");
+  writeFileSync(join(main, "java/dev/convocados/wear/fake/Fake.kt"), kotlin, "utf8");
+  return dir;
 }
 
 function fullDescription() {
@@ -44,6 +66,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(listingDir, { recursive: true, force: true });
+  for (const dir of fixtureDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 describe("committed Play listing", () => {
@@ -78,14 +101,17 @@ describe("Wear surfaces the gate derives from android-app/wear", () => {
   });
 
   it.each(["complication"])(
-    "leaves the %s obligation dormant while the app ships none",
+    "arms the %s detector against a fixture module, in both directions",
     (keyword) => {
-      // A detector that fired on today's module would make the gate
-      // unsatisfiable. This asserts the negative for the surface the app does
-      // not have, and it starts failing the moment one is added — which is the
-      // point: adding the feature obliges the copy.
-      expect(fullDescription().toLowerCase()).not.toContain(keyword);
-      expect(check()).toEqual([]);
+      // The real module ships no complication, so the real gate cannot exercise
+      // that detector. A fixture can. Both directions matter: without the second
+      // assertion a detector that always fired would pass the first.
+      const module = wearFixture(`class Fake : ComplicationProvider() {}\n`);
+
+      expect(checkAgainst(module).join("\n")).toMatch(new RegExp(`must mention "${keyword}"`));
+
+      setFullDescription(`${fullDescription()}\nAlso a watch face complication.`);
+      expect(checkAgainst(module)).toEqual([]);
     },
   );
 });

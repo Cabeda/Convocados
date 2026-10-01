@@ -11,9 +11,10 @@
  * It rejects two classes of failure: an incomplete listing (every language needs
  * all three fields, non-empty, within Play's limit — Play replaces the whole
  * listing resource, so an absent field is cleared), and a Wear surface the app
- * ships but the description does not mention. The obligations below are derived
- * from the wear module, not kept in a checklist, so adding a surface adds the
- * obligation automatically.
+ * ships but the description does not mention. Each obligation is detected from
+ * the wear module rather than asserted from a list of features, but the set of
+ * detectable surfaces is fixed below and is not self-extending: a surface outside
+ * it is caught in review, not here.
  *
  * One implementation, on purpose. `src/test/play-listing.test.ts` drives the
  * failing paths through this module; a second copy of the rules would stay green
