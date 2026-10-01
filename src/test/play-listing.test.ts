@@ -100,20 +100,17 @@ describe("Wear surfaces the gate derives from android-app/wear", () => {
     expect(check().join("\n")).toMatch(/Wear tile \(BIND_TILE_PROVIDER \/ TileService\)/);
   });
 
-  it.each(["complication"])(
-    "arms the %s detector against a fixture module, in both directions",
-    (keyword) => {
-      // The real module ships no complication, so the real gate cannot exercise
-      // that detector. A fixture can. Both directions matter: without the second
-      // assertion a detector that always fired would pass the first.
-      const module = wearFixture(`class Fake : ComplicationProvider() {}\n`);
+  it("arms the complication detector against a fixture module, in both directions", () => {
+    // The real module ships no complication, so the real gate cannot exercise
+    // that detector. A fixture can. Both directions matter: without the second
+    // assertion, a detector that fired on everything would pass the first.
+    const module = wearFixture("class Fake : ComplicationProvider() {}\n");
 
-      expect(checkAgainst(module).join("\n")).toMatch(new RegExp(`must mention "${keyword}"`));
+    expect(checkAgainst(module).join("\n")).toMatch(/must mention "complication"/);
 
-      setFullDescription(`${fullDescription()}\nAlso a watch face complication.`);
-      expect(checkAgainst(module)).toEqual([]);
-    },
-  );
+    setFullDescription(`${fullDescription()}\nAlso a watch face complication.`);
+    expect(checkAgainst(module)).toEqual([]);
+  });
 });
 
 describe("Play's per-field requirements", () => {

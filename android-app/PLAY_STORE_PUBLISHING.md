@@ -151,9 +151,12 @@ what Play shows on both store pages, and a Wear screen that the phone does not
 have still has to be described here. `syncPlayListingText` stages that text into
 both modules' Play listing layout, and `release.yml` runs it via
 `syncPlayListings` before `:app:publishListing` / `:wear:publishListing`, so
-every release ships the reviewed copy. The staging task only copies files — it
-deliberately does not touch `.../listings/<lang>/graphics/`, which the sibling
-graphics tasks own.
+every release ships the reviewed copy. Staging clears stale text: `*.txt` in each
+language directory, and any language directory with no source text at all (a
+dropped locale would otherwise keep uploading). It never touches
+`.../listings/<lang>/graphics/`, which the sibling graphics tasks own — the two
+sibling tasks share that directory with no guaranteed order, so wiping it would
+discard screenshots the same build had just staged.
 
 Read the live listing back in Play Console (Store presence → Main store listing)
 when you need to know what is actually published, and copy it into
@@ -161,18 +164,25 @@ when you need to know what is actually published, and copy it into
 overwrites your change.
 
 The gate is `pnpm check:play-listing` (`scripts/check-play-listing.mjs`). It runs
-in GATE 1 and as a step in the Play publish job, before anything is uploaded,
-and enforces two rules:
+in GATE 1 and as a step in the Play publish job. That step sits *after* the
+bundles are published, deliberately: a copy problem should not block a release,
+and Play rejects an undocumented tile days later rather than during CI. It fails
+the job before any *listing* is uploaded, and enforces two rules:
 
 - **All three fields, every language.** Play's listing update replaces the whole
   resource, so a missing field does not stay as it is — it is cleared.
-- **Every Wear surface the app ships is described.** The obligations are derived
-  from the wear module — its manifest and its Kotlin sources — not kept in a
-  checklist, so adding a surface adds the obligation automatically. A tile
-  (`BIND_TILE_PROVIDER` or a `TileService`) obliges the description to mention
-  "tile"; an ongoing activity (`OngoingActivity`) obliges "ongoing". This is not
-  hypothetical — the quick-game tile shipped while the description never mentioned
-  it and Play rejected the release under the Wear App Quality Guidelines.
+- **Every Wear surface the app ships is described.** Each obligation is detected
+  from the wear module — its manifest and its Kotlin sources — rather than
+  asserted from a list of features, but the set of detectable surfaces is **fixed
+  and not self-extending**: a tile (`BIND_TILE_PROVIDER` or a `TileService`)
+  obliges "tile", an ongoing activity (`OngoingActivity`) obliges "ongoing", a
+  complication (`ComplicationProvider`) obliges "complication". A watch face is
+  excluded on purpose, because the copy legitimately says "watch face" when it
+  describes the live-score indicator. **Anything outside those three is caught in
+  review, not by the script** — which is why adding a Wear surface means editing
+  the description in the same PR. This is not hypothetical: the quick-game tile
+  shipped while the description never mentioned it, and Play rejected the release
+  under the Wear App Quality Guidelines.
   `src/test/play-listing.test.ts` drives the failing paths through the same
   module, so the gate cannot decay into a no-op unnoticed. See
   [ADR 0049](../docs/adr/0049-play-listing-text-is-a-build-input.md).
