@@ -1,0 +1,44 @@
+name: Dump Play Listing
+
+# Diagnostic: dumps the live Google Play store listing text (title, short
+# description, full description) for com.cabeda.Convocados, which serves both
+# the phone and the Wear OS app. The service account is only readable inside
+# Actions, so this is how the listing is inspected locally:
+#
+#   gh workflow run play-listing-dump.yml
+#   gh run download <run-id> -n play-listing
+#
+# The text itself is public (it is on the store page), so uploading it as a
+# build artifact leaks nothing the listing does not already show. The service
+# account JSON never leaves the runner.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    name: Dump listing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Dump listing text
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          python3 scripts/play-listing.py --out play-listing-dump | tee play-listing-dump.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: play-listing
+          path: |
+            play-listing-dump.txt
+            play-listing-dump/
