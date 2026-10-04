@@ -760,6 +760,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
         setUndoData({ eventId, ...data.undo });
       }
     } else {
+      // #1237: failing silently here left people tapping a dead x with no idea why.
+      const json = await res.json().catch(() => ({}));
+      setPlayerError(json.error ?? t("somethingWentWrong"));
       fetchEvent();
       return;
     }

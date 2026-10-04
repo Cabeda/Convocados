@@ -89,7 +89,10 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   });
 
   const playerIndex = event.players.findIndex((p) => p.id === playerId);
-  const player = event.players[playerIndex];
+  // The active roster view is not the identity anchor: a player re-activated on
+  // GameParticipant (invite accept, priority confirm) can still have their Player
+  // row archived, so resolve the row by id including archived ones (#1237).
+  const player = await prisma.player.findFirst({ where: { id: playerId, eventId } });
   if (!player) throw new Error("Player not found.");
   if (player.eventId !== eventId) throw new Error("Player is not in this event.");
 
@@ -288,7 +291,8 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     warned: !!shouldWarn,
     undo: {
       name: player.name,
-      order: playerIndex,
+      // An archived row has no active slot; put it back at the end (#1237).
+      order: playerIndex >= 0 ? playerIndex : event.players.length,
       userId: player.userId ?? null,
       removedAt: Date.now(),
     },

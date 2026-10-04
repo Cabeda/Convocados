@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { archiveAndLeave } from "~/lib/leave.server";
+import { resolveLeaveTarget } from "~/lib/rosterChange.server";
 
 /** POST /api/events/[id]/leave — authenticated user leaves an event they were a Player in.
  *  On success: Player.archivedAt is set, Rsvp.status = "no", auto-unfollow.
@@ -20,12 +21,9 @@ export const POST: APIRoute = async ({ params, request }) => {
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
 
-  // Find the Player row for this user in this event.
-  const { prisma } = await import("~/lib/db.server");
-  const player = await prisma.player.findFirst({
-    where: { eventId, userId: session.user.id, archivedAt: null },
-    select: { id: true },
-  });
+  // Find the Player row for this user in this event. Membership comes from the
+  // roster the event page renders, so anyone it still lists can leave (#1237).
+  const player = await resolveLeaveTarget(eventId, { userId: session.user.id });
   if (!player) {
     return Response.json({ error: "You are not a player in this event." }, { status: 404 });
   }
@@ -33,7 +31,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   try {
     const result = await archiveAndLeave({
       eventId,
-      playerId: player.id,
+      playerId: player.playerId,
       actor: { kind: "self", userId: session.user.id },
       origin,
     });

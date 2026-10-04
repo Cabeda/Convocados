@@ -4,6 +4,7 @@ import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server"
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { isGameEnded } from "../../../../lib/gameStatus";
 import { archiveAndLeave } from "../../../../lib/leave.server";
+import { resolveLeaveTarget } from "../../../../lib/rosterChange.server";
 import { applyRosterChange, resetInviteRateLimitStores } from "../../../../lib/applyRosterChange.server";
 import {
   IDEMPOTENCY_HEADER,
@@ -114,20 +115,15 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const { playerId } = await request.json();
   const session = await getSession(request);
 
-  let player = await prisma.player.findFirst({
-    where: { id: playerId, eventId, archivedAt: null },
+  // The event GET hands out EventPlayer ids, and a re-activated player may still
+  // have their Player row archived — resolve against the roster (#1237).
+  const target = await resolveLeaveTarget(eventId, { playerId });
+  if (!target) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const player = await prisma.player.findUnique({
+    where: { id: target.playerId },
     include: { event: { select: { ownerId: true } } },
   });
-  // ADR 0016: Event GET now returns EventPlayer IDs. Fall back to name-based lookup.
-  if (!player) {
-    const ep = await prisma.eventPlayer.findFirst({ where: { id: playerId, eventId } });
-    if (ep) {
-      player = await prisma.player.findFirst({
-        where: { eventId, name: ep.name, archivedAt: null },
-        include: { event: { select: { ownerId: true } } },
-      });
-    }
-  }
   if (!player) return Response.json({ error: "Not found." }, { status: 404 });
 
   // Protected player check: players with userId can only be removed by themselves or the event owner.
