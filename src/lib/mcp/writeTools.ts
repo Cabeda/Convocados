@@ -18,6 +18,9 @@ import { fromDateTimeLocalValue } from "../timezones";
 import { cancelCurrentGame, CancelError } from "../cancelEvent.server";
 import { upsertRsvp } from "../rsvp.server";
 import { enqueueRsvpAnswerNotification } from "../rsvp-notifications.server";
+import { enqueuePushSetupHintSafe } from "../pushSetupHint";
+import { getNotificationPrefs } from "../notificationPrefs.server";
+import { sendPushToUser } from "../push.server";
 import { logEvent } from "../eventLog.server";
 
 /**
@@ -495,6 +498,177 @@ async function rsvp(args: Record<string, unknown>, ctx: AuthContext) {
   return { ok: true, status: result.status, respondedAt: result.respondedAt };
 }
 
+/**
+ * Follow an event the caller does not play in. Self-service.
+ *
+ * Mirrors POST /api/events/[id]/follow. Being on the roster already implies
+ * following (ADR 0017), so this is for spectators who want event-change and
+ * recruitment notifications without a roster slot.
+ */
+async function followEvent(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
+  if (!event) throw new McpError("Game not found", -32001, 404);
+
+  const follow = await prisma.eventFollow.upsert({
+    where: { eventId_userId: { eventId, userId: ctx.userId } },
+    create: { eventId, userId: ctx.userId },
+    update: {},
+  });
+
+  // First-time follow nudge to enable device push (7-day per-user cooldown).
+  enqueuePushSetupHintSafe(ctx.userId, eventId);
+
+  return {
+    ok: true,
+    following: true,
+    mutePlayerActivity: follow.mutePlayerActivity,
+    muteReminders: follow.muteReminders,
+    mutePostGame: follow.mutePostGame,
+    muteEventDetails: follow.muteEventDetails,
+  };
+}
+
+/**
+ * Unfollow an event. Self-service.
+ *
+ * ADR 0003: a player who joins but later unfollows keeps their roster slot and
+ * merely opts out of notifications, so this is not blocked for players.
+ */
+async function unfollowEvent(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await prisma.eventFollow.deleteMany({ where: { eventId, userId: ctx.userId } });
+  return { ok: true, following: false };
+}
+
+/**
+ * Leave an event the caller is a player in. Self-service — resolves the
+ * caller's own roster row, so this can never remove anybody else.
+ */
+async function leaveEvent(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
+  if (!event) throw new McpError("Game not found", -32001, 404);
+
+  const player = await prisma.player.findFirst({
+    where: { eventId, userId: ctx.userId, archivedAt: null },
+    select: { id: true },
+  });
+  // ADR 0026: guest invite rows and display-name changes can leave an
+  // EventPlayer-native identity with no live Player row at all.
+  const eventPlayer = player
+    ? null
+    : await prisma.eventPlayer.findFirst({
+        where: { eventId, userId: ctx.userId },
+        select: { name: true },
+      });
+  if (!player && !eventPlayer) {
+    throw new McpError("You are not a player in this event.", -32001, 404);
+  }
+
+  const result = await archiveAndLeave({
+    eventId,
+    playerId: player?.id ?? null,
+    ...(eventPlayer ? { name: eventPlayer.name } : {}),
+    actor: { kind: "self", userId: ctx.userId },
+  });
+
+  return {
+    ok: true,
+    name: result.undo.name,
+    warned: result.warned,
+    benchEmptyAfter: result.benchEmptyAfter,
+  };
+}
+
+/**
+ * Mark or unmark a participant as a no-show for one game. Owner/admin only.
+ * Mirrors POST /api/events/[id]/no-show (ADR 0018).
+ */
+async function setNoShow(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await requireEventAccess(ctx, eventId);
+
+  const gameId = args.gameId as string | undefined;
+  const eventPlayerId = args.eventPlayerId as string | undefined;
+  const noShow = args.noShow;
+  if (!gameId || !eventPlayerId || typeof noShow !== "boolean") {
+    throw new McpError("gameId, eventPlayerId and noShow (boolean) are required.", -32602, 400);
+  }
+
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { title: true } });
+
+  // Bind the supplied game to THIS event, otherwise owning event A would grant
+  // no-show writes on a game belonging to event B.
+  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { eventId: true } });
+  if (!game || game.eventId !== eventId) {
+    throw new McpError("gameId does not belong to this event.", -32602, 400);
+  }
+
+  const participant = await prisma.gameParticipant.findUnique({
+    where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
+    include: { eventPlayer: { select: { userId: true } } },
+  });
+  if (!participant) throw new McpError("Participant not found.", -32001, 404);
+
+  await prisma.gameParticipant.update({ where: { id: participant.id }, data: { noShow } });
+
+  const userId = participant.eventPlayer.userId;
+  if (userId) {
+    if (noShow) {
+      await prisma.priorityEnrollment.updateMany({
+        where: { eventId, userId },
+        data: { noShowStreak: { increment: 1 } },
+      }).catch(() => {});
+      enqueueNoShowNotification({
+        userId,
+        eventId,
+        title: event?.title ?? "Game",
+        streak: await noShowStreak(eventId, userId),
+      }).catch(() => {});
+    } else {
+      await prisma.priorityEnrollment.updateMany({
+        where: { eventId, userId, noShowStreak: { gt: 0 } },
+        data: { noShowStreak: { decrement: 1 } },
+      }).catch(() => {});
+    }
+  }
+
+  logEvent(eventId, noShow ? "no_show_marked" : "no_show_cleared", null, ctx.userId, {
+    source: "mcp",
+    eventPlayerId,
+  }).catch(() => {});
+
+  return { ok: true, noShow };
+}
+
+async function noShowStreak(eventId: string, userId: string): Promise<number> {
+  const enrollment = await prisma.priorityEnrollment.findUnique({
+    where: { eventId_userId: { eventId, userId } },
+    select: { noShowStreak: true },
+  });
+  return enrollment?.noShowStreak ?? 1;
+}
+
+/** Best-effort push telling the player they were marked absent. */
+async function enqueueNoShowNotification(input: {
+  userId: string;
+  eventId: string;
+  title: string;
+  streak: number;
+}): Promise<void> {
+  const prefs = await getNotificationPrefs(input.userId);
+  if (!prefs.pushEnabled) return;
+  const body =
+    `You missed ${input.title}. No-show streak: ${input.streak}.` +
+    (input.streak >= 2 ? " Priority may be affected." : "");
+  await sendPushToUser(input.userId, input.title, body, `/events/${input.eventId}`).catch(() => {});
+}
+
 export const WRITE_TOOLS: ToolDef[] = [
   {
     name: "convocados_add_player",
@@ -638,7 +812,62 @@ export const WRITE_TOOLS: ToolDef[] = [
       },
       required: ["eventId", "status"],
     },
-    scope: "manage:players",
+    // Self-service: an organiser scope here would stop a player whose token was
+    // granted only read access from answering their own RSVP.
+    scope: "read:events",
     handler: rsvp,
+  },
+  {
+    name: "convocados_follow_event",
+    description:
+      "Follow a Game you do not play in, to get event-change and recruitment notifications. Self-service; playing in a Game already implies following it.",
+    inputSchema: {
+      type: "object",
+      properties: { eventId: { type: "string", description: "Event ID" } },
+      required: ["eventId"],
+    },
+    scope: "read:events",
+    handler: followEvent,
+  },
+  {
+    name: "convocados_unfollow_event",
+    description:
+      "Stop following a Game. Self-service; valid while you still hold a roster slot, which you then merely stop being notified about.",
+    inputSchema: {
+      type: "object",
+      properties: { eventId: { type: "string", description: "Event ID" } },
+      required: ["eventId"],
+    },
+    scope: "read:events",
+    handler: unfollowEvent,
+  },
+  {
+    name: "convocados_leave_event",
+    description:
+      "Leave a Game YOU are a player in: archives your roster slot, declines your RSVP and unfollows you. Self-service; cannot remove any other player.",
+    inputSchema: {
+      type: "object",
+      properties: { eventId: { type: "string", description: "Event ID" } },
+      required: ["eventId"],
+    },
+    scope: "read:events",
+    handler: leaveEvent,
+  },
+  {
+    name: "convocados_set_no_show",
+    description:
+      "Mark or unmark a player as a no-show for one specific game, which updates their attendance and no-show streak. Actor must own or admin the event.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID the game belongs to" },
+        gameId: { type: "string", description: "Game ID to mark" },
+        eventPlayerId: { type: "string", description: "EventPlayer ID of the player" },
+        noShow: { type: "boolean", description: "true to mark as no-show, false to undo the mark" },
+      },
+      required: ["eventId", "gameId", "eventPlayerId", "noShow"],
+    },
+    scope: "manage:players",
+    handler: setNoShow,
   },
 ];

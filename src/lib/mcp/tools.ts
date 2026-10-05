@@ -121,6 +121,29 @@ async function getRatings(args: Record<string, unknown>, _ctx: AuthContext) {
   return { ratings: fallback };
 }
 
+/**
+ * Which account this token acts as. Not decoration: an MCP tool call mutates
+ * real data, so the first thing to check when one behaves unexpectedly is
+ * whether it ran as the account you expected. Deliberately returns no token,
+ * secret or session material.
+ */
+async function whoami(_args: Record<string, unknown>, ctx: AuthContext) {
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.userId },
+    select: { id: true, name: true, email: true, role: true, emailVerified: true },
+  });
+  if (!user) throw new McpError("User not found", -32001, 404);
+  return {
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    emailVerified: user.emailVerified,
+    authMethod: ctx.authMethod,
+    grantedScopes: ctx.scopes,
+  };
+}
+
 const READ_TOOLS: ToolDef[] = [
   {
     name: "convocados_get_balance",
@@ -172,6 +195,14 @@ const READ_TOOLS: ToolDef[] = [
     inputSchema: { type: "object", properties: { eventId: { type: "string" } }, required: ["eventId"] },
     scope: "read:events",
     handler: listPlayers,
+  },
+  {
+    name: "convocados_whoami",
+    description:
+      "Return the account this MCP token acts as, plus the scopes it was granted. Self-service read-only; call it first when a write tool behaves unexpectedly, to confirm which user it ran as.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    scope: "read:profile",
+    handler: whoami,
   },
 ];
 
