@@ -638,11 +638,8 @@ async function setNoShow(args: Record<string, unknown>, ctx: AuthContext) {
     }
   }
 
-  logEvent(eventId, noShow ? "no_show_marked" : "no_show_cleared", null, ctx.userId, {
-    source: "mcp",
-    eventPlayerId,
-  }).catch(() => {});
-
+  // No event-log entry: EventAction has no no-show verb and the REST route
+  // logs nothing either. GameParticipant.noShow plus the streak is the record.
   return { ok: true, noShow };
 }
 

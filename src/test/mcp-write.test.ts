@@ -490,7 +490,7 @@ describe("MCP write tools — set_score", () => {
 });
 
 describe("MCP write tools — tools/list surface", () => {
-  it("exposes all six write tools alongside the read tools", async () => {
+  it("exposes every write tool alongside the read tools", async () => {
     mockAuth.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth", clientId: "c1" });
     const req = makeRequest(
       { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
@@ -500,10 +500,22 @@ describe("MCP write tools — tools/list surface", () => {
     const body: any = await res.json();
     const names = body.result.tools.map((t: any) => t.name);
     expect(names).toEqual([...names].sort());
-    for (const tool of ["convocados_add_player", "convocados_remove_player", "convocados_randomize_teams", "convocados_update_payment", "convocados_set_score", "convocados_create_event"]) {
+    for (const tool of [
+      "convocados_add_player",
+      "convocados_remove_player",
+      "convocados_randomize_teams",
+      "convocados_update_payment",
+      "convocados_set_score",
+      "convocados_create_event",
+      "convocados_follow_event",
+      "convocados_unfollow_event",
+      "convocados_leave_event",
+      "convocados_set_no_show",
+    ]) {
       expect(names).toContain(tool);
     }
-    expect(names).toHaveLength(16);
+    // Exact count so adding or dropping a tool is a deliberate, visible change.
+    expect(names).toHaveLength(21);
   });
 });
 
@@ -860,7 +872,7 @@ describe("MCP write tools — rsvp", () => {
   it("sets the caller's RSVP", async () => {
     const owner = await createOwner();
     const event = await createEvent(owner.id);
-    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
 
     const res = await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "yes" })));
     expect(res.status).toBe(200);
@@ -872,21 +884,30 @@ describe("MCP write tools — rsvp", () => {
   it("rejects an invalid status", async () => {
     const owner = await createOwner();
     const event = await createEvent(owner.id);
-    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
     expect((await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "perhaps" })))).status).toBe(400);
   });
 
   it("rejects when the game has already started", async () => {
     const owner = await createOwner();
     const event = await createEvent(owner.id, { dateTime: new Date(Date.now() - 3600_000) });
-    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
     expect((await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "yes" })))).status).toBe(409);
   });
 
-  it("rejects when the scope is missing", async () => {
+  it("is self-service, so a read-only token may answer", async () => {
+    // rsvp used to require manage:players, which stopped a player whose token
+    // was granted only read access from answering their own RSVP.
     const owner = await createOwner();
     const event = await createEvent(owner.id);
     mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
+    expect((await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "yes" })))).status).not.toBe(403);
+  });
+
+  it("still rejects when the read scope itself is missing", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:history"], authMethod: "oauth", clientId: "c1" });
     expect((await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "yes" })))).status).toBe(403);
   });
 });
