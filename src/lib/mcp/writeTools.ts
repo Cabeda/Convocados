@@ -688,7 +688,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_remove_player",
-    description: "Remove a player from a Game (soft-archive, triggers leave side-effects). Provide playerId or name.",
+    description: "Remove a player from a Game (soft-archive, triggers leave side-effects). Provide playerId or name. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
       properties: {
@@ -703,7 +703,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_randomize_teams",
-    description: "Generate/randomize teams for a Game from its active players. Set balanced=true to use ELO balancing.",
+    description: "Generate/randomize teams for a Game from its active players, overwriting any existing assignment. Set balanced=true to use ELO balancing. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
       properties: {
@@ -717,13 +717,13 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_update_payment",
-    description: "Update a player's payment status (pending|sent|paid) for a Game. paid writes the wallet ledger credit.",
+    description: "Update a player's payment status (pending|sent|paid) for a Game. paid writes the wallet ledger credit. Actor must own or admin the event, unless marking their own payment as sent.",
     inputSchema: {
       type: "object",
       properties: {
         eventId: { type: "string", description: "Event ID" },
         playerName: { type: "string", description: "Player display name" },
-        status: { type: "string", enum: ["pending", "sent", "paid"] },
+        status: { type: "string", enum: ["pending", "sent", "paid"], description: "pending = unpaid, sent = player says they paid, paid = organizer confirmed" },
         method: { type: "string", description: "Payment method label (mbway, revolut, cash, ...)" },
       },
       required: ["eventId", "playerName", "status"],
@@ -733,7 +733,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_set_score",
-    description: "Set the final score (scoreOne, scoreTwo) on the latest GameHistory for an Event. Triggers ELO processing.",
+    description: "Set the final score (scoreOne, scoreTwo) on the latest GameHistory for an Event. Triggers ELO processing. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
       properties: {
@@ -762,8 +762,9 @@ export const WRITE_TOOLS: ToolDef[] = [
         teamTwoName: { type: "string", description: "Team two name (default Gunas)" },
         isPublic: { type: "boolean", description: "Public listing (default false)" },
         isRecurring: { type: "boolean", description: "Recurring event (default false)" },
-        recurrenceFreq: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"] },
-        recurrenceInterval: { type: "integer", description: "Recurrence interval (default 1)" },
+        recurrenceFreq: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"], description: "Recurrence period (only used when isRecurring is true)" },
+        recurrenceInterval: { type: "integer", description: "Repeat every N periods (default 1)" },
+        recurrenceByDay: { type: "string", description: "Weekday code for weekly recurrence, e.g. MO" },
       },
       required: ["title", "dateTime"],
     },

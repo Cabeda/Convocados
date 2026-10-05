@@ -171,14 +171,14 @@ const READ_TOOLS: ToolDef[] = [
   {
     name: "convocados_get_history",
     description: "Get game history for an Event (past Games). Requires eventId.",
-    inputSchema: { type: "object", properties: { eventId: { type: "string" } }, required: ["eventId"] },
+    inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:history",
     handler: getHistory,
   },
   {
     name: "convocados_get_ratings",
     description: "Get ELO ratings for an Event. Requires eventId.",
-    inputSchema: { type: "object", properties: { eventId: { type: "string" } }, required: ["eventId"] },
+    inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:ratings",
     handler: getRatings,
   },
@@ -192,7 +192,7 @@ const READ_TOOLS: ToolDef[] = [
   {
     name: "convocados_list_players",
     description: "List players for a Game (Event). Requires eventId.",
-    inputSchema: { type: "object", properties: { eventId: { type: "string" } }, required: ["eventId"] },
+    inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:events",
     handler: listPlayers,
   },
