@@ -139,9 +139,17 @@ export const DELETE: APIRoute = async ({ params, request }) => {
       });
   const name = row?.name ?? roster?.name;
   if (!name) return Response.json({ error: "Not found." }, { status: 404 });
-  // The roster row is the identity going forward; a legacy row only wins when it
-  // carries an account, so the gate judges the same person it always did.
-  const subjectUserId = roster?.userId ?? row?.userId ?? null;
+  // The legacy Player row carries the authoritative account link — the read path
+  // trusts Player.userId for exactly this reason (index.ts). A roster row with no
+  // userId must therefore still fall back to it, including when that Player row is
+  // archived: gameDualWrite creates unlinked EventPlayers, so "no userId on the
+  // roster row" does not mean "anonymous", and trusting that alone would skip the
+  // gate below and let an unauthenticated x remove an account-linked player.
+  const linked = row ?? await prisma.player.findFirst({
+    where: { eventId, name },
+    select: { id: true, name: true, userId: true },
+  });
+  const subjectUserId = roster?.userId ?? linked?.userId ?? null;
 
   // Protected player check: players with userId can only be removed by themselves or the event owner.
   if (subjectUserId) {
@@ -160,9 +168,10 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const actorUserId = session?.user?.id ?? owner.ownerId ?? null;
   const result = await archiveAndLeave({
     eventId,
-    // Only pass the Player row when it is the identity we resolved — a stale row
-    // under a different name would archive the wrong person.
-    playerId: row && row.name === name ? row.id : null,
+    // The Player row only when it is the active row we just resolved — otherwise
+    // archiveAndLeave works from `name`, which is how it finds the roster row for a
+    // player whose Player row is archived or absent.
+    playerId: row?.id ?? null,
     name,
     actor: isSelf
       ? { kind: "self", userId: actorUserId }

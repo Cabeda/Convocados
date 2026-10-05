@@ -81,12 +81,13 @@ export const POST: APIRoute = async ({ params, request }) => {
       const origin = `${proto}://${host}`;
       // ADR 0016: `playerId` is whatever the client sent — an EventPlayer id from
       // the event GET, or a legacy Player row id. upsertGuestRsvp already resolved
-      // which one it was and keyed the Rsvp on the EventPlayer, so reuse its name
-      // here: archiveAndLeave needs it to identify the roster row, and a re-activated
-      // guest has no un-archived Player row to look the name up from (#1237).
+      // which one it was and keyed the Rsvp on the EventPlayer, so hand
+      // archiveAndLeave the same identity: the name, because that is how it finds
+      // the roster row when no Player row is active, and the row id when there is
+      // one, because that is what it soft-archives (#1237).
       const result = await archiveAndLeave({
         eventId,
-        playerId: null,
+        playerId: rsvp.playerId,
         name: rsvp.name,
         actor: { kind: "organizer", userId: session.user.id },
         origin,

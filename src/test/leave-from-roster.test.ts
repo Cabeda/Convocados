@@ -80,9 +80,10 @@ beforeEach(async () => {
 
 /** Legacy Player + EventPlayer + GameParticipant — a fully-synced roster row. */
 async function seedOnRoster(name: string, userId: string | null, order: number) {
-  await prisma.player.create({ data: { eventId: event.id, name, userId, order } });
+  const player = await prisma.player.create({ data: { eventId: event.id, name, userId, order } });
   const eventPlayer = await prisma.eventPlayer.create({ data: { eventId: event.id, name, userId } });
   await prisma.gameParticipant.create({ data: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order } });
+  return player.id;
 }
 
 async function rosterNames() {
@@ -138,8 +139,10 @@ describe("#1237 — roster membership and the leave gate must agree", () => {
     expect((await leave("u-alice")).status).toBe(200);
     expect(await rosterNames()).not.toContain("Alice");
     expect(await strandedAs("Alice", "u-alice")).toBeNull();
-    // Leaving again is a no-op, not a resurrection: the roster identity row is
-    // soft-archived so it still resolves, which is what keeps #1237 healed.
+    // Leaving again must not resurrect them. (It is not free: #1250 resolves
+    // identity from the roster, which survives a soft archive, so the repeat still
+    // runs the flow and writes a player_left_bench NotificationJob. Pre-existing on
+    // main; pinned here so the next reader does not call it a no-op.)
     await leave("u-alice");
     expect(await rosterNames()).not.toContain("Alice");
   });
@@ -296,6 +299,27 @@ describe("#1237 — a rejected leave must not change anything", () => {
     expect(await prisma.player.count({ where: { eventId: event.id, name: "Alice", archivedAt: null } })).toBe(0);
   });
 
+  it("a roster row with no userId is still gated on the Player row's account", async () => {
+    // gameDualWrite creates EventPlayers with no userId and writes *active*
+    // participants (reachable via PATCH .../history/{historyId}). "No userId on the
+    // roster row" therefore does not mean anonymous — the archived Player row holds
+    // the authoritative link. Trusting the roster row alone skips the gate, and an
+    // unauthenticated x then removes an account-linked player instead of 403ing.
+    const alice = await seedOnRoster("Alice", "u-alice", 0);
+    await prisma.eventPlayer.update({
+      where: { id: await eventPlayerIdOf("Alice") },
+      data: { userId: null },
+    });
+    await prisma.player.update({ where: { id: alice }, data: { archivedAt: new Date() } });
+
+    vi.mocked(getSession).mockResolvedValue(undefined as any);
+    const res = await clickX("Alice", "u-anonymous");
+
+    expect(res.status).toBe(403);
+    const row = await prisma.player.findFirstOrThrow({ where: { id: alice } });
+    expect(row.archivedAt).toBeTruthy();
+  });
+
   it("an account with a ghost EventPlayer row still leaves the row it is on", async () => {
     // priority/confirm upserts EventPlayer by (eventId, name) with the caller's
     // *current* display name, so a renamed account legitimately owns two rows — and
@@ -336,5 +360,26 @@ describe("#1237 — a rejected leave must not change anything", () => {
 
     expect(res.status).toBe(200);
     expect(await rosterNames()).not.toContain("Guest");
+  });
+
+  it("declining a guest still soft-archives their legacy Player row", async () => {
+    // The decline path identifies the roster row by name so it works without an
+    // active Player row. It must still pass the row id when there is one: that is
+    // what archiveAndLeave soft-archives, and an un-archived Player row keeps the
+    // guest in the ADR 0017 player-only push tier — the exact mis-tiering #1237 is
+    // about (main archives it, so this must not regress).
+    await seedOnRoster("Guest", null, 0);
+    await seedOnRoster("Bob", "u-bob", 1);
+    asUser("u-owner");
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false } as any);
+
+    const res = await rsvpRoute({
+      params: { id: event.id, playerId: await eventPlayerIdOf("Guest") },
+      request: req("http://x/rsvp", { method: "POST", body: JSON.stringify({ status: "no" }), userId: "u-owner" }),
+    } as any);
+
+    expect(res.status).toBe(200);
+    const row = await prisma.player.findFirstOrThrow({ where: { eventId: event.id, name: "Guest" } });
+    expect(row.archivedAt).toBeTruthy();
   });
 });
