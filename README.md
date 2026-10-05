@@ -51,8 +51,49 @@ Most sports organizers use a WhatsApp group and a spreadsheet. Convocados replac
 | 🔔 Push notifications | Web Push + native mobile when players join/leave |
 | 🌍 Public events | Browse open games with filters, table view, and Leaflet map |
 | 🔗 Webhooks | HTTP callbacks for all event lifecycle events |
-| 🔐 OAuth 2.1 / OIDC | Full provider with PKCE, magic link, Google SSO, MCP-ready |
+| 🔐 OAuth 2.1 / OIDC | Full provider with PKCE, magic link, Google SSO |
+| 🤖 MCP server | 22 tools over `/api/mcp`, authenticated with the OAuth scopes above |
 | 📱 Android app | Native Kotlin + Jetpack Compose (phone + Wear OS) |
+
+---
+
+## MCP Server
+
+`POST /api/mcp` is a stateless [MCP](https://modelcontextprotocol.io) Streamable HTTP
+endpoint. Any MCP client can drive Convocados — Claude Desktop, Cursor, VS Code Copilot —
+using the OAuth 2.1 provider this app already runs.
+
+Clients discover it automatically via RFC 9728 metadata:
+
+```
+GET /.well-known/oauth-protected-resource/api/mcp
+```
+
+**Connecting** — in your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "convocados": { "url": "https://convocados.cabeda.dev/api/mcp" }
+  }
+}
+```
+
+The client follows `resource_metadata` → `/api/auth/oauth2/register` (dynamic client
+registration) → the consent screen → done. Request the scopes you need; the tool table
+declares which scope each tool requires.
+
+**Design notes**
+
+- **Stateless.** Every POST re-authenticates from the caller's bearer token (or session
+  cookie), so nothing is held in memory and the endpoint survives machine suspend.
+- **No duplicated business logic.** Each tool re-dispatches into the existing REST route
+  (`src/pages/api/events/...`), so ownership checks, rate limiting and auditing stay in one
+  place. See `src/lib/mcp/tools.ts`.
+- **One tool per job, not per route.** 22 tools cover every operation; `update_event`
+  collapses six `PUT` routes behind a `field` enum. A model offered 139 tools picks wrong.
+
+Tool list lives in `src/lib/mcp/tools.ts`; protocol handling in `src/lib/mcp/server.ts`.
 
 ---
 
