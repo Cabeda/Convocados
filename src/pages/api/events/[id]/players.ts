@@ -4,6 +4,7 @@ import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server"
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { isGameEnded } from "../../../../lib/gameStatus";
 import { archiveAndLeave } from "../../../../lib/leave.server";
+import { activeRosterEventPlayerById } from "../../../../lib/rosterChange.server";
 import { applyRosterChange, resetInviteRateLimitStores } from "../../../../lib/applyRosterChange.server";
 import {
   IDEMPOTENCY_HEADER,
@@ -131,12 +132,10 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     select: { id: true, name: true, userId: true },
   });
   // The event GET hands out EventPlayer ids (ADR 0016), so that is the common case.
-  const roster = row
-    ? null
-    : await prisma.eventPlayer.findFirst({
-        where: { id: playerId, eventId },
-        select: { id: true, name: true, userId: true },
-      });
+  // Restricted to the *active* roster: a pending invite ghost is not a player yet
+  // (ADR 0025) and is retracted by its own action, so the x must not act on one —
+  // otherwise an anonymous caller could cancel someone's invite.
+  const roster = row ? null : await activeRosterEventPlayerById(eventId, playerId);
   const name = row?.name ?? roster?.name;
   if (!name) return Response.json({ error: "Not found." }, { status: 404 });
   // The legacy Player row carries the authoritative account link — the read path

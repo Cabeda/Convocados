@@ -320,6 +320,31 @@ describe("#1237 — a rejected leave must not change anything", () => {
     expect(row.archivedAt).toBeTruthy();
   });
 
+  it("the x does not act on a pending invite ghost", async () => {
+    // ADR 0025: a pending participant is an invite, not a player — never part of the
+    // roster, and retracted by its own action. Resolving the EventPlayer id without
+    // checking the roster would let any anonymous caller cancel someone's invite.
+    await seedOnRoster("Bob", "u-bob", 0);
+    const ghost = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ghost" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId, eventPlayerId: ghost.id, order: 1, status: "pending" },
+    });
+
+    vi.mocked(getSession).mockResolvedValue(undefined as any);
+    const res = await playersDelete({
+      params: { id: event.id },
+      request: req(`http://x/api/events/${event.id}/players`, {
+        method: "DELETE",
+        body: JSON.stringify({ playerId: ghost.id }),
+      }),
+    } as any);
+
+    expect(res.status).toBe(404);
+    const participant = await prisma.gameParticipant.findFirstOrThrow({ where: { eventPlayerId: ghost.id } });
+    expect(participant.archivedAt).toBeNull();
+    expect(participant.status).toBe("pending");
+  });
+
   it("an account with a ghost EventPlayer row still leaves the row it is on", async () => {
     // priority/confirm upserts EventPlayer by (eventId, name) with the caller's
     // *current* display name, so a renamed account legitimately owns two rows — and

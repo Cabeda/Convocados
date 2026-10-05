@@ -10,6 +10,22 @@ import { activeParticipantsWhere } from "./activeParticipants.server";
 import { upsertGameParticipantForRoster } from "./rosterCore.server";
 
 /**
+ * The active roster row behind this EventPlayer id, or null.
+ *
+ * A pending invite ghost is not on the roster (ADR 0025) — it is retracted by its own
+ * action, not by the x on the roster — so the roster routes must not act on one.
+ */
+export async function activeRosterEventPlayerById(eventId: string, eventPlayerId: string) {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) return null;
+  const participant = await prisma.gameParticipant.findFirst({
+    where: { ...activeParticipantsWhere(event.currentGameId), eventPlayerId, eventPlayer: { eventId } },
+    select: { eventPlayer: { select: { id: true, name: true, userId: true } } },
+  });
+  return participant?.eventPlayer ?? null;
+}
+
+/**
  * The EventPlayer row an account is currently listed under, or null.
  *
  * EventPlayer is unique on (eventId, name) — *not* on userId — so one account can
