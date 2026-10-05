@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import type * as AuthHelpersServer from "~/lib/auth.helpers.server";
 import { prisma } from "~/lib/db.server";
 import { GET, POST } from "~/pages/api/events/[id]/webhooks";
@@ -215,5 +217,29 @@ describe("POST /api/events/[id]/webhooks", () => {
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/webhook" }));
     expect(res.status).toBe(200);
+  });
+});
+
+describe("webhook event type documentation", () => {
+  const docs = fs.readFileSync(
+    path.join(process.cwd(), "src/pages/docs/api/webhooks.astro"),
+    "utf8",
+  );
+  // Scope to the "Event types" table so a type mentioned only in the payload
+  // table still counts as undocumented.
+  const eventTypesTable = docs.slice(
+    docs.indexOf("<h2>Event types</h2>"),
+    docs.indexOf("<h2>", docs.indexOf("<h2>Event types</h2>") + 1),
+  );
+
+  it("documents every declared event type", () => {
+    const undocumented = WEBHOOK_EVENT_TYPES.filter((ev) => !eventTypesTable.includes(`<code>${ev}</code>`));
+    expect(undocumented).toEqual([]);
+  });
+
+  it("documents no event type that is no longer declared", () => {
+    const declared = new Set<string>(WEBHOOK_EVENT_TYPES);
+    const documented = [...eventTypesTable.matchAll(/<code>([a-z_]+)<\/code>/g)].map((m) => m[1]);
+    expect(documented.filter((name) => !declared.has(name))).toEqual([]);
   });
 });

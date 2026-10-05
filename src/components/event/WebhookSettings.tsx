@@ -27,8 +27,6 @@ const DELIVERY_STATUS_LABELS: Record<string, TranslationKey> = {
   pending: "webhookDeliveryStatus_pending",
 };
 
-
-
 interface Webhook {
   id: string;
   url: string;
