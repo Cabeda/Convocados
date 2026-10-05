@@ -41,7 +41,6 @@ import { POST as priorityConfirm } from "~/pages/api/events/[id]/priority/confir
 import { POST as rsvpRoute } from "~/pages/api/events/[id]/players/[playerId]/rsvp";
 import { GET as eventGet } from "~/pages/api/events/[id]/index";
 import { acceptPlayerInvite, createPlayerInvite } from "~/lib/invite.server";
-import { repairPlayerRow } from "~/lib/rosterChange.server";
 
 function req(url: string, { userId, ...init }: RequestInit & { userId?: string } = {}) {
   const headers = new Headers(init.headers);
@@ -139,7 +138,10 @@ describe("#1237 — roster membership and the leave gate must agree", () => {
     expect((await leave("u-alice")).status).toBe(200);
     expect(await rosterNames()).not.toContain("Alice");
     expect(await strandedAs("Alice", "u-alice")).toBeNull();
-    expect((await leave("u-alice")).status).toBe(404);
+    // Leaving again is a no-op, not a resurrection: the roster identity row is
+    // soft-archived so it still resolves, which is what keeps #1237 healed.
+    await leave("u-alice");
+    expect(await rosterNames()).not.toContain("Alice");
   });
 
   it("re-adding through POST /roster leaves the player able to leave again", async () => {
@@ -279,30 +281,7 @@ describe("#1237 — a rejected leave must not change anything", () => {
     expect(active.map((p) => p.name)).toEqual(["Bob"]);
   });
 
-  it("healing a stranded Player row does not drop it onto an occupied slot", async () => {
-    // Un-archiving in place kept the row's stale `order`. Alice's archived row and
-    // Bob's live row both sat in slot 0, and a tie makes the undo index
-    // (leave.server.ts) and undo-remove's shift-by-order ambiguous.
-    await strandAlice();
-    await prisma.player.update({ where: { id: await playerIdOf("Alice") }, data: { order: 0 } });
-    asUser("u-alice");
-
-    const repaired = await repairPlayerRow(await eventPlayerIdOf("Alice"));
-
-    expect(repaired).toBe(await playerIdOf("Alice"));
-    const active = await prisma.player.findMany({
-      where: { eventId: event.id, archivedAt: null },
-      select: { name: true, order: true },
-      orderBy: { order: "asc" },
-    });
-    expect(active.map((p) => p.order)).toEqual([...new Set(active.map((p) => p.order))]);
-    expect(active.find((p) => p.name === "Alice")?.order).toBe(1);
-  });
-
   it("two concurrent leaves by an invitee with no legacy row never 500", async () => {
-    // Both callers resolve before they try to write, and the heal upserts on the
-    // unique (eventId, name) key. Find-then-create let the loser throw P2002 out
-    // of the route as a 500, so the roster change never landed.
     await seedOnRoster("Bob", "u-bob", 0);
     await reactivateViaInvite();
     asUser("u-alice");
@@ -312,21 +291,28 @@ describe("#1237 — a rejected leave must not change anything", () => {
     expect(statuses.every((s) => s < 500)).toBe(true);
     expect(statuses).toContain(200);
     expect(await rosterNames()).not.toContain("Alice");
-    expect(await aliceArchivedAt()).toBeTruthy();
+    // No legacy Player row was ever created for this invitee — still none, and
+    // definitely not an un-archived one.
+    expect(await prisma.player.count({ where: { eventId: event.id, name: "Alice", archivedAt: null } })).toBe(0);
   });
 
   it("an account with a ghost EventPlayer row still leaves the row it is on", async () => {
     // priority/confirm upserts EventPlayer by (eventId, name) with the caller's
-    // *current* display name, so a renamed account legitimately owns two rows.
-    // EventPlayer is not unique on userId, so an unordered pick answers about the
-    // ghost and 404s the player who is actually on the list.
+    // *current* display name, so a renamed account legitimately owns two rows — and
+    // EventPlayer is not unique on userId. An unordered findFirst lands on the ghost,
+    // so the leave succeeds (200) while archiving nothing: the player stays on the
+    // list, still unable to leave. Asserting the status alone hides that, so assert
+    // *who* actually left.
     await seedOnRoster("Bob", "u-bob", 0);
-    const ghost = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alice" } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alice" } });
     await seedOnRoster("Alicia", "u-alice", 1);
-    expect(ghost.userId).toBe("u-alice");
     asUser("u-alice");
 
-    expect(await strandedAs("Alicia", "u-alice")).toBeNull();
+    expect((await leave("u-alice")).status).toBe(200);
+
+    const remaining = await rosterNames();
+    expect(remaining).not.toContain("Alicia"); // the row they were actually listed on
+    expect(remaining).toContain("Bob");
   });
 
   it("the organizer declining a stranded guest is not a 404 (admin rsvp path)", async () => {

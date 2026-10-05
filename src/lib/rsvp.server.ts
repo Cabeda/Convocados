@@ -146,11 +146,15 @@ export async function upsertGuestRsvp(
   });
 
   const respondedAt = status === null ? null : new Date();
-  return prisma.rsvp.upsert({
+  const row = await prisma.rsvp.upsert({
     where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
     create: { eventPlayerId: ep.id, gameId: event.currentGameId, status, respondedAt, respondedByUserId: actorUserId },
     update: { status, respondedAt, respondedByUserId: actorUserId },
   });
+  // Carry the roster name we resolved. `playerId` is whatever the client sent, and
+  // the decline path then has to hand archiveAndLeave the same identity — which it
+  // cannot re-derive when the guest has no un-archived Player row (#1237).
+  return { ...row, name: player.name };
 }
 
 export async function getRsvpForGuest(eventId: string, playerId: string) {

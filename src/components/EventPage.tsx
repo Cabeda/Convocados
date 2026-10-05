@@ -760,9 +760,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
         setUndoData({ eventId, ...data.undo });
       }
     } else {
-      // #1237: failing silently here left people tapping a dead x with no idea why.
-      // Localized text only — json.error is a raw English server string and this UI
-      // is not English-only.
+      // #1237: the x used to fail silently here, so a player the page still listed
+      // had no way off it and no idea why. Localized text only — json.error is a
+      // raw English server string and this UI is not English-only.
       setPlayerError(t("somethingWentWrong"));
       fetchEvent();
       return;

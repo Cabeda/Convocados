@@ -106,27 +106,30 @@ async function removePlayer(args: Record<string, unknown>, ctx: AuthContext) {
   if (!eventId) throw new McpError("eventId required", -32602, 400);
   await requireEventAccess(ctx, eventId);
 
-  const playerId = args.playerId as string | undefined;
-  const name = args.name as string | undefined;
-  if (!playerId && !(typeof name === "string" && name.trim())) {
-    throw new McpError("playerId or name required", -32602, 400);
-  }
-  // ADR 0016: clients pass EventPlayer ids, and a re-activated player may have no
-  // un-archived Player row at all — archiveAndLeave resolves both ids and names
-  // against the roster itself (#1237), so no legacy lookup is duplicated here.
-  let result: Awaited<ReturnType<typeof archiveAndLeave>>;
-  try {
-    result = await archiveAndLeave({
-      eventId,
-      playerId,
-      name: typeof name === "string" ? name.trim() : undefined,
-      actor: { kind: "organizer", userId: ctx.userId },
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Player not found.";
-    if (/not found/i.test(message)) throw new McpError(message, -32001, 404);
-    throw err;
-  }
+  const byId = (args.playerId as string | undefined) ?? undefined;
+  const byName = typeof args.name === "string" ? args.name.trim() : undefined;
+  if (!byId && !byName) throw new McpError("playerId or name required", -32602, 400);
+
+  // ADR 0016: the event GET hands out EventPlayer ids, and archiveAndLeave
+  // identifies by roster name, so resolve one to the other here. One read, no
+  // archivedAt filtering: that filter is what made a re-activated player
+  // un-removable from here (#1237).
+  const ep = byId
+    ? await prisma.eventPlayer.findFirst({ where: { id: byId, eventId }, select: { name: true } })
+    : null;
+  const row = await prisma.player.findFirst({
+    where: byId && !ep ? { id: byId, eventId } : { eventId, name: ep?.name ?? byName },
+    select: { id: true, name: true },
+  });
+  const name = row?.name ?? ep?.name;
+  if (!name) throw new McpError("Player not found.", -32001, 404);
+
+  const result = await archiveAndLeave({
+    eventId,
+    playerId: row?.id ?? null,
+    name,
+    actor: { kind: "organizer", userId: ctx.userId },
+  });
   return { ok: true, name: result.undo.name, warned: result.warned, benchEmptyAfter: result.benchEmptyAfter };
 }
 

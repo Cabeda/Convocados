@@ -4,7 +4,6 @@ import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server"
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { isGameEnded } from "../../../../lib/gameStatus";
 import { archiveAndLeave } from "../../../../lib/leave.server";
-import { resolveLeaveTarget } from "../../../../lib/rosterChange.server";
 import { applyRosterChange, resetInviteRateLimitStores } from "../../../../lib/applyRosterChange.server";
 import {
   IDEMPOTENCY_HEADER,
@@ -115,18 +114,38 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const { playerId } = await request.json();
   const session = await getSession(request);
 
-  // The event GET hands out EventPlayer ids, and a re-activated player may still
-  // have their Player row archived — resolve against the roster (#1237). This is
-  // a pure read, so nothing past the 403 below can have written anything.
-  const target = await resolveLeaveTarget(eventId, { playerId });
-  if (!target) return Response.json({ error: "Not found." }, { status: 404 });
-
+  // ADR 0016: the roster the event page renders is GameParticipant + EventPlayer,
+  // but this gate looked only for an un-archived legacy Player row. Reactivation
+  // paths — accepting a re-invite, confirming a priority spot — put someone back on
+  // the roster without restoring that row, so the x answered 404 for a player the
+  // list was showing, with no way off it (#1237). Resolve the roster name and let
+  // archiveAndLeave work from it, the same way the self-leave path does.
+  //
+  // This only reads. Keeping resolution side-effect free is what guarantees the 403
+  // below has not already changed anything.
   const owner = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
   if (!owner) return Response.json({ error: "Not found." }, { status: 404 });
 
+  const row = await prisma.player.findFirst({
+    where: { id: playerId, eventId, archivedAt: null },
+    select: { id: true, name: true, userId: true },
+  });
+  // The event GET hands out EventPlayer ids (ADR 0016), so that is the common case.
+  const roster = row
+    ? null
+    : await prisma.eventPlayer.findFirst({
+        where: { id: playerId, eventId },
+        select: { id: true, name: true, userId: true },
+      });
+  const name = row?.name ?? roster?.name;
+  if (!name) return Response.json({ error: "Not found." }, { status: 404 });
+  // The roster row is the identity going forward; a legacy row only wins when it
+  // carries an account, so the gate judges the same person it always did.
+  const subjectUserId = roster?.userId ?? row?.userId ?? null;
+
   // Protected player check: players with userId can only be removed by themselves or the event owner.
-  if (target.userId) {
-    const isSelf = session?.user?.id === target.userId;
+  if (subjectUserId) {
+    const isSelf = session?.user?.id === subjectUserId;
     const { isOwner, isAdmin } = await checkOwnership(request, owner.ownerId, session, eventId);
     if (!isSelf && !isOwner && !isAdmin) {
       return Response.json({ error: "This player is account-linked and can only be removed by themselves or the event owner." }, { status: 403 });
@@ -135,13 +154,16 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   // Soft-archive + notify + log + re-index, with the warn-the-rest push gated on (48h + bench-empty).
   // Self-removal (the player is removing themselves) uses actor.kind="self" so the auto-unfollow fires.
-  const isSelf = !!session?.user?.id && target.userId === session.user.id;
+  const isSelf = !!session?.user?.id && subjectUserId === session.user.id;
   // For unauthenticated requests, pass null as the actor id (lib skips the Rsvp audit row,
   // which has a FK to User). Real authenticated users get a FK-safe actor id.
   const actorUserId = session?.user?.id ?? owner.ownerId ?? null;
   const result = await archiveAndLeave({
     eventId,
-    playerId: target.playerId ?? target.eventPlayerId,
+    // Only pass the Player row when it is the identity we resolved — a stale row
+    // under a different name would archive the wrong person.
+    playerId: row && row.name === name ? row.id : null,
+    name,
     actor: isSelf
       ? { kind: "self", userId: actorUserId }
       : { kind: "organizer", userId: actorUserId },

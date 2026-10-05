@@ -17,7 +17,6 @@ import { logEvent } from "./eventLog.server";
 import { createLogger } from "./logger.server";
 import { removePlayerFromTeams, validateTeams } from "./teamFormation.server";
 import { RSVP_WINDOW_HOURS } from "./rsvp.server";
-import { repairPlayerRow, resolveLeaveTarget, type LeaveSelector } from "./rosterChange.server";
 
 const log = createLogger("leave");
 
@@ -27,10 +26,16 @@ export type LeaveActor =
 
 export interface ArchiveAndLeaveInput {
   eventId: string;
-  /** Legacy Player row id, or the EventPlayer id the event GET hands out
-   *  (ADR 0016). Falls back to `name`, then to the self actor's own account. */
+  /**
+   * Legacy `Player` row id. Optional: an EventPlayer-native identity (ADR 0026
+   * guest invite links, or a re-join under a renamed display name) has no live
+   * `Player` row at all, so `name` alone identifies it.
+   */
   playerId?: string | null;
-  /** Resolve by display name — the MCP remove_player tool accepts either. */
+  /**
+   * Roster name — the authoritative identity key (ADR 0016). Required whenever
+   * `playerId` is absent; defaults to the `Player` row's name when both are given.
+   */
   name?: string;
   actor: LeaveActor;
   /** Origin used to build event URLs in the push body. Defaults to the production host. */
@@ -74,21 +79,6 @@ export async function resolveActorName(playerName: string, actor: LeaveActor): P
   return "anonymous";
 }
 
-/** A user can only leave on their own behalf. Runs before any write, so a
- *  rejected self-leave cannot heal the legacy row on the way out (#1237). */
-function assertSelfLeave(subjectUserId: string | null, actor: LeaveActor): void {
-  if (actor.kind === "self" && subjectUserId !== actor.userId) {
-    throw new Error("You can only leave on your own behalf.");
-  }
-}
-
-/** Which identity the request is about, for the resolution step below. */
-function leaveSelector(input: ArchiveAndLeaveInput, actor: LeaveActor): LeaveSelector | null {
-  if (input.playerId) return { playerId: input.playerId };
-  if (input.name) return { name: input.name };
-  return actor.kind === "self" && actor.userId ? { userId: actor.userId } : null;
-}
-
 export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<ArchiveAndLeaveResult> {
   const { eventId, playerId, actor } = input;
   const origin = input.origin ?? "https://convocados.cabeda.dev";
@@ -108,36 +98,32 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     select: { currentGameId: true },
   });
 
-  // ADR 0016: the active roster view is not the identity anchor: a player
-  // re-activated on GameParticipant (invite accept, priority confirm) can still
-  // have their Player row archived, or none at all, so resolve the row by id
-  // including archived ones and fall back to the roster (#1237).
-  let player = playerId ? await prisma.player.findFirst({ where: { id: playerId, eventId } }) : null;
-  if (player) {
-    if (player.eventId !== eventId) throw new Error("Player is not in this event.");
-    // Authorization is the caller's responsibility (see checkOwnership in the API
-    // route). We still validate the self-leave invariant: a user can only leave on
-    // their own behalf.
-    assertSelfLeave(player.userId, actor);
-  } else {
-    const selector = leaveSelector(input, actor);
-    const rostered = selector ? await resolveLeaveTarget(eventId, selector) : null;
-    if (!rostered) throw new Error("Player not found.");
-    assertSelfLeave(rostered.userId, actor);
+  const player = playerId
+    ? event.players.find((p) => p.id === playerId) ?? null
+    : null;
 
-    // The resolver is a read: when it found a usable Player row we are done, and
-    // when it did not we heal the row here — which is the whole point of doing it
-    // here and not in the resolver, because the route has already authorized this
-    // request and the self-leave invariant is settled, so the write can only ever
-    // follow a decision to leave. Every caller — the routes and the MCP tool — gets
-    // this for free instead of each keeping its own legacy lookup.
-    const healedId = rostered.playerId
-      ?? (rostered.eventPlayerId ? await repairPlayerRow(rostered.eventPlayerId) : null);
-    if (!healedId) throw new Error("Player not found.");
-    player = await prisma.player.findUniqueOrThrow({ where: { id: healedId } });
+  // ADR 0016/0026: the roster the user actually sees is GameParticipant +
+  // EventPlayer, so an EventPlayer-native identity can be live on the current
+  // game with no live `Player` row. Fall back to the caller-supplied name so
+  // self-leave works for those identities too.
+  const rosterName = player?.name ?? input.name ?? null;
+  if (!rosterName) throw new Error("Player not found.");
+  if (player && player.eventId !== eventId) throw new Error("Player is not in this event.");
+
+  // The EventPlayer is the identity every downstream surface keys on (Rsvp,
+  // teams, payments, notifications). It is absent on events with no current
+  // game, so it stays optional — but when present it is the authoritative link.
+  const ep = await prisma.eventPlayer.findUnique({
+    where: { eventId_name: { eventId, name: rosterName } },
+  });
+
+  // Authorization is the caller's responsibility (see checkOwnership in the API route).
+  // We still validate the self-leave invariant: a user can only leave on their own behalf.
+  // EventPlayer.userId is authoritative; the legacy Player row can carry a stale link.
+  const identityUserId = ep?.userId ?? player?.userId ?? null;
+  if (actor.kind === "self" && identityUserId !== actor.userId) {
+    throw new Error("You can only leave on your own behalf.");
   }
-
-  const playerIndex = event.players.findIndex((p) => p.id === player.id);
 
   // ADR 0016: the current game's GameParticipant rows are the authoritative
   // roster. Legacy Player rows accumulate across recurring occurrences and would
@@ -148,27 +134,25 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   const activeCountBefore = roster.activeCount;
   const hasBench = roster.hasBench;
   const firstBenchName = roster.firstBenchName ?? undefined;
-  const wasActive = roster.activeNames.has(player.name);
+  const wasActive = roster.activeNames.has(rosterName);
 
-  // Soft-archive the Player row. Preserves the row + any Rsvp keyed on this playerId.
-  await prisma.player.update({
-    where: { id: player.id, eventId },
-    data: { archivedAt: new Date() },
-  });
+  // Soft-archive the Player row when there is one. Preserves the row + any Rsvp
+  // keyed on this playerId. EventPlayer-native identities have no Player row.
+  if (player) {
+    await prisma.player.update({
+      where: { id: player.id, eventId },
+      data: { archivedAt: new Date() },
+    });
+  }
 
   // ADR 0016: also archive the GameParticipant for the current Game
-  if (currentGameId) {
-    const ep = await prisma.eventPlayer.findUnique({
-      where: { eventId_name: { eventId, name: player.name } },
+  if (currentGameId && ep) {
+    await prisma.gameParticipant.updateMany({
+      where: { gameId: currentGameId, eventPlayerId: ep.id },
+      data: { archivedAt: new Date() },
     });
-    if (ep) {
-      await prisma.gameParticipant.updateMany({
-        where: { gameId: currentGameId, eventPlayerId: ep.id },
-        data: { archivedAt: new Date() },
-      });
-      // Payment overhaul: drop the leaver's payment row from the active list.
-      await syncGamePayments(currentGameId, eventId);
-    }
+    // Payment overhaul: drop the leaver's payment row from the active list.
+    await syncGamePayments(currentGameId, eventId);
   }
 
   // Write Rsvp. Every removal from the current game records status="no":
@@ -176,38 +160,33 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   //   - Organizer removal (guest or linked user): status="no" + respondedByUserId audit.
   // The leaver lands in the Declined roster; a re-add/undo resets it to "yes".
   // ADR 0016: RSVP is keyed on (eventPlayerId, gameId).
-  if (currentGameId && ((actor.kind === "self" && player.userId) || (actor.kind === "organizer" && actor.userId))) {
-    const ep = await prisma.eventPlayer.findUnique({
-      where: { eventId_name: { eventId, name: player.name } },
+  if (currentGameId && ep && ((actor.kind === "self" && identityUserId) || (actor.kind === "organizer" && actor.userId))) {
+    await prisma.rsvp.upsert({
+      where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: currentGameId } },
+      create: {
+        eventPlayerId: ep.id,
+        gameId: currentGameId,
+        status: "no",
+        respondedAt: new Date(),
+        ...(actor.kind === "organizer" ? { respondedByUserId: actor.userId ?? undefined } : {}),
+      },
+      update: {
+        status: "no",
+        respondedAt: new Date(),
+        ...(actor.kind === "organizer" ? { respondedByUserId: actor.userId ?? undefined } : {}),
+      },
     });
-    if (ep) {
-      await prisma.rsvp.upsert({
-        where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: currentGameId } },
-        create: {
-          eventPlayerId: ep.id,
-          gameId: currentGameId,
-          status: "no",
-          respondedAt: new Date(),
-          ...(actor.kind === "organizer" ? { respondedByUserId: actor.userId ?? undefined } : {}),
-        },
-        update: {
-          status: "no",
-          respondedAt: new Date(),
-          ...(actor.kind === "organizer" ? { respondedByUserId: actor.userId ?? undefined } : {}),
-        },
-      });
-    }
   }
 
   // Auto-unfollow on self-removal
-  if (actor.kind === "self" && player.userId) {
+  if (actor.kind === "self" && identityUserId) {
     await prisma.eventFollow.deleteMany({
-      where: { eventId, userId: player.userId },
+      where: { eventId, userId: identityUserId },
     });
   }
 
   // Re-index remaining player orders
-  const remaining = event.players.filter((p) => p.id !== player.id);
+  const remaining = event.players.filter((p) => p.id !== player?.id);
   await prisma.$transaction(
     remaining.map((p, i) =>
       p.order !== i
@@ -218,7 +197,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // Auto-sync teams: remove player, optionally promote bench player into their team
   if (wasActive) {
-    await removePlayerFromTeams(eventId, player.name, firstBenchName, currentGameId);
+    await removePlayerFromTeams(eventId, rosterName, firstBenchName, currentGameId);
   }
   await validateTeams(eventId, event.maxPlayers, currentGameId);
 
@@ -247,7 +226,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
       {
         title: event.title,
         key: "notifyPlayerLeft",
-        params: { name: player.name, n: spotsLeftStr },
+        params: { name: rosterName, n: spotsLeftStr },
         url,
         spotsLeft,
       },
@@ -261,7 +240,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
       {
         title: event.title,
         key: "notifyPlayerLeftPromoted",
-        params: { left: player.name, promoted: firstBenchName, n: spotsLeftStr },
+        params: { left: rosterName, promoted: firstBenchName, n: spotsLeftStr },
         url,
         spotsLeft,
       },
@@ -275,7 +254,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
       {
         title: event.title,
         key: "notifyPlayerLeftBench",
-        params: { name: player.name },
+        params: { name: rosterName },
         url,
         spotsLeft,
       },
@@ -293,7 +272,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
       {
         title: event.title,
         key: "notifySpotAvailable",
-        params: { name: player.name },
+        params: { name: rosterName },
         url: `${url}?action=join`,
         spotsLeft,
       },
@@ -311,26 +290,25 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   }
 
   // Fire webhooks
-  const webhookActor = await resolveActorName(player.name, actor);
-  fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft, actor: webhookActor }).catch(() => {});
+  const webhookActor = await resolveActorName(rosterName, actor);
+  fireWebhooks(eventId, "player_left", { playerName: rosterName, spotsLeft, actor: webhookActor }).catch(() => {});
 
   // Recalculate payment shares if a cost is set
   await syncPaymentsForEvent(eventId);
 
   // Activity log
-  const actorName = actor.kind === "self" ? player.name : null;
+  const actorName = actor.kind === "self" ? rosterName : null;
   const actorId = actor.userId;
-  logEvent(eventId, "player_removed", actorName, actorId, { playerName: player.name, source: actor.kind }).catch(() => {});
+  logEvent(eventId, "player_removed", actorName, actorId, { playerName: rosterName, source: actor.kind }).catch(() => {});
 
   return {
     ok: true,
     benchEmptyAfter: benchEmptyAfter ?? false,
     warned: !!shouldWarn,
     undo: {
-      name: player.name,
-      // An archived row has no active slot; put it back at the end (#1237).
-      order: playerIndex >= 0 ? playerIndex : event.players.length,
-      userId: player.userId ?? null,
+      name: rosterName,
+      order: player ? event.players.findIndex((p) => p.id === player.id) : roster.members.findIndex((m) => m.name === rosterName),
+      userId: identityUserId,
       removedAt: Date.now(),
     },
   };
