@@ -47,6 +47,11 @@ overrides:
   deepmerge-ts@<8.0.0: '>=8.0.0'
   devalue@>=5.6.3 <=5.8.0: '>=5.8.1'
   effect@<3.20.0: '>=3.20.0'
+  # max-stale can disclose cross-user cached responses (GHSA-ch52-4w7c-c8xp).
+  # Reached through astro -> @astrojs/node, so it is in the server render path.
+  # The advisory names >=4.2.1 as patched, but no 4.2.1 was ever published; 4.3.0
+  # is the patched release and satisfies astro's own ^4.2.0 request.
+  http-cache-semantics@<=4.2.0: '>=4.3.0'
   # ajv asks for fast-uri ^3.0.1. An open-ended '>=3.1.6' override let pnpm
   # resolve that to the 4.x line, which carries the authority-injection
   # advisory below — so the upper bound is part of the fix, not decoration.
