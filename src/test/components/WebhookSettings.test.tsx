@@ -104,7 +104,7 @@ describe("WebhookSettings", () => {
       expect(call).toBeTruthy();
       expect(JSON.parse(String((call as [string, RequestInit])[1].body))).toMatchObject({
         url: "https://example.com/incoming",
-        events: ["player_joined", "player_left", "game_full", "game_reset", "player_invited"],
+        events: ["player_joined", "player_left", "game_full", "game_reset", "player_invited", "game_cancelled"],
       });
     });
   });

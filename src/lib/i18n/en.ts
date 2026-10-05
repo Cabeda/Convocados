@@ -395,6 +395,7 @@ const en = {
   webhookEventType_game_full: "Game full",
   webhookEventType_game_reset: "Game reset",
   webhookEventType_player_invited: "Player invited",
+  webhookEventType_game_cancelled: "Game cancelled",
   webhookTest: "Send test payload",
   webhookDelete: "Delete",
   webhookDeleteConfirm: "Are you sure you want to delete this webhook?",

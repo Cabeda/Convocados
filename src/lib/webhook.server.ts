@@ -1,15 +1,11 @@
 import { createHmac, randomUUID } from "crypto";
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
+import type { WebhookEventType } from "./webhookEvents";
+
+export type { WebhookEventType };
 
 const log = createLogger("webhook");
-
-export type WebhookEventType =
-  | "player_joined"
-  | "player_left"
-  | "game_full"
-  | "game_reset"
-  | "player_invited";
 
 const MAX_ATTEMPTS = 5;
 const TIMEOUT_MS = 5000;

@@ -11,14 +11,15 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
+import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
 
-const EVENT_TYPE_LABELS: Record<string, TranslationKey> = {
-  player_joined: "webhookEventType_player_joined",
-  player_left: "webhookEventType_player_left",
-  game_full: "webhookEventType_game_full",
-  game_reset: "webhookEventType_game_reset",
-  player_invited: "webhookEventType_player_invited",
-};
+// ponytail: an event name we don't know falls through as-is rather than
+// silently reading as "All events".
+function eventTypeLabel(ev: string, t: (k: TranslationKey) => string): string {
+  return (WEBHOOK_EVENT_TYPES as readonly string[]).includes(ev)
+    ? t(`webhookEventType_${ev}` as TranslationKey)
+    : ev;
+}
 
 const DELIVERY_STATUS_LABELS: Record<string, TranslationKey> = {
   success: "webhookDeliveryStatus_success",
@@ -26,7 +27,7 @@ const DELIVERY_STATUS_LABELS: Record<string, TranslationKey> = {
   pending: "webhookDeliveryStatus_pending",
 };
 
-const EVENT_TYPES = ["player_joined", "player_left", "game_full", "game_reset", "player_invited"] as const;
+
 
 interface Webhook {
   id: string;
@@ -55,7 +56,7 @@ export function WebhookSettings({ eventId }: Props) {
   const [loading, setLoading] = useState(true);
   const [url, setUrl] = useState("");
   const [secret, setSecret] = useState("");
-  const [events, setEvents] = useState<string[]>([...EVENT_TYPES]);
+  const [events, setEvents] = useState<string[]>([...WEBHOOK_EVENT_TYPES]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, Delivery>>({});
@@ -208,7 +209,7 @@ export function WebhookSettings({ eventId }: Props) {
             onChange={(e) => setSecret(e.target.value)}
           />
           <FormGroup row>
-            {EVENT_TYPES.map((ev) => (
+            {WEBHOOK_EVENT_TYPES.map((ev) => (
               <FormControlLabel
                 key={ev}
                 control={<Checkbox size="small" checked={events.includes(ev)} onChange={() => handleToggleEvent(ev)} />}
@@ -253,7 +254,7 @@ export function WebhookSettings({ eventId }: Props) {
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                       {wh.events.length === 0
                         ? <Chip size="small" label={t("webhookAllEvents")} />
-                        : wh.events.map((e) => <Chip key={e} size="small" label={t(EVENT_TYPE_LABELS[e] ?? "webhookAllEvents")} />)}
+                        : wh.events.map((e) => <Chip key={e} size="small" label={eventTypeLabel(e, t)} />)}
                     </Box>
                     {testResult[wh.id] && testResult[wh.id].status !== "pending" && (
                       <Typography variant="caption" color="text.secondary">
@@ -291,7 +292,7 @@ export function WebhookSettings({ eventId }: Props) {
         <DialogContent>
           <Typography variant="body2" sx={{ wordBreak: "break-all", mb: 1 }}>{editing?.url}</Typography>
           <FormGroup row>
-            {EVENT_TYPES.map((ev) => (
+            {WEBHOOK_EVENT_TYPES.map((ev) => (
               <FormControlLabel
                 key={ev}
                 control={<Checkbox size="small" checked={editEvents.includes(ev)} onChange={() => handleToggleEditEvent(ev)} />}

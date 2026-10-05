@@ -175,6 +175,13 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
   }
 
   // Per #538: no game_cancelled notification — the cancelled game is over.
+  // The webhook is the organizer's automation channel, so it always fires —
+  // including when the recurring CAS below was lost by a concurrent cancel.
+  fireWebhooks(event.id, "game_cancelled", {
+    dateTime: game.dateTime.toISOString(),
+    isRecurring: !!event.isRecurring,
+  }).catch(() => {});
+
   await logEvent(event.id, "game_cancelled", actor.name, actor.id);
 
   return { ok: true, gameId: game.id };

@@ -5,6 +5,7 @@ import { GET, POST } from "~/pages/api/events/[id]/webhooks";
 import { checkOwnership } from "~/lib/auth.helpers.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
+import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
 
 vi.mock("~/lib/auth.helpers.server", async () => {
   const actual = await vi.importActual<typeof AuthHelpersServer>("~/lib/auth.helpers.server");
@@ -189,6 +190,21 @@ describe("POST /api/events/[id]/webhooks", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.events).toEqual(["player_joined"]);
+  });
+
+  it("accepts every declared event type, including game_cancelled", async () => {
+    const owner = await seedUser("owner-all-events");
+    const event = await seedEvent(owner.id);
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    const res = await POST(
+      postCtx(event.id, { url: "https://example.com/all-events", events: [...WEBHOOK_EVENT_TYPES] }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Nothing silently dropped — the list is the same one the UI renders.
+    expect(body.events).toEqual([...WEBHOOK_EVENT_TYPES]);
   });
 
   it("allows admin to create webhook", async () => {
