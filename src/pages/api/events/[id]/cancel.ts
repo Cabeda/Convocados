@@ -144,6 +144,13 @@ export const PUT: APIRoute = async ({ params, request }) => {
     cancelEventJobs(event.id).catch(() => {});
   }
 
+  // Fire game_cancelled webhook (non-blocking). Fires for every cancel — for
+  // recurring events game_reset is fired separately when the CAS is won.
+  fireWebhooks(event.id, "game_cancelled", {
+    dateTime: game.dateTime.toISOString(),
+    isRecurring: !!event.isRecurring,
+  }).catch(() => {});
+
   // ── Log the event ────────────────────────────────────────────────────────
   // Per #538: no `game_cancelled` notification is sent. The cancelled game is
   // over — a notification would only create noise. For recurring events, the

@@ -8,7 +8,8 @@ export type WebhookEventType =
   | "player_joined"
   | "player_left"
   | "game_full"
-  | "game_reset";
+  | "game_reset"
+  | "game_cancelled";
 
 const MAX_ATTEMPTS = 5;
 const TIMEOUT_MS = 5000;

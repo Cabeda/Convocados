@@ -257,6 +257,7 @@ const de: TranslationKeys = {
   webhookEventType_player_left: "Spieler ausgetreten",
   webhookEventType_game_full: "Spiel voll",
   webhookEventType_game_reset: "Spiel zurückgesetzt",
+  webhookEventType_game_cancelled: "Spiel abgesagt",
   webhookTest: "Test-Payload senden",
   webhookDelete: "Löschen",
   webhookDeleteConfirm: "Bist du sicher, dass du diesen Webhook löschen möchtest?",

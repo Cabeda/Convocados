@@ -32,7 +32,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: `Maximum ${MAX_WEBHOOKS_PER_EVENT} webhooks per event.` }, { status: 429 });
   }
 
-  const validEvents = ["player_joined", "player_left", "game_full", "game_reset"];
+  const validEvents = ["player_joined", "player_left", "game_full", "game_reset", "game_cancelled"];
   const events: string[] = Array.isArray(body.events)
     ? body.events.filter((e: string) => validEvents.includes(e))
     : [];

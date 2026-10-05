@@ -5,7 +5,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
 
 <DocsLayout title="Webhooks API" description="Subscribe to event notifications via HTTP callbacks.">
   <h1>Webhooks API</h1>
-  <p class="subtitle">Receive HTTP POST callbacks when events happen — player joins, leaves, game full, or game reset.</p>
+  <p class="subtitle">Receive HTTP POST callbacks when events happen — player joins, leaves, game full, game reset, or game cancelled.</p>
 
   <h2>Event types</h2>
   <table>
@@ -15,6 +15,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
       <tr><td><code>player_left</code></td><td>A player is removed from the event</td></tr>
       <tr><td><code>game_full</code></td><td>The last active spot is filled (spotsLeft = 0)</td></tr>
       <tr><td><code>game_reset</code></td><td>A recurring event resets its player list</td></tr>
+      <tr><td><code>game_cancelled</code></td><td>An organizer cancels the current game</td></tr>
     </tbody>
   </table>
 
@@ -100,6 +101,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
       <tr><td><code>player_left</code></td><td><code>playerName</code>, <code>spotsLeft</code></td></tr>
       <tr><td><code>game_full</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code> (always 0)</td></tr>
       <tr><td><code>game_reset</code></td><td><code>newDateTime</code> (ISO 8601)</td></tr>
+      <tr><td><code>game_cancelled</code></td><td><code>dateTime</code> (ISO 8601), <code>isRecurring</code></td></tr>
     </tbody>
   </table>
 
