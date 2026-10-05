@@ -116,20 +116,18 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const session = await getSession(request);
 
   // The event GET hands out EventPlayer ids, and a re-activated player may still
-  // have their Player row archived — resolve against the roster (#1237).
+  // have their Player row archived — resolve against the roster (#1237). This is
+  // a pure read, so nothing past the 403 below can have written anything.
   const target = await resolveLeaveTarget(eventId, { playerId });
   if (!target) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const player = await prisma.player.findUnique({
-    where: { id: target.playerId },
-    include: { event: { select: { ownerId: true } } },
-  });
-  if (!player) return Response.json({ error: "Not found." }, { status: 404 });
+  const owner = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
+  if (!owner) return Response.json({ error: "Not found." }, { status: 404 });
 
   // Protected player check: players with userId can only be removed by themselves or the event owner.
-  if (player.userId) {
-    const isSelf = session?.user?.id === player.userId;
-    const { isOwner, isAdmin } = await checkOwnership(request, player.event.ownerId, session, eventId);
+  if (target.userId) {
+    const isSelf = session?.user?.id === target.userId;
+    const { isOwner, isAdmin } = await checkOwnership(request, owner.ownerId, session, eventId);
     if (!isSelf && !isOwner && !isAdmin) {
       return Response.json({ error: "This player is account-linked and can only be removed by themselves or the event owner." }, { status: 403 });
     }
@@ -137,13 +135,13 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   // Soft-archive + notify + log + re-index, with the warn-the-rest push gated on (48h + bench-empty).
   // Self-removal (the player is removing themselves) uses actor.kind="self" so the auto-unfollow fires.
-  const isSelf = session?.user?.id && player.userId === session.user.id;
+  const isSelf = !!session?.user?.id && target.userId === session.user.id;
   // For unauthenticated requests, pass null as the actor id (lib skips the Rsvp audit row,
   // which has a FK to User). Real authenticated users get a FK-safe actor id.
-  const actorUserId = session?.user?.id ?? player.event.ownerId ?? null;
+  const actorUserId = session?.user?.id ?? owner.ownerId ?? null;
   const result = await archiveAndLeave({
     eventId,
-    playerId: player.id,
+    playerId: target.playerId ?? target.eventPlayerId,
     actor: isSelf
       ? { kind: "self", userId: actorUserId }
       : { kind: "organizer", userId: actorUserId },

@@ -108,24 +108,25 @@ async function removePlayer(args: Record<string, unknown>, ctx: AuthContext) {
 
   const playerId = args.playerId as string | undefined;
   const name = args.name as string | undefined;
-  let player: { id: string } | null = null;
-  if (playerId) {
-    player = await prisma.player.findFirst({ where: { id: playerId, eventId, archivedAt: null }, select: { id: true } });
-    // ADR 0016: clients may pass an EventPlayer id (the Event GET surfaces those).
-    if (!player) {
-      const ep = await prisma.eventPlayer.findFirst({ where: { id: playerId, eventId }, select: { name: true } });
-      if (ep) player = await prisma.player.findFirst({ where: { eventId, name: ep.name, archivedAt: null }, select: { id: true } });
-    }
-  } else if (typeof name === "string" && name.trim()) {
-    player = await prisma.player.findFirst({ where: { eventId, name, archivedAt: null }, select: { id: true } });
+  if (!playerId && !(typeof name === "string" && name.trim())) {
+    throw new McpError("playerId or name required", -32602, 400);
   }
-  if (!player) throw new McpError("Player not found.", -32001, 404);
-
-  const result = await archiveAndLeave({
-    eventId,
-    playerId: player.id,
-    actor: { kind: "organizer", userId: ctx.userId },
-  });
+  // ADR 0016: clients pass EventPlayer ids, and a re-activated player may have no
+  // un-archived Player row at all — archiveAndLeave resolves both ids and names
+  // against the roster itself (#1237), so no legacy lookup is duplicated here.
+  let result: Awaited<ReturnType<typeof archiveAndLeave>>;
+  try {
+    result = await archiveAndLeave({
+      eventId,
+      playerId,
+      name: typeof name === "string" ? name.trim() : undefined,
+      actor: { kind: "organizer", userId: ctx.userId },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Player not found.";
+    if (/not found/i.test(message)) throw new McpError(message, -32001, 404);
+    throw err;
+  }
   return { ok: true, name: result.undo.name, warned: result.warned, benchEmptyAfter: result.benchEmptyAfter };
 }
 

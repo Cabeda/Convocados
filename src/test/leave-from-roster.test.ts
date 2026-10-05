@@ -33,13 +33,15 @@ vi.mock("~/lib/auth.helpers.server", async (orig) => ({
   checkOwnership: vi.fn().mockResolvedValue({ isOwner: false, isAdmin: false }),
 }));
 
-import { getSession } from "~/lib/auth.helpers.server";
+import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
 import { POST as leaveRoute } from "~/pages/api/events/[id]/leave";
 import { DELETE as playersDelete } from "~/pages/api/events/[id]/players";
 import { POST as rosterRoute } from "~/pages/api/events/[id]/roster";
 import { POST as priorityConfirm } from "~/pages/api/events/[id]/priority/confirm";
+import { POST as rsvpRoute } from "~/pages/api/events/[id]/players/[playerId]/rsvp";
 import { GET as eventGet } from "~/pages/api/events/[id]/index";
 import { acceptPlayerInvite, createPlayerInvite } from "~/lib/invite.server";
+import { repairPlayerRow } from "~/lib/rosterChange.server";
 
 function req(url: string, { userId, ...init }: RequestInit & { userId?: string } = {}) {
   const headers = new Headers(init.headers);
@@ -78,7 +80,7 @@ beforeEach(async () => {
 });
 
 /** Legacy Player + EventPlayer + GameParticipant — a fully-synced roster row. */
-async function seedOnRoster(name: string, userId: string, order: number) {
+async function seedOnRoster(name: string, userId: string | null, order: number) {
   await prisma.player.create({ data: { eventId: event.id, name, userId, order } });
   const eventPlayer = await prisma.eventPlayer.create({ data: { eventId: event.id, name, userId } });
   await prisma.gameParticipant.create({ data: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order } });
@@ -110,6 +112,11 @@ async function reactivateViaInvite() {
   asUser("u-alice");
   await acceptPlayerInvite({ token, userId: "u-alice", eventId: event.id, gameId: event.currentGameId, maxPlayers: event.maxPlayers });
 }
+
+const playerIdOf = (name: string) =>
+  prisma.player.findFirstOrThrow({ where: { eventId: event.id, name }, select: { id: true } }).then((p) => p.id);
+const eventPlayerIdOf = (name: string) =>
+  prisma.eventPlayer.findFirstOrThrow({ where: { eventId: event.id, name }, select: { id: true } }).then((p) => p.id);
 
 /**
  * The reporter's whole complaint as one check: if the roster shows you, neither
@@ -211,5 +218,137 @@ describe("#1237 — roster membership and the leave gate must agree", () => {
     expect(await rosterNames()).toContain("Alice");
 
     expect(await strandedAs("Alice", "u-alice")).toBeNull();
+  });
+});
+
+/**
+ * Healing the legacy row is a WRITE, so it must only happen on the way *in* to a
+ * leave that was allowed. These are the states where it used to fire anyway —
+ * before the route decided, or before the caller had proved who they were.
+ */
+describe("#1237 — a rejected leave must not change anything", () => {
+  /** Alice left, then got re-invited: on the roster, Player row still archived. */
+  async function strandAlice() {
+    await seedOnRoster("Alice", "u-alice", 0);
+    await seedOnRoster("Bob", "u-bob", 1);
+    asUser("u-alice");
+    await leave("u-alice");
+    await reactivateViaInvite();
+    expect((await prisma.player.findFirstOrThrow({ where: { eventId: event.id, name: "Alice" } })).archivedAt).toBeTruthy();
+  }
+
+  const aliceArchivedAt = () =>
+    prisma.player.findFirstOrThrow({ where: { eventId: event.id, name: "Alice" } }).then((p) => p.archivedAt);
+
+  it("an unauthenticated x on a stranded player is a 403 that changes nothing", async () => {
+    await strandAlice();
+    const before = await aliceArchivedAt();
+
+    // No session at all: checkOwnership answers {isOwner:false,isAdmin:false}, so
+    // an account-linked player is off limits — but the legacy row must not have
+    // been un-archived on the way to that answer.
+    vi.mocked(getSession).mockResolvedValue(undefined as any);
+    const res = await clickX("Alice", "u-anonymous");
+
+    expect(res.status).toBe(403);
+    expect(await aliceArchivedAt()).toEqual(before);
+  });
+
+  it("another player's x on a stranded account-linked player is a 403 that changes nothing", async () => {
+    await strandAlice();
+    const before = await aliceArchivedAt();
+
+    asUser("u-bob");
+    const res = await clickX("Alice", "u-bob");
+
+    expect(res.status).toBe(403);
+    expect(await aliceArchivedAt()).toEqual(before);
+  });
+
+  it("a 403 does not promote the rejected player into the push Tier 2 audience", async () => {
+    // push.server.ts reads Player.archivedAt to decide "is an active player"
+    // (ADR 0017). Un-archiving on a rejected request silently moved someone into
+    // the player-only notification tier they were never in.
+    await strandAlice();
+    asUser("u-bob");
+    expect((await clickX("Alice", "u-bob")).status).toBe(403);
+
+    const alice = await prisma.player.findFirstOrThrow({ where: { eventId: event.id, name: "Alice" } });
+    expect(alice.archivedAt).toBeTruthy();
+    const active = await prisma.player.findMany({ where: { eventId: event.id, archivedAt: null }, select: { name: true } });
+    expect(active.map((p) => p.name)).toEqual(["Bob"]);
+  });
+
+  it("healing a stranded Player row does not drop it onto an occupied slot", async () => {
+    // Un-archiving in place kept the row's stale `order`. Alice's archived row and
+    // Bob's live row both sat in slot 0, and a tie makes the undo index
+    // (leave.server.ts) and undo-remove's shift-by-order ambiguous.
+    await strandAlice();
+    await prisma.player.update({ where: { id: await playerIdOf("Alice") }, data: { order: 0 } });
+    asUser("u-alice");
+
+    const repaired = await repairPlayerRow(await eventPlayerIdOf("Alice"));
+
+    expect(repaired).toBe(await playerIdOf("Alice"));
+    const active = await prisma.player.findMany({
+      where: { eventId: event.id, archivedAt: null },
+      select: { name: true, order: true },
+      orderBy: { order: "asc" },
+    });
+    expect(active.map((p) => p.order)).toEqual([...new Set(active.map((p) => p.order))]);
+    expect(active.find((p) => p.name === "Alice")?.order).toBe(1);
+  });
+
+  it("two concurrent leaves by an invitee with no legacy row never 500", async () => {
+    // Both callers resolve before they try to write, and the heal upserts on the
+    // unique (eventId, name) key. Find-then-create let the loser throw P2002 out
+    // of the route as a 500, so the roster change never landed.
+    await seedOnRoster("Bob", "u-bob", 0);
+    await reactivateViaInvite();
+    asUser("u-alice");
+
+    const statuses = (await Promise.all([leave("u-alice"), leave("u-alice")])).map((r) => r.status);
+
+    expect(statuses.every((s) => s < 500)).toBe(true);
+    expect(statuses).toContain(200);
+    expect(await rosterNames()).not.toContain("Alice");
+    expect(await aliceArchivedAt()).toBeTruthy();
+  });
+
+  it("an account with a ghost EventPlayer row still leaves the row it is on", async () => {
+    // priority/confirm upserts EventPlayer by (eventId, name) with the caller's
+    // *current* display name, so a renamed account legitimately owns two rows.
+    // EventPlayer is not unique on userId, so an unordered pick answers about the
+    // ghost and 404s the player who is actually on the list.
+    await seedOnRoster("Bob", "u-bob", 0);
+    const ghost = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alice" } });
+    await seedOnRoster("Alicia", "u-alice", 1);
+    expect(ghost.userId).toBe("u-alice");
+    asUser("u-alice");
+
+    expect(await strandedAs("Alicia", "u-alice")).toBeNull();
+  });
+
+  it("the organizer declining a stranded guest is not a 404 (admin rsvp path)", async () => {
+    // rsvp.ts hands the client-supplied id straight to archiveAndLeave, which used
+    // to look it up as a Player row only — so a re-activated guest still 404'd.
+    await seedOnRoster("Guest", null, 0);
+    await seedOnRoster("Bob", "u-bob", 1);
+    // The #1237 shape for a guest: the roster still lists them (GameParticipant is
+    // active) while their legacy Player row is archived.
+    await prisma.player.update({
+      where: { id: await playerIdOf("Guest") },
+      data: { archivedAt: new Date() },
+    });
+
+    asUser("u-owner");
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false } as any);
+    const res = await rsvpRoute({
+      params: { id: event.id, playerId: await eventPlayerIdOf("Guest") },
+      request: req("http://x/rsvp", { method: "POST", body: JSON.stringify({ status: "no" }), userId: "u-owner" }),
+    } as any);
+
+    expect(res.status).toBe(200);
+    expect(await rosterNames()).not.toContain("Guest");
   });
 });

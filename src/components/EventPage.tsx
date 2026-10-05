@@ -761,8 +761,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
       }
     } else {
       // #1237: failing silently here left people tapping a dead x with no idea why.
-      const json = await res.json().catch(() => ({}));
-      setPlayerError(json.error ?? t("somethingWentWrong"));
+      // Localized text only — json.error is a raw English server string and this UI
+      // is not English-only.
+      setPlayerError(t("somethingWentWrong"));
       fetchEvent();
       return;
     }

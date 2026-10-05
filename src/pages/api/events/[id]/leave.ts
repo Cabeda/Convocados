@@ -23,15 +23,18 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Find the Player row for this user in this event. Membership comes from the
   // roster the event page renders, so anyone it still lists can leave (#1237).
-  const player = await resolveLeaveTarget(eventId, { userId: session.user.id });
-  if (!player) {
+  // playerId stays null: archiveAndLeave resolves the legacy row against the
+  // roster and, once authorized, heals it. A target it cannot resolve 404s here,
+  // and a rejected request never writes (#1237).
+  const found = await resolveLeaveTarget(eventId, { userId: session.user.id });
+  if (!found) {
     return Response.json({ error: "You are not a player in this event." }, { status: 404 });
   }
 
   try {
     const result = await archiveAndLeave({
       eventId,
-      playerId: player.playerId,
+      playerId: found.playerId,
       actor: { kind: "self", userId: session.user.id },
       origin,
     });
