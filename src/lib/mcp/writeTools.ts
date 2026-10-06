@@ -31,6 +31,15 @@ import { logEvent } from "../eventLog.server";
  * an event the user does not run.
  */
 
+/**
+ * Fire-and-forget a side effect (audit log, push, streak counter) without ever
+ * failing the tool call. One helper rather than an inline `.catch(() => {})` per
+ * call site: identical behaviour, and a single failure path to test.
+ */
+function bestEffort(work: Promise<unknown>): Promise<unknown> {
+  return work.catch(() => {});
+}
+
 const VALID_PAYMENT_STATUSES = ["pending", "sent", "paid"] as const;
 const VALID_RECURRENCE_FREQS = ["daily", "weekly", "monthly", "yearly"] as const;
 
@@ -426,7 +435,7 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
   if (data.dateTime) {
     const updated = await prisma.event.findUnique({ where: { id: eventId } });
     if (updated) {
-      await cancelEventJobs(eventId).catch(() => {});
+      await bestEffort(cancelEventJobs(eventId));
       try {
         await scheduleEventReminders(eventId, updated.dateTime, updated.durationMinutes);
       } catch {
@@ -435,10 +444,10 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
     }
   }
 
-  logEvent(eventId, "event_updated", null, ctx.userId, {
+  bestEffort(logEvent(eventId, "event_updated", null, ctx.userId, {
     fields: Object.keys(data),
     source: "mcp",
-  }).catch(() => {});
+  }));
 
   return { id: eventId, updated: Object.keys(data) };
 }
@@ -478,22 +487,22 @@ async function rsvp(args: Record<string, unknown>, ctx: AuthContext) {
   const typedStatus = status as "yes" | "no" | "maybe";
   const result = await upsertRsvp(eventId, ctx.userId, typedStatus);
 
-  enqueueRsvpAnswerNotification({
+  bestEffort(enqueueRsvpAnswerNotification({
     eventId,
     eventTitle: event.title,
     status: typedStatus,
     actorUserId: ctx.userId,
     actorName: null,
     actorIsLogged: true,
-  }).catch(() => {});
+  }));
 
-  logEvent(
+  bestEffort(logEvent(
     eventId,
     typedStatus === "yes" ? "rsvp_yes" : typedStatus === "no" ? "rsvp_no" : "rsvp_maybe",
     null,
     ctx.userId,
     { source: "mcp", status: typedStatus },
-  ).catch(() => {});
+  ));
 
   return { ok: true, status: result.status, respondedAt: result.respondedAt };
 }
@@ -550,8 +559,7 @@ async function unfollowEvent(args: Record<string, unknown>, ctx: AuthContext) {
 async function leaveEvent(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string | undefined;
   if (!eventId) throw new McpError("eventId required", -32602, 400);
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
-  if (!event) throw new McpError("Game not found", -32001, 404);
+  await requireEventAccess(ctx, eventId);
 
   const player = await prisma.player.findFirst({
     where: { eventId, userId: ctx.userId, archivedAt: null },
@@ -591,7 +599,7 @@ async function leaveEvent(args: Record<string, unknown>, ctx: AuthContext) {
 async function setNoShow(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string | undefined;
   if (!eventId) throw new McpError("eventId required", -32602, 400);
-  await requireEventAccess(ctx, eventId);
+  const event = await requireEventAccess(ctx, eventId);
 
   const gameId = args.gameId as string | undefined;
   const eventPlayerId = args.eventPlayerId as string | undefined;
@@ -599,8 +607,6 @@ async function setNoShow(args: Record<string, unknown>, ctx: AuthContext) {
   if (!gameId || !eventPlayerId || typeof noShow !== "boolean") {
     throw new McpError("gameId, eventPlayerId and noShow (boolean) are required.", -32602, 400);
   }
-
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { title: true } });
 
   // Bind the supplied game to THIS event, otherwise owning event A would grant
   // no-show writes on a game belonging to event B.
@@ -620,21 +626,21 @@ async function setNoShow(args: Record<string, unknown>, ctx: AuthContext) {
   const userId = participant.eventPlayer.userId;
   if (userId) {
     if (noShow) {
-      await prisma.priorityEnrollment.updateMany({
+      await bestEffort(prisma.priorityEnrollment.updateMany({
         where: { eventId, userId },
         data: { noShowStreak: { increment: 1 } },
-      }).catch(() => {});
-      enqueueNoShowNotification({
+      }));
+      await bestEffort(enqueueNoShowNotification({
         userId,
         eventId,
-        title: event?.title ?? "Game",
+        title: event.title,
         streak: await noShowStreak(eventId, userId),
-      }).catch(() => {});
+      }));
     } else {
-      await prisma.priorityEnrollment.updateMany({
+      await bestEffort(prisma.priorityEnrollment.updateMany({
         where: { eventId, userId, noShowStreak: { gt: 0 } },
         data: { noShowStreak: { decrement: 1 } },
-      }).catch(() => {});
+      }));
     }
   }
 
@@ -663,7 +669,7 @@ async function enqueueNoShowNotification(input: {
   const body =
     `You missed ${input.title}. No-show streak: ${input.streak}.` +
     (input.streak >= 2 ? " Priority may be affected." : "");
-  await sendPushToUser(input.userId, input.title, body, `/events/${input.eventId}`).catch(() => {});
+  await bestEffort(sendPushToUser(input.userId, input.title, body, `/events/${input.eventId}`));
 }
 
 export const WRITE_TOOLS: ToolDef[] = [

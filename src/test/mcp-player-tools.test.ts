@@ -18,6 +18,7 @@ vi.mock("~/lib/authenticate.server", () => ({
     return ctx.scopes.includes(scope);
   }),
 }));
+vi.mock("~/lib/push.server", () => ({ sendPushToUser: vi.fn(async () => "sent") }));
 vi.mock("~/lib/apiRateLimit.server", async (importOriginal) => {
   const orig = (await importOriginal()) as any;
   return {
@@ -29,6 +30,8 @@ vi.mock("~/lib/apiRateLimit.server", async (importOriginal) => {
 
 import { authenticateRequest } from "~/lib/authenticate.server";
 const { POST } = await import("~/pages/api/mcp");
+const { sendPushToUser } = await import("~/lib/push.server");
+const mockPush = vi.mocked(sendPushToUser);
 import { TOOLS } from "~/lib/mcp/tools";
 const mockAuth = vi.mocked(authenticateRequest);
 const PROTOCOL = "2026-07-28";
@@ -180,6 +183,11 @@ describe("convocados_whoami", () => {
 
   it("echoes no token or session material", async () => {
     expect(output(await run("convocados_whoami", {}))).not.toMatch(/Bearer|cvk_|"token"/i);
+  });
+
+  it("404s when the token's user no longer exists", async () => {
+    const call = await run("convocados_whoami", {}, ["*"], "ghost-user");
+    expect(call.status).toBe(404);
   });
 
   it("401s without a token", async () => {
@@ -424,6 +432,70 @@ describe("convocados_set_no_show", () => {
     expectFailure(await run("convocados_set_no_show", {
       eventId: event.id, gameId, eventPlayerId: outsider.id, noShow: true,
     }), /not found/i);
+  });
+
+  it("still succeeds when the best-effort push fails", async () => {
+    // The streak counter and the push are side effects, not the tool's job:
+    // a delivery failure must not turn a saved no-show into an error.
+    mockPush.mockRejectedValueOnce(new Error("push endpoint down"));
+    const event = await createEvent(USER.id);
+    const { eventPlayer, gameId } = await seedPlayer(event.id, USER.name, USER.id);
+    await prisma.priorityEnrollment.create({
+      data: { eventId: event.id, userId: USER.id, noShowStreak: 1 },
+    });
+
+    const call = await run("convocados_set_no_show", {
+      eventId: event.id, gameId, eventPlayerId: eventPlayer.id, noShow: true,
+    });
+    expect(call.status).toBe(200);
+
+    // The no-show itself was persisted despite the push failure.
+    expect((await prisma.priorityEnrollment.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: USER.id } },
+    }))?.noShowStreak).toBe(2);
+    expect(mockPush).toHaveBeenCalledOnce();
+  });
+
+  it("covers a first-ever no-show (no enrollment row) and warns only from streak 2", async () => {
+    const event = await createEvent(USER.id);
+    const { eventPlayer, gameId } = await seedPlayer(event.id, USER.name, USER.id);
+
+    const call = await run("convocados_set_no_show", {
+      eventId: event.id, gameId, eventPlayerId: eventPlayer.id, noShow: true,
+    });
+    expect(call.status).toBe(200);
+
+    // No priorityEnrollment row exists, so the streak falls back to 1 and the
+    // push must not carry the priority warning.
+    const body = String(mockPush.mock.calls.at(-1)?.[2]);
+    expect(body).toContain("No-show streak: 1");
+    expect(body).not.toContain("Priority may be affected");
+  });
+
+  it("stays silent when the player turned push off", async () => {
+    const event = await createEvent(USER.id);
+    const { eventPlayer, gameId } = await seedPlayer(event.id, USER.name, USER.id);
+    await prisma.notificationPreferences.create({
+      data: { userId: USER.id, pushEnabled: false },
+    });
+
+    const call = await run("convocados_set_no_show", {
+      eventId: event.id, gameId, eventPlayerId: eventPlayer.id, noShow: true,
+    });
+    expect(call.status).toBe(200);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing eventId rather than guessing the event", async () => {
+    for (const name of ["convocados_unfollow_event", "convocados_leave_event", "convocados_set_no_show"]) {
+      const call = await run(name, {});
+      expect(call.status, name).toBe(400);
+    }
+  });
+
+  it("404s when the caller has left the event", async () => {
+    const call = await run("convocados_leave_event", { eventId: "no-such-event" });
+    expect(call.status).toBe(404);
   });
 
   it("needs the scope that matches the action", async () => {
