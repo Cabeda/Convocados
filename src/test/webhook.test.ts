@@ -87,15 +87,15 @@ describe("POST /api/events/[id]/webhooks", () => {
     expect(res.status).toBe(409);
   });
 
-  it("filters invalid event types", async () => {
+  it("rejects unknown event types with 400 instead of silently subscribing to all", async () => {
     const id = await seedEvent();
     const res = await createWebhook(ctx({ id }, {
       url: "https://example.com/hook",
       events: ["player_joined", "invalid_event", "game_full"],
     }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.events).toEqual(["player_joined", "game_full"]);
+    expect(body.error).toContain("invalid_event");
   });
 
   it("defaults to empty events array (subscribe to all)", async () => {

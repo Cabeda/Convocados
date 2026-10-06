@@ -38,6 +38,9 @@ const mockCheckEventAdmin = vi.mocked(checkEventAdmin);
 import { enqueueNotification } from "~/lib/notificationQueue.server";
 const mockEnqueueNotification = vi.mocked(enqueueNotification);
 
+import { fireWebhooks } from "~/lib/webhook.server";
+const mockFireWebhooks = vi.mocked(fireWebhooks);
+
 import { PUT as cancelGame } from "~/pages/api/events/[id]/cancel";
 
 function putCtx(params: Record<string, string>) {
@@ -91,6 +94,8 @@ beforeEach(async () => {
   mockCheckOwnership.mockReset();
   mockCheckEventAdmin.mockReset();
   mockEnqueueNotification.mockReset();
+  mockFireWebhooks.mockReset();
+  mockFireWebhooks.mockResolvedValue(undefined);
   await resetApiRateLimitStore();
   await prisma.walletTransaction.deleteMany();
   await prisma.eventLog.deleteMany();
@@ -329,6 +334,62 @@ describe("PUT /api/events/[id]/cancel", () => {
     await cancelGame(putCtx({ id: event.id }));
 
     expect(mockEnqueueNotification).not.toHaveBeenCalled();
+  });
+
+  it("fires the game_cancelled webhook for a non-recurring event", async () => {
+    await seedUser();
+    const event = await seedEvent({ ownerId: "user1" });
+    await seedGame(event.id);
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    await cancelGame(putCtx({ id: event.id }));
+
+    expect(mockFireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_cancelled",
+      expect.objectContaining({ isRecurring: false, gameId: expect.any(String) }),
+    );
+  });
+
+  it("fires the game_cancelled webhook for a recurring event alongside game_reset", async () => {
+    await seedUser();
+    const future = new Date(Date.now() + 86400_000);
+    const event = await seedEvent({
+      ownerId: "user1",
+      isRecurring: true,
+      recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+      dateTime: future,
+    });
+    await seedGame(event.id);
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    await cancelGame(putCtx({ id: event.id }));
+
+    const types = mockFireWebhooks.mock.calls.map((c) => c[1]);
+    expect(types).toContain("game_cancelled");
+    expect(types).toContain("game_reset");
+    expect(mockFireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_cancelled",
+      expect.objectContaining({ isRecurring: true }),
+    );
+  });
+
+  it("does NOT fire the game_cancelled webhook when the cancel is rejected", async () => {
+    await seedUser();
+    const event = await seedEvent({ ownerId: "user1" });
+    await seedGame(event.id, "cancelled");
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    await cancelGame(putCtx({ id: event.id }));
+
+    expect(mockFireWebhooks).not.toHaveBeenCalled();
   });
 
   it("resets recruitment dedup flags for the next occurrence on recurring cancel", async () => {

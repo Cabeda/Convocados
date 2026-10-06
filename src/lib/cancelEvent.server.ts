@@ -174,7 +174,17 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
     cancelEventJobs(event.id).catch(() => {});
   }
 
-  // Per #538: no game_cancelled notification — the cancelled game is over.
+  // Per #538: no game_cancelled *notification* is enqueued — the cancelled game
+  // is over. This is the webhook event, a different channel: the organizer's
+  // automation needs to know (e.g. release a court booking), so it always
+  // fires — including when the recurring CAS above was lost by a concurrent
+  // cancel. gameId is the dedupe key for that race.
+  fireWebhooks(event.id, "game_cancelled", {
+    gameId: game.id,
+    dateTime: game.dateTime.toISOString(),
+    isRecurring: !!event.isRecurring,
+  }).catch(() => {});
+
   await logEvent(event.id, "game_cancelled", actor.name, actor.id);
 
   return { ok: true, gameId: game.id };

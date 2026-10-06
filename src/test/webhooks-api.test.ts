@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import type * as AuthHelpersServer from "~/lib/auth.helpers.server";
 import { prisma } from "~/lib/db.server";
 import { GET, POST } from "~/pages/api/events/[id]/webhooks";
 import { checkOwnership } from "~/lib/auth.helpers.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
+import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
 
 vi.mock("~/lib/auth.helpers.server", async () => {
   const actual = await vi.importActual<typeof AuthHelpersServer>("~/lib/auth.helpers.server");
@@ -179,16 +182,31 @@ describe("POST /api/events/[id]/webhooks", () => {
     expect(res.status).toBe(429);
   });
 
-  it("filters invalid events", async () => {
+  it("rejects unknown event types with 400 instead of silently subscribing to all", async () => {
     const owner = await seedUser("owner-7");
     const event = await seedEvent(owner.id);
 
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/webhook", events: ["player_joined", "invalid_event"] }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("invalid_event");
+  });
+
+  it("accepts every declared event type, including game_cancelled", async () => {
+    const owner = await seedUser("owner-all-events");
+    const event = await seedEvent(owner.id);
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    const res = await POST(
+      postCtx(event.id, { url: "https://example.com/all-events", events: [...WEBHOOK_EVENT_TYPES] }),
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.events).toEqual(["player_joined"]);
+    // Nothing silently dropped — the list is the same one the UI renders.
+    expect(body.events).toEqual([...WEBHOOK_EVENT_TYPES]);
   });
 
   it("allows admin to create webhook", async () => {
@@ -199,5 +217,29 @@ describe("POST /api/events/[id]/webhooks", () => {
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/webhook" }));
     expect(res.status).toBe(200);
+  });
+});
+
+describe("webhook event type documentation", () => {
+  const docs = fs.readFileSync(
+    path.join(process.cwd(), "src/pages/docs/api/webhooks.astro"),
+    "utf8",
+  );
+  // Scope to the "Event types" table so a type mentioned only in the payload
+  // table still counts as undocumented.
+  const eventTypesTable = docs.slice(
+    docs.indexOf("<h2>Event types</h2>"),
+    docs.indexOf("<h2>", docs.indexOf("<h2>Event types</h2>") + 1),
+  );
+
+  it("documents every declared event type", () => {
+    const undocumented = WEBHOOK_EVENT_TYPES.filter((ev) => !eventTypesTable.includes(`<code>${ev}</code>`));
+    expect(undocumented).toEqual([]);
+  });
+
+  it("documents no event type that is no longer declared", () => {
+    const declared = new Set<string>(WEBHOOK_EVENT_TYPES);
+    const documented = [...eventTypesTable.matchAll(/<code>([a-z_]+)<\/code>/g)].map((m) => m[1]);
+    expect(documented.filter((name) => !declared.has(name))).toEqual([]);
   });
 });

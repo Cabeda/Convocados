@@ -3,8 +3,9 @@ import { prisma } from "../../../../../../lib/db.server";
 
 import { authorizeEventMutation } from "../../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
+import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
 
-const VALID_EVENTS = ["player_joined", "player_left", "game_full", "game_reset"];
+const VALID_EVENTS: readonly string[] = WEBHOOK_EVENT_TYPES;
 
 async function loadAuthorizedWebhook(eventId: string, webhookId: string, request: Request) {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
@@ -38,7 +39,15 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "events is required." }, { status: 400 });
   }
 
-  const events: string[] = body.events.filter((e: string) => VALID_EVENTS.includes(e));
+  const invalid = body.events.filter((e: string) => !VALID_EVENTS.includes(e));
+  if (invalid.length > 0) {
+    return Response.json(
+      { error: `Unknown event type(s): ${invalid.join(", ")}. Valid: ${VALID_EVENTS.join(", ")}` },
+      { status: 400 },
+    );
+  }
+
+  const events: string[] = body.events;
   const webhook = await prisma.webhookSubscription.update({
     where: { id: webhookId },
     data: { events: JSON.stringify(events) },

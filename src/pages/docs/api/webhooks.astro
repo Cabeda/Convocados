@@ -5,7 +5,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
 
 <DocsLayout title="Webhooks API" description="Subscribe to event notifications via HTTP callbacks.">
   <h1>Webhooks API</h1>
-  <p class="subtitle">Receive HTTP POST callbacks when events happen — player joins, leaves, game full, or game reset.</p>
+  <p class="subtitle">Receive HTTP POST callbacks when events happen — player joins, leaves, game full, game reset, game cancelled, or a player is invited.</p>
 
   <h2>Event types</h2>
   <table>
@@ -13,10 +13,22 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     <tbody>
       <tr><td><code>player_joined</code></td><td>A player is added to the event</td></tr>
       <tr><td><code>player_left</code></td><td>A player is removed from the event</td></tr>
+      <tr><td><code>player_invited</code></td><td>A player is invited to the event</td></tr>
       <tr><td><code>game_full</code></td><td>The last active spot is filled (spotsLeft = 0)</td></tr>
       <tr><td><code>game_reset</code></td><td>A recurring event resets its player list</td></tr>
+      <tr><td><code>game_cancelled</code></td><td>An organizer cancels the current game</td></tr>
     </tbody>
   </table>
+
+  <h3>Ordering on a recurring cancel</h3>
+  <p>
+    When a recurring event is cancelled, <code>game_reset</code> is delivered
+    <strong>before</strong> <code>game_cancelled</code>. By the time
+    <code>game_cancelled</code> arrives, the event's current game is already the
+    <em>next</em> occurrence — so <code>game_cancelled.dateTime</code> is the
+    <strong>cancelled</strong> game's start, not the current game's. Use
+    <code>gameId</code> to tell them apart.
+  </p>
 
   <h2><span class="endpoint method-post">POST</span> /api/events/[id]/webhooks</h2>
   <p>Subscribe a webhook URL to receive event notifications.</p>
@@ -26,7 +38,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
     <tbody>
       <tr><td><code>url</code></td><td>string</td><td>Yes</td><td>The URL to receive POST callbacks</td></tr>
-      <tr><td><code>events</code></td><td>string[]</td><td>No</td><td>Event types to subscribe to. Empty array = all events</td></tr>
+      <tr><td><code>events</code></td><td>string[]</td><td>No</td><td>Event types to subscribe to. Empty array = all events. An unknown type returns <code>400</code> — it is never silently dropped (which would mean "all events")</td></tr>
       <tr><td><code>secret</code></td><td>string</td><td>No</td><td>Shared secret for HMAC-SHA256 signature verification</td></tr>
     </tbody>
   </table>
@@ -99,8 +111,10 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     <tbody>
       <tr><td><code>player_joined</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code>, <code>actor</code> (who joined: the player/user name or <code>"anonymous"</code>)</td></tr>
       <tr><td><code>player_left</code></td><td><code>playerName</code>, <code>spotsLeft</code>, <code>actor</code> (who removed them: a player/user name or <code>"anonymous"</code>)</td></tr>
+      <tr><td><code>player_invited</code></td><td><code>playerName</code>, <code>inviteUrl</code> (the claim link the invitee must open)</td></tr>
       <tr><td><code>game_full</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code>, <code>actor</code> (always 0)</td></tr>
       <tr><td><code>game_reset</code></td><td><code>newDateTime</code> (ISO 8601)</td></tr>
+      <tr><td><code>game_cancelled</code></td><td><code>gameId</code> (the cancelled game — dedupe key for the concurrent-cancel race), <code>dateTime</code> (ISO 8601, the <strong>cancelled</strong> game's start, not the current game's), <code>isRecurring</code></td></tr>
     </tbody>
   </table>
 

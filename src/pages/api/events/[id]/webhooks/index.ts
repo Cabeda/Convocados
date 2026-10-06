@@ -5,6 +5,7 @@ import { prisma } from "../../../../../lib/db.server";
 import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
 import { validateWebhookUrl } from "../../../../../lib/webhookUrl";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
+import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
 
 const MAX_WEBHOOKS_PER_EVENT = 10;
 
@@ -34,10 +35,16 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: `Maximum ${MAX_WEBHOOKS_PER_EVENT} webhooks per event.` }, { status: 429 });
   }
 
-  const validEvents = ["player_joined", "player_left", "game_full", "game_reset"];
-  const events: string[] = Array.isArray(body.events)
-    ? body.events.filter((e: string) => validEvents.includes(e))
-    : [];
+  const validEvents: readonly string[] = WEBHOOK_EVENT_TYPES;
+  const requested: unknown[] = Array.isArray(body.events) ? body.events : [];
+  const invalid = requested.filter((e: unknown) => !validEvents.includes(e as string));
+  if (invalid.length > 0) {
+    return Response.json(
+      { error: `Unknown event type(s): ${invalid.join(", ")}. Valid: ${validEvents.join(", ")}` },
+      { status: 400 },
+    );
+  }
+  const events: string[] = requested as string[];
   const secret = typeof body.secret === "string" ? body.secret : null;
 
   try {

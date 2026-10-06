@@ -5,6 +5,7 @@ import { PATCH } from "~/pages/api/events/[id]/webhooks/[webhookId]";
 import { checkOwnership } from "~/lib/auth.helpers.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
+import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
 
 vi.mock("~/lib/auth.helpers.server", async () => {
   const actual = await vi.importActual<typeof AuthHelpersServer>("~/lib/auth.helpers.server");
@@ -109,7 +110,7 @@ describe("PATCH /api/events/[id]/webhooks/[webhookId]", () => {
     expect(res.status).toBe(400);
   });
 
-  it("filters invalid events", async () => {
+  it("rejects unknown event types with 400 instead of silently subscribing to all", async () => {
     const owner = await seedUser("owner-5");
     const event = await seedEvent(owner.id);
     const webhook = await seedWebhook(event.id, "https://example.com/webhook", ["game_full"]);
@@ -117,9 +118,27 @@ describe("PATCH /api/events/[id]/webhooks/[webhookId]", () => {
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PATCH(ctx(event.id, webhook.id, { events: ["player_joined", "invalid_event"] }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("invalid_event");
+  });
+
+  it("accepts every declared event type, including game_cancelled", async () => {
+    const owner = await seedUser("owner-all-events-edit");
+    const event = await seedEvent(owner.id, "evt-wh-all-events");
+    const webhook = await seedWebhook(event.id, "https://example.com/webhook", ["game_full"]);
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    const res = await PATCH(ctx(event.id, webhook.id, { events: [...WEBHOOK_EVENT_TYPES] }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.events).toEqual(["player_joined"]);
+    // The edit route validated its own copy of the list, which is how
+    // player_invited drifted out of both routes. One const, both routes.
+    expect(body.events).toEqual([...WEBHOOK_EVENT_TYPES]);
+
+    const updated = await prisma.webhookSubscription.findUnique({ where: { id: webhook.id } });
+    expect(JSON.parse(updated!.events)).toEqual([...WEBHOOK_EVENT_TYPES]);
   });
 
   it("allows removing all events (subscribe to all)", async () => {
