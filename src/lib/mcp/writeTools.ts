@@ -22,6 +22,9 @@ import { enqueuePushSetupHintSafe } from "../pushSetupHint";
 import { getNotificationPrefs } from "../notificationPrefs.server";
 import { sendPushToUser } from "../push.server";
 import { logEvent } from "../eventLog.server";
+import { assignTeams } from "../teamAssignment.server";
+import { setEventCost } from "../eventCost.server";
+import { claimPlayer as claimPlayerFn } from "../claimPlayer.server";
 
 /**
  * MCP write tools (V1.5). All mutations reuse the same server-side libs as
@@ -672,6 +675,98 @@ async function enqueueNoShowNotification(input: {
   await bestEffort(sendPushToUser(input.userId, input.title, body, `/events/${input.eventId}`));
 }
 
+async function setTeams(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  const event = await requireEventAccess(ctx, eventId);
+
+  const teamOnePlayerIds = args.teamOnePlayerIds;
+  const teamTwoPlayerIds = args.teamTwoPlayerIds;
+  if (!Array.isArray(teamOnePlayerIds) || !Array.isArray(teamTwoPlayerIds)) {
+    throw new McpError("teamOnePlayerIds and teamTwoPlayerIds must be arrays", -32602, 400);
+  }
+
+  try {
+    const result = await assignTeams(
+      eventId,
+      { teamOnePlayerIds, teamTwoPlayerIds },
+      event.maxPlayers,
+      event.currentGameId,
+      event.sport,
+    );
+    return {
+      ok: true,
+      teamOne: { name: result.teamOne.name, players: result.teamOne.members.map((m) => m.name) },
+      teamTwo: { name: result.teamTwo.name, players: result.teamTwo.members.map((m) => m.name) },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message.includes("not found") || message.includes("Duplicate") || message.includes("bench")) {
+      throw new McpError(message, -32602, 400);
+    }
+    throw err;
+  }
+}
+
+async function setCost(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await requireEventAccess(ctx, eventId);
+
+  const totalAmount = Number(args.totalAmount);
+  if (!totalAmount || totalAmount <= 0) {
+    throw new McpError("totalAmount must be a positive number.", -32602, 400);
+  }
+
+  try {
+    const result = await setEventCost(eventId, args as any);
+    return {
+      ok: true,
+      totalAmount: result.totalAmount,
+      currency: result.currency,
+      scope: result.scope,
+      paymentCount: result.payments.length,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message.includes("totalAmount") || message.includes("monthly") || message.includes("dropIn") || message.includes("payment method") || message.includes("No active game")) {
+      throw new McpError(message, -32602, 400);
+    }
+    throw err;
+  }
+}
+
+async function claimPlayer(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  const playerId = args.playerId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  if (!playerId) throw new McpError("playerId required", -32602, 400);
+
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.userId },
+    select: { name: true },
+  });
+  if (!user) throw new McpError("User not found", -32001, 404);
+
+  try {
+    const result = await claimPlayerFn(eventId, {
+      playerId,
+      userId: ctx.userId,
+      userName: user.name,
+    });
+    return result;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message === "Player not found.") {
+      throw new McpError(message, -32001, 404);
+    }
+    if (message.includes("already linked") || message.includes("already have") || message.includes("already claimed")) {
+      throw new McpError(message, -32001, 409);
+    }
+    throw err;
+  }
+}
+
 export const WRITE_TOOLS: ToolDef[] = [
   {
     name: "convocados_add_player",
@@ -873,5 +968,67 @@ export const WRITE_TOOLS: ToolDef[] = [
     },
     scope: "manage:players",
     handler: setNoShow,
+  },
+  {
+    name: "convocados_set_teams",
+    description:
+      "Assign players to teams for a Game. Provide teamOnePlayerIds and teamTwoPlayerIds as arrays of player IDs. Actor must own or admin the event.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID" },
+        teamOnePlayerIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Player IDs for team one",
+        },
+        teamTwoPlayerIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Player IDs for team two",
+        },
+      },
+      required: ["eventId", "teamOnePlayerIds", "teamTwoPlayerIds"],
+    },
+    scope: "manage:teams",
+    handler: setTeams,
+  },
+  {
+    name: "convocados_set_cost",
+    description:
+      "Set or update the cost for a Game. Recalculates per-player payment shares. Scope 'this_game' overrides only the current game; 'all_future' (default) updates the template. Actor must own or admin the event.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID" },
+        totalAmount: { type: "number", description: "Total cost amount (must be positive)" },
+        currency: { type: "string", description: "Currency code (default EUR)" },
+        paymentDetails: { type: "string", description: "Payment instructions or notes" },
+        scope: { type: "string", enum: ["this_game", "all_future"], description: "Cost scope (default all_future)" },
+        paymentMethods: {
+          type: "array",
+          items: { type: "string" },
+          description: "Accepted payment methods",
+        },
+      },
+      required: ["eventId", "totalAmount"],
+    },
+    scope: "manage:payments",
+    handler: setCost,
+  },
+  {
+    name: "convocados_claim_player",
+    description:
+      "Claim an anonymous player slot and link it to your account. Self-service; renames the player across teams, ratings, and history.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID" },
+        playerId: { type: "string", description: "Player ID or EventPlayer ID to claim" },
+      },
+      required: ["eventId", "playerId"],
+    },
+    scope: "read:events",
+    handler: claimPlayer,
   },
 ];

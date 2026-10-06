@@ -511,11 +511,14 @@ describe("MCP write tools — tools/list surface", () => {
       "convocados_unfollow_event",
       "convocados_leave_event",
       "convocados_set_no_show",
+      "convocados_set_teams",
+      "convocados_set_cost",
+      "convocados_claim_player",
     ]) {
       expect(names).toContain(tool);
     }
     // Exact count so adding or dropping a tool is a deliberate, visible change.
-    expect(names).toHaveLength(21);
+    expect(names).toHaveLength(24);
   });
 });
 

@@ -4,11 +4,8 @@ import { prisma } from "../../../../lib/db.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { validatePaymentMethods, normalizePaymentMethod } from "../../../../lib/paymentMethods";
-import type { PaymentMethod } from "../../../../lib/paymentMethods";
-import { syncGamePayments } from "../../../../lib/settlement.server";
-import { perPlayerShare } from "../../../../lib/gameCost";
 import { summarizePayments } from "../../../../lib/paymentSummary";
+import { setEventCost } from "../../../../lib/eventCost.server";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -28,222 +25,20 @@ export const PUT: APIRoute = async ({ params, request }) => {
   }
 
   const body = await request.json();
-  const totalAmount = Number(body.totalAmount);
-  if (!totalAmount || totalAmount <= 0) {
-    return Response.json({ error: "totalAmount must be a positive number." }, { status: 400 });
-  }
-  const currency = String(body.currency ?? "EUR").trim().slice(0, 10) || "EUR";
-  const paymentDetails = body.paymentDetails !== null && body.paymentDetails !== undefined
-    ? String(body.paymentDetails).trim().slice(0, 500) || null
-    : undefined;
 
-  // Monthly subscription fields (ADR 0008) + Drop-in Surcharge
-  const monthlyEnabled = body.monthlyEnabled !== undefined ? Boolean(body.monthlyEnabled) : undefined;
-  let monthlyFeeCents: number | null | undefined = undefined;
-  if (body.monthlyFeeCents !== undefined && body.monthlyFeeCents !== null) {
-    const n = Number(body.monthlyFeeCents);
-    if (!Number.isInteger(n) || n < 0) {
-      return Response.json({ error: "monthlyFeeCents must be a non-negative integer." }, { status: 400 });
+  try {
+    const result = await setEventCost(eventId, body);
+    return Response.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : `Non-Error: ${JSON.stringify(err)}`;
+    if (message.includes("totalAmount") || message.includes("monthly") || message.includes("dropIn") || message.includes("payment method")) {
+      return Response.json({ error: message }, { status: 400 });
     }
-    monthlyFeeCents = n;
-  }
-  let monthlyGamesCovered: number | undefined = undefined;
-  if (body.monthlyGamesCovered !== undefined && body.monthlyGamesCovered !== null) {
-    const n = Number(body.monthlyGamesCovered);
-    if (!Number.isInteger(n) || n <= 0) {
-      return Response.json({ error: "monthlyGamesCovered must be a positive integer." }, { status: 400 });
+    if (message.includes("No active game")) {
+      return Response.json({ error: message }, { status: 400 });
     }
-    monthlyGamesCovered = n;
+    throw err;
   }
-  let dropInSurchargeCents: number | undefined = undefined;
-  if (body.dropInSurchargeCents !== undefined && body.dropInSurchargeCents !== null) {
-    const n = Number(body.dropInSurchargeCents);
-    if (!Number.isInteger(n) || n < 0) {
-      return Response.json({ error: "dropInSurchargeCents must be a non-negative integer." }, { status: 400 });
-    }
-    dropInSurchargeCents = n;
-  }
-
-  // Validate structured payment methods (if provided)
-  let paymentMethodsJson: string | undefined;
-  if (body.paymentMethods !== undefined) {
-    if (body.paymentMethods === null || (Array.isArray(body.paymentMethods) && body.paymentMethods.length === 0)) {
-      paymentMethodsJson = null as unknown as string;
-    } else {
-      const err = validatePaymentMethods(body.paymentMethods);
-      if (err) return Response.json({ error: err }, { status: 400 });
-      const normalized = (body.paymentMethods as PaymentMethod[]).map(normalizePaymentMethod);
-      paymentMethodsJson = JSON.stringify(normalized);
-    }
-  }
-
-  // Active players only (not bench)
-  const activePlayers = event.players.slice(0, event.maxPlayers);
-  // Per-player share = total / required playing slots (maxPlayers), NOT the
-  // current roster size — the per-player price is fixed for the event.
-  const share = perPlayerShare(totalAmount, event.maxPlayers);
-
-  // ADR 0019: Cost change scope — "this_game" sets per-Game override, "all_future" (default) updates template
-  const scope = String(body.scope ?? "all_future");
-
-  if (scope === "this_game") {
-    // Per-Game cost override — only affects the current Game
-    if (!event.currentGameId) {
-      return Response.json({ error: "No active game to override cost for." }, { status: 400 });
-    }
-
-    await prisma.game.update({
-      where: { id: event.currentGameId },
-      data: { costTotalAmount: totalAmount, costCurrency: currency },
-    });
-
-    // Still need an EventCost for payment tracking (create if missing, don't update amount)
-    let eventCost = await prisma.eventCost.findUnique({ where: { eventId } });
-    if (!eventCost) {
-      eventCost = await prisma.eventCost.create({
-        data: {
-          eventId,
-          totalAmount, // use the provided amount as initial template too
-          currency,
-          paymentDetails: paymentDetails ?? null,
-          paymentMethods: paymentMethodsJson ?? null,
-        },
-      });
-    }
-
-    // Recalculate PlayerPayment shares based on the per-game override amount.
-    // Note: no owner auto-paid — the new model settles only a designated payer
-    // (GamePayment), never the owner by virtue of ownership (spec).
-    for (const player of activePlayers) {
-      await prisma.playerPayment.upsert({
-        where: {
-          eventCostId_playerName: { eventCostId: eventCost.id, playerName: player.name },
-        },
-        create: {
-          eventCostId: eventCost.id,
-          playerName: player.name,
-          amount: share,
-        },
-        update: { amount: share },
-      });
-    }
-
-    const activeNames = new Set(activePlayers.map((p) => p.name));
-    await prisma.playerPayment.deleteMany({
-      where: { eventCostId: eventCost.id, playerName: { notIn: [...activeNames] } },
-    });
-
-    // Payment overhaul: keep per-game payment rows in sync once a cost exists.
-    if (event.currentGameId) {
-      await syncGamePayments(event.currentGameId, eventId);
-    }
-
-    const payments = await prisma.playerPayment.findMany({
-      where: { eventCostId: eventCost.id },
-      orderBy: { playerName: "asc" },
-    });
-
-    return Response.json({
-      ...eventCost,
-      scope: "this_game",
-      gameOverride: { costTotalAmount: totalAmount, costCurrency: currency },
-      createdAt: eventCost.createdAt.toISOString(),
-      updatedAt: eventCost.updatedAt.toISOString(),
-      payments: payments.map((p) => ({
-        ...p,
-        paidAt: p.paidAt?.toISOString() ?? null,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString(),
-      })),
-    });
-  }
-
-  // scope === "all_future" (default) — update the EventCost template
-
-  // Upsert EventCost
-  const existing = await prisma.eventCost.findUnique({ where: { eventId } });
-
-  let eventCost;
-  if (existing) {
-    eventCost = await prisma.eventCost.update({
-      where: { id: existing.id },
-      data: {
-        totalAmount,
-        currency,
-        ...(paymentDetails !== undefined && { paymentDetails }),
-        ...(paymentMethodsJson !== undefined && { paymentMethods: paymentMethodsJson }),
-        ...(monthlyEnabled !== undefined && { monthlyEnabled }),
-        ...(monthlyFeeCents !== undefined && { monthlyFeeCents }),
-        ...(monthlyGamesCovered !== undefined && { monthlyGamesCovered }),
-        ...(dropInSurchargeCents !== undefined && { dropInSurchargeCents }),
-      },
-    });
-  } else {
-    eventCost = await prisma.eventCost.create({
-      data: {
-        eventId,
-        totalAmount,
-        currency,
-        paymentDetails: paymentDetails ?? null,
-        paymentMethods: paymentMethodsJson ?? null,
-        ...(monthlyEnabled !== undefined && { monthlyEnabled }),
-        ...(monthlyFeeCents !== undefined && { monthlyFeeCents }),
-        ...(monthlyGamesCovered !== undefined && { monthlyGamesCovered }),
-        ...(dropInSurchargeCents !== undefined && { dropInSurchargeCents }),
-      },
-    });
-  }
-
-  // Upsert PlayerPayment for each active player.
-  // Note: no owner auto-paid — the new model settles only a designated payer
-  // (GamePayment), never the owner by virtue of ownership (spec).
-  for (const player of activePlayers) {
-    await prisma.playerPayment.upsert({
-      where: {
-        eventCostId_playerName: { eventCostId: eventCost.id, playerName: player.name },
-      },
-      create: {
-        eventCostId: eventCost.id,
-        playerName: player.name,
-        amount: share,
-      },
-      update: {
-        amount: share,
-      },
-    });
-  }
-
-  // Remove payments for players no longer active
-  const activeNames = new Set(activePlayers.map((p) => p.name));
-  await prisma.playerPayment.deleteMany({
-    where: {
-      eventCostId: eventCost.id,
-      playerName: { notIn: [...activeNames] },
-    },
-  });
-
-  // Payment overhaul: keep per-game payment rows in sync once a cost exists.
-  if (event.currentGameId) {
-    await syncGamePayments(event.currentGameId, eventId);
-  }
-
-  const payments = await prisma.playerPayment.findMany({
-    where: { eventCostId: eventCost.id },
-    orderBy: { playerName: "asc" },
-  });
-
-
-  return Response.json({
-    ...eventCost,
-    createdAt: eventCost.createdAt.toISOString(),
-    updatedAt: eventCost.updatedAt.toISOString(),
-    payments: payments.map((p) => ({
-      ...p,
-      paidAt: p.paidAt?.toISOString() ?? null,
-      createdAt: p.createdAt.toISOString(),
-      updatedAt: p.updatedAt.toISOString(),
-    })),
-  });
 };
 
 /** GET — get event cost with payments and summary. Owner/admin/participant (or ownerless-unlisted link access). */

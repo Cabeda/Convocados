@@ -1044,15 +1044,17 @@ export function PlayerList({
           </>
         )}
 
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
-          <Button variant="contained" size="large" startIcon={<ShuffleIcon />}
-            disabled={active.length < 2 || isRandomizing}
-            aria-busy={isRandomizing ? "true" : undefined}
-            sx={{ px: 4, py: 1.5 }}
-            onClick={() => hasTeams ? onConfirmReRandomize() : onRandomize()}>
-            {t("randomizeTeams")}
-          </Button>
-        </Box>
+        {isOwner && (
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
+            <Button variant="contained" size="large" startIcon={<ShuffleIcon />}
+              disabled={active.length < 2 || isRandomizing}
+              aria-busy={isRandomizing ? "true" : undefined}
+              sx={{ px: 4, py: 1.5 }}
+              onClick={() => hasTeams ? onConfirmReRandomize() : onRandomize()}>
+              {t("randomizeTeams")}
+            </Button>
+          </Box>
+        )}
 
         <ConfirmLeaveDialog
           open={leaveDialog.open}
