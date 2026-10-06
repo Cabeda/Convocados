@@ -31,7 +31,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     return Response.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : `Non-Error: ${JSON.stringify(err)}`;
-    if (message.includes("totalAmount") || message.includes("monthly") || message.includes("dropIn") || message.includes("payment method")) {
+    if (message.includes("totalAmount") || message.includes("monthly") || message.includes("dropIn") || message.includes("payment") || message.includes("Invalid type") || message.includes("revolut") || message.includes("Phone number") || message.includes("Value is required")) {
       return Response.json({ error: message }, { status: 400 });
     }
     if (message.includes("No active game")) {
