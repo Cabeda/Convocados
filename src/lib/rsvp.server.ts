@@ -106,7 +106,7 @@ export async function getRsvpForUser(eventId: string, userId: string) {
 async function resolveGuestPlayer(eventId: string, playerId: string) {
   const player = await prisma.player.findUnique({
     where: { id: playerId },
-    select: { eventId: true, userId: true, name: true },
+    select: { id: true, eventId: true, userId: true, name: true },
   });
   if (player) return player;
 
@@ -119,9 +119,9 @@ async function resolveGuestPlayer(eventId: string, playerId: string) {
   const byName = await prisma.player.findFirst({
     where: { eventId, name: ep.name },
     orderBy: { archivedAt: "asc" }, // NULL (active) sorts first
-    select: { eventId: true, userId: true, name: true },
+    select: { id: true, eventId: true, userId: true, name: true },
   });
-  return byName ?? { eventId, userId: ep.userId, name: ep.name };
+  return byName ?? { id: null, eventId, userId: ep.userId, name: ep.name };
 }
 
 /** Idempotent RSVP upsert for a guest Player. Admin/owner acts on the guest's behalf. */
@@ -146,11 +146,18 @@ export async function upsertGuestRsvp(
   });
 
   const respondedAt = status === null ? null : new Date();
-  return prisma.rsvp.upsert({
+  const row = await prisma.rsvp.upsert({
     where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
     create: { eventPlayerId: ep.id, gameId: event.currentGameId, status, respondedAt, respondedByUserId: actorUserId },
     update: { status, respondedAt, respondedByUserId: actorUserId },
   });
+  // Carry the identity we resolved. `playerId` is whatever the client sent — an
+  // EventPlayer id or a legacy Player row id — and the decline path then has to
+  // hand archiveAndLeave the same identity: the roster *name*, because that is how
+  // it finds the roster row, and the *Player row id* when one exists, because that
+  // is what it soft-archives. Dropping the id leaves the guest's Player row
+  // un-archived, which leaves them in the ADR 0017 player-only push tier (#1237).
+  return { ...row, name: player.name, playerId: player.id ?? null };
 }
 
 export async function getRsvpForGuest(eventId: string, playerId: string) {

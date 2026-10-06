@@ -4,6 +4,7 @@ import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server"
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { isGameEnded } from "../../../../lib/gameStatus";
 import { archiveAndLeave } from "../../../../lib/leave.server";
+import { activeRosterEventPlayerById } from "../../../../lib/rosterChange.server";
 import { applyRosterChange, resetInviteRateLimitStores } from "../../../../lib/applyRosterChange.server";
 import {
   IDEMPOTENCY_HEADER,
@@ -114,26 +115,45 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const { playerId } = await request.json();
   const session = await getSession(request);
 
-  let player = await prisma.player.findFirst({
+  // ADR 0016: the roster the event page renders is GameParticipant + EventPlayer,
+  // but this gate looked only for an un-archived legacy Player row. Reactivation
+  // paths — accepting a re-invite, confirming a priority spot — put someone back on
+  // the roster without restoring that row, so the x answered 404 for a player the
+  // list was showing, with no way off it (#1237). Resolve the roster name and let
+  // archiveAndLeave work from it, the same way the self-leave path does.
+  //
+  // This only reads. Keeping resolution side-effect free is what guarantees the 403
+  // below has not already changed anything.
+  const owner = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
+  if (!owner) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const row = await prisma.player.findFirst({
     where: { id: playerId, eventId, archivedAt: null },
-    include: { event: { select: { ownerId: true } } },
+    select: { id: true, name: true, userId: true },
   });
-  // ADR 0016: Event GET now returns EventPlayer IDs. Fall back to name-based lookup.
-  if (!player) {
-    const ep = await prisma.eventPlayer.findFirst({ where: { id: playerId, eventId } });
-    if (ep) {
-      player = await prisma.player.findFirst({
-        where: { eventId, name: ep.name, archivedAt: null },
-        include: { event: { select: { ownerId: true } } },
-      });
-    }
-  }
-  if (!player) return Response.json({ error: "Not found." }, { status: 404 });
+  // The event GET hands out EventPlayer ids (ADR 0016), so that is the common case.
+  // Restricted to the *active* roster: a pending invite ghost is not a player yet
+  // (ADR 0025) and is retracted by its own action, so the x must not act on one —
+  // otherwise an anonymous caller could cancel someone's invite.
+  const roster = row ? null : await activeRosterEventPlayerById(eventId, playerId);
+  const name = row?.name ?? roster?.name;
+  if (!name) return Response.json({ error: "Not found." }, { status: 404 });
+  // The legacy Player row carries the authoritative account link — the read path
+  // trusts Player.userId for exactly this reason (index.ts). A roster row with no
+  // userId must therefore still fall back to it, including when that Player row is
+  // archived: gameDualWrite creates unlinked EventPlayers, so "no userId on the
+  // roster row" does not mean "anonymous", and trusting that alone would skip the
+  // gate below and let an unauthenticated x remove an account-linked player.
+  const linked = row ?? await prisma.player.findFirst({
+    where: { eventId, name },
+    select: { id: true, name: true, userId: true },
+  });
+  const subjectUserId = roster?.userId ?? linked?.userId ?? null;
 
   // Protected player check: players with userId can only be removed by themselves or the event owner.
-  if (player.userId) {
-    const isSelf = session?.user?.id === player.userId;
-    const { isOwner, isAdmin } = await checkOwnership(request, player.event.ownerId, session, eventId);
+  if (subjectUserId) {
+    const isSelf = session?.user?.id === subjectUserId;
+    const { isOwner, isAdmin } = await checkOwnership(request, owner.ownerId, session, eventId);
     if (!isSelf && !isOwner && !isAdmin) {
       return Response.json({ error: "This player is account-linked and can only be removed by themselves or the event owner." }, { status: 403 });
     }
@@ -141,13 +161,17 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   // Soft-archive + notify + log + re-index, with the warn-the-rest push gated on (48h + bench-empty).
   // Self-removal (the player is removing themselves) uses actor.kind="self" so the auto-unfollow fires.
-  const isSelf = session?.user?.id && player.userId === session.user.id;
+  const isSelf = !!session?.user?.id && subjectUserId === session.user.id;
   // For unauthenticated requests, pass null as the actor id (lib skips the Rsvp audit row,
   // which has a FK to User). Real authenticated users get a FK-safe actor id.
-  const actorUserId = session?.user?.id ?? player.event.ownerId ?? null;
+  const actorUserId = session?.user?.id ?? owner.ownerId ?? null;
   const result = await archiveAndLeave({
     eventId,
-    playerId: player.id,
+    // The Player row only when it is the active row we just resolved — otherwise
+    // archiveAndLeave works from `name`, which is how it finds the roster row for a
+    // player whose Player row is archived or absent.
+    playerId: row?.id ?? null,
+    name,
     actor: isSelf
       ? { kind: "self", userId: actorUserId }
       : { kind: "organizer", userId: actorUserId },

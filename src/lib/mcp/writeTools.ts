@@ -106,24 +106,28 @@ async function removePlayer(args: Record<string, unknown>, ctx: AuthContext) {
   if (!eventId) throw new McpError("eventId required", -32602, 400);
   await requireEventAccess(ctx, eventId);
 
-  const playerId = args.playerId as string | undefined;
-  const name = args.name as string | undefined;
-  let player: { id: string } | null = null;
-  if (playerId) {
-    player = await prisma.player.findFirst({ where: { id: playerId, eventId, archivedAt: null }, select: { id: true } });
-    // ADR 0016: clients may pass an EventPlayer id (the Event GET surfaces those).
-    if (!player) {
-      const ep = await prisma.eventPlayer.findFirst({ where: { id: playerId, eventId }, select: { name: true } });
-      if (ep) player = await prisma.player.findFirst({ where: { eventId, name: ep.name, archivedAt: null }, select: { id: true } });
-    }
-  } else if (typeof name === "string" && name.trim()) {
-    player = await prisma.player.findFirst({ where: { eventId, name, archivedAt: null }, select: { id: true } });
-  }
-  if (!player) throw new McpError("Player not found.", -32001, 404);
+  const byId = (args.playerId as string | undefined) ?? undefined;
+  const byName = typeof args.name === "string" ? args.name.trim() : undefined;
+  if (!byId && !byName) throw new McpError("playerId or name required", -32602, 400);
+
+  // ADR 0016: the event GET hands out EventPlayer ids, and archiveAndLeave
+  // identifies by roster name, so resolve one to the other here. One read, no
+  // archivedAt filtering: that filter is what made a re-activated player
+  // un-removable from here (#1237).
+  const ep = byId
+    ? await prisma.eventPlayer.findFirst({ where: { id: byId, eventId }, select: { name: true } })
+    : null;
+  const row = await prisma.player.findFirst({
+    where: byId && !ep ? { id: byId, eventId } : { eventId, name: ep?.name ?? byName },
+    select: { id: true, name: true },
+  });
+  const name = row?.name ?? ep?.name;
+  if (!name) throw new McpError("Player not found.", -32001, 404);
 
   const result = await archiveAndLeave({
     eventId,
-    playerId: player.id,
+    playerId: row?.id ?? null,
+    name,
     actor: { kind: "organizer", userId: ctx.userId },
   });
   return { ok: true, name: result.undo.name, warned: result.warned, benchEmptyAfter: result.benchEmptyAfter };

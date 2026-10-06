@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { archiveAndLeave } from "~/lib/leave.server";
+import { rosteredEventPlayerForUser } from "~/lib/rosterChange.server";
 
 /** POST /api/events/[id]/leave — authenticated user leaves an event they were a Player in.
  *  On success: Player.archivedAt is set, Rsvp.status = "no", auto-unfollow.
@@ -29,10 +30,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   // "You are not a player in this event." to a player the page just showed as
   // joined. Fall back to the Player table so ownerless/legacy events still work.
   const { prisma } = await import("~/lib/db.server");
-  const ep = await prisma.eventPlayer.findFirst({
-    where: { eventId, userId: session.user.id },
-    select: { name: true },
-  });
+  const ep = await rosteredEventPlayerForUser(eventId, session.user.id);
   const player = await prisma.player.findFirst({
     where: { eventId, userId: session.user.id, archivedAt: null },
     select: { id: true, name: true },
