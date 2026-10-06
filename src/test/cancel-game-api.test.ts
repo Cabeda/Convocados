@@ -349,7 +349,7 @@ describe("PUT /api/events/[id]/cancel", () => {
     expect(mockFireWebhooks).toHaveBeenCalledWith(
       event.id,
       "game_cancelled",
-      expect.objectContaining({ isRecurring: false }),
+      expect.objectContaining({ isRecurring: false, gameId: expect.any(String) }),
     );
   });
 

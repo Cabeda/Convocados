@@ -110,7 +110,7 @@ describe("PATCH /api/events/[id]/webhooks/[webhookId]", () => {
     expect(res.status).toBe(400);
   });
 
-  it("filters invalid events", async () => {
+  it("rejects unknown event types with 400 instead of silently subscribing to all", async () => {
     const owner = await seedUser("owner-5");
     const event = await seedEvent(owner.id);
     const webhook = await seedWebhook(event.id, "https://example.com/webhook", ["game_full"]);
@@ -118,9 +118,9 @@ describe("PATCH /api/events/[id]/webhooks/[webhookId]", () => {
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PATCH(ctx(event.id, webhook.id, { events: ["player_joined", "invalid_event"] }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.events).toEqual(["player_joined"]);
+    expect(body.error).toContain("invalid_event");
   });
 
   it("accepts every declared event type, including game_cancelled", async () => {

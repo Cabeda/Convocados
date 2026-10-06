@@ -36,9 +36,15 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   const validEvents: readonly string[] = WEBHOOK_EVENT_TYPES;
-  const events: string[] = Array.isArray(body.events)
-    ? body.events.filter((e: string) => validEvents.includes(e))
-    : [];
+  const requested: unknown[] = Array.isArray(body.events) ? body.events : [];
+  const invalid = requested.filter((e: unknown) => !validEvents.includes(e as string));
+  if (invalid.length > 0) {
+    return Response.json(
+      { error: `Unknown event type(s): ${invalid.join(", ")}. Valid: ${validEvents.join(", ")}` },
+      { status: 400 },
+    );
+  }
+  const events: string[] = requested as string[];
   const secret = typeof body.secret === "string" ? body.secret : null;
 
   try {

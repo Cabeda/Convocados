@@ -182,16 +182,16 @@ describe("POST /api/events/[id]/webhooks", () => {
     expect(res.status).toBe(429);
   });
 
-  it("filters invalid events", async () => {
+  it("rejects unknown event types with 400 instead of silently subscribing to all", async () => {
     const owner = await seedUser("owner-7");
     const event = await seedEvent(owner.id);
 
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/webhook", events: ["player_joined", "invalid_event"] }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.events).toEqual(["player_joined"]);
+    expect(body.error).toContain("invalid_event");
   });
 
   it("accepts every declared event type, including game_cancelled", async () => {

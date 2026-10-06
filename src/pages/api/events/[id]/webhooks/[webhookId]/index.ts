@@ -39,7 +39,15 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "events is required." }, { status: 400 });
   }
 
-  const events: string[] = body.events.filter((e: string) => VALID_EVENTS.includes(e));
+  const invalid = body.events.filter((e: string) => !VALID_EVENTS.includes(e));
+  if (invalid.length > 0) {
+    return Response.json(
+      { error: `Unknown event type(s): ${invalid.join(", ")}. Valid: ${VALID_EVENTS.join(", ")}` },
+      { status: 400 },
+    );
+  }
+
+  const events: string[] = body.events;
   const webhook = await prisma.webhookSubscription.update({
     where: { id: webhookId },
     data: { events: JSON.stringify(events) },
