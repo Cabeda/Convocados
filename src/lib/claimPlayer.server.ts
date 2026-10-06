@@ -120,7 +120,7 @@ export async function claimPlayer(
     });
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "CLAIM_RACE") {
-      throw new Error("This player was already claimed by someone else.");
+      throw new Error("This player was already claimed by someone else.", { cause: err });
     }
     throw err;
   }
