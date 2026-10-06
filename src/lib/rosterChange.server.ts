@@ -6,7 +6,46 @@
  */
 import { prisma } from "./db.server";
 import { nextGameParticipantOrder } from "./game.server";
+import { activeParticipantsWhere } from "./activeParticipants.server";
 import { upsertGameParticipantForRoster } from "./rosterCore.server";
+
+/**
+ * The active roster row behind this EventPlayer id, or null.
+ *
+ * A pending invite ghost is not on the roster (ADR 0025) — it is retracted by its own
+ * action, not by the x on the roster — so the roster routes must not act on one.
+ */
+export async function activeRosterEventPlayerById(eventId: string, eventPlayerId: string) {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) return null;
+  const participant = await prisma.gameParticipant.findFirst({
+    where: { ...activeParticipantsWhere(event.currentGameId), eventPlayerId, eventPlayer: { eventId } },
+    select: { eventPlayer: { select: { id: true, name: true, userId: true } } },
+  });
+  return participant?.eventPlayer ?? null;
+}
+
+/**
+ * The EventPlayer row an account is currently listed under, or null.
+ *
+ * EventPlayer is unique on (eventId, name) — *not* on userId — so one account can
+ * own two rows: priority/confirm upserts by name using the caller's *current*
+ * display name and leaves the row from their previous name behind. An unordered
+ * findFirst can land on that ghost, and acting on the ghost leaves the player still
+ * on the list — #1237's symptom one indirection away. Prefer the row the current
+ * Game actually lists.
+ */
+export async function rosteredEventPlayerForUser(eventId: string, userId: string) {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (event?.currentGameId) {
+    const participant = await prisma.gameParticipant.findFirst({
+      where: { ...activeParticipantsWhere(event.currentGameId), eventPlayer: { eventId, userId } },
+      select: { eventPlayer: { select: { id: true, name: true } } },
+    });
+    if (participant) return participant.eventPlayer;
+  }
+  return prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true, name: true } });
+}
 
 /**
  * Move an existing Player row to the end of the active list (queue semantics).

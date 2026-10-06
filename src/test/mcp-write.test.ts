@@ -561,13 +561,18 @@ describe("MCP write tools — additional validation and auth gaps", () => {
     expect(body.error.code).toBe(-32602);
   });
 
-  it("remove_player via EventPlayer id fallback still 404 when no Player row", async () => {
+  it("removes via an EventPlayer id when the guest has no Player row at all (#1237)", async () => {
+    // This used to 404: the lookup filtered on an un-archived Player row, so an
+    // EventPlayer-native identity (ADR 0026 guest invite, re-join under a new name)
+    // was un-removable from here. archiveAndLeave identifies by roster name.
     const owner = await createOwner();
     const event = await createEvent(owner.id);
     const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ghost" } });
     mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
     const res = await POST(ctx(callTool("convocados_remove_player", { eventId: event.id, playerId: ep.id })));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    expect(JSON.parse(body.result.content[0].text).name).toBe("Ghost");
   });
 
   it("randomize_teams errors when eventId is missing", async () => {
