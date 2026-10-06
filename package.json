@@ -10,7 +10,7 @@
     "start": "sh ./scripts/start.sh",
     "setup-hooks": "sh ./scripts/install-hooks.sh",
     "lint": "eslint src/ scripts/check-play-listing.mjs --no-ignore",
-    "typecheck": "tsc",
+    "typecheck": "tsc6",
     "test": "vitest run",
     "check:play-listing": "node scripts/check-play-listing.mjs",
     "test:mutation": "node scripts/run-mutation.mjs",
