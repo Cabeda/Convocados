@@ -72,6 +72,9 @@ overrides:
   # dependents request the v2 line, so stay on it.
   proxy-addr@<2.0.8: '>=2.0.8'
   qs@<6.16.0: '>=6.16.0'
+  # sharp <0.35.5: CVE-2026-96889 via librsvg (GHSA-wq5f-xc86-pv6w).
+  # Reached through astro -> @astrojs/node. Patched in 0.35.5.
+  sharp: '>=0.35.5'
   # event-loop DoS through indexed source-map section offsets
   # (GHSA-68fv-2mgg-jv7q), reached through astro's toolchain (magicast,
   # svgo/css-tree). Patched in 1.2.2; all dependents request v1.
