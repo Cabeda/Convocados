@@ -5,7 +5,8 @@
 name: "factory: repair"
 
 on:
-  check_suite: completed
+  check_suite:
+    types: [completed]
   workflow_dispatch:
     inputs:
       pr:
