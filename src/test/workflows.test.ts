@@ -97,7 +97,7 @@ describe("workflow files are valid", () => {
     try {
       doc = parse(raw) as Workflow;
     } catch (err) {
-      throw new Error(`${file} is not valid YAML: ${(err as Error).message}`);
+      throw new Error(`${file} is not valid YAML: ${(err as Error).message}`, { cause: err });
     }
     expect(doc, `${file} must be a mapping`).toBeTypeOf("object");
     expect(Object.keys(doc?.jobs ?? {}).length, `${file} must declare at least one job`).toBeGreaterThan(0);
