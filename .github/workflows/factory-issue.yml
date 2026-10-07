@@ -20,6 +20,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Always runs, and is the fix for a silent loss: an offer labelled before the
+  # factory had an identity used to skip with no trace, and GitHub never
+  # replayed it. The person who labelled saw nothing happen and had no way to
+  # learn the offer was dropped.
+  #
+  # Deliberately narrow scope: comment on Issues and nothing else. It cannot
+  # push, cannot merge, and the token never reaches a model — the Agent job
+  # below keeps `permissions: {}` and mints its own App token (ADR 0046). Job
+  # permissions are per-job, so this does not widen the Agent's blast radius.
+  notice:
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      issues: write
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Say so when a live offer cannot be honoured
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_LABEL: ${{ github.event.label.name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue }}
+          FACTORY_PAUSED: ${{ vars.FACTORY_PAUSED }}
+          FACTORY_APP_ID: ${{ vars.FACTORY_APP_ID }}
+          FACTORY_MODEL: ${{ vars.FACTORY_MODEL }}
+        run: node scripts/factory/decline-notice.ts
+
   factory:
     # Everything flows through the App token minted below. The default
     # GITHUB_TOKEN needs no scope here, and must not carry one: it lives in the
