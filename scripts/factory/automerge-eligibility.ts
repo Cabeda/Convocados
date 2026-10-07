@@ -43,11 +43,21 @@ export interface PullRequestFacts {
 
 /**
  * Checks that must be present *and* successful. A missing check is not a pass.
- * Named explicitly so a rename surfaces as a failure rather than silently
- * dropping a gate from the required set.
+ *
+ * `CI` and `Analyze (javascript-typescript)` are the two contexts the `main`
+ * rulesets actually mark required — verified against
+ * `repos/Cabeda/Convocados/rulesets`, not guessed. `Typecheck`, `Lint`,
+ * `Dependency Audit` and `Build` are the individual gates that `CI` aggregates,
+ * and they are named separately so that a red member cannot hide behind a green
+ * aggregate.
+ *
+ * `Coverage Gate` is deliberately absent: it reports `skipped` on
+ * dependency-only diffs, so requiring it would make every Dependabot PR
+ * ineligible. Pinned by a test so nobody re-adds it without meeting that.
  */
 export const REQUIRED_CHECKS = [
   "CI",
+  "Analyze (javascript-typescript)",
   "Typecheck",
   "Lint",
   "Dependency Audit",

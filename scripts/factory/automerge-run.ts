@@ -10,7 +10,7 @@
  *   DRY_RUN=true node scripts/factory/automerge-run.ts  # report only
  */
 import { execFileSync } from "node:child_process";
-import { decideAutomerge, explain, type Check, type PullRequestFacts } from "./automerge-eligibility.ts";
+import { decideAutomerge, explain, REQUIRED_CHECKS, type Check, type PullRequestFacts } from "./automerge-eligibility.ts";
 
 const REPO = process.env.GITHUB_REPOSITORY ?? "Cabeda/Convocados";
 const DRY_RUN = process.env.DRY_RUN === "true";
@@ -25,17 +25,26 @@ interface RawPr {
   labels: Array<{ name: string }>;
 }
 
-function gh(args: string[]): string {
+/**
+ * Run `gh`, reporting whether it worked.
+ *
+ * Deliberately not a bare string getter. Swallowing the exit status let the
+ * "Auto-merge armed" comment post even when arming failed — the audit record
+ * claiming something the run had not achieved, which is the exact dishonesty
+ * the deterministic-script argument exists to rule out.
+ */
+function gh(args: string[]): { ok: boolean; out: string } {
   try {
-    return execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const out = execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    return { ok: true, out };
   } catch {
-    return "";
+    return { ok: false, out: "" };
   }
 }
 
 function ghJson<T>(args: string[]): T {
-  const out = gh(args);
-  if (!out.trim()) throw new Error(`gh ${args.join(" ")} returned nothing`);
+  const { ok, out } = gh(args);
+  if (!ok || !out.trim()) throw new Error(`gh ${args.join(" ")} failed or returned nothing`);
   return JSON.parse(out) as T;
 }
 
@@ -50,13 +59,14 @@ function ghJson<T>(args: string[]): T {
  * If this cannot be determined we return MAX_SAFE_INTEGER, i.e. fail closed.
  */
 function commitsBehind(base: string, head: string): number {
-  const out = gh([
+  const { ok, out } = gh([
     "api",
     `repos/${REPO}/compare/${base}...${head}`,
     "--jq",
     ".behind_by",
-  ]).trim();
-  const n = Number.parseInt(out, 10);
+  ]);
+  if (!ok) return Number.MAX_SAFE_INTEGER;
+  const n = Number.parseInt(out.trim(), 10);
   return Number.isNaN(n) ? Number.MAX_SAFE_INTEGER : n;
 }
 
@@ -81,31 +91,48 @@ async function collectFacts(pr: RawPr): Promise<PullRequestFacts> {
   };
 }
 
-async function arm(pr: PullRequestFacts): Promise<void> {
-  const body = [
-    "Auto-merge armed by the Delivery Factory.",
-    "",
-    "Machine-authored dependency bump. Every required gate is green on this exact",
-    "head, and the branch is level with `main`. GitHub fires the merge itself when",
-    "the required checks settle — the factory cannot force it, and branch",
-    "protection still applies.",
-    "",
-    "Reversal: unset the `FACTORY_AUTOMERGE` repository variable and cancel auto-merge",
-    "on this PR. Add `factory:blocked` to park it.",
-    "",
-    "<details><summary>Conditions checked</summary>",
-    "",
-    "- author is `dependabot[bot]`",
-    "- base is `main`, not a draft, no conflicts, mergeability computed",
-    "- not behind `main` (a green run on a stale base proves nothing about it)",
-    "- `CI`, `Typecheck`, `Lint`, `Dependency Audit`, `Build` all `success`",
-    "- no `factory:blocked` label",
-    "",
-    "</details>",
-  ].join("\n");
+async function arm(pr: PullRequestFacts): Promise<boolean> {
+  // Arm first, and only claim it if the arm actually succeeded.
+  const armed = gh(["pr", "merge", String(pr.number), "--squash", "--auto", "--delete-branch"]);
 
-  gh(["pr", "merge", String(pr.number), "--squash", "--auto", "--delete-branch"]);
-  gh(["pr", "comment", String(pr.number), "--body", body]);
+  const body = armed.ok
+    ? [
+        "Auto-merge armed by the Delivery Factory.",
+        "",
+        "Machine-authored dependency bump. Every required gate is green on this exact",
+        "head, and the branch is level with `main`. GitHub fires the merge itself when",
+        "the required checks settle.",
+        "",
+        "This factory can arm auto-merge but holds no merge permission, so it cannot",
+        "force this merge. Branch protection still decides.",
+        "",
+        "**Reversal is two steps, not one.** Unsetting `FACTORY_AUTOMERGE` stops future",
+        "runs but does NOT cancel what is already armed — GitHub fires armed auto-merge",
+        "independently of any repository variable. To stop this one, cancel auto-merge on",
+        "this PR as well. Add `factory:blocked` to park it.",
+        "",
+        "<details><summary>Conditions checked</summary>",
+        "",
+        "- author is `dependabot[bot]`",
+        "- base is `main`, not a draft, no conflicts, mergeability computed",
+        "- not behind `main` (a green run on a stale base proves nothing about it)",
+        `- ${REQUIRED_CHECKS.map((c) => `\`${c}\``).join(", ")} all \`success\` on this head`,
+        "- no `factory:blocked` label",
+        "",
+        "</details>",
+      ].join("\n")
+    : [
+        "**The factory tried to arm auto-merge here and failed.** No auto-merge is",
+        "queued on this PR. Leaving it for a human.",
+        "",
+        "Usual cause: repository auto-merge is disabled, or the token lacks",
+        "`pull-requests: write`. Nothing about this PR's green gates is in question —",
+        "the gates are green, the *arming* is what failed.",
+      ].join("\n");
+
+  const commented = gh(["pr", "comment", String(pr.number), "--body", body]);
+  if (!commented.ok) console.warn(`  #${pr.number}: could not post the audit comment`);
+  return armed.ok;
 }
 
 async function main(): Promise<void> {
@@ -138,8 +165,9 @@ async function main(): Promise<void> {
       console.log(`  dry run: would arm auto-merge on #${facts.number}`);
       continue;
     }
-    await arm(facts);
-    armed += 1;
+    // Count only arms that actually happened. A failed arm is reported, not
+    // tallied, so the summary cannot overstate what the run did.
+    if (await arm(facts)) armed += 1;
   }
 
   console.log(DRY_RUN ? "Dry run: nothing armed." : `Armed auto-merge on ${armed} PR(s).`);

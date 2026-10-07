@@ -9,12 +9,17 @@
 # predicates with tests; an LLM asked "should this merge?" gives the same answer
 # twice about half the time. Keep the judgement out of the model.
 #
-# Why auto-merge and not merge permission: the App deliberately holds no merge
-# permission (AGENTS.md, "Merge Authority"). Auto-merge needs only
-# `pull-requests: write`, which the App already has. So the factory can *arm* a
-# merge once the gates are green and still cannot force one. If this policy is
-# ever wrong, flipping the variable stops it, and nothing the factory can do
-# bypasses branch protection.
+# Why auto-merge and not merge permission: the App is granted no `contents` and no
+# merge scope here. `pull-requests: write` is enough to *arm* auto-merge, and
+# GitHub fires the merge itself once the required checks settle. Branch
+# protection is what actually prevents a forced merge, and it is untouched.
+# Note honestly: `pull-requests: write` *can* call the merge endpoint, so the
+# real constraint is `decideAutomerge()` plus branch protection — not the token.
+#
+# Reversal is two steps. Unsetting `FACTORY_AUTOMERGE` stops future runs but does
+# NOT cancel auto-merge already armed on a PR; GitHub fires that independently
+# of any repository variable. Every arm comment says so, and names the second
+# step.
 #
 # Scope is deliberately narrow: dependabot bumps only. A human-authored Change
 # gets a human, however green it is.
@@ -43,11 +48,20 @@ concurrency:
 jobs:
   automerge:
     runs-on: ubuntu-latest
-    if: vars.FACTORY_AUTOMERGE == 'true'
+    # Both switches, in the same order every other factory workflow uses:
+    # FACTORY_PAUSED stops everything at every entry point, and
+    # FACTORY_AUTOMERGE is what activates this policy in the first place.
+    if: >-
+      vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_AUTOMERGE == 'true'
     timeout-minutes: 10
     steps:
-      - name: Check the activation switch
+      - name: Check the switches
         run: |
+          if [ "${{ vars.FACTORY_PAUSED }}" = "true" ]; then
+            echo "FACTORY_PAUSED=true — the factory is stopped. Exiting." >&2
+            exit 0
+          fi
           if [ "${{ vars.FACTORY_AUTOMERGE }}" != "true" ]; then
             echo "FACTORY_AUTOMERGE is not 'true' — the policy is inert. Nothing will merge." >&2
             exit 0
@@ -67,8 +81,23 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile --prefer-offline
 
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Matches the other factory roles (ADR 0048) so the audit trail is
+          # authored by convenedos-factory[bot] rather than github-actions[bot].
+          # No `contents`, so nothing here can push to any branch.
+          permission-pull-requests: write
+
+      # Bare `node`, not `pnpm tsx`: tsx is not a declared dependency, it only
+      # resolves through pnpm's hidden hoist. Node 24 strips the types itself,
+      # and this matches scripts/factory/attempt.ts.
       - name: Arm auto-merge on eligible dependency bumps
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           DRY_RUN: ${{ inputs.dry-run == 'true' }}
-        run: pnpm tsx scripts/factory/automerge-run.ts
+        run: node scripts/factory/automerge-run.ts

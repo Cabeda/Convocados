@@ -268,16 +268,26 @@ Blocked Issue stays out of the queue until a human clears it.
   1. **It is a script, not an agent.** The decision is
      `decideAutomerge()` — named predicates with tests, reproducible and auditable.
      An LLM asked "should this merge?" is neither.
-  2. **It arms, it does not merge.** Auto-merge needs only `pull-requests: write`,
-     which the App already holds. It still holds **no merge permission**, so it
-     cannot force a merge, and branch protection is untouched.
+  2. **It arms, it does not merge.** The App is granted no `contents` scope, and
+     GitHub fires the merge once the required checks settle. Stated precisely,
+     because the tempting claim is false: `pull-requests: write` **can** call the
+     merge endpoint. What prevents a forced merge is `decideAutomerge()` plus
+     branch protection, not the token.
   3. **A green run on a stale base is not eligible.** The PR must be level with
-     `main`, every required gate (`CI`, `Typecheck`, `Lint`, `Dependency Audit`,
-     `Build`) must be `success` **on that head**, and a gate that never ran is not
-     a passing gate. This is the #1256 lesson: its lockfile predated the sharp
-     override, its own CI was green anyway, and merging reverted the fix.
-  4. **Reversal is one variable.** Unsetting `FACTORY_AUTOMERGE` disarms everything
-     already queued. `factory:blocked` parks any single Change.
+     `main`, and every gate the `main` rulesets require — `CI`,
+     `Analyze (javascript-typescript)`, `Typecheck`, `Lint`,
+     `Dependency Audit`, `Build` — must be `success` **on that head**. A gate
+     that never ran is not a passing gate. This is the #1256 lesson: its lockfile
+     predated the sharp override, its own CI was green anyway, and merging
+     reverted the fix.
+  4. **Reversal is two steps, and the second is the one people forget.**
+     Unsetting `FACTORY_AUTOMERGE` stops future runs but does **not** cancel
+     auto-merge already armed on a PR — GitHub fires that independently of any
+     repository variable. To stop an armed Change: unset the variable **and**
+     cancel auto-merge on that PR. `factory:blocked` parks any single Change.
+
+  The workflow also honours `FACTORY_PAUSED` first, like every other factory
+  entry point.
 
   A human-authored Change is **never** auto-merged, at any gate state. Setting this
   variable is the activation, and no machine may set or clear it.

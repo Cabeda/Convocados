@@ -15,6 +15,7 @@ import {
 
 const GREEN: Check[] = [
   { name: "CI", conclusion: "success" },
+  { name: "Analyze (javascript-typescript)", conclusion: "success" },
   { name: "Typecheck", conclusion: "success" },
   { name: "Lint", conclusion: "success" },
   { name: "Dependency Audit", conclusion: "success" },
@@ -84,12 +85,15 @@ describe("a missing gate is not a passing gate", () => {
   });
 
   it("names every required check explicitly, so a rename cannot drop a gate", () => {
-    expect(REQUIRED_CHECKS).toContain("Dependency Audit");
+    // The two contexts the `main` rulesets genuinely require.
+    expect(REQUIRED_CHECKS).toContain("CI");
+    expect(REQUIRED_CHECKS).toContain("Analyze (javascript-typescript)");
+    // The individual gates `CI` aggregates, named so a red member cannot hide
+    // behind a green aggregate.
     expect(REQUIRED_CHECKS).toContain("Typecheck");
     expect(REQUIRED_CHECKS).toContain("Lint");
+    expect(REQUIRED_CHECKS).toContain("Dependency Audit");
     expect(REQUIRED_CHECKS).toContain("Build");
-    // The aggregate gate branch protection actually requires.
-    expect(REQUIRED_CHECKS).toContain("CI");
   });
 
   it("does not require Coverage Gate, because it is skipped on dependency-only diffs", () => {
