@@ -261,6 +261,36 @@ Blocked Issue stays out of the queue until a human clears it.
 - **Only Cabeda applies or removes `ready-for-agent`.** Explorers may not label their own
   output, and the Factory may not pull work that was not offered.
 - **Only Cabeda merges.** No agent merges, ever, including after approval.
+- **`FACTORY_AUTOMERGE=true` (a repo variable) is the single exception, and it is
+  off by default.** It lets `scripts/factory/automerge-run.ts` arm GitHub auto-merge
+  on **machine-authored Dependabot bumps only**, and nothing else. Four properties
+  keep that narrow:
+  1. **It is a script, not an agent.** The decision is
+     `decideAutomerge()` — named predicates with tests, reproducible and auditable.
+     An LLM asked "should this merge?" is neither.
+  2. **It arms, it does not merge.** The App is granted no `contents` scope, and
+     GitHub fires the merge once the required checks settle. Stated precisely,
+     because the tempting claim is false: `pull-requests: write` **can** call the
+     merge endpoint. What prevents a forced merge is `decideAutomerge()` plus
+     branch protection, not the token.
+  3. **A green run on a stale base is not eligible.** The PR must be level with
+     `main`, and every gate the `main` rulesets require — `CI`,
+     `Analyze (javascript-typescript)`, `Typecheck`, `Lint`,
+     `Dependency Audit`, `Build` — must be `success` **on that head**. A gate
+     that never ran is not a passing gate. This is the #1256 lesson: its lockfile
+     predated the sharp override, its own CI was green anyway, and merging
+     reverted the fix.
+  4. **Reversal is two steps, and the second is the one people forget.**
+     Unsetting `FACTORY_AUTOMERGE` stops future runs but does **not** cancel
+     auto-merge already armed on a PR — GitHub fires that independently of any
+     repository variable. To stop an armed Change: unset the variable **and**
+     cancel auto-merge on that PR. `factory:blocked` parks any single Change.
+
+  The workflow also honours `FACTORY_PAUSED` first, like every other factory
+  entry point.
+
+  A human-authored Change is **never** auto-merged, at any gate state. Setting this
+  variable is the activation, and no machine may set or clear it.
 - **The factory branches from `origin/main` only** — never from a local checkout or another
   feature branch, so no Change inherits half-finished work.
 - **`FACTORY_PAUSED=true` (a repo variable) stops everything** at every entry point. No
