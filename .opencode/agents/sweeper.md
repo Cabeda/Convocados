@@ -70,6 +70,33 @@ And it is **not** stuck when:
 When you judge this, read `gh pr view <n> --json commits,updatedAt,comments` and ask what actually
 changed, not when something last said something.
 
+## Stranded offers
+
+A Change can be stuck. An **offer** can be stranded, and that is worse because nobody is looking at
+it — there is no PR, so no check list goes red and nothing turns amber anywhere.
+
+An offer is stranded when an open Issue carries `ready-for-agent` and **no Change was ever opened
+from it**:
+
+- `gh issue view <n> --json labels,comments` shows `ready-for-agent`;
+- no `factory/*` PR references it, and the Issue has no comment from the Factory saying it
+  started, was Blocked, or was declined;
+- it has been that way for **more than 24 hours**.
+
+File one Issue naming **every** stranded offer you find, not one per offer: a single Issue that
+lists them is the actionable artefact, and 20 near-identical Issues would be exactly the noise this
+role exists to avoid.
+
+The remedy in the Issue must say to **re-apply `ready-for-agent`** — that is what restarts an
+offer, because GitHub does not replay past `issues: labeled` events. **Never re-apply it
+yourself.** The label is Cabeda's alone, and an agent that re-queues itself has removed the human
+gate that the label exists to be.
+
+This is not hypothetical: #1216 was labelled on 2026-09-29, before the factory had an App id or a
+model, so the dispatch skipped silently and was never retried. `factory-issue.yml` now comments on
+the Issue when it declines, so this specific cause cannot recur — but an offer stranded *before*
+that fix, or by any other cause, is still yours to find.
+
 ## Dedupe is the whole job
 
 Before filing anything, check that nobody already knows:
