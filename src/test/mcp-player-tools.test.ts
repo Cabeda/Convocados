@@ -529,3 +529,93 @@ describe("convocados_rsvp scope", () => {
     ))).toBe(true);
   });
 });
+
+// ── set_teams ───────────────────────────────────────────────────────────────
+
+describe("convocados_set_teams", () => {
+  it("assigns players to two teams", async () => {
+    const event = await createEvent(USER.id);
+    const a = await seedPlayer(event.id, "Alice");
+    const b = await seedPlayer(event.id, "Bob");
+    // The event has a currentGameId, so assignTeams resolves EventPlayer ids.
+    const call = await run("convocados_set_teams", {
+      eventId: event.id,
+      teamOnePlayerIds: [a.eventPlayer.id],
+      teamTwoPlayerIds: [b.eventPlayer.id],
+    });
+    expect(failed(call)).toBe(false);
+    expect(output(call)).toContain("Alice");
+    expect(output(call)).toContain("Bob");
+  });
+
+  it("rejects a player id that is not on the event roster", async () => {
+    const event = await createEvent(USER.id);
+    expectFailure(await run("convocados_set_teams", {
+      eventId: event.id, teamOnePlayerIds: ["nope"], teamTwoPlayerIds: [],
+    }), /not found/i);
+  });
+
+  it("requires both team arrays", async () => {
+    const event = await createEvent(USER.id);
+    expect(failed(await run("convocados_set_teams", {
+      eventId: event.id, teamOnePlayerIds: [],
+    }))).toBe(true);
+  });
+
+  it("refuses a non-owner", async () => {
+    const stranger = await createUser("stranger");
+    const event = await createEvent(USER.id);
+    expect(failed(await run("convocados_set_teams", {
+      eventId: event.id, teamOnePlayerIds: [], teamTwoPlayerIds: [],
+    }, ["*"], stranger.id))).toBe(true);
+  });
+});
+
+// ── set_cost ────────────────────────────────────────────────────────────────
+
+describe("convocados_set_cost", () => {
+  it("sets cost and recalculates shares", async () => {
+    const event = await createEvent(USER.id);
+    await seedPlayer(event.id, "Alice");
+    const call = await run("convocados_set_cost", {
+      eventId: event.id, totalAmount: 100,
+    });
+    expect(failed(call)).toBe(false);
+  });
+
+  it("rejects a non-positive amount", async () => {
+    const event = await createEvent(USER.id);
+    expect(failed(await run("convocados_set_cost", {
+      eventId: event.id, totalAmount: -10,
+    }))).toBe(true);
+  });
+
+  it("refuses a non-owner", async () => {
+    const stranger = await createUser("stranger");
+    const event = await createEvent(USER.id);
+    expect(failed(await run("convocados_set_cost", {
+      eventId: event.id, totalAmount: 50,
+    }, ["*"], stranger.id))).toBe(true);
+  });
+});
+
+// ── claim_player ────────────────────────────────────────────────────────────
+
+describe("convocados_claim_player", () => {
+  it("claims an anonymous slot for the caller", async () => {
+    const event = await createEvent(null);
+    const { player } = await seedPlayer(event.id, "Anon");
+    const call = await run("convocados_claim_player", {
+      eventId: event.id, playerId: player.id,
+    });
+    expect(failed(call)).toBe(false);
+    expect((await prisma.player.findUnique({ where: { id: player.id } }))?.userId).toBe(USER.id);
+  });
+
+  it("404s for an unknown player", async () => {
+    const event = await createEvent(null);
+    expect(failed(await run("convocados_claim_player", {
+      eventId: event.id, playerId: "no-such",
+    }))).toBe(true);
+  });
+});
