@@ -261,6 +261,26 @@ Blocked Issue stays out of the queue until a human clears it.
 - **Only Cabeda applies or removes `ready-for-agent`.** Explorers may not label their own
   output, and the Factory may not pull work that was not offered.
 - **Only Cabeda merges.** No agent merges, ever, including after approval.
+- **`FACTORY_AUTOMERGE=true` (a repo variable) is the single exception, and it is
+  off by default.** It lets `scripts/factory/automerge-run.ts` arm GitHub auto-merge
+  on **machine-authored Dependabot bumps only**, and nothing else. Four properties
+  keep that narrow:
+  1. **It is a script, not an agent.** The decision is
+     `decideAutomerge()` — named predicates with tests, reproducible and auditable.
+     An LLM asked "should this merge?" is neither.
+  2. **It arms, it does not merge.** Auto-merge needs only `pull-requests: write`,
+     which the App already holds. It still holds **no merge permission**, so it
+     cannot force a merge, and branch protection is untouched.
+  3. **A green run on a stale base is not eligible.** The PR must be level with
+     `main`, every required gate (`CI`, `Typecheck`, `Lint`, `Dependency Audit`,
+     `Build`) must be `success` **on that head**, and a gate that never ran is not
+     a passing gate. This is the #1256 lesson: its lockfile predated the sharp
+     override, its own CI was green anyway, and merging reverted the fix.
+  4. **Reversal is one variable.** Unsetting `FACTORY_AUTOMERGE` disarms everything
+     already queued. `factory:blocked` parks any single Change.
+
+  A human-authored Change is **never** auto-merged, at any gate state. Setting this
+  variable is the activation, and no machine may set or clear it.
 - **The factory branches from `origin/main` only** — never from a local checkout or another
   feature branch, so no Change inherits half-finished work.
 - **`FACTORY_PAUSED=true` (a repo variable) stops everything** at every entry point. No

@@ -1,0 +1,74 @@
+# Auto-merge for machine-authored dependency bumps.
+#
+# INERT BY DEFAULT. It does nothing until `FACTORY_AUTOMERGE` is set to
+# 'true'. Setting it is the activation, and unsetting it disarms everything
+# already queued.
+#
+# Why a script and not an agent: a merge decision must be reproducible and
+# auditable. `scripts/factory/automerge-eligibility.ts` is a list of named
+# predicates with tests; an LLM asked "should this merge?" gives the same answer
+# twice about half the time. Keep the judgement out of the model.
+#
+# Why auto-merge and not merge permission: the App deliberately holds no merge
+# permission (AGENTS.md, "Merge Authority"). Auto-merge needs only
+# `pull-requests: write`, which the App already has. So the factory can *arm* a
+# merge once the gates are green and still cannot force one. If this policy is
+# ever wrong, flipping the variable stops it, and nothing the factory can do
+# bypasses branch protection.
+#
+# Scope is deliberately narrow: dependabot bumps only. A human-authored Change
+# gets a human, however green it is.
+name: "factory: auto-merge"
+
+on:
+  schedule:
+    - cron: "23,53 * * * *" # off the hour: :00/:30 are janitor and sweep
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Report eligibility without arming auto-merge"
+        required: false
+        type: boolean
+        default: true
+
+# Reads the PR list and comments. No `contents`, so it cannot push to any branch.
+permissions:
+  pull-requests: write
+  issues: read
+
+concurrency:
+  group: factory-automerge
+  cancel-in-progress: false
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    if: vars.FACTORY_AUTOMERGE == 'true'
+    timeout-minutes: 10
+    steps:
+      - name: Check the activation switch
+        run: |
+          if [ "${{ vars.FACTORY_AUTOMERGE }}" != "true" ]; then
+            echo "FACTORY_AUTOMERGE is not 'true' — the policy is inert. Nothing will merge." >&2
+            exit 0
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Arm auto-merge on eligible dependency bumps
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry-run == 'true' }}
+        run: pnpm tsx scripts/factory/automerge-run.ts
