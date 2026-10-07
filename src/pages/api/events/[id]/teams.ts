@@ -3,54 +3,8 @@ import { prisma } from "../../../../lib/db.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 import { applyFormationLayout } from "../../../../lib/teams";
-import { getDefaultFormation } from "../../../../lib/formations";
-import { syncGamePayments } from "../../../../lib/settlement.server";
-import { syncGameFromTeamResults } from "../../../../lib/gameDualWrite.server";
-
-/** Dual-write a fresh teamResult draw onto the occurrence Game (ADR 0016):
- * Game team names/formations, GameParticipant team/slot, and any materialized
- * GameHistory snapshot for the same occurrence. */
-async function dualWriteCurrentGameTeams(currentGameId: string | null, eventId: string) {
-	if (!currentGameId) return;
-	const game = await prisma.game.findUnique({ where: { id: currentGameId } });
-	if (game) {
-		const teamResults = await prisma.teamResult.findMany({
-			where: { eventId },
-			include: { members: { orderBy: { order: "asc" } } },
-			orderBy: { id: "asc" },
-		});
-		await syncGameFromTeamResults(game, teamResults);
-	}
-	await syncGamePayments(currentGameId, eventId);
-}
-
-/** Resolve the active player list for an event.
- * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
- * Falls back to the legacy Player table for events without a current game.
- * Excludes pending invite ghosts (ADR 0025) so they never occupy a team slot
- * or push a real player onto the bench. */
-async function getActivePlayers(eventId: string, currentGameId: string | null) {
-	if (currentGameId) {
-		const participants = await prisma.gameParticipant.findMany({
-			where: activeParticipantsWhere(currentGameId),
-			include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
-			orderBy: { order: "asc" },
-		});
-		return participants.map((gp) => ({
-			id: gp.eventPlayer.id,
-			name: gp.eventPlayer.name,
-			order: gp.order,
-			userId: gp.eventPlayer.userId,
-		}));
-	}
-	const players = await prisma.player.findMany({
-		where: { eventId, archivedAt: null },
-		orderBy: { order: "asc" },
-	});
-	return players.map((p) => ({ id: p.id, name: p.name, order: p.order, userId: p.userId }));
-}
+import { assignTeams, getActivePlayers, dualWriteCurrentGameTeams } from "../../../../lib/teamAssignment.server";
 
 
 /**
@@ -223,178 +177,113 @@ export const PUT: APIRoute = async ({ params, request }) => {
 };
 
 export const PATCH: APIRoute = async ({ params, request }) => {
-	const limited = await rateLimitResponse(request, "write");
-	if (limited) return limited;
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
 
-	if (!params.id) return Response.json({ error: "Missing event id" }, { status: 400 });
+  if (!params.id) return Response.json({ error: "Missing event id" }, { status: 400 });
 
-	const auth = await authenticateRequest(request);
-	if (!auth) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticateRequest(request);
+  if (!auth) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-	if (!auth.scopes.includes("write:events") && !auth.scopes.includes("manage:players")) {
-		return Response.json({ error: "Forbidden: insufficient scope" }, { status: 403 });
-	}
+  if (!auth.scopes.includes("write:events") && !auth.scopes.includes("manage:players")) {
+    return Response.json({ error: "Forbidden: insufficient scope" }, { status: 403 });
+  }
 
-	const event = await prisma.event.findUnique({
-		where: { id: params.id },
-		include: {
-			teamResults: { include: { members: true } },
-		},
-	});
+  const event = await prisma.event.findUnique({
+    where: { id: params.id },
+    include: {
+      teamResults: { include: { members: true } },
+    },
+  });
 
-	if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-	const allPlayersForPatch = await getActivePlayers(params.id, event.currentGameId);
+  // Check ownership or admin
+  const isOwner = event.ownerId === auth.userId;
+  const isAdmin = auth.userId
+    ? (await prisma.eventAdmin.findFirst({
+        where: { eventId: event.id, userId: auth.userId },
+      })) !== null
+    : false;
 
-	// Check ownership or admin
-	const isOwner = event.ownerId === auth.userId;
-	const isAdmin = auth.userId
-		? (await prisma.eventAdmin.findFirst({
-				where: { eventId: event.id, userId: auth.userId },
-			})) !== null
-		: false;
+  if (!isOwner && !isAdmin) {
+    return Response.json({ error: "Forbidden: only the owner or admin can update teams" }, { status: 403 });
+  }
 
-	if (!isOwner && !isAdmin) {
-		return Response.json({ error: "Forbidden: only the owner or admin can update teams" }, { status: 403 });
-	}
+  let body: { teamOnePlayerIds?: string[]; teamTwoPlayerIds?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-	let body: { teamOnePlayerIds?: string[]; teamTwoPlayerIds?: string[] };
-	try {
-		body = await request.json();
-	} catch {
-		return Response.json({ error: "Invalid JSON body" }, { status: 400 });
-	}
+  const teamOnePlayerIds: string[] = body.teamOnePlayerIds ?? [];
+  const teamTwoPlayerIds: string[] = body.teamTwoPlayerIds ?? [];
+  if (!Array.isArray(teamOnePlayerIds) || !Array.isArray(teamTwoPlayerIds)) {
+    return Response.json({ error: "teamOnePlayerIds and teamTwoPlayerIds must be arrays" }, { status: 400 });
+  }
 
-	const teamOnePlayerIds: string[] = body.teamOnePlayerIds ?? [];
-	const teamTwoPlayerIds: string[] = body.teamTwoPlayerIds ?? [];
-	if (!Array.isArray(teamOnePlayerIds) || !Array.isArray(teamTwoPlayerIds)) {
-		return Response.json({ error: "teamOnePlayerIds and teamTwoPlayerIds must be arrays" }, { status: 400 });
-	}
+  try {
+    await assignTeams(
+      event.id,
+      { teamOnePlayerIds, teamTwoPlayerIds },
+      event.maxPlayers,
+      event.currentGameId,
+      event.sport,
+    );
 
-	// Validate all player IDs belong to this event
-	const allPlayerIds = new Set(allPlayersForPatch.map((p) => p.id));
-	const requestedIds = [...teamOnePlayerIds, ...teamTwoPlayerIds];
-	for (const id of requestedIds) {
-		if (!allPlayerIds.has(id)) {
-			return Response.json({ error: `Player ${id} not found in event` }, { status: 400 });
-		}
-	}
+    const updatedEvent = await prisma.event.findUnique({
+      where: { id: event.id },
+      include: {
+        teamResults: { include: { members: { orderBy: { order: "asc" } } } },
+      },
+    });
+    if (!updatedEvent) return Response.json({ error: "Not found." }, { status: 404 });
 
-	// Validate no duplicates
-	const idSet = new Set(requestedIds);
-	if (idSet.size !== requestedIds.length) {
-		return Response.json({ error: "Duplicate player IDs" }, { status: 400 });
-	}
+    const updatedPlayers = await getActivePlayers(event.id, event.currentGameId);
+    const activeUpdated = updatedPlayers.slice(0, updatedEvent.maxPlayers);
+    const benchUpdated = updatedPlayers.slice(updatedEvent.maxPlayers);
 
-	// Only allow active players (first N by position) to be on teams
-	const activePlayerIds = new Set(
-		allPlayersForPatch.slice(0, event.maxPlayers).map((p) => p.id),
-	);
-	for (const id of requestedIds) {
-		if (!activePlayerIds.has(id)) {
-			return Response.json({ error: `Player ${id} is on the bench and cannot be assigned to a team` }, { status: 400 });
-		}
-	}
+    const updatedMemberLookup = new Map<string, string>();
+    for (const team of updatedEvent.teamResults) {
+      for (const member of team.members) {
+        updatedMemberLookup.set(member.name, team.id);
+      }
+    }
 
-	// Ensure we have exactly 2 team results; create them if needed
-	if (event.teamResults.length < 2) {
-		// Delete existing team results and create fresh ones
-		await prisma.teamResult.deleteMany({ where: { eventId: event.id } });
-		await prisma.teamResult.createMany({
-			data: [
-				{ name: event.teamOneName || "Team 1", eventId: event.id, formation: getDefaultFormation(event.sport).id },
-				{ name: event.teamTwoName || "Team 2", eventId: event.id, formation: getDefaultFormation(event.sport).id },
-			],
-		});
-	}
+    const t1Id = updatedEvent.teamResults[0]?.id;
+    const t2Id = updatedEvent.teamResults[1]?.id;
 
-	// Fetch fresh team results
-	const teams = await prisma.teamResult.findMany({
-		where: { eventId: event.id },
-		orderBy: { id: "asc" },
-	});
-
-	// Clear all existing team members
-	await prisma.teamMember.deleteMany({
-		where: { teamResultId: { in: teams.map((t) => t.id) } },
-	});
-
-	// Assign players to teams
-	const teamOne = teams[0];
-	const teamTwo = teams[1];
-
-	// Assign players to teams. Slots are clamped to the sport's default formation
-	// so an oversized roster never persists out-of-range positions.
-	const patchSlotCount = getDefaultFormation(event.sport).slots.length;
-	const memberCreates: { name: string; order: number; slot: number | null; teamResultId: string }[] = [];
-	const playerLookup = new Map(allPlayersForPatch.map((p) => [p.id, p.name]));
-
-	for (let i = 0; i < teamOnePlayerIds.length; i++) {
-		const name = playerLookup.get(teamOnePlayerIds[i]);
-		if (name) {
-			memberCreates.push({ name, order: i, slot: i < patchSlotCount ? i : null, teamResultId: teamOne.id });
-		}
-	}
-
-	for (let i = 0; i < teamTwoPlayerIds.length; i++) {
-		const name = playerLookup.get(teamTwoPlayerIds[i]);
-		if (name) {
-			memberCreates.push({ name, order: i, slot: i < patchSlotCount ? i : null, teamResultId: teamTwo.id });
-		}
-	}
-
-	await prisma.teamResult.updateMany({
-		where: { id: { in: teams.map((t) => t.id) } },
-		data: { formation: getDefaultFormation(event.sport).id },
-	});
-
-	if (memberCreates.length > 0) {
-		await prisma.teamMember.createMany({ data: memberCreates });
-	}
-
-	// Keep payment rows aligned with the new lineup: only lineup players owe.
-	await dualWriteCurrentGameTeams(event.currentGameId, event.id);
-
-	// Return updated teams
-	const updatedEvent = await prisma.event.findUnique({
-		where: { id: event.id },
-		include: {
-			teamResults: { include: { members: { orderBy: { order: "asc" } } } },
-		},
-	});
-	if (!updatedEvent) return Response.json({ error: "Not found." }, { status: 404 });
-
-	const updatedPlayers = await getActivePlayers(event.id, event.currentGameId);
-	const activeUpdated = updatedPlayers.slice(0, updatedEvent.maxPlayers);
-	const benchUpdated = updatedPlayers.slice(updatedEvent.maxPlayers);
-
-	const updatedMemberLookup = new Map<string, string>();
-	for (const team of updatedEvent.teamResults) {
-		for (const member of team.members) {
-			updatedMemberLookup.set(member.name, team.id);
-		}
-	}
-
-	const t1Id = updatedEvent.teamResults[0]?.id;
-	const t2Id = updatedEvent.teamResults[1]?.id;
-
-	return Response.json({
-		teamOne: {
-			name: updatedEvent.teamOneName || "Team 1",
-			players: activeUpdated
-				.filter((p) => t1Id && updatedMemberLookup.get(p.name) === t1Id)
-				.map((p) => ({ id: p.id, name: p.name, order: p.order })),
-		},
-		teamTwo: {
-			name: updatedEvent.teamTwoName || "Team 2",
-			players: activeUpdated
-				.filter((p) => t2Id && updatedMemberLookup.get(p.name) === t2Id)
-				.map((p) => ({ id: p.id, name: p.name, order: p.order })),
-		},
-		unassigned: activeUpdated
-			.filter((p) => !updatedMemberLookup.has(p.name))
-			.map((p) => ({ id: p.id, name: p.name, order: p.order })),
-		bench: benchUpdated.map((p) => ({ id: p.id, name: p.name, order: p.order })),
-		maxPlayers: updatedEvent.maxPlayers,
-	});
+    return Response.json({
+      teamOne: {
+        name: updatedEvent.teamOneName || "Team 1",
+        players: activeUpdated
+          .filter((p) => t1Id && updatedMemberLookup.get(p.name) === t1Id)
+          .map((p) => ({ id: p.id, name: p.name, order: p.order })),
+      },
+      teamTwo: {
+        name: updatedEvent.teamTwoName || "Team 2",
+        players: activeUpdated
+          .filter((p) => t2Id && updatedMemberLookup.get(p.name) === t2Id)
+          .map((p) => ({ id: p.id, name: p.name, order: p.order })),
+      },
+      unassigned: activeUpdated
+        .filter((p) => !updatedMemberLookup.has(p.name))
+        .map((p) => ({ id: p.id, name: p.name, order: p.order })),
+      bench: benchUpdated.map((p) => ({ id: p.id, name: p.name, order: p.order })),
+      maxPlayers: updatedEvent.maxPlayers,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message.includes("not found")) {
+      return Response.json({ error: message }, { status: 400 });
+    }
+    if (message.includes("Duplicate")) {
+      return Response.json({ error: message }, { status: 400 });
+    }
+    if (message.includes("bench")) {
+      return Response.json({ error: message }, { status: 400 });
+    }
+    throw err;
+  }
 };
