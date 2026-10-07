@@ -18,7 +18,13 @@ import { fromDateTimeLocalValue } from "../timezones";
 import { cancelCurrentGame, CancelError } from "../cancelEvent.server";
 import { upsertRsvp } from "../rsvp.server";
 import { enqueueRsvpAnswerNotification } from "../rsvp-notifications.server";
+import { enqueuePushSetupHintSafe } from "../pushSetupHint";
+import { getNotificationPrefs } from "../notificationPrefs.server";
+import { sendPushToUser } from "../push.server";
 import { logEvent } from "../eventLog.server";
+import { assignTeams } from "../teamAssignment.server";
+import { setEventCost } from "../eventCost.server";
+import { claimPlayer as claimPlayerFn } from "../claimPlayer.server";
 
 /**
  * MCP write tools (V1.5). All mutations reuse the same server-side libs as
@@ -27,6 +33,15 @@ import { logEvent } from "../eventLog.server";
  * the event owner or an admin — an OAuth token alone is never enough to mutate
  * an event the user does not run.
  */
+
+/**
+ * Fire-and-forget a side effect (audit log, push, streak counter) without ever
+ * failing the tool call. One helper rather than an inline `.catch(() => {})` per
+ * call site: identical behaviour, and a single failure path to test.
+ */
+function bestEffort(work: Promise<unknown>): Promise<unknown> {
+  return work.catch(() => {});
+}
 
 const VALID_PAYMENT_STATUSES = ["pending", "sent", "paid"] as const;
 const VALID_RECURRENCE_FREQS = ["daily", "weekly", "monthly", "yearly"] as const;
@@ -423,7 +438,7 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
   if (data.dateTime) {
     const updated = await prisma.event.findUnique({ where: { id: eventId } });
     if (updated) {
-      await cancelEventJobs(eventId).catch(() => {});
+      await bestEffort(cancelEventJobs(eventId));
       try {
         await scheduleEventReminders(eventId, updated.dateTime, updated.durationMinutes);
       } catch {
@@ -432,10 +447,10 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
     }
   }
 
-  logEvent(eventId, "event_updated", null, ctx.userId, {
+  bestEffort(logEvent(eventId, "event_updated", null, ctx.userId, {
     fields: Object.keys(data),
     source: "mcp",
-  }).catch(() => {});
+  }));
 
   return { id: eventId, updated: Object.keys(data) };
 }
@@ -475,24 +490,281 @@ async function rsvp(args: Record<string, unknown>, ctx: AuthContext) {
   const typedStatus = status as "yes" | "no" | "maybe";
   const result = await upsertRsvp(eventId, ctx.userId, typedStatus);
 
-  enqueueRsvpAnswerNotification({
+  bestEffort(enqueueRsvpAnswerNotification({
     eventId,
     eventTitle: event.title,
     status: typedStatus,
     actorUserId: ctx.userId,
     actorName: null,
     actorIsLogged: true,
-  }).catch(() => {});
+  }));
 
-  logEvent(
+  bestEffort(logEvent(
     eventId,
     typedStatus === "yes" ? "rsvp_yes" : typedStatus === "no" ? "rsvp_no" : "rsvp_maybe",
     null,
     ctx.userId,
     { source: "mcp", status: typedStatus },
-  ).catch(() => {});
+  ));
 
   return { ok: true, status: result.status, respondedAt: result.respondedAt };
+}
+
+/**
+ * Follow an event the caller does not play in. Self-service.
+ *
+ * Mirrors POST /api/events/[id]/follow. Being on the roster already implies
+ * following (ADR 0017), so this is for spectators who want event-change and
+ * recruitment notifications without a roster slot.
+ */
+async function followEvent(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
+  if (!event) throw new McpError("Game not found", -32001, 404);
+
+  const follow = await prisma.eventFollow.upsert({
+    where: { eventId_userId: { eventId, userId: ctx.userId } },
+    create: { eventId, userId: ctx.userId },
+    update: {},
+  });
+
+  // First-time follow nudge to enable device push (7-day per-user cooldown).
+  enqueuePushSetupHintSafe(ctx.userId, eventId);
+
+  return {
+    ok: true,
+    following: true,
+    mutePlayerActivity: follow.mutePlayerActivity,
+    muteReminders: follow.muteReminders,
+    mutePostGame: follow.mutePostGame,
+    muteEventDetails: follow.muteEventDetails,
+  };
+}
+
+/**
+ * Unfollow an event. Self-service.
+ *
+ * ADR 0003: a player who joins but later unfollows keeps their roster slot and
+ * merely opts out of notifications, so this is not blocked for players.
+ */
+async function unfollowEvent(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await prisma.eventFollow.deleteMany({ where: { eventId, userId: ctx.userId } });
+  return { ok: true, following: false };
+}
+
+/**
+ * Leave an event the caller is a player in. Self-service — resolves the
+ * caller's own roster row, so this can never remove anybody else.
+ */
+async function leaveEvent(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await requireEventAccess(ctx, eventId);
+
+  const player = await prisma.player.findFirst({
+    where: { eventId, userId: ctx.userId, archivedAt: null },
+    select: { id: true },
+  });
+  // ADR 0026: guest invite rows and display-name changes can leave an
+  // EventPlayer-native identity with no live Player row at all.
+  const eventPlayer = player
+    ? null
+    : await prisma.eventPlayer.findFirst({
+        where: { eventId, userId: ctx.userId },
+        select: { name: true },
+      });
+  if (!player && !eventPlayer) {
+    throw new McpError("You are not a player in this event.", -32001, 404);
+  }
+
+  const result = await archiveAndLeave({
+    eventId,
+    playerId: player?.id ?? null,
+    ...(eventPlayer ? { name: eventPlayer.name } : {}),
+    actor: { kind: "self", userId: ctx.userId },
+  });
+
+  return {
+    ok: true,
+    name: result.undo.name,
+    warned: result.warned,
+    benchEmptyAfter: result.benchEmptyAfter,
+  };
+}
+
+/**
+ * Mark or unmark a participant as a no-show for one game. Owner/admin only.
+ * Mirrors POST /api/events/[id]/no-show (ADR 0018).
+ */
+async function setNoShow(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  const event = await requireEventAccess(ctx, eventId);
+
+  const gameId = args.gameId as string | undefined;
+  const eventPlayerId = args.eventPlayerId as string | undefined;
+  const noShow = args.noShow;
+  if (!gameId || !eventPlayerId || typeof noShow !== "boolean") {
+    throw new McpError("gameId, eventPlayerId and noShow (boolean) are required.", -32602, 400);
+  }
+
+  // Bind the supplied game to THIS event, otherwise owning event A would grant
+  // no-show writes on a game belonging to event B.
+  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { eventId: true } });
+  if (!game || game.eventId !== eventId) {
+    throw new McpError("gameId does not belong to this event.", -32602, 400);
+  }
+
+  const participant = await prisma.gameParticipant.findUnique({
+    where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
+    include: { eventPlayer: { select: { userId: true } } },
+  });
+  if (!participant) throw new McpError("Participant not found.", -32001, 404);
+
+  await prisma.gameParticipant.update({ where: { id: participant.id }, data: { noShow } });
+
+  const userId = participant.eventPlayer.userId;
+  if (userId) {
+    if (noShow) {
+      await bestEffort(prisma.priorityEnrollment.updateMany({
+        where: { eventId, userId },
+        data: { noShowStreak: { increment: 1 } },
+      }));
+      await bestEffort(enqueueNoShowNotification({
+        userId,
+        eventId,
+        title: event.title,
+        streak: await noShowStreak(eventId, userId),
+      }));
+    } else {
+      await bestEffort(prisma.priorityEnrollment.updateMany({
+        where: { eventId, userId, noShowStreak: { gt: 0 } },
+        data: { noShowStreak: { decrement: 1 } },
+      }));
+    }
+  }
+
+  // No event-log entry: EventAction has no no-show verb and the REST route
+  // logs nothing either. GameParticipant.noShow plus the streak is the record.
+  return { ok: true, noShow };
+}
+
+async function noShowStreak(eventId: string, userId: string): Promise<number> {
+  const enrollment = await prisma.priorityEnrollment.findUnique({
+    where: { eventId_userId: { eventId, userId } },
+    select: { noShowStreak: true },
+  });
+  return enrollment?.noShowStreak ?? 1;
+}
+
+/** Best-effort push telling the player they were marked absent. */
+async function enqueueNoShowNotification(input: {
+  userId: string;
+  eventId: string;
+  title: string;
+  streak: number;
+}): Promise<void> {
+  const prefs = await getNotificationPrefs(input.userId);
+  if (!prefs.pushEnabled) return;
+  const body =
+    `You missed ${input.title}. No-show streak: ${input.streak}.` +
+    (input.streak >= 2 ? " Priority may be affected." : "");
+  await bestEffort(sendPushToUser(input.userId, input.title, body, `/events/${input.eventId}`));
+}
+
+async function setTeams(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  const event = await requireEventAccess(ctx, eventId);
+
+  const teamOnePlayerIds = args.teamOnePlayerIds;
+  const teamTwoPlayerIds = args.teamTwoPlayerIds;
+  if (!Array.isArray(teamOnePlayerIds) || !Array.isArray(teamTwoPlayerIds)) {
+    throw new McpError("teamOnePlayerIds and teamTwoPlayerIds must be arrays", -32602, 400);
+  }
+
+  try {
+    const result = await assignTeams(
+      eventId,
+      { teamOnePlayerIds, teamTwoPlayerIds },
+      event.maxPlayers,
+      event.currentGameId,
+      event.sport,
+    );
+    return {
+      ok: true,
+      teamOne: { name: result.teamOne.name, players: result.teamOne.members.map((m) => m.name) },
+      teamTwo: { name: result.teamTwo.name, players: result.teamTwo.members.map((m) => m.name) },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message.includes("not found") || message.includes("Duplicate") || message.includes("bench")) {
+      throw new McpError(message, -32602, 400);
+    }
+    throw err;
+  }
+}
+
+async function setCost(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await requireEventAccess(ctx, eventId);
+
+  const totalAmount = Number(args.totalAmount);
+  if (!totalAmount || totalAmount <= 0) {
+    throw new McpError("totalAmount must be a positive number.", -32602, 400);
+  }
+
+  try {
+    const result = await setEventCost(eventId, args as any);
+    return {
+      ok: true,
+      totalAmount: result.totalAmount,
+      currency: result.currency,
+      scope: result.scope,
+      paymentCount: result.payments.length,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message.includes("totalAmount") || message.includes("monthly") || message.includes("dropIn") || message.includes("payment method") || message.includes("No active game")) {
+      throw new McpError(message, -32602, 400);
+    }
+    throw err;
+  }
+}
+
+async function claimPlayer(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  const playerId = args.playerId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  if (!playerId) throw new McpError("playerId required", -32602, 400);
+
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.userId },
+    select: { name: true },
+  });
+  if (!user) throw new McpError("User not found", -32001, 404);
+
+  try {
+    const result = await claimPlayerFn(eventId, {
+      playerId,
+      userId: ctx.userId,
+      userName: user.name,
+    });
+    return result;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message === "Player not found.") {
+      throw new McpError(message, -32001, 404);
+    }
+    if (message.includes("already linked") || message.includes("already have") || message.includes("already claimed")) {
+      throw new McpError(message, -32001, 409);
+    }
+    throw err;
+  }
 }
 
 export const WRITE_TOOLS: ToolDef[] = [
@@ -514,7 +786,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_remove_player",
-    description: "Remove a player from a Game (soft-archive, triggers leave side-effects). Provide playerId or name.",
+    description: "Remove a player from a Game (soft-archive, triggers leave side-effects). Provide playerId or name. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
       properties: {
@@ -529,7 +801,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_randomize_teams",
-    description: "Generate/randomize teams for a Game from its active players. Set balanced=true to use ELO balancing.",
+    description: "Generate/randomize teams for a Game from its active players, overwriting any existing assignment. Set balanced=true to use ELO balancing. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
       properties: {
@@ -543,13 +815,13 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_update_payment",
-    description: "Update a player's payment status (pending|sent|paid) for a Game. paid writes the wallet ledger credit.",
+    description: "Update a player's payment status (pending|sent|paid) for a Game. paid writes the wallet ledger credit. Actor must own or admin the event, unless marking their own payment as sent.",
     inputSchema: {
       type: "object",
       properties: {
         eventId: { type: "string", description: "Event ID" },
         playerName: { type: "string", description: "Player display name" },
-        status: { type: "string", enum: ["pending", "sent", "paid"] },
+        status: { type: "string", enum: ["pending", "sent", "paid"], description: "pending = unpaid, sent = player says they paid, paid = organizer confirmed" },
         method: { type: "string", description: "Payment method label (mbway, revolut, cash, ...)" },
       },
       required: ["eventId", "playerName", "status"],
@@ -559,7 +831,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_set_score",
-    description: "Set the final score (scoreOne, scoreTwo) on the latest GameHistory for an Event. Triggers ELO processing.",
+    description: "Set the final score (scoreOne, scoreTwo) on the latest GameHistory for an Event. Triggers ELO processing. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
       properties: {
@@ -588,8 +860,9 @@ export const WRITE_TOOLS: ToolDef[] = [
         teamTwoName: { type: "string", description: "Team two name (default Gunas)" },
         isPublic: { type: "boolean", description: "Public listing (default false)" },
         isRecurring: { type: "boolean", description: "Recurring event (default false)" },
-        recurrenceFreq: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"] },
-        recurrenceInterval: { type: "integer", description: "Recurrence interval (default 1)" },
+        recurrenceFreq: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"], description: "Recurrence period (only used when isRecurring is true)" },
+        recurrenceInterval: { type: "integer", description: "Repeat every N periods (default 1)" },
+        recurrenceByDay: { type: "string", description: "Weekday code for weekly recurrence, e.g. MO" },
       },
       required: ["title", "dateTime"],
     },
@@ -638,7 +911,124 @@ export const WRITE_TOOLS: ToolDef[] = [
       },
       required: ["eventId", "status"],
     },
-    scope: "manage:players",
+    // Self-service: an organiser scope here would stop a player whose token was
+    // granted only read access from answering their own RSVP.
+    scope: "read:events",
     handler: rsvp,
+  },
+  {
+    name: "convocados_follow_event",
+    description:
+      "Follow a Game you do not play in, to get event-change and recruitment notifications. Self-service; playing in a Game already implies following it.",
+    inputSchema: {
+      type: "object",
+      properties: { eventId: { type: "string", description: "Event ID" } },
+      required: ["eventId"],
+    },
+    scope: "read:events",
+    handler: followEvent,
+  },
+  {
+    name: "convocados_unfollow_event",
+    description:
+      "Stop following a Game. Self-service; valid while you still hold a roster slot, which you then merely stop being notified about.",
+    inputSchema: {
+      type: "object",
+      properties: { eventId: { type: "string", description: "Event ID" } },
+      required: ["eventId"],
+    },
+    scope: "read:events",
+    handler: unfollowEvent,
+  },
+  {
+    name: "convocados_leave_event",
+    description:
+      "Leave a Game YOU are a player in: archives your roster slot, declines your RSVP and unfollows you. Self-service; cannot remove any other player.",
+    inputSchema: {
+      type: "object",
+      properties: { eventId: { type: "string", description: "Event ID" } },
+      required: ["eventId"],
+    },
+    scope: "read:events",
+    handler: leaveEvent,
+  },
+  {
+    name: "convocados_set_no_show",
+    description:
+      "Mark or unmark a player as a no-show for one specific game, which updates their attendance and no-show streak. Actor must own or admin the event.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID the game belongs to" },
+        gameId: { type: "string", description: "Game ID to mark" },
+        eventPlayerId: { type: "string", description: "EventPlayer ID of the player" },
+        noShow: { type: "boolean", description: "true to mark as no-show, false to undo the mark" },
+      },
+      required: ["eventId", "gameId", "eventPlayerId", "noShow"],
+    },
+    scope: "manage:players",
+    handler: setNoShow,
+  },
+  {
+    name: "convocados_set_teams",
+    description:
+      "Assign players to teams for a Game. Provide teamOnePlayerIds and teamTwoPlayerIds as arrays of player IDs. Actor must own or admin the event.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID" },
+        teamOnePlayerIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Player IDs for team one",
+        },
+        teamTwoPlayerIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Player IDs for team two",
+        },
+      },
+      required: ["eventId", "teamOnePlayerIds", "teamTwoPlayerIds"],
+    },
+    scope: "manage:teams",
+    handler: setTeams,
+  },
+  {
+    name: "convocados_set_cost",
+    description:
+      "Set or update the cost for a Game. Recalculates per-player payment shares. Scope 'this_game' overrides only the current game; 'all_future' (default) updates the template. Actor must own or admin the event.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID" },
+        totalAmount: { type: "number", description: "Total cost amount (must be positive)" },
+        currency: { type: "string", description: "Currency code (default EUR)" },
+        paymentDetails: { type: "string", description: "Payment instructions or notes" },
+        scope: { type: "string", enum: ["this_game", "all_future"], description: "Cost scope (default all_future)" },
+        paymentMethods: {
+          type: "array",
+          items: { type: "string" },
+          description: "Accepted payment methods",
+        },
+      },
+      required: ["eventId", "totalAmount"],
+    },
+    scope: "manage:payments",
+    handler: setCost,
+  },
+  {
+    name: "convocados_claim_player",
+    description:
+      "Claim an anonymous player slot and link it to your account. Self-service; renames the player across teams, ratings, and history.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID" },
+        playerId: { type: "string", description: "Player ID or EventPlayer ID to claim" },
+      },
+      required: ["eventId", "playerId"],
+    },
+    scope: "read:events",
+    handler: claimPlayer,
   },
 ];
