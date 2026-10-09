@@ -26,6 +26,7 @@ import { logEvent } from "./eventLog.server";
 import { applyFormationLayout } from "./teams";
 import { createLogger } from "./logger.server";
 import { normalizeForMatch } from "./stringMatch";
+import { isSystemUserId } from "./payerIdentity.server";
 import { balanceTeams } from "./elo.server";
 import { Randomize } from "./random";
 import { enqueuePushSetupHintSafe } from "./pushSetupHint";
@@ -217,7 +218,10 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
       where: { email: normalizedEmail },
       select: { id: true, name: true },
     });
-    if (found) resolvedUser = found;
+    // A synthetic ledger placeholder is named (and emailed) after the player it
+    // charges, never a person — resolving to one links the roster row to an id
+    // the human can never match and strands them on the list.
+    if (found && !isSystemUserId(found.id)) resolvedUser = found;
   }
 
   // ── Name resolution ────────────────────────────────────────────────────────
@@ -261,7 +265,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
     const allUsers = await prisma.user.findMany({
       select: { id: true, name: true },
     });
-    const matches = allUsers.filter((u) => normalizeForMatch(u.name) === target);
+    const matches = allUsers.filter((u) => normalizeForMatch(u.name) === target && !isSystemUserId(u.id));
     if (matches.length === 1 && target.length > 0) {
       const candidateId = matches[0].id;
       const alreadyInEvent = await prisma.player.count({

@@ -15,6 +15,14 @@ export function systemUserId(eventId: string, playerName: string): string {
   return `system:${eventId}:${playerName}`;
 }
 
+/** True for the synthetic ledger ids minted by `systemUserId`. These are money
+ *  identities, never accounts: name-based roster resolution must never pick one
+ *  up, or the roster row becomes un-leavable by the human it names (the player
+ *  is then on the list under an id their session can never match). */
+export function isSystemUserId(userId: string | null | undefined): boolean {
+  return typeof userId === "string" && userId.startsWith("system:");
+}
+
 type DbClient = Pick<typeof prisma, "eventPlayer" | "player" | "user">;
 
 /**

@@ -14,6 +14,7 @@
 import { prisma } from "./db.server";
 import { normalizeForMatch } from "./stringMatch";
 import { nextGameParticipantOrder } from "./game.server";
+import { isSystemUserId } from "./payerIdentity.server";
 
 export type RosterTarget = {
   /** Resolved display name (trimmed, 50 chars) — always present. */
@@ -75,11 +76,14 @@ export async function resolveRosterTarget(
   }
 
   // 3. Name that uniquely matches a single User (fuzzy, case-insensitive).
+  //    A synthetic ledger placeholder is named after the player it charges, so
+  //    it must not count as a match — otherwise the roster row is linked to the
+  //    placeholder and the human behind the name can never leave.
   if (rawName) {
     const target = normalizeForMatch(rawName);
     if (target) {
       const allUsers = await prisma.user.findMany({ select: { id: true, name: true } });
-      const matches = allUsers.filter((u) => normalizeForMatch(u.name) === target);
+      const matches = allUsers.filter((u) => normalizeForMatch(u.name) === target && !isSystemUserId(u.id));
       if (matches.length === 1) {
         return { name: matches[0].name.trim().slice(0, 50), userId: matches[0].id, user: matches[0] };
       }

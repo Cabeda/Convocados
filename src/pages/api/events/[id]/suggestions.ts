@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
+import { isSystemUserId } from "../../../../lib/payerIdentity.server";
 import {
   applyDeclinePenalty,
   computeCoPlayScore,
@@ -147,7 +148,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     const allUsers = await prisma.user.findMany({ select: { id: true, name: true } });
     const matchesByKey = new Map<string, string[]>();
     for (const u of allUsers) {
-      if (!u.name || u.id.startsWith("system:")) continue;
+      if (!u.name || isSystemUserId(u.id)) continue;
       const key = normalizeForMatch(u.name);
       if (!anonNames.includes(key)) continue;
       const list = matchesByKey.get(key) ?? [];
