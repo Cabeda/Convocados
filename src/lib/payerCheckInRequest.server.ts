@@ -49,7 +49,7 @@ export async function resolvePayerCheckInRequest(
   }
 
   const body = await request.json();
-  const gameId = String(body?.gameId ?? "");
+  const gameId = String(body.gameId ?? "");
   if (!gameId) {
     return { ok: false, response: Response.json({ error: "gameId is required." }, { status: 400 }) };
   }

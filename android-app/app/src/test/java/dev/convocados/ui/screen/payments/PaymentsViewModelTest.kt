@@ -75,6 +75,23 @@ class PaymentsViewModelTest {
     }
 
     @Test
+    fun `payerSettleAll calls the payer check-in endpoint and reloads`() = runTest {
+        val response = SettlementSummary(viewerRole = "player")
+        coEvery { api.fetchSettlement("e1") } returnsMany listOf(response, response)
+        coEvery { api.payerMarkAllPaid("e1", "g1") } returns OkResponse()
+
+        val vm = PaymentsViewModel(api)
+        vm.load("e1")
+        advanceUntilIdle()
+
+        vm.payerSettleAll("e1", "g1")
+        advanceUntilIdle()
+
+        coVerify { api.payerMarkAllPaid("e1", "g1") }
+        coVerify(atLeast = 2) { api.fetchSettlement("e1") }
+    }
+
+    @Test
     fun `reportSent calls api and reloads`() = runTest {
         val response = SettlementSummary(viewerRole = "player", viewerEventPlayerId = "ep1")
         coEvery { api.fetchSettlement("e1") } returnsMany listOf(response, response)
