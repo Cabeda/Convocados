@@ -72,8 +72,6 @@ fun TeamFieldView(
     modifier: Modifier = Modifier,
 ) {
     if (teams.size != 2) return
-    val formation = remember(sport) { defaultFormation(sport) }
-    val slotCount = formation.slots.size
     var pitchHeight by remember { mutableIntStateOf(0) }
     var drag by remember { mutableStateOf<FieldDrag?>(null) }
 
@@ -101,6 +99,10 @@ fun TeamFieldView(
         )
         Column(Modifier.fillMaxSize()) {
             teams.forEachIndexed { teamIndex, team ->
+                // Each team keeps its own stored formation; only a missing or
+                // unresolvable one falls back to the sport default.
+                val formation = remember(sport, team.formation) { resolveFormation(sport, team.formation) }
+                val slotCount = formation.slots.size
                 TeamHalf(
                     team = team,
                     teamIndex = teamIndex,

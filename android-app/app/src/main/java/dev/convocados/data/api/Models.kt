@@ -52,6 +52,8 @@ data class TeamResult(
     val id: String,
     val name: String,
     val members: List<TeamMember> = emptyList(),
+    /** Stored formation id (e.g. "2-2-2"); null on teams that predate formations. */
+    val formation: String? = null,
 )
 
 @Serializable

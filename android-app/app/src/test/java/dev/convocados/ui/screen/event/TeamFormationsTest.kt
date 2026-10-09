@@ -26,6 +26,41 @@ class TeamFormationsTest {
     }
 
     @Test
+    fun resolveFormation_storedIdWinsOverSportDefault() {
+        val stored = formationsForSport("football-7v7").first { it.id == "2-2-2" }
+        val resolved = resolveFormation("football-7v7", "2-2-2")
+        assertEquals("2-2-2", resolved.id)
+        assertEquals(stored.slots, resolved.slots)
+    }
+
+    @Test
+    fun resolveFormation_nullFallsBackToSportDefault() {
+        assertEquals("2-3-1", resolveFormation("football-7v7", null).id)
+    }
+
+    @Test
+    fun resolveFormation_blankFallsBackToSportDefault() {
+        assertEquals("2-3-1", resolveFormation("football-7v7", "").id)
+    }
+
+    @Test
+    fun resolveFormation_unknownIdFallsBackToSportDefault() {
+        assertEquals("2-3-1", resolveFormation("football-7v7", "4-4-2").id)
+    }
+
+    @Test
+    fun resolveFormation_idFromAnotherSportDoesNotResolve() {
+        // "3-3" exists for volleyball only, so a 7v7 team storing it gets the default.
+        assertEquals("2-3-1", resolveFormation("football-7v7", "3-3").id)
+    }
+
+    @Test
+    fun resolveFormation_unknownSportResolvesOnlyAgainstGenericSet() {
+        assertEquals("2-2-1", resolveFormation("kabaddi", "2-2-1").id)
+        assertEquals("2-2-1", resolveFormation("kabaddi", "2-2-2").id)
+    }
+
+    @Test
     fun allSlotsStayWithinUnitSquare() {
         for (sport in listOf("football-11v11", "basketball", "volleyball", "other", null)) {
             for (formation in formationsForSport(sport)) {
