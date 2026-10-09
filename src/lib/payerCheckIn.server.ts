@@ -15,6 +15,7 @@ import { prisma } from "./db.server";
 import { sendPushToUser } from "./push.server";
 import { getNotificationPrefs, wantsPaymentReminderPush } from "./notificationPrefs.server";
 import { createLogger } from "./logger.server";
+import { createT, type Locale } from "./i18n";
 
 const log = createLogger("payer-check-in");
 
@@ -32,14 +33,36 @@ export interface PayerCheckInResult {
 /**
  * Process all games that owe the payer a check-in.
  * Called from the cron endpoint.
+ *
+ * Scoped like ADR 0018's sweep: the event's *current* occurrence game,
+ * non-archived events only. Stale occurrences left behind by a recurring
+ * reset keep their rows and payer, so scanning every game would fire one
+ * identical ask per closed occurrence.
  */
 export async function processPayerCheckIns(): Promise<PayerCheckInResult> {
   const now = new Date();
   const result: PayerCheckInResult = { asked: [] };
 
-  // Games with a payer set and at least one share still not paid.
+  // Safe pre-filter (game end ≥ event start); the exact +24h gate is below.
+  const events = await prisma.event.findMany({
+    where: {
+      dateTime: { lt: new Date(now.getTime() - CHECK_IN_DELAY_H * 60 * 60 * 1000) },
+      currentGameId: { not: null },
+      archivedAt: null,
+    },
+    select: {
+      id: true,
+      title: true,
+      dateTime: true,
+      durationMinutes: true,
+      currentGameId: true,
+    },
+  });
+  const eventById = new Map(events.map((e) => [e.id, e] as const));
+
   const games = await prisma.game.findMany({
     where: {
+      id: { in: events.map((e) => e.currentGameId).filter((id): id is string => id !== null) },
       payerEventPlayerId: { not: null },
       status: { not: "cancelled" },
       payments: { some: { status: { in: ["pending", "sent"] }, archivedAt: null } },
@@ -47,17 +70,18 @@ export async function processPayerCheckIns(): Promise<PayerCheckInResult> {
     select: {
       id: true,
       eventId: true,
-      dateTime: true,
       payerCheckInSentAt: true,
       payerCheckInSnoozedUntil: true,
       payerEventPlayer: { select: { userId: true } },
-      event: { select: { title: true, durationMinutes: true } },
     },
   });
 
   for (const game of games) {
+    const event = eventById.get(game.eventId);
+    if (!event) continue;
+
     // Game end = occurrence start + event duration.
-    const gameEnd = new Date(game.dateTime.getTime() + game.event.durationMinutes * 60_000);
+    const gameEnd = new Date(event.dateTime.getTime() + event.durationMinutes * 60_000);
     const hoursSinceEnd = (now.getTime() - gameEnd.getTime()) / (60 * 60 * 1000);
     if (hoursSinceEnd < CHECK_IN_DELAY_H) continue;
 
@@ -74,10 +98,19 @@ export async function processPayerCheckIns(): Promise<PayerCheckInResult> {
       const prefs = await getNotificationPrefs(userId);
       if (!wantsPaymentReminderPush(prefs)) continue;
 
+      // Localized like the other server pushes: the payer's device locale,
+      // falling back to English when they have no registered device.
+      const [appTokens, webSubs] = await Promise.all([
+        prisma.appPushToken.findMany({ where: { userId }, select: { locale: true } }),
+        prisma.pushSubscription.findMany({ where: { userId }, select: { locale: true } }),
+      ]);
+      const locale: Locale = (appTokens[0]?.locale ?? webSubs[0]?.locale ?? "en") as Locale;
+      const t = createT(locale);
+
       await sendPushToUser(
         userId,
-        game.event.title,
-        `Has everyone paid for ${game.event.title}? Mark all paid, or ask again later.`,
+        event.title,
+        t("notifyPayerCheckIn", { title: event.title }),
         `/events/${game.eventId}`,
         { type: "payment_payer_check_in", gameId: game.id },
       );

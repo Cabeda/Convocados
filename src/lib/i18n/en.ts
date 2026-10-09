@@ -371,6 +371,7 @@ const en = {
   notifySeasonRankTitle: "Season Rank updated",
   notifySeasonRankBody: "{delta} RP → {rank} ({tier})",
   notifySeasonRankProvisionalBody: "{delta} RP → unlocks at 3 games ({n}/3)",
+  notifyPayerCheckIn: "Has everyone paid for {title}? Mark all paid, or ask again later.",
 
   // Update banner
   updateAvailable: "A new version is available",

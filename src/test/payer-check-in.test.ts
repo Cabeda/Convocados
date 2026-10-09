@@ -287,6 +287,54 @@ describe("processPayerCheckIns", () => {
     expect(result.asked).toHaveLength(0);
     expect(mockSendPush).toHaveBeenCalledTimes(1);
   });
+
+  it("stays quiet for archived events (#1141)", async () => {
+    const payer = await seedUser({ name: "Payer" });
+    const event = await seedPastEvent(payer.id, 25);
+    await prisma.event.update({ where: { id: event.id }, data: { archivedAt: new Date() } });
+    await seedGameWithPayments(event.id, [
+      { name: "Debtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+
+    const result = await processPayerCheckIns();
+
+    expect(result.asked).toHaveLength(0);
+    expect(mockSendPush).not.toHaveBeenCalled();
+  });
+
+  it("only asks about the event's current occurrence game", async () => {
+    const payer = await seedUser({ name: "Payer" });
+    const event = await seedPastEvent(payer.id, 24 * 7); // event ended a week ago
+    // Stale occurrence from before a recurring reset: payer set, shares unpaid.
+    const { game: staleGame } = await seedGameWithPayments(event.id, [
+      { name: "OldDebtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+    // The reset advanced the event; the current occurrence has its own game.
+    // Its end is 25h ago (dateTime = end − 90m duration).
+    const advanced = new Date(Date.now() - 25 * 60 * 60 * 1000 - 90 * 60_000);
+    await prisma.event.update({ where: { id: event.id }, data: { dateTime: advanced } });
+    const { game: currentGame } = await seedGameWithPayments(event.id, [
+      { name: "Debtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+
+    const result = await processPayerCheckIns();
+
+    expect(result.asked).toEqual([`${event.id}:${currentGame.id}`]);
+    expect(result.asked).not.toContain(`${event.id}:${staleGame.id}`);
+  });
+
+  it("translates the push body into the payer's device locale", async () => {
+    const payer = await seedUser({ name: "Payer" });
+    const event = await seedPastEvent(payer.id, 25);
+    await seedGameWithPayments(event.id, [
+      { name: "Debtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+    await prisma.appPushToken.create({ data: { userId: payer.id, token: "tok-pt", platform: "android", locale: "pt" } });
+
+    await processPayerCheckIns();
+
+    expect(mockSendPush.mock.calls[0][2]).toBe("Já todos pagaram pelo Past Game? Marca tudo como pago, ou pergunta mais tarde.");
+  });
 });
 
 describe("POST /api/events/[id]/payments/payer-check-in/mark-all-paid", () => {
