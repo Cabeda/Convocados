@@ -424,6 +424,28 @@ describe("getSettlementSummary (privacy)", () => {
     expect(venue?.isPlayer).toBe(false);
     expect(venue?.owedToAmount).toBe(18); // 3 debtors × €6 = 60 / maxPlayers(10)
   });
+
+  it("flags the game as the viewer's to settle when the viewer is the payer (#1236)", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    await linkUser("Ana", "user-ana");
+
+    const s = await getSettlementSummary(event.id, { role: "player", userId: "user-ana" });
+    expect(s.games[0].viewerIsPayer).toBe(true);
+  });
+
+  it("does not flag the game for a viewer who is not the payer (#1236)", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    await linkUser("Bruno", "user-bruno");
+
+    const s = await getSettlementSummary(event.id, { role: "player", userId: "user-bruno" });
+    expect(s.games[0].viewerIsPayer).toBe(false);
+  });
 });
 
 describe("getSettlementSummary excludes cancelled and future games", () => {
