@@ -8,9 +8,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * Fraction of the display that stays inside the round bezel for content that
@@ -39,6 +43,13 @@ const val ROUND_EQUATOR_FRACTION = 0.95f
 val ROUND_LIST_INSET: Dp = 20.dp
 
 /**
+ * Inset that [roundBezelClip] applies before clipping to a circle, so content
+ * laid out against the screen edge has to live inside a circle of
+ * `min(side) / 2 - ROUND_BEZEL_INSET`.
+ */
+private val ROUND_BEZEL_INSET = 8.dp
+
+/**
  * Constrains width to [fraction] on round displays so a wide control placed
  * near the bezel is never clipped. No-op on square displays.
  */
@@ -47,29 +58,54 @@ fun Modifier.roundSafeWidth(fraction: Float = ROUND_SAFE_FRACTION): Modifier =
     if (LocalConfiguration.current.isScreenRound) fillMaxWidth(fraction) else this
 
 /**
- * Constrains the whole composable to the round display's safe (inscribed)
- * square, centered by the parent, so nothing lands under the bezel. No-op on
- * square displays.
- */
-@Composable
-fun Modifier.roundSafeSize(fraction: Float = ROUND_SAFE_FRACTION): Modifier =
-    if (LocalConfiguration.current.isScreenRound) fillMaxSize(fraction) else fillMaxSize()
-
-/**
  * For content centered on the equator: nearly full width (circle is widest
- * there) with the height still limited to the inscribed vertical band so
- * top/bottom overlays stay clear. Square keeps the previous full-bleed size.
+ * there) with the height capped at the inscribed rectangle for that width, so
+ * the block's corners stay inside the circular bezel clip on every round
+ * display size. Square keeps the previous full-bleed size.
+ *
+ * [inset] is the bezel-safe padding the caller wants around its content; the
+ * inscribed rectangle is measured on that inner rectangle, because that is the
+ * part the user sees against the bezel.
  */
 @Composable
 fun Modifier.roundEquatorSize(
     widthFraction: Float = ROUND_EQUATOR_FRACTION,
     heightFraction: Float = ROUND_SAFE_FRACTION,
-): Modifier =
-    if (LocalConfiguration.current.isScreenRound) {
-        fillMaxWidth(widthFraction).fillMaxHeight(heightFraction)
-    } else {
-        fillMaxSize()
-    }
+    inset: Dp = 0.dp,
+): Modifier {
+    val configuration = LocalConfiguration.current
+    if (!configuration.isScreenRound) return fillMaxSize().padding(inset)
+    val bezelRadius =
+        minOf(configuration.screenWidthDp, configuration.screenHeightDp).dp / 2f - ROUND_BEZEL_INSET
+    return equatorInscribedSize(bezelRadius, widthFraction, heightFraction, inset)
+}
+
+/**
+ * Lays the child out at [widthFraction] of the available width, no taller than
+ * the rectangle that fits inside the [bezelRadius] circle, inset by [inset].
+ */
+private fun Modifier.equatorInscribedSize(
+    bezelRadius: Dp,
+    widthFraction: Float,
+    heightFraction: Float,
+    inset: Dp,
+) = this.layout { measurable, constraints ->
+    val insetPx = inset.roundToPx()
+    val width = (constraints.maxWidth * widthFraction).roundToInt()
+    val contentWidth = (width - 2 * insetPx).coerceAtLeast(0)
+    // A contentWidth x contentHeight rectangle only fits inside the circle
+    // while (contentWidth/2)^2 + (contentHeight/2)^2 <= radius^2.
+    val halfWidth = contentWidth / 2f
+    val radius = bezelRadius.toPx()
+    val inscribedHeight =
+        if (halfWidth >= radius) 0 else (2f * sqrt(radius * radius - halfWidth * halfWidth)).roundToInt()
+    val height = minOf(
+        (constraints.maxHeight * heightFraction).roundToInt(),
+        inscribedHeight + 2 * insetPx,
+    ).coerceAtMost(constraints.maxHeight)
+    val placeable = measurable.measure(Constraints.fixed(contentWidth, height - 2 * insetPx))
+    layout(width, height) { placeable.placeRelative(insetPx, insetPx) }
+}
 
 /**
  * Horizontal inset for full-width rows on round displays. Applied to list
@@ -90,7 +126,7 @@ fun Modifier.roundListInset(horizontal: Dp = ROUND_LIST_INSET): Modifier =
 @Composable
 fun Modifier.roundBezelClip(): Modifier =
     if (LocalConfiguration.current.isScreenRound) {
-        padding(8.dp).clip(CircleShape)
+        padding(ROUND_BEZEL_INSET).clip(CircleShape)
     } else {
         this
     }
