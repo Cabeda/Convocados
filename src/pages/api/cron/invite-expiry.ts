@@ -13,8 +13,14 @@ import { requireCronSecret } from "~/lib/cronAuth.server";
  * of one-off events and of events whose next occurrence is weeks away, neither
  * of which any other caller reaches.
  *
- * Driven by the scheduler worker; the timeout is deliberately inside the
- * 5-minute maintenance window so an idle pass is a single indexed query.
+ * Driven by the scheduler worker every 5 minutes (its 30s fetch timeout is
+ * deliberately inside that window). An idle pass is NOT a single indexed
+ * query: one query finds the distinct gameIds that still hold a pending invite
+ * past its kickoff, then two-to-three per stale game — up to
+ * PAST_GAME_SWEEP_LIMIT = 100 games, so ~301 queries per tick at worst. The
+ * `game.dateTime` relation filter cannot use an index (Prisma cannot index
+ * across a relation), so that first query scans the pending PlayerInvite rows;
+ * the sweep cap, not the query plan, is what bounds the cost.
  */
 export const POST: APIRoute = async ({ request }) => {
   const cronSecret = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;

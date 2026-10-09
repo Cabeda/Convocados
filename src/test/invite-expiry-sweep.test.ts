@@ -25,18 +25,18 @@ import { prisma } from "~/lib/db.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
-const mockGetSession = vi.fn().mockResolvedValue(null);
 const mockCheckEventAdmin = vi.fn().mockResolvedValue(false);
+// `invite.server.ts` pulls exactly one helper out of this module in this graph
+// (`checkEventAdmin`); `getSession` and `checkOwnership` are not reachable from
+// either the cron route or `expirePastGameInvites`, so mocking them here would
+// only hide a future import that silently stops being exercised.
 vi.mock("~/lib/auth.helpers.server", () => ({
-  getSession: (...args: any[]) => mockGetSession(...args),
-  checkOwnership: vi.fn().mockResolvedValue({ isOwner: true, isAdmin: false, session: null }),
   checkEventAdmin: (...args: any[]) => mockCheckEventAdmin(...args),
 }));
 vi.mock("~/lib/logger.server", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("~/lib/geocode", () => ({ resolveLocation: vi.fn() }));
 
 import { POST as inviteExpiryCron } from "~/pages/api/cron/invite-expiry";
 import { createPlayerInvite, expirePastGameInvites } from "~/lib/invite.server";
@@ -94,7 +94,6 @@ async function seedEventWithGame(
 }
 
 beforeEach(async () => {
-  mockGetSession.mockResolvedValue(null);
   mockCheckEventAdmin.mockResolvedValue(false);
   await resetRateLimitStore();
   await resetApiRateLimitStore();
