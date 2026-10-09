@@ -35,13 +35,23 @@ async function seedUser(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/** Create an event that ended `hoursAgo` hours in the past */
+/** Create an event that ended `hoursAgo` hours in the past, with a cost configured */
 async function seedPastEvent(ownerId: string | null, hoursAgo: number) {
   const durationMinutes = 90;
   const gameEnd = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
   const dateTime = new Date(gameEnd.getTime() - durationMinutes * 60_000);
   return prisma.event.create({
-    data: { id: eid(), title: "Past Game", location: "Pitch", dateTime, durationMinutes, maxPlayers: 10, ownerId },
+    data: {
+      id: eid(),
+      title: "Past Game",
+      location: "Pitch",
+      dateTime,
+      durationMinutes,
+      maxPlayers: 10,
+      ownerId,
+      // Settlement dual-writes the ledger, which requires a cost row.
+      eventCost: { create: { totalAmount: 20, currency: "EUR", monthlyGamesCovered: 5 } },
+    },
   });
 }
 
@@ -362,8 +372,9 @@ describe("POST /api/events/[id]/payments/payer-check-in/snooze", () => {
     const updated = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
     expect(updated.payerCheckInSnoozedUntil).not.toBeNull();
     const snoozedMs = updated.payerCheckInSnoozedUntil!.getTime() - before;
-    expect(snoozedMs).toBeGreaterThan(23 * 60 * 60 * 1000);
-    expect(snoozedMs).toBeLessThanOrEqual(24 * 60 * 60 * 1000);
+    // Exactly 24h ahead, plus however long the request itself took.
+    expect(snoozedMs).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000);
+    expect(snoozedMs).toBeLessThanOrEqual(24 * 60 * 60 * 1000 + 10_000);
   });
 
   it("rejects callers who are not the payer", async () => {

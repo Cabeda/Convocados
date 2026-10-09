@@ -130,6 +130,7 @@
 | Split Costs | ✅ | ✅ | ❌ |
 | Mark Paid | ✅ | ✅ | ❌ |
 | Cost Override | ✅ | ❌ | ❌ |
+| Payer Check In | ✅ | ✅ | ❌ |
 
 ### Event Settings
 

@@ -261,6 +261,7 @@
     <string name="action_join">Mitmachen</string>
     <string name="action_add_score">Ergebnis</string>
     <string name="action_confirm_payment">Confirmar</string>
+    <string name="action_ask_again">Später erneut fragen</string>
     <string name="email_notifications">E-Mail-Benachrichtigungen</string>
     <string name="enable_email">E-Mail aktivieren</string>
     <string name="enable_email_desc">Hauptschalter für alle E-Mails</string>
