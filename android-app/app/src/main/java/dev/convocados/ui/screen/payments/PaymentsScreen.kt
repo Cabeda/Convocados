@@ -60,6 +60,8 @@ class PaymentsViewModel @Inject constructor(private val api: ConvocadosApi) : Vi
 
     fun settle(eventId: String, gameId: String, eventPlayerId: String) = action { api.settleShare(eventId, gameId, eventPlayerId); load(eventId) }
     fun settleAll(eventId: String, gameId: String) = action { api.settleAll(eventId, gameId); load(eventId) }
+    /** #1236: the payer answers the check-in with "everyone paid". */
+    fun payerSettleAll(eventId: String, gameId: String) = action { api.payerMarkAllPaid(eventId, gameId); load(eventId) }
     fun reportSent(eventId: String, gameId: String, eventPlayerId: String) = action { api.selfReportSent(eventId, gameId, eventPlayerId); load(eventId) }
 
     private fun action(block: suspend () -> Unit) {
@@ -144,7 +146,7 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
             if (d.games.isNotEmpty()) {
                 item { Text(stringResource(R.string.payments_unsettled_games), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
                 items(d.games, key = { it.gameId }) { g ->
-                    SettlementGameCard(g, isManager, busy, onMarkPaid = { ep -> viewModel.settle(eventId, g.gameId, ep) }, onSettleAll = { viewModel.settleAll(eventId, g.gameId) }, onReportSent = { ep -> viewModel.reportSent(eventId, g.gameId, ep) }, viewerEventPlayerId = d.viewerEventPlayerId)
+                    SettlementGameCard(g, isManager, busy, onMarkPaid = { ep -> viewModel.settle(eventId, g.gameId, ep) }, onSettleAll = { if (isManager) viewModel.settleAll(eventId, g.gameId) else viewModel.payerSettleAll(eventId, g.gameId) }, onReportSent = { ep -> viewModel.reportSent(eventId, g.gameId, ep) }, viewerEventPlayerId = d.viewerEventPlayerId)
                 }
             }
         }
@@ -160,7 +162,9 @@ private fun SettlementGameCard(g: SettlementGame, isManager: Boolean, busy: Bool
                     Text(shortDate(g.dateTime), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     g.payerName?.let { Text(stringResource(R.string.payments_is_owed, it, fmtMoney(g.total)), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                 }
-                if (isManager && g.debtorCount > 0) {
+                // #1236: the payer settles their own game from here too — same
+                // condition as web (payer && debtorCount > 0).
+                if ((isManager || g.viewerIsPayer) && g.debtorCount > 0) {
                     TextButton(onClick = onSettleAll, enabled = !busy) { Text(stringResource(R.string.payments_settle_all)) }
                 }
             }

@@ -33,7 +33,6 @@ import dev.convocados.wear.ui.roundEquatorSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
 import dev.convocados.wear.ui.roundListInset
-import dev.convocados.wear.ui.roundSafeSize
 import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.ongoing.OngoingLaunch
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
@@ -550,10 +549,10 @@ internal fun ScoreEditor(
         Row(
             modifier = Modifier
                 .align(Alignment.Center)
-                .roundEquatorSize()
                 // Bezel-safe inset so tiles sit inside the round display
-                // instead of touching the screen edge.
-                .padding(8.dp),
+                // instead of touching the screen edge; the height is capped by
+                // the inscribed rectangle so the corners stay clear too.
+                .roundEquatorSize(inset = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TeamScoreButton(

@@ -26,6 +26,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
         val playerName = intent.getStringExtra(EXTRA_PLAYER_NAME)
         val inviteToken = intent.getStringExtra(EXTRA_INVITE_TOKEN)
+        val gameId = intent.getStringExtra(EXTRA_GAME_ID)
 
         Log.d("NotificationAction", "Action=$action eventId=$eventId")
 
@@ -37,7 +38,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         // Fire-and-forget API call
         CoroutineScope(Dispatchers.IO).launch {
-            handler.handle(action, eventId, playerName, inviteToken)
+            handler.handle(action, eventId, playerName, inviteToken, gameId)
         }
     }
 
@@ -47,6 +48,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_NOTIFICATION_ID = "notification_id"
         const val EXTRA_PLAYER_NAME = "player_name"
         const val EXTRA_INVITE_TOKEN = "invite_token"
+        const val EXTRA_GAME_ID = "game_id"
 
         const val ACTION_RSVP_YES = NotificationActionHandler.ACTION_RSVP_YES
         const val ACTION_RSVP_NO = NotificationActionHandler.ACTION_RSVP_NO
@@ -54,5 +56,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val ACTION_CONFIRM_PAYMENT = NotificationActionHandler.ACTION_CONFIRM_PAYMENT
         const val ACTION_INVITE_ACCEPT = NotificationActionHandler.ACTION_INVITE_ACCEPT
         const val ACTION_INVITE_DECLINE = NotificationActionHandler.ACTION_INVITE_DECLINE
+        const val ACTION_PAYER_MARK_ALL_PAID = NotificationActionHandler.ACTION_PAYER_MARK_ALL_PAID
+        const val ACTION_PAYER_ASK_AGAIN = NotificationActionHandler.ACTION_PAYER_ASK_AGAIN
     }
 }
