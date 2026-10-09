@@ -34,54 +34,47 @@ export interface PayerCheckInResult {
  * Process all games that owe the payer a check-in.
  * Called from the cron endpoint.
  *
- * Scoped like ADR 0018's sweep: the event's *current* occurrence game,
- * non-archived events only. Stale occurrences left behind by a recurring
- * reset keep their rows and payer, so scanning every game would fire one
- * identical ask per closed occurrence.
+ * Scoped per-game, not per-event: the trigger is the occurrence's own
+ * `game.dateTime` plus the event duration. The event's `dateTime` is
+ * useless here — a recurring reset (advanceOccurrence.server.ts) moves it
+ * forward to the next occurrence the moment a game ends, so gating on it
+ * would silence every recurring event, which is the primary scenario.
+ *
+ * Idempotence is per game: `payerCheckInSentAt` records the ask and only an
+ * explicit snooze re-arms it, so closed occurrences left behind by a reset
+ * are each asked about exactly once.
  */
 export async function processPayerCheckIns(): Promise<PayerCheckInResult> {
   const now = new Date();
   const result: PayerCheckInResult = { asked: [] };
 
-  // Safe pre-filter (game end ≥ event start); the exact +24h gate is below.
-  const events = await prisma.event.findMany({
-    where: {
-      dateTime: { lt: new Date(now.getTime() - CHECK_IN_DELAY_H * 60 * 60 * 1000) },
-      currentGameId: { not: null },
-      archivedAt: null,
-    },
-    select: {
-      id: true,
-      title: true,
-      dateTime: true,
-      durationMinutes: true,
-      currentGameId: true,
-    },
-  });
-  const eventById = new Map(events.map((e) => [e.id, e] as const));
-
+  // Safe pre-filter: the game ends at `game.dateTime + duration`, and duration
+  // is non-negative, so a due game's dateTime is always ≥24h in the past. The
+  // exact +24h gate is computed below, where the duration is known.
   const games = await prisma.game.findMany({
     where: {
-      id: { in: events.map((e) => e.currentGameId).filter((id): id is string => id !== null) },
+      dateTime: { lt: new Date(now.getTime() - CHECK_IN_DELAY_H * 60 * 60 * 1000) },
       payerEventPlayerId: { not: null },
       status: { not: "cancelled" },
+      event: { archivedAt: null },
       payments: { some: { status: { in: ["pending", "sent"] }, archivedAt: null } },
     },
     select: {
       id: true,
       eventId: true,
+      dateTime: true,
       payerCheckInSentAt: true,
       payerCheckInSnoozedUntil: true,
+      event: { select: { title: true, durationMinutes: true } },
       payerEventPlayer: { select: { userId: true } },
     },
   });
 
   for (const game of games) {
-    const event = eventById.get(game.eventId);
-    if (!event) continue;
+    const { event } = game;
 
     // Game end = occurrence start + event duration.
-    const gameEnd = new Date(event.dateTime.getTime() + event.durationMinutes * 60_000);
+    const gameEnd = new Date(game.dateTime.getTime() + event.durationMinutes * 60_000);
     const hoursSinceEnd = (now.getTime() - gameEnd.getTime()) / (60 * 60 * 1000);
     if (hoursSinceEnd < CHECK_IN_DELAY_H) continue;
 

@@ -302,10 +302,39 @@ describe("processPayerCheckIns", () => {
     expect(mockSendPush).not.toHaveBeenCalled();
   });
 
-  it("only asks about the event's current occurrence game", async () => {
+  it("asks about the occurrence a weekly event just closed (#1236 regression)", async () => {
+    const payer = await seedUser({ name: "Payer" });
+    const event = await seedPastEvent(payer.id, 25);
+    const { game: closed } = await seedGameWithPayments(event.id, [
+      { name: "Debtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+
+    // The recurring reset ran when the game ended (advanceOccurrence.server.ts):
+    // the event date moved to next week and currentGameId now points at the
+    // brand-new occurrence. Only the closed game still owes the payer money.
+    const nextWeek = new Date(closed.dateTime.getTime() + 7 * 24 * 60 * 60 * 1000);
+    await prisma.event.update({
+      where: { id: event.id },
+      data: {
+        isRecurring: true,
+        recurrenceRule: "weekly",
+        dateTime: nextWeek,
+        nextResetAt: new Date(nextWeek.getTime() + 90 * 60_000),
+      },
+    });
+    await seedGameWithPayments(event.id, [], { payerUserId: payer.id });
+
+    const result = await processPayerCheckIns();
+
+    expect(result.asked).toEqual([`${event.id}:${closed.id}`]);
+    expect(mockSendPush).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks about every closed occurrence that still owes money", async () => {
     const payer = await seedUser({ name: "Payer" });
     const event = await seedPastEvent(payer.id, 24 * 7); // event ended a week ago
-    // Stale occurrence from before a recurring reset: payer set, shares unpaid.
+    // Occurrence closed by a recurring reset: payer set, shares unpaid. Its own
+    // game date is what makes it due — the event date has since moved on.
     const { game: staleGame } = await seedGameWithPayments(event.id, [
       { name: "OldDebtor", amount: 5, status: "pending", userId: null },
     ], { payerUserId: payer.id });
@@ -319,8 +348,7 @@ describe("processPayerCheckIns", () => {
 
     const result = await processPayerCheckIns();
 
-    expect(result.asked).toEqual([`${event.id}:${currentGame.id}`]);
-    expect(result.asked).not.toContain(`${event.id}:${staleGame.id}`);
+    expect(result.asked).toEqual([`${event.id}:${staleGame.id}`, `${event.id}:${currentGame.id}`]);
   });
 
   it("translates the push body into the payer's device locale", async () => {
