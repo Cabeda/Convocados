@@ -115,6 +115,38 @@ export async function expirePendingInvites(gameId: string, now: Date = new Date(
   return expiring.length;
 }
 
+/** Games swept per tick so one run can't hold a request open. */
+const PAST_GAME_SWEEP_LIMIT = 100;
+
+/**
+ * Eager sweep: expire pending invites for every game that has already kicked
+ * off (GH #1273). `expirePendingInvites` is scoped to one gameId and all of its
+ * production callers pass either the event's *current* game or the invite's own
+ * game behind a human click, so the rows belonging to a lapsed occurrence are
+ * never revisited — three of them sat `pending` for seven weeks in prod.
+ *
+ * Scope is the GAME DATE, never the invite's age: an invite for a game a week
+ * out is still actionable, and `PlayerInvite` rows are revivable by re-invite,
+ * so an age-based sweep would destroy live invitations.
+ *
+ * Reuses `expirePendingInvites` per game so the ghost cleanup (pending
+ * GameParticipant + Rsvp) is byte-for-byte the same as on the lazy read path.
+ */
+export async function expirePastGameInvites(now: Date = new Date()): Promise<number> {
+  const staleGames = await prisma.playerInvite.findMany({
+    where: { status: "pending", game: { dateTime: { lte: now } } },
+    select: { gameId: true },
+    distinct: ["gameId"],
+    orderBy: { gameId: "asc" },
+    take: PAST_GAME_SWEEP_LIMIT,
+  });
+  let expired = 0;
+  for (const { gameId } of staleGames) {
+    expired += await expirePendingInvites(gameId, now);
+  }
+  return expired;
+}
+
 /**
  * Create a pending PlayerInvite. The caller (API route) is responsible for the
  * preconditions: not already joined, no pending invite, invitee wants invites,
