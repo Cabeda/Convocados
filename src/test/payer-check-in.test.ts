@@ -354,6 +354,32 @@ describe("POST /api/events/[id]/payments/payer-check-in/mark-all-paid", () => {
 
     expect(res.status).toBe(404);
   });
+
+  it("reports a ledger failure instead of crashing", async () => {
+    // Settlement dual-writes the ledger, which needs the event's cost row.
+    // A game whose cost config was removed must surface as a 400, not a 500.
+    const payer = await seedUser({ name: "Payer" });
+    const event = await prisma.event.create({
+      data: {
+        title: "No Cost Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 25 * 60 * 60 * 1000),
+        durationMinutes: 90,
+        maxPlayers: 10,
+        ownerId: payer.id,
+      },
+    });
+    const { game } = await seedGameWithPayments(event.id, [
+      { name: "Debtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+    mockGetSession.mockResolvedValue({ user: { id: payer.id } } as any);
+
+    const res = await postMarkAllPaid(postCtx({ id: event.id }, { gameId: game.id }));
+
+    expect(res.status).toBe(400);
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows.some((r) => r.status !== "paid")).toBe(true);
+  });
 });
 
 describe("POST /api/events/[id]/payments/payer-check-in/snooze", () => {
@@ -404,5 +430,22 @@ describe("POST /api/events/[id]/payments/payer-check-in/snooze", () => {
     const res = await postSnooze(postCtx({ id: event.id }, { gameId: game.id }));
 
     expect(res.status).toBe(401);
+  });
+
+  it("rejects a gameId from another event", async () => {
+    const payer = await seedUser({ name: "Payer" });
+    const event = await seedPastEvent(payer.id, 25);
+    await seedGameWithPayments(event.id, [
+      { name: "Debtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+    const other = await seedPastEvent(payer.id, 30);
+    const { game: otherGame } = await seedGameWithPayments(other.id, [
+      { name: "Debtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+    mockGetSession.mockResolvedValue({ user: { id: payer.id } } as any);
+
+    const res = await postSnooze(postCtx({ id: event.id }, { gameId: otherGame.id }));
+
+    expect(res.status).toBe(404);
   });
 });
