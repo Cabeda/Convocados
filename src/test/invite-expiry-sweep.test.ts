@@ -1,13 +1,14 @@
 /**
  * Sweeping pending invites whose game has already kicked off (GH #1273 / dex
- * yobg93a).
+ * yobg93ra).
  *
  * Prod evidence: event `cmmkfrx8b0000o2ixrix1yp2m` — 18 PlayerInvite rows, 4
  * still `status='pending'`, three of them invited 2026-08-21 for occurrences
  * that had long finished. `expirePendingInvites` is scoped to ONE gameId and
- * every one of its five production callers passes either the *current* game or
- * the invite's own game behind a human click, so the rows for a lapsed
- * occurrence were never revisited. The orphan-ghost heal kept the participants
+ * every one of its four production callers (`acceptPlayerInvite`,
+ * `declinePlayerInvite`, the invite-panel GET, the invite-token GET) passes
+ * either the *current* game or the invite's own game behind a human click, so
+ * the rows for a lapsed occurrence were never revisited. The orphan-ghost heal kept the participants
  * table clean, which is exactly why the audit reported `orphans: 0` and the
  * broken invite rows went unnoticed for seven weeks.
  *
@@ -149,42 +150,63 @@ describe("expirePastGameInvites", () => {
   it("leaves invites for a future game pending — expiry is scoped by kickoff, not by invite age", async () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Future Invitee");
-    // The same eventPlayer has a stale invite on an old occurrence AND a
-    // legitimate one a week out. Only the old one may go.
+    // ONE recurring event, two occurrences sharing a single EventPlayer — the
+    // production shape (advanceOccurrence mints a new Game per occurrence while
+    // the EventPlayer row is event-scoped). The same player has a stale invite
+    // on the old occurrence AND a legitimate one a week out. Only the old one
+    // may go, and the old occurrence's ghost cleanup must not reach across
+    // occurrences into the upcoming game's roster or RSVP.
     const rule = JSON.stringify({ freq: "weekly", interval: 1 });
-    const old = await seedEventWithGame(
-      owner.id,
-      new Date(Date.now() - 7 * 86_400_000),
-      { isRecurring: true, recurrenceRule: rule, currentGameId: false },
-    );
     const upcoming = new Date(Date.now() + 7 * 86_400_000);
-    const current = await seedEventWithGame(owner.id, upcoming, { isRecurring: true, recurrenceRule: rule });
+    const ev = await prisma.event.create({
+      data: {
+        id: eid(),
+        title: "Game",
+        location: "Pitch",
+        dateTime: upcoming,
+        ownerId: owner.id,
+        maxPlayers: 10,
+        durationMinutes: 60,
+        isRecurring: true,
+        recurrenceRule: rule,
+      },
+    });
+    const oldGame = await prisma.game.create({
+      data: { eventId: ev.id, dateTime: new Date(Date.now() - 7 * 86_400_000) },
+    });
+    const liveGame = await prisma.game.create({ data: { eventId: ev.id, dateTime: upcoming } });
+    await prisma.event.update({ where: { id: ev.id }, data: { currentGameId: liveGame.id } });
+
     const stale = await createPlayerInvite({
-      eventId: old.id,
-      gameId: old.currentGameId!,
+      eventId: ev.id,
+      gameId: oldGame.id,
       inviteeUserId: invitee.id,
       invitedByUserId: owner.id,
       origin: "https://x.dev",
       delivery: "link-only",
     });
     const live = await createPlayerInvite({
-      eventId: current.id,
-      gameId: current.currentGameId!,
+      eventId: ev.id,
+      gameId: liveGame.id,
       inviteeUserId: invitee.id,
       invitedByUserId: owner.id,
       origin: "https://x.dev",
       delivery: "link-only",
     });
 
+    const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: ev.id, userId: invitee.id } });
+    await prisma.rsvp.create({ data: { eventPlayerId: ep.id, gameId: liveGame.id, status: "yes" } });
+
     expect(await expirePastGameInvites()).toBe(1);
 
     expect((await prisma.playerInvite.findUniqueOrThrow({ where: { id: stale.inviteId } })).status).toBe("expired");
-    // Still actionable: the game has not kicked off.
     expect((await prisma.playerInvite.findUniqueOrThrow({ where: { id: live.inviteId } })).status).toBe("pending");
-    const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: current.id, userId: invitee.id } });
-    expect(
-      await prisma.gameParticipant.count({ where: { gameId: current.currentGameId!, eventPlayerId: ep.id } }),
-    ).toBe(1);
+    // Old occurrence's ghosts are gone…
+    expect(await prisma.gameParticipant.count({ where: { gameId: oldGame.id, eventPlayerId: ep.id } })).toBe(0);
+    // …but the upcoming game, sharing the same EventPlayer, is untouched and
+    // still actionable: the game has not kicked off.
+    expect(await prisma.gameParticipant.count({ where: { gameId: liveGame.id, eventPlayerId: ep.id } })).toBe(1);
+    expect(await prisma.rsvp.count({ where: { gameId: liveGame.id, eventPlayerId: ep.id } })).toBe(1);
   });
 
   it("does not disturb already-answered invites on a past game", async () => {
