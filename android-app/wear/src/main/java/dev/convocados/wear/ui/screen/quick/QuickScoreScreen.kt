@@ -29,7 +29,7 @@ import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.roundEquatorSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
-import dev.convocados.wear.ui.roundSafeSize
+import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.ongoing.OngoingLaunch
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
 import dev.convocados.wear.ui.ongoing.ongoingScoreText
@@ -153,7 +153,7 @@ internal fun QuickScoreContent(
                 if (isQuickStructuredSport(state.sport)) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         QuickSetScoreEditor(
-                            modifier = Modifier.roundSafeSize(),
+                            modifier = Modifier.fillMaxSize(),
                             state = state,
                             onIncrementOne = onIncrementOne,
                             onDecrementOne = onDecrementOne,
@@ -166,11 +166,11 @@ internal fun QuickScoreContent(
                 } else {
                     Row(
                         // Bezel-safe inset so tiles sit inside the round display;
-                        // roundEquatorSize uses the full circular width at center.
+                        // the height is capped by the inscribed rectangle so the
+                        // corners stay clear too.
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .roundEquatorSize()
-                            .padding(8.dp),
+                            .roundEquatorSize(inset = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         TeamScoreButton(
@@ -280,7 +280,10 @@ private fun QuickSetScoreEditor(
             overflow = TextOverflow.Ellipsis,
         )
         Row(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .roundListInset(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TeamScoreButton(
@@ -317,7 +320,7 @@ private fun QuickSetScoreEditor(
         // Expressive connected actions instead of loose CompactButtons.
         val nextSetSource = remember { MutableInteractionSource() }
         val tiebreakSource = remember { MutableInteractionSource() }
-        ButtonGroup(Modifier.fillMaxWidth()) {
+        ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
             Button(
                 onClick = onNextSet,
                 enabled = state.scoreSets.size < 5,

@@ -38,6 +38,7 @@ class ConvocadosFcmService : FirebaseMessagingService() {
         val url = message.data["url"]
         val type = message.data["type"]
         val playerName = message.data["player"] // for payment_self_reported actions
+        val gameId = message.data["gameId"] // for #1236 payer check-in quick actions
         // ADR 0025: invite pushes carry the PlayerInvite token so the
         // Accept/Decline notification actions can answer without opening the app,
         // plus sport/time/place so the decision is informed.
@@ -103,6 +104,15 @@ class ConvocadosFcmService : FirebaseMessagingService() {
                     builder.addAction(0, getString(R.string.action_confirm_payment),
                         createActionIntent(NotificationActionReceiver.ACTION_CONFIRM_PAYMENT, eventId, notificationId, playerName))
                 }
+                // #1236: payer check-in — "Did everyone pay?" with one-tap answers
+                "payment_payer_check_in" -> {
+                    if (gameId != null) {
+                        builder.addAction(0, getString(R.string.mark_all_paid),
+                            createActionIntent(NotificationActionReceiver.ACTION_PAYER_MARK_ALL_PAID, eventId, notificationId, gameId = gameId))
+                        builder.addAction(0, getString(R.string.action_ask_again),
+                            createActionIntent(NotificationActionReceiver.ACTION_PAYER_ASK_AGAIN, eventId, notificationId, gameId = gameId))
+                    }
+                }
                 // Post-game: just open (deep link handles it)
                 "post_game" -> {
                     builder.addAction(0, getString(R.string.action_add_score), pendingIntent)
@@ -120,6 +130,7 @@ class ConvocadosFcmService : FirebaseMessagingService() {
         notificationId: Int,
         playerName: String? = null,
         inviteToken: String? = null,
+        gameId: String? = null,
     ): PendingIntent {
         val intent = Intent(this, NotificationActionReceiver::class.java).apply {
             putExtra(NotificationActionReceiver.EXTRA_ACTION, action)
@@ -127,9 +138,10 @@ class ConvocadosFcmService : FirebaseMessagingService() {
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
             playerName?.let { putExtra(NotificationActionReceiver.EXTRA_PLAYER_NAME, it) }
             inviteToken?.let { putExtra(NotificationActionReceiver.EXTRA_INVITE_TOKEN, it) }
+            gameId?.let { putExtra(NotificationActionReceiver.EXTRA_GAME_ID, it) }
         }
         return PendingIntent.getBroadcast(
-            this, "$action:$eventId:${playerName ?: ""}:$inviteToken".hashCode(), intent,
+            this, "$action:$eventId:${playerName ?: ""}:$inviteToken:$gameId".hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
@@ -152,6 +164,7 @@ class ConvocadosFcmService : FirebaseMessagingService() {
             "post_game" -> CHANNEL_POST_GAME
             "payment_confirmed" -> CHANNEL_PAYMENT_REMINDERS
             "payment_self_reported" -> CHANNEL_PAYMENT_REMINDERS
+            "payment_payer_check_in" -> CHANNEL_PAYMENT_REMINDERS
             // Tier 1 — Event-level
             "game_cancelled" -> CHANNEL_EVENT_UPDATES
             "game_invite" -> CHANNEL_EVENT_UPDATES

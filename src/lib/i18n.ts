@@ -16,7 +16,11 @@ const SUPPORTED_LOCALES = new Set<string>(Object.keys(translations));
 
 export function createT(locale: Locale): TFunction {
   return (key, params) => {
-    const dict = translations[locale] as Record<string, string>;
+    // Callers cast a stored device locale straight into createT, and any
+    // string is storable (api/push/app-token.ts, AppPushToken.locale from
+    // Locale.getDefault().language). An unshipped locale must degrade to
+    // English per key, not throw on a missing dictionary.
+    const dict = (translations[locale] ?? translations.en) as Record<string, string>;
     let str = dict[key] ?? (translations.en as Record<string, string>)[key] ?? key;
     if (params) {
       for (const [k, v] of Object.entries(params)) {

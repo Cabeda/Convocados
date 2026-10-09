@@ -24,6 +24,23 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
+ * Any non-background content must stay inside this fraction of the circular
+ * bezel radius; matches the visibility of `roundBezelClip`'s inset clip.
+ */
+private const val BEZEL_CONTAINMENT_FRACTION = 0.97f
+
+/**
+ * Stricter bound for the score tiles: they are the only content that occupies
+ * the equator band at full width, so their corners are the ones a round bezel
+ * cuts first. 0.95 keeps a visible gap between tile and bezel clip on every
+ * round display size, instead of relying on the material corner radius.
+ */
+private const val SCORE_TILE_BEZEL_FRACTION = 0.95f
+
+private val TEAM_ONE_TILE = Color(0xFF33402F)
+private val TEAM_TWO_TILE = Color(0xFF4A3A2C)
+
+/**
  * Geometric shape assertions that go RED on the "square inside a circle" bug.
  *
  * Roborazzi goldens encode the current (buggy) rendering, so pixel-diff verify
@@ -34,8 +51,10 @@ import kotlin.math.hypot
  *    full-bleed square rows that a real watch would clip.
  * 2. On round displays, centered score content spans most of the display
  *    width — not a 0.72 inscribed square floating with dead margins.
- * 3. On square displays, content still uses the full width (no regression).
- * 4. Round and square goldens for the same screen actually differ — form-factor
+ * 3. On round displays, the score tiles clear the bezel on every round size —
+ *    a wide block must earn its height from the circle, not from a fraction.
+ * 4. On square displays, content still uses the full width (no regression).
+ * 5. Round and square goldens for the same screen actually differ — form-factor
  *    specific UI, not one layout shipped to both.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -161,6 +180,107 @@ class WearAdaptiveShapeTest {
         assertTeamTilesUseWidth(limg, minFraction = 0.85f, context = "round live score")
     }
 
+    // ── 2b. Score tiles clear the bezel clip on every round size ─────────
+    // The tiles sit at the equator, where the circle is widest, but a block
+    // that spans 0.95 of the width may only be as tall as the inscribed
+    // rectangle allows. Sized by a fixed height fraction instead, its corners
+    // reach the circular bezel clip and only the material corner radius keeps
+    // them from being cut — so the tiles must clear the bezel on their own.
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun roundLiveScore_scoreTilesClearTheCircularBezel() {
+        composeRule.setContent {
+            ConvocadosWearTheme {
+                ScoreFixtureContent(
+                    state = WearFixtures.liveScore,
+                    now = WearFixtures.now,
+                    onIncrementOne = {},
+                    onIncrementTwo = {},
+                    onDecrementOne = {},
+                    onDecrementTwo = {},
+                    onUndo = {},
+                )
+            }
+        }
+        assertTeamTilesInsideCircle(
+            composeRule.onRoot().captureToImage(),
+            radiusFraction = SCORE_TILE_BEZEL_FRACTION,
+            context = "round live score tiles",
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun roundQuickScore_scoreTilesClearTheCircularBezel() {
+        composeRule.setContent {
+            ConvocadosWearTheme {
+                QuickScoreContent(
+                    state = WearFixtures.quickScore,
+                    nowOverride = WearFixtures.now,
+                    onIncrementOne = {},
+                    onDecrementOne = {},
+                    onIncrementTwo = {},
+                    onDecrementTwo = {},
+                    onNextSet = {},
+                    onToggleTiebreak = {},
+                )
+            }
+        }
+        assertTeamTilesInsideCircle(
+            composeRule.onRoot().captureToImage(),
+            radiusFraction = SCORE_TILE_BEZEL_FRACTION,
+            context = "round quick score tiles",
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "w227dp-h227dp-round")
+    fun smallRoundLiveScore_scoreTilesClearTheCircularBezel() {
+        composeRule.setContent {
+            ConvocadosWearTheme {
+                ScoreFixtureContent(
+                    state = WearFixtures.liveScore,
+                    now = WearFixtures.now,
+                    onIncrementOne = {},
+                    onIncrementTwo = {},
+                    onDecrementOne = {},
+                    onDecrementTwo = {},
+                    onUndo = {},
+                )
+            }
+        }
+        assertTeamTilesInsideCircle(
+            composeRule.onRoot().captureToImage(),
+            radiusFraction = SCORE_TILE_BEZEL_FRACTION,
+            context = "small round live score tiles",
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun roundQuickTennis_usesCircularWidthNotShrunkSquare() {
+        composeRule.setContent {
+            ConvocadosWearTheme {
+                QuickScoreContent(
+                    state = WearFixtures.quickTennis,
+                    nowOverride = WearFixtures.now,
+                    onIncrementOne = {},
+                    onDecrementOne = {},
+                    onIncrementTwo = {},
+                    onDecrementTwo = {},
+                    onNextSet = {},
+                    onToggleTiebreak = {},
+                )
+            }
+        }
+        assertTeamTilesUseWidth(
+            composeRule.onRoot().captureToImage(),
+            minFraction = 0.80f,
+            context = "round quick tennis score",
+        )
+    }
+
     @Test
     @Config(qualifiers = "w390dp-h390dp-round")
     fun roundQuickSave_contentSpansDisplay() {
@@ -197,6 +317,30 @@ class WearAdaptiveShapeTest {
             composeRule.onRoot().captureToImage(),
             minFraction = 0.80f,
             context = "square live score",
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun squareQuickScore_usesFullWidth() {
+        composeRule.setContent {
+            ConvocadosWearTheme {
+                QuickScoreContent(
+                    state = WearFixtures.quickScore,
+                    nowOverride = WearFixtures.now,
+                    onIncrementOne = {},
+                    onDecrementOne = {},
+                    onIncrementTwo = {},
+                    onDecrementTwo = {},
+                    onNextSet = {},
+                    onToggleTiebreak = {},
+                )
+            }
+        }
+        assertTeamTilesUseWidth(
+            composeRule.onRoot().captureToImage(),
+            minFraction = 0.80f,
+            context = "square quick score",
         )
     }
 
@@ -282,13 +426,17 @@ class WearAdaptiveShapeTest {
      * assert every non-background pixel lies within the circular bezel
      * (radius = half the short side, minus a small anti-aliasing margin).
      */
-    private fun assertContentInsideCircle(image: ImageBitmap, context: String) {
+    private fun assertContentInsideCircle(
+        image: ImageBitmap,
+        context: String,
+        radiusFraction: Float = BEZEL_CONTAINMENT_FRACTION,
+    ) {
         val pixels = image.toPixelMap()
         val w = pixels.width
         val h = pixels.height
         val cx = w / 2f
         val cy = h / 2f
-        val radius = (minOf(w, h) / 2f) * 0.97f
+        val radius = (minOf(w, h) / 2f) * radiusFraction
 
         val background = pixels[0, 0]
         var outside = 0
@@ -317,6 +465,54 @@ class WearAdaptiveShapeTest {
         assertTrue(
             "$context: $outside sampled content pixels fall outside the circular bezel " +
                 "(square layout clipped by round screen). Examples:$outsideExamples",
+            outside == 0,
+        )
+    }
+
+    /**
+     * Assert every sampled team-tile pixel lies inside [radiusFraction] of the
+     * circular bezel radius. Tighter than [assertContentInsideCircle] because
+     * the tile block is the widest thing on the screen: a rectangle that spans
+     * the equator has to earn its height from the circle, not from a fraction
+     * of the available space.
+     */
+    private fun assertTeamTilesInsideCircle(
+        image: ImageBitmap,
+        radiusFraction: Float,
+        context: String,
+    ) {
+        val pixels = image.toPixelMap()
+        val w = pixels.width
+        val h = pixels.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val radius = (minOf(w, h) / 2f) * radiusFraction
+
+        var outside = 0
+        var outsideExamples = ""
+        val step = maxOf(1, minOf(w, h) / 250)
+        var y = 0
+        while (y < h) {
+            var x = 0
+            while (x < w) {
+                val color = pixels[x, y]
+                if (pixelsEqual(color, TEAM_ONE_TILE) || pixelsEqual(color, TEAM_TWO_TILE)) {
+                    val distance = hypot(x + 0.5f - cx, y + 0.5f - cy)
+                    if (distance > radius) {
+                        outside++
+                        if (outside <= 5) {
+                            outsideExamples += " ($x,$y d=${distance.toInt()})"
+                        }
+                    }
+                }
+                x += step
+            }
+            y += step
+        }
+
+        assertTrue(
+            "$context: $outside sampled team-tile pixels fall outside the circular bezel " +
+                "(score block taller than the inscribed rectangle allows). Examples:$outsideExamples",
             outside == 0,
         )
     }
@@ -427,8 +623,8 @@ class WearAdaptiveShapeTest {
         val pixels = image.toPixelMap()
         val w = pixels.width
         val h = pixels.height
-        val teamOne = Color(0xFF33402F)
-        val teamTwo = Color(0xFF4A3A2C)
+        val teamOne = TEAM_ONE_TILE
+        val teamTwo = TEAM_TWO_TILE
 
         val bandTop = (h * 0.40f).toInt()
         val bandBottom = (h * 0.60f).toInt()
