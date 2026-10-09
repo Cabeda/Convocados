@@ -169,8 +169,10 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     eventId,
     // The Player row only when it is the active row we just resolved — otherwise
     // archiveAndLeave works from `name`, which is how it finds the roster row for a
-    // player whose Player row is archived or absent.
-    playerId: row?.id ?? null,
+    // player whose Player row is archived or absent. `linked` is resolved by name,
+    // so it is the row the list is showing: without it a remove that arrived with
+    // an EventPlayer id archived the game row but left the legacy Player row live.
+    playerId: row?.id ?? linked?.id ?? null,
     name,
     actor: isSelf
       ? { kind: "self", userId: actorUserId }
