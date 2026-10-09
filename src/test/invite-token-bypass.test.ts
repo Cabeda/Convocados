@@ -26,15 +26,13 @@ async function seedUser(name: string, email: string) {
   });
 }
 
-async function seedEvent(ownerId: string | null) {
-  const now = new Date();
-  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+async function seedEventAt(ownerId: string | null, dateTime: Date) {
   const event = await prisma.event.create({
     data: {
       id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       title: "Test Event",
       location: "Test Field",
-      dateTime: tomorrow,
+      dateTime,
       timezone: "UTC",
       maxPlayers: 10,
       ownerId,
@@ -46,12 +44,17 @@ async function seedEvent(ownerId: string | null) {
     data: {
       id: `g-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       eventId: event.id,
-      dateTime: tomorrow,
+      dateTime,
       status: "scheduled",
     },
   });
   await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
   return { ...event, currentGameId: game.id, gameId: game.id };
+}
+
+async function seedEvent(ownerId: string | null) {
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  return seedEventAt(ownerId, tomorrow);
 }
 
 describe("GET /api/events/[id] — inviteToken bypass", () => {
@@ -108,5 +111,96 @@ describe("GET /api/events/[id] — inviteToken bypass", () => {
     const res = await getEvent(ctx(eventB.id, token));
     const body = await res.json();
     expect(body.locked).toBe(true);
+  });
+
+  it("refuses the password bypass once the invite's game has kicked off", async () => {
+    const owner = await seedUser("OwnerPast", "owner-past@example.com");
+    const invitee = await seedUser("InviteePast", "invitee-past@example.com");
+    const event = await seedEventAt(owner.id, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+
+    const { token } = await createPlayerInvite({
+      eventId: event.id,
+      gameId: event.gameId,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://convocados.cabeda.dev",
+    });
+
+    const res = await getEvent(ctx(event.id, token));
+    const body = await res.json();
+
+    expect(body.locked).toBe(true);
+    expect(body.hasPassword).toBe(true);
+    expect(body.inviteExpired).toBe(true);
+    // Anonymous viewer of a stale token sees the lock, never the roster.
+    expect(body.players).toBeUndefined();
+    expect(body.teamResults).toBeUndefined();
+    expect(body.title).toBe("Test Event");
+  });
+
+  it("heals the stale invite to expired and drops the pending roster ghost", async () => {
+    const owner = await seedUser("OwnerHeal", "owner-heal@example.com");
+    const invitee = await seedUser("InviteeHeal", "invitee-heal@example.com");
+    const event = await seedEventAt(owner.id, new Date(Date.now() - 3 * 60 * 60 * 1000));
+
+    const { token } = await createPlayerInvite({
+      eventId: event.id,
+      gameId: event.gameId,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://convocados.cabeda.dev",
+    });
+
+    expect(await prisma.gameParticipant.count({ where: { gameId: event.gameId, status: "pending" } })).toBe(1);
+
+    await getEvent(ctx(event.id, token));
+
+    const invite = await prisma.playerInvite.findUniqueOrThrow({ where: { token } });
+    expect(invite.status).toBe("expired");
+    expect(await prisma.gameParticipant.count({ where: { gameId: event.gameId, status: "pending" } })).toBe(0);
+    expect(await prisma.rsvp.count({ where: { gameId: event.gameId } })).toBe(0);
+  });
+
+  it("refuses an already-answered token for a past game without rewriting it", async () => {
+    const owner = await seedUser("OwnerDeclined", "owner-declined@example.com");
+    const invitee = await seedUser("InviteeDeclined", "invitee-declined@example.com");
+    const event = await seedEventAt(owner.id, new Date(Date.now() - 48 * 60 * 60 * 1000));
+
+    const { token } = await createPlayerInvite({
+      eventId: event.id,
+      gameId: event.gameId,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://convocados.cabeda.dev",
+    });
+    await prisma.playerInvite.update({ where: { token }, data: { status: "declined" } });
+
+    const res = await getEvent(ctx(event.id, token));
+    const body = await res.json();
+
+    expect(body.locked).toBe(true);
+    const invite = await prisma.playerInvite.findUniqueOrThrow({ where: { token } });
+    expect(invite.status).toBe("declined");
+  });
+
+  it("still bypasses the password for an accepted invite on a game yet to kick off", async () => {
+    const owner = await seedUser("OwnerAccepted", "owner-accepted@example.com");
+    const invitee = await seedUser("InviteeAccepted", "invitee-accepted@example.com");
+    const event = await seedEvent(owner.id);
+
+    const { token } = await createPlayerInvite({
+      eventId: event.id,
+      gameId: event.gameId,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://convocados.cabeda.dev",
+    });
+    await prisma.playerInvite.update({ where: { token }, data: { status: "accepted" } });
+
+    const res = await getEvent(ctx(event.id, token));
+    const body = await res.json();
+
+    expect(body.locked).toBeUndefined();
+    expect(body.id).toBe(event.id);
   });
 });

@@ -5,6 +5,7 @@ import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server
 import { checkAccess } from "../../../../lib/eventAccess";
 import { computePostGameStatus } from "../../../../lib/postgame.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
+import { expirePendingInvites } from "../../../../lib/invite.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
@@ -31,19 +32,36 @@ export const GET: APIRoute = async ({ params, request }) => {
     // Invite link bypass: a valid PlayerInvite token for this event unlocks the page.
     // This lets an organizer share the event link with ?inviteToken=xxx to skip the
     // password, and the EventPage will show an Accept/Decline banner.
+    //
+    // The bypass is gated on the same predicate the expiry sweep uses — the invite's
+    // game must still be ahead of kickoff. A shared token must never outlive its game:
+    // once it has kicked off the link buys nothing and the request falls through to
+    // the ordinary password/visibility path (#1285).
     let hasValidInviteToken = false;
+    let inviteTokenExpired = false;
     try {
       const inviteToken = new URL(request.url).searchParams.get("inviteToken");
       if (inviteToken) {
         const invite = await prisma.playerInvite.findUnique({
           where: { token: inviteToken },
           select: {
+            gameId: true,
+            status: true,
             eventPlayer: { select: { eventId: true } },
-            game: { select: { eventId: true } },
+            game: { select: { eventId: true, dateTime: true } },
           },
         });
         if (invite && (invite.eventPlayer.eventId === event.id || invite.game?.eventId === event.id)) {
-          hasValidInviteToken = true;
+          const kickedOff = invite.game.dateTime <= new Date();
+          if (kickedOff) {
+            // Heal: reuse the shared lazy-expiry helper (the same one accept and
+            // decline call) rather than restating status transitions here. It is
+            // a no-op for invites that already left the pending state.
+            if (invite.status === "pending") await expirePendingInvites(invite.gameId);
+            inviteTokenExpired = true;
+          } else {
+            hasValidInviteToken = true;
+          }
         }
       }
     } catch {
@@ -65,6 +83,9 @@ export const GET: APIRoute = async ({ params, request }) => {
         id: event.id,
         title: event.title,
         hasPassword: true,
+        // Signals "your link is stale" without leaking why (or the roster) to a
+        // viewer who has no other claim on the event.
+        inviteExpired: inviteTokenExpired,
       });
     }
   }
