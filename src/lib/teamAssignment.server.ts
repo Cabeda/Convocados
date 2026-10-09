@@ -1,6 +1,7 @@
 import { prisma } from "./db.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
 import { getDefaultFormation } from "./formations";
+import { reconcileFormations } from "./teamFormation.server";
 import { syncGamePayments } from "./settlement.server";
 import { syncGameFromTeamResults } from "./gameDualWrite.server";
 
@@ -109,32 +110,35 @@ export async function assignTeams(
   const teamOne = teams[0];
   const teamTwo = teams[1];
 
-  const patchSlotCount = getDefaultFormation(sport).slots.length;
+  // Slots belong to the formation each team stores, not to the sport's
+  // default: members are written unplaced and the reconcile below lays them
+  // onto it. Deriving them from `getDefaultFormation(sport)` here wrote a
+  // member `slot: null` whenever the default was narrower than the drawn team.
   const memberCreates: { name: string; order: number; slot: number | null; teamResultId: string }[] = [];
   const playerLookup = new Map(allPlayers.map((p) => [p.id, p.name]));
 
   for (let i = 0; i < input.teamOnePlayerIds.length; i++) {
     const name = playerLookup.get(input.teamOnePlayerIds[i]);
     if (name) {
-      memberCreates.push({ name, order: i, slot: i < patchSlotCount ? i : null, teamResultId: teamOne.id });
+      memberCreates.push({ name, order: i, slot: null, teamResultId: teamOne.id });
     }
   }
 
   for (let i = 0; i < input.teamTwoPlayerIds.length; i++) {
     const name = playerLookup.get(input.teamTwoPlayerIds[i]);
     if (name) {
-      memberCreates.push({ name, order: i, slot: i < patchSlotCount ? i : null, teamResultId: teamTwo.id });
+      memberCreates.push({ name, order: i, slot: null, teamResultId: teamTwo.id });
     }
   }
-
-  await prisma.teamResult.updateMany({
-    where: { id: { in: teams.map((t) => t.id) } },
-    data: { formation: getDefaultFormation(sport).id },
-  });
 
   if (memberCreates.length > 0) {
     await prisma.teamMember.createMany({ data: memberCreates });
   }
+
+  // Re-derive both teams' layouts from the saved split: a stored formation is
+  // only defaulted when it does not resolve for the sport, so the organiser's
+  // choice outlives a save and nobody is left outside the formation they see.
+  await reconcileFormations(eventId, sport);
 
   await dualWriteCurrentGameTeams(currentGameId, eventId);
 

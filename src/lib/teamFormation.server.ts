@@ -22,8 +22,12 @@ import { applyFormationLayout } from "./teams";
  * member here is what keeps the label describing the split it labels.
  * Members beyond the formation's slots stay unplaced — the panel shows them
  * as "Not placed" instead of inventing a position.
+ *
+ * Every writer of team membership calls this — the roster flows and the
+ * organiser's manual save alike — so none of them can derive slots from a
+ * formation the team does not store.
  */
-async function reconcileFormations(eventId: string, sport: string | null): Promise<void> {
+export async function reconcileFormations(eventId: string, sport: string | null): Promise<void> {
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
