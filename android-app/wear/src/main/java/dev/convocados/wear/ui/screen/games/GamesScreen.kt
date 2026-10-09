@@ -65,14 +65,11 @@ fun GamesScreen(
     val tokens = expressiveTokens()
     val showOfflineBanner = shouldShowOfflineGamesBanner(state.isOffline, isOnline)
 
-    // Auto-navigate to the scorable suggested game on first load
-    val autoNavId = state.autoNavigateEventId
-    LaunchedEffect(autoNavId) {
-        if (autoNavId != null) {
-            onGameSelected(autoNavId)
-            viewModel.consumeAutoNavigate()
-        }
-    }
+    // No auto-navigation into the score screen (#1204): that destination is a
+    // fixed-height Box with nothing to scroll, so a cold launch used to drop
+    // the user somewhere they could not escape without swipe-dismissing. The
+    // suggested game is already sorted first and labeled, so a single tap opens
+    // it on the user's terms.
 
     // Auto-refresh when returning to this screen (VM survives the detour), so
     // the list picks up updates after the user was elsewhere — silently

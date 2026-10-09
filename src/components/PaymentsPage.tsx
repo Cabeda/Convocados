@@ -32,6 +32,7 @@ interface SettlementGame {
   mode: "tracked" | "untracked";
   payerName: string | null;
   payerIsPlayer: boolean;
+  viewerIsPayer: boolean;
   total: number;
   paidCount: number;
   debtorCount: number;
@@ -96,11 +97,11 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
     load();
   }, [load]);
 
-  const runAction = async (path: string, body: Record<string, unknown>) => {
+  const runAction = async (path: string, body: Record<string, unknown>, method: "PUT" | "POST" = "PUT") => {
     setBusy(true);
     try {
       const res = await fetch(path, {
-        method: "PUT",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -212,12 +213,16 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
                         {t("paymentsConfigTitle")}
                       </Button>
                     )}
-                    {isManager && g.debtorCount > 0 && (
+                    {(isManager || g.viewerIsPayer) && g.debtorCount > 0 && (
                       <Button
                         size="small"
                         variant="contained"
                         disabled={busy}
-                        onClick={() => runAction(`/api/events/${eventId}/payments/settlement/bulk`, { gameId: g.gameId })}
+                        onClick={() =>
+                          isManager
+                            ? runAction(`/api/events/${eventId}/payments/settlement/bulk`, { gameId: g.gameId })
+                            : runAction(`/api/events/${eventId}/payments/payer-check-in/mark-all-paid`, { gameId: g.gameId }, "POST")
+                        }
                       >
                         {t("paymentsSettleAll")}
                       </Button>

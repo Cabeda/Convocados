@@ -514,6 +514,8 @@ export interface SettlementGameView {
   mode: PaymentMode;
   payerName: string | null;
   payerIsPlayer: boolean;
+  /** #1236: the viewer is this game's payer — they may settle it from the page. */
+  viewerIsPayer: boolean;
   total: number;
   paidCount: number;
   debtorCount: number;
@@ -635,6 +637,7 @@ export async function getSettlementSummary(
       mode: (game.paymentMode as PaymentMode | null) ?? "tracked",
       payerName,
       payerIsPlayer,
+      viewerIsPayer: payerEventPlayerId !== null && payerEventPlayerId === viewerEventPlayerId,
       total: totalDebt,
       paidCount: summarizePayments(activeRows).paidCount,
       debtorCount: debtors.length,

@@ -643,6 +643,30 @@ export const openApiSpec = {
         responses: { "200": { description: "Self-report recorded" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/payments/payer-check-in/mark-all-paid": {
+      post: {
+        summary: "Payer answers the 24h check-in: everyone paid — settle all unpaid shares of a game",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" } }, required: ["gameId"] } } },
+        },
+        responses: { "200": { description: "Shares settled" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/payer-check-in/snooze": {
+      post: {
+        summary: "Payer answers the 24h check-in: ask again in 24h",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" } }, required: ["gameId"] } } },
+        },
+        responses: { "200": { description: "Check-in snoozed" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/balance": {
       get: {
         summary: "Get outstanding balance and enforcement info for the caller",

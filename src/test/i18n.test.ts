@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { createT, detectLocale, setStoredLocale, translations } from "~/lib/i18n";
+import { createT, detectLocale, setStoredLocale, translations, type Locale } from "~/lib/i18n";
 import { titles, type TitleLocale } from "~/lib/randomTitles";
 
 describe("createT", () => {
@@ -33,6 +33,15 @@ describe("createT", () => {
     const t = createT("en");
     // @ts-expect-error testing missing key
     expect(t("nonExistentKey")).toBe("nonExistentKey");
+  });
+
+  it("falls back to English for a locale the app does not ship", () => {
+    // Server callers cast a stored device locale straight into createT
+    // (push.server.ts). AppPushToken.locale accepts any string
+    // (api/push/app-token.ts) and Android registers Locale.getDefault().language,
+    // so "nl", "ja", "ru"… reach here — the dictionary lookup must not throw.
+    const t = createT("nl" as Locale);
+    expect(t("createGame")).toBe("Create a Game");
   });
 
   it("all English keys have Portuguese translations", () => {

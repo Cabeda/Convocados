@@ -47,6 +47,7 @@ class NotificationChannelsTest {
     fun `payment types route to payment channel`() {
         assertEquals(ConvocadosFcmService.CHANNEL_PAYMENT_REMINDERS, ConvocadosFcmService.channelIdFor("payment_confirmed"))
         assertEquals(ConvocadosFcmService.CHANNEL_PAYMENT_REMINDERS, ConvocadosFcmService.channelIdFor("payment_self_reported"))
+        assertEquals(ConvocadosFcmService.CHANNEL_PAYMENT_REMINDERS, ConvocadosFcmService.channelIdFor("payment_payer_check_in"))
     }
 
     @Test

@@ -265,6 +265,15 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun settleAll(eventId: String, gameId: String): OkResponse =
         client.put("/api/events/$eventId/payments/settlement/bulk", SettlementBulkRequest(gameId))
 
+    // ── #1236: Payer check-in quick actions ─────────────────────────────────
+    /** "Everyone paid" — the payer settles every unpaid share of the game. */
+    suspend fun payerMarkAllPaid(eventId: String, gameId: String): OkResponse =
+        client.post("/api/events/$eventId/payments/payer-check-in/mark-all-paid", SettlementBulkRequest(gameId))
+
+    /** "Ask again in 24h" — suppress the next check-in ask for 24h. */
+    suspend fun payerSnoozeCheckIn(eventId: String, gameId: String): OkResponse =
+        client.post("/api/events/$eventId/payments/payer-check-in/snooze", SettlementBulkRequest(gameId))
+
     suspend fun selfReportSent(eventId: String, gameId: String, eventPlayerId: String): OkResponse =
         client.post("/api/events/$eventId/payments/settlement/self-report", SettlementActionRequest(gameId, eventPlayerId))
 
