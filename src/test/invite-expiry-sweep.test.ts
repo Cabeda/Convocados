@@ -1,6 +1,6 @@
 /**
  * Sweeping pending invites whose game has already kicked off (GH #1273 / dex
- * yobg93a).
+ * yobg93ra).
  *
  * Prod evidence: event `cmmkfrx8b0000o2ixrix1yp2m` — 18 PlayerInvite rows, 4
  * still `status='pending'`, three of them invited 2026-08-21 for occurrences
@@ -67,11 +67,11 @@ async function seedUser(name: string) {
   });
 }
 
-/** An event plus one game at `dateTime`, optionally wired as the current game. */
+/** An event plus one game at `dateTime`, wired as the event's current game. */
 async function seedEventWithGame(
   ownerId: string,
   dateTime: Date,
-  extra: { isRecurring?: boolean; recurrenceRule?: string | null; currentGameId?: boolean } = {},
+  extra: { isRecurring?: boolean; recurrenceRule?: string | null } = {},
 ) {
   const event = await prisma.event.create({
     data: {
@@ -87,9 +87,7 @@ async function seedEventWithGame(
     },
   });
   const game = await prisma.game.create({ data: { eventId: event.id, dateTime } });
-  if (extra.currentGameId !== false) {
-    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
-  }
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
   return { ...event, gameId: game.id, currentGameId: game.id };
 }
 
@@ -149,19 +147,21 @@ describe("expirePastGameInvites", () => {
   it("leaves invites for a future game pending — expiry is scoped by kickoff, not by invite age", async () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Future Invitee");
-    // The same eventPlayer has a stale invite on an old occurrence AND a
-    // legitimate one a week out. Only the old one may go.
+    // One recurring event, two occurrences, ONE shared EventPlayer — the prod
+    // shape after advanceOccurrence. The invitee holds a stale invite on the
+    // lapsed occurrence AND a legitimate one a week out; only the old may go.
     const rule = JSON.stringify({ freq: "weekly", interval: 1 });
-    const old = await seedEventWithGame(
+    const current = await seedEventWithGame(
       owner.id,
-      new Date(Date.now() - 7 * 86_400_000),
-      { isRecurring: true, recurrenceRule: rule, currentGameId: false },
+      new Date(Date.now() + 7 * 86_400_000),
+      { isRecurring: true, recurrenceRule: rule },
     );
-    const upcoming = new Date(Date.now() + 7 * 86_400_000);
-    const current = await seedEventWithGame(owner.id, upcoming, { isRecurring: true, recurrenceRule: rule });
+    const oldGame = await prisma.game.create({
+      data: { eventId: current.id, dateTime: new Date(Date.now() - 7 * 86_400_000) },
+    });
     const stale = await createPlayerInvite({
-      eventId: old.id,
-      gameId: old.currentGameId!,
+      eventId: current.id,
+      gameId: oldGame.id,
       inviteeUserId: invitee.id,
       invitedByUserId: owner.id,
       origin: "https://x.dev",
@@ -182,6 +182,9 @@ describe("expirePastGameInvites", () => {
     // Still actionable: the game has not kicked off.
     expect((await prisma.playerInvite.findUniqueOrThrow({ where: { id: live.inviteId } })).status).toBe("pending");
     const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: current.id, userId: invitee.id } });
+    // Both invites share one EventPlayer, so cleanup that loses its gameId
+    // scope would take the upcoming game's pending roster spot with it.
+    expect(await prisma.gameParticipant.count({ where: { gameId: oldGame.id, eventPlayerId: ep.id } })).toBe(0);
     expect(
       await prisma.gameParticipant.count({ where: { gameId: current.currentGameId!, eventPlayerId: ep.id } }),
     ).toBe(1);
