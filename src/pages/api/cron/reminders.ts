@@ -114,6 +114,17 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to process payment escalation");
   }
 
+  // ── #1236: Payer check-in ──────────────────────────────────────────────────
+  // 24h after the game, if the payer is set and not everyone has paid, ask the
+  // payer whether everyone paid. One ask per game; snooze re-arms it.
+  let payerCheckIns: string[] = [];
+  try {
+    const { processPayerCheckIns } = await import("~/lib/payerCheckIn.server");
+    payerCheckIns = (await processPayerCheckIns()).asked;
+  } catch (err) {
+    log.error({ err }, "Failed to process payer check-ins");
+  }
+
   // Legacy email reminders — still send email for users who want it (stage-agnostic)
   const paymentRemindersSent: string[] = [];
   try {
@@ -413,7 +424,7 @@ export const POST: APIRoute = async ({ request }) => {
   ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, paymentEscalation, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
+    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, paymentEscalation, payerCheckIns, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
     { headers: { "Content-Type": "application/json" } },
   );
 };

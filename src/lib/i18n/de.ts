@@ -349,6 +349,7 @@ const de: TranslationKeys = {
   notifySeasonRankTitle: "Saison-Rang aktualisiert",
   notifySeasonRankBody: "{delta} RP → {rank} ({tier})",
   notifySeasonRankProvisionalBody: "{delta} RP → freigeschaltet nach 3 Spielen ({n}/3)",
+  notifyPayerCheckIn: "Haben alle für {title} bezahlt? Alle als bezahlt markieren oder später erneut fragen.",
   updateAvailable: "Neue Version verfügbar",
   updateNow: "Aktualisieren",
   integrations: "Integrationen",

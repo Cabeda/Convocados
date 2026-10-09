@@ -99,4 +99,29 @@ class NotificationActionHandlerTest {
 
         coVerify(exactly = 1) { api.respondToInvite("tok-dead", "accept") }
     }
+
+    // ── #1236: payer check-in quick actions from the push notification ────────
+
+    @Test
+    fun `mark all paid settles the game for the payer`() = runTest {
+        handler.handle(NotificationActionHandler.ACTION_PAYER_MARK_ALL_PAID, "evt-1", null, gameId = "game-9")
+
+        coVerify(exactly = 1) { api.payerMarkAllPaid("evt-1", "game-9") }
+    }
+
+    @Test
+    fun `ask again snoozes the check-in for the game`() = runTest {
+        handler.handle(NotificationActionHandler.ACTION_PAYER_ASK_AGAIN, "evt-1", null, gameId = "game-9")
+
+        coVerify(exactly = 1) { api.payerSnoozeCheckIn("evt-1", "game-9") }
+    }
+
+    @Test
+    fun `payer check-in actions without a gameId are no-ops`() = runTest {
+        handler.handle(NotificationActionHandler.ACTION_PAYER_MARK_ALL_PAID, "evt-1", null)
+        handler.handle(NotificationActionHandler.ACTION_PAYER_ASK_AGAIN, "evt-1", null)
+
+        coVerify(exactly = 0) { api.payerMarkAllPaid(any(), any()) }
+        coVerify(exactly = 0) { api.payerSnoozeCheckIn(any(), any()) }
+    }
 }

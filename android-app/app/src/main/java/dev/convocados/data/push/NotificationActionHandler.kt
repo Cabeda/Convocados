@@ -16,8 +16,10 @@ class NotificationActionHandler @Inject constructor(private val api: ConvocadosA
     /**
      * Performs the action. Never throws: a failure inside a BroadcastReceiver
      * would crash the app process, and there is no UI to surface errors to.
+     *
+     * `gameId` scopes payment actions to a single occurrence game (#1236).
      */
-    suspend fun handle(action: String, eventId: String, playerName: String?, inviteToken: String? = null) {
+    suspend fun handle(action: String, eventId: String, playerName: String?, inviteToken: String? = null, gameId: String? = null) {
         try {
             when (action) {
                 ACTION_RSVP_YES -> api.submitRsvp(eventId, "yes")
@@ -26,6 +28,13 @@ class NotificationActionHandler @Inject constructor(private val api: ConvocadosA
                 ACTION_JOIN -> api.quickJoin(eventId)
                 ACTION_CONFIRM_PAYMENT -> if (playerName != null) {
                     api.updatePaymentStatus(eventId, playerName, "paid")
+                }
+                // #1236: payer answers the 24h check-in straight from the push.
+                ACTION_PAYER_MARK_ALL_PAID -> if (gameId != null) {
+                    api.payerMarkAllPaid(eventId, gameId)
+                }
+                ACTION_PAYER_ASK_AGAIN -> if (gameId != null) {
+                    api.payerSnoozeCheckIn(eventId, gameId)
                 }
                 // ADR 0025: quick accept/decline straight from the invite push.
                 ACTION_INVITE_ACCEPT -> if (inviteToken != null) {
@@ -47,5 +56,7 @@ class NotificationActionHandler @Inject constructor(private val api: ConvocadosA
         const val ACTION_CONFIRM_PAYMENT = "confirm_payment"
         const val ACTION_INVITE_ACCEPT = "invite_accept"
         const val ACTION_INVITE_DECLINE = "invite_decline"
+        const val ACTION_PAYER_MARK_ALL_PAID = "payer_mark_all_paid"
+        const val ACTION_PAYER_ASK_AGAIN = "payer_ask_again"
     }
 }
