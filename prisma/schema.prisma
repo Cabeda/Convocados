@@ -368,6 +368,11 @@ model Game {
   payerEventPlayerId String?
   payerEventPlayer   EventPlayer? @relation("GamePayer", fields: [payerEventPlayerId], references: [id], onDelete: SetNull)
   payerExternalName  String?
+  // Payer check-in (#1236): 24h after the game, the payer is asked whether
+  // everyone paid. sentAt = last time we asked; snoozedUntil = "ask me again
+  // in 24h" marker read by the cron sweep.
+  payerCheckInSentAt      DateTime?
+  payerCheckInSnoozedUntil DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

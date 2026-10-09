@@ -296,6 +296,7 @@
     <string name="action_join">Join</string>
     <string name="action_add_score">Add score</string>
     <string name="action_confirm_payment">Confirm</string>
+    <string name="action_ask_again">Ask again later</string>
     <string name="email_notifications">Email notifications</string>
     <string name="enable_email">Enable email</string>
     <string name="enable_email_desc">Master toggle for all emails</string>

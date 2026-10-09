@@ -624,6 +624,8 @@ data class SettlementGame(
     val mode: String = "tracked",
     val payerName: String? = null,
     val payerIsPlayer: Boolean = false,
+    /** #1236: the viewer is this game's payer — they may settle it from the page. */
+    val viewerIsPayer: Boolean = false,
     val total: Double = 0.0,
     val paidCount: Int = 0,
     val debtorCount: Int = 0,

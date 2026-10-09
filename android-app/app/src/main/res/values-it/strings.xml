@@ -261,6 +261,7 @@
     <string name="action_join">Partecipa</string>
     <string name="action_add_score">Risultato</string>
     <string name="action_confirm_payment">Confirmar</string>
+    <string name="action_ask_again">Chiedi più tardi</string>
     <string name="email_notifications">Notifiche email</string>
     <string name="enable_email">Attiva email</string>
     <string name="enable_email_desc">Interruttore generale per tutte le email</string>
