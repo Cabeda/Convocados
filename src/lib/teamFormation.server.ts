@@ -10,6 +10,12 @@ import { balanceTeams } from "./elo.server";
 import type { Imatch } from "./random";
 import { applyFormationLayout } from "./teams";
 
+/** Event fields every team flow needs: balance, naming and per-game scoping. */
+const TEAM_EVENT_SELECT = {
+  balanced: true, maxPlayers: true, teamOneName: true,
+  teamTwoName: true, currentGameId: true, sport: true,
+} as const;
+
 /**
  * Re-derive every team's formation and slot layout from the members it
  * actually has.
@@ -58,6 +64,34 @@ async function reconcileFormations(eventId: string, sport: string | null): Promi
   if (writes.length > 0) {
     await prisma.$transaction(writes);
   }
+}
+
+/** Event's ELO ratings as a name to rating map; unrated players score 1000. */
+async function loadRatingMap(eventId: string): Promise<Map<string, number>> {
+  const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+  return new Map(ratings.map((r) => [r.name, r.rating]));
+}
+
+/**
+ * Replace both teams' memberships with a balanced draw of `playerNames`.
+ * The delete and the creates share one transaction: a half-applied draw
+ * would leave a team nameless or short. Formations are re-derived after, so
+ * each stored label still describes the split it labels.
+ */
+async function rebalanceTeams(eventId: string, teams: { id: string; name: string }[], playerNames: string[], teamNames: [string, string], sport: string | null): Promise<void> {
+  const ratingMap = await loadRatingMap(eventId);
+  const newMatches = balanceTeams(playerNames.map((name) => ({ name, rating: ratingMap.get(name) ?? 1000 })), teamNames);
+
+  await prisma.$transaction([
+    prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map((t) => t.id) } } }),
+    ...newMatches.flatMap((match) => {
+      const teamId = teams.find((t) => t.name === match.team)?.id;
+      if (!teamId) return [];
+      return match.players.map((p) => prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } }));
+    }),
+  ]);
+
+  await reconcileFormations(eventId, sport);
 }
 
 /**
@@ -109,32 +143,14 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
   });
   if (teams.length === 0) return; // no teams generated yet
 
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true, currentGameId: true, sport: true } });
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: TEAM_EVENT_SELECT });
   const gameId = currentGameId ?? event?.currentGameId;
   const activeNames = (await getActiveRosterState(eventId, event?.maxPlayers ?? 0, gameId)).activeNames;
   if (!activeNames.has(playerName)) return; // bench player — never onto the pitch
 
   if (event?.balanced && teams.length === 2) {
     // Full rebalance: include all current members + new player
-    const ratings = await prisma.playerRating.findMany({ where: { eventId } });
-    const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
-    const playersWithRatings = [...activeNames].map((name) => ({
-      name,
-      rating: ratingMap.get(name) ?? 1000,
-    }));
-    const newMatches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
-
-    await prisma.$transaction([
-      prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map(t => t.id) } } }),
-      ...newMatches.flatMap((match) => {
-        const teamId = teams.find(t => t.name === match.team)?.id;
-        if (!teamId) return [];
-        return match.players.map((p) =>
-          prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } })
-        );
-      }),
-    ]);
-    await reconcileFormations(eventId, event.sport);
+    await rebalanceTeams(eventId, teams, [...activeNames], [event.teamOneName, event.teamTwoName], event?.sport ?? null);
     return;
   }
 
@@ -167,7 +183,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
   });
   if (teams.length === 0) return;
 
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true, currentGameId: true, sport: true } });
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: TEAM_EVENT_SELECT });
   const gameId = currentGameId ?? event?.currentGameId;
 
   // Balanced mode: full rebalance with current active players (excluding the leaving one, including promoted)
@@ -178,25 +194,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
     }
 
     if (activeNames.length >= 2) {
-      const ratings = await prisma.playerRating.findMany({ where: { eventId } });
-      const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
-      const playersWithRatings = activeNames.map((name) => ({
-        name,
-        rating: ratingMap.get(name) ?? 1000,
-      }));
-      const newMatches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
-
-      await prisma.$transaction([
-        prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map(t => t.id) } } }),
-        ...newMatches.flatMap((match) => {
-          const teamId = teams.find(t => t.name === match.team)?.id;
-          if (!teamId) return [];
-          return match.players.map((p) =>
-            prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } })
-          );
-        }),
-      ]);
-      await reconcileFormations(eventId, event.sport);
+      await rebalanceTeams(eventId, teams, activeNames, [event.teamOneName, event.teamTwoName], event?.sport ?? null);
       return;
     }
   }
@@ -263,8 +261,7 @@ async function tryBalancedSwap(eventId: string, promotedName: string, promotedTe
   if (!promotedTeam || !otherTeam) return;
 
   // Get ELO ratings
-  const ratings = await prisma.playerRating.findMany({ where: { eventId } });
-  const ratingMap = new Map(ratings.map(r => [r.name, r.rating]));
+  const ratingMap = await loadRatingMap(eventId);
   const getRating = (name: string) => ratingMap.get(name) ?? 1000;
 
   const promotedRating = getRating(promotedName);
