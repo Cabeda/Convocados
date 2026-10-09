@@ -528,6 +528,57 @@ describe("POST /api/events/:id/priority/confirm", () => {
     expect(names).toContain("PriorityPlayer");
     expect(names).not.toContain("Carlos");
   });
+
+  // ── Roster identity survives a rename (GH #1287) ──────────────────────────
+
+  it("places a confirmed spot on the roster identity, not the caller's renamed account name", async () => {
+    const owner = await seedUser();
+    // The account's CURRENT display name — the player renamed it after joining.
+    const player = await seedUser({ name: "Ze Renamed" });
+    const event = await seedEvent(owner.id, { priorityEnabled: true });
+    const game = await seedGame(event, 8);
+
+    // The roster rows the user joined under, before the rename.
+    await seedParticipant(event.id, game.id, "Ana", 0);
+    await seedParticipant(event.id, game.id, "Bia", 1);
+    await seedParticipant(event.id, game.id, "Ze", 2, { userId: player.id });
+    await testPrisma.player.create({
+      data: { eventId: event.id, name: "Ze", userId: player.id, order: 2 },
+    });
+
+    await seedEnrollment(event.id, player);
+    await seedPendingConfirmation(event.id, player, event.dateTime);
+    mockAuth(player.id);
+    mockGetSession.mockResolvedValue({ user: { id: player.id, name: "Ze Renamed" }, session: { id: "s1" } });
+
+    const res = await confirmPriority(ctx({ id: event.id }, {}));
+    expect(res.status).toBe(200);
+
+    // One identity for the account: the confirm must reuse the roster row the
+    // active slice and the teams draw already key on, never mint a second one
+    // under the current display name.
+    const identities = await testPrisma.eventPlayer.findMany({
+      where: { eventId: event.id, userId: player.id },
+    });
+    expect(identities).toHaveLength(1);
+    expect(identities[0].name).toBe("Ze");
+
+    const participants = await testPrisma.gameParticipant.findMany({
+      where: { gameId: game.id, eventPlayer: { userId: player.id } },
+    });
+    expect(participants).toHaveLength(1);
+
+    const legacyRows = await testPrisma.player.findMany({
+      where: { eventId: event.id, userId: player.id },
+    });
+    expect(legacyRows).toHaveLength(1);
+    expect(legacyRows[0].name).toBe("Ze");
+
+    // The stale name must not appear anywhere in the current game's roster.
+    const list = await activeOrders(event.id, game.id, 8);
+    expect(list.map((p) => p.name)).not.toContain("Ze Renamed");
+    expect(list.filter((p) => p.name === "Ze")).toHaveLength(1);
+  });
 });
 
 describe("POST /api/events/:id/priority/decline", () => {
