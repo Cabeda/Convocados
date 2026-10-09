@@ -28,7 +28,8 @@ interface Tsconfig {
 }
 
 const readTsconfig = (absolutePath: string): Tsconfig =>
-  JSON.parse(readFileSync(absolutePath, "utf-8"));
+  // Astro ships its presets as JSONC.
+  JSON.parse(readFileSync(absolutePath, "utf-8").replace(/^\s*\/\/.*$/gm, ""));
 
 const repo = () => readTsconfig(resolve(ROOT, "tsconfig.json"));
 
