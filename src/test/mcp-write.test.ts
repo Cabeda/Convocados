@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
+import { getDefaultFormation } from "~/lib/formations";
 
 vi.mock("~/lib/authenticate.server", () => ({
   authenticateRequest: vi.fn(),
@@ -363,6 +364,52 @@ describe("MCP write tools — randomize_teams", () => {
     expect(res.status).toBe(200);
     const teams = await prisma.teamResult.count({ where: { eventId: event.id } });
     expect(teams).toBe(2);
+  });
+
+  it("stores the sport formation and slot layout on drawn teams (#1286)", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id, { maxPlayers: 4, sport: "padel" });
+    for (const [i, name] of ["Alice", "Bob", "Carol", "Dave"].entries()) {
+      await addActivePlayer(event.id, event.currentGameId!, name, i);
+    }
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:teams"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_randomize_teams", { eventId: event.id })));
+    expect(res.status).toBe(200);
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+    expect(teams).toHaveLength(2);
+    for (const team of teams) {
+      // Same stored rows as the organiser-driven web path: the draw's
+      // formation is the sport default ("2" for padel) and every member is
+      // placed on a distinct slot.
+      expect(team.formation).toBe("2");
+      expect(team.members.map((m) => m.name)).toHaveLength(2);
+      expect(team.members.map((m) => m.slot)).toEqual([0, 1]);
+    }
+  });
+
+  it("uses the event's sport default formation when none is requested (#1286)", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id, { maxPlayers: 4 });
+    for (const [i, name] of ["Alice", "Bob", "Carol", "Dave"].entries()) {
+      await addActivePlayer(event.id, event.currentGameId!, name, i);
+    }
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:teams"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_randomize_teams", { eventId: event.id })));
+    expect(res.status).toBe(200);
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+    expect(teams).toHaveLength(2);
+    for (const team of teams) {
+      // The event's sport (schema default when unset) picks the formation,
+      // exactly as the organiser-driven web path resolves it.
+      expect(team.formation).toBe(getDefaultFormation(event.sport).id);
+      expect(team.members.map((m) => m.slot)).toEqual([0, 1]);
+    }
   });
 });
 

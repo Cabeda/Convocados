@@ -8,7 +8,9 @@ import { syncGamePayments } from "../settlement.server";
 import { addPlayerToTeams, validateTeams } from "../teamFormation.server";
 import { archiveAndLeave } from "../leave.server";
 import { Randomize } from "../random";
+import type { Imatch } from "../random";
 import { balanceTeams, processGame } from "../elo.server";
+import { applyFormationLayout } from "../teams";
 import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
 import { serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
@@ -170,7 +172,7 @@ async function randomizeTeams(args: Record<string, unknown>, ctx: AuthContext) {
   if (players.length < 2) throw new McpError("Need at least 2 players.", -32001, 400);
 
   const balanced = args.balanced === true;
-  let matches: { team: string; players: { name: string; order: number }[] }[];
+  let matches: Imatch[];
   if (balanced) {
     const ratings = await prisma.playerRating.findMany({ where: { eventId } });
     const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
@@ -182,14 +184,20 @@ async function randomizeTeams(args: Record<string, unknown>, ctx: AuthContext) {
     matches = Randomize(players.map((p) => p.name), [event.teamOneName, event.teamTwoName]);
   }
 
+  // Same layout as POST /randomize: resolve each team's formation against the
+  // sport and place every member on a slot before storing, so an agent-drawn
+  // write is indistinguishable from an organiser-drawn one (#1286).
+  const laidOut = applyFormationLayout(matches, event.sport);
+
   await prisma.$transaction([
     prisma.teamResult.deleteMany({ where: { eventId } }),
-    ...matches.map((match) =>
+    ...laidOut.map((match) =>
       prisma.teamResult.create({
         data: {
           name: match.team,
+          formation: match.formation ?? null,
           eventId,
-          members: { create: match.players.map((p) => ({ name: p.name, order: p.order })) },
+          members: { create: match.players.map((p) => ({ name: p.name, order: p.order, slot: p.slot ?? null })) },
         },
       })
     ),
