@@ -37,15 +37,17 @@ async function reconcileFormations(eventId: string, sport: string | null): Promi
   }));
   const laidOut = applyFormationLayout(matches, sport);
 
-  const writes = laidOut.flatMap((match) => {
-    const team = teams.find((t) => t.name === match.team);
-    if (!team) return [];
+  const writes = laidOut.flatMap((match, i) => {
+    const team = teams[i];
     const ops = [];
     if (team.formation !== match.formation) {
       ops.push(prisma.teamResult.update({ where: { id: team.id }, data: { formation: match.formation } }));
     }
-    for (const player of match.players) {
-      const member = team.members.find((m) => m.name === player.name);
+    // `applyFormationLayout` preserves the input arrays, so laid-out player j
+    // is member j of THIS team: a name lookup would collapse two members
+    // sharing a display name onto one row and leave the other unplaced.
+    for (const [j, player] of match.players.entries()) {
+      const member = team.members[j];
       if (member && member.slot !== (player.slot ?? null)) {
         ops.push(prisma.teamMember.update({ where: { id: member.id }, data: { slot: player.slot ?? null } }));
       }
@@ -83,6 +85,8 @@ export async function validateTeams(eventId: string, maxPlayers: number, current
 
   if (idsToRemove.length > 0) {
     await prisma.teamMember.deleteMany({ where: { id: { in: idsToRemove } } });
+    // The eviction shrank a team: re-place the survivors on the stored formation.
+    await reconcileFormations(eventId, (await prisma.event.findUnique({ where: { id: eventId }, select: { sport: true } }))?.sport ?? null);
     return true;
   }
   return false;

@@ -17,7 +17,7 @@ import { prisma } from "~/lib/db.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { getFormation } from "~/lib/formations";
-import { addPlayerToTeams } from "~/lib/teamFormation.server";
+import { addPlayerToTeams, validateTeams } from "~/lib/teamFormation.server";
 import { POST as addPlayer } from "~/pages/api/events/[id]/players";
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
@@ -70,6 +70,11 @@ async function seedDrawnTeams(eventId: string, split: Record<string, string[]>) 
       await prisma.teamMember.create({ data: { name: names[i], order: i, slot: i, teamResultId: team.id } });
     }
   }
+}
+
+async function seedTeamWithSlots(eventId: string, teamName: string, members: [string, number | null][]) {
+  const team = await prisma.teamResult.create({ data: { name: teamName, eventId, formation: "2-2" } });
+  await Promise.all(members.map(([n, slot], i) => prisma.teamMember.create({ data: { name: n, order: i, slot, teamResultId: team.id } })));
 }
 
 async function loadTeams(eventId: string) {
@@ -218,5 +223,32 @@ describe("teams panel invariant: the stored formation always describes the split
     expect(ninjas.members.filter((m) => m.slot === null)).toHaveLength(1);
     expect(gunas.members.every((m) => typeof m.slot === "number")).toBe(true);
     expect(gunas.members.map((m) => m.slot).sort()).toEqual([0, 1, 2, 3]);
+  });
+
+  it("places every member of its own team when a display name is shared across teams", async () => {
+    const { event, gameId } = await seedEventWithGame(10);
+    await seedActiveParticipant(gameId, event.id, "Player 9", 0);
+    // Three member rows share the display name "Rui" across the two teams.
+    await seedTeamWithSlots(event.id, "Ninjas", [["Rui", 3], ["Rui", null]]);
+    await seedTeamWithSlots(event.id, "Gunas", [["Rui", null]]);
+    await addPlayerToTeams(event.id, "Player 9", gameId);
+    // Nobody is left unplaced, and no two members of a team share a slot.
+    for (const team of await loadTeams(event.id)) {
+      expect(team.members.every((m) => typeof m.slot === "number" && m.slot! < SLOTS), team.name).toBe(true);
+      expect(new Set(team.members.map((m) => m.slot)).size, team.name).toBe(team.members.length);
+    }
+  });
+
+  it("re-derives the layout after validateTeams evicts an off-roster member", async () => {
+    const { event, gameId } = await seedEventWithGame(10);
+    await Promise.all(Array.from({ length: 12 }, (_, i) => seedActiveParticipant(gameId, event.id, `Player ${i + 1}`, i)));
+    // A draw from a larger split: the 9th joiner sits unplaced, Player 11 fell off the active slice.
+    await seedTeamWithSlots(event.id, "Ninjas", [["Player 1", 0], ["Player 2", 1], ["Player 3", 2], ["Player 4", 3], ["Player 5", null]]);
+    await seedTeamWithSlots(event.id, "Gunas", [["Player 6", 0], ["Player 7", 1], ["Player 8", 2], ["Player 9", 3], ["Player 11", 4]]);
+    expect(await validateTeams(event.id, event.maxPlayers, gameId)).toBe(true);
+    const teams = await loadTeams(event.id);
+    expect(teams.every((t) => getFormation(SPORT, t.formation) !== undefined)).toBe(true);
+    expect(teams.flatMap((t) => t.members).every((m) => typeof m.slot === "number" && m.slot! < SLOTS)).toBe(true);
+    expect(teams.flatMap((t) => t.members).filter((m) => m.name === "Player 11")).toHaveLength(0);
   });
 });
