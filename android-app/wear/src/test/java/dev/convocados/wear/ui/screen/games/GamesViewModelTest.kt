@@ -253,7 +253,7 @@ class GamesViewModelTest {
     }
 
     @Test
-    fun `autoNavigateEventId is set when suggested game is scorable`() = runTest {
+    fun `scorable suggested game is surfaced as suggested without any navigation signal`() = runTest {
         val now = Instant.now()
         val scorableGame = makeGame("scorable", now.plus(30, ChronoUnit.MINUTES))
 
@@ -267,13 +267,14 @@ class GamesViewModelTest {
 
         viewModel.uiState.test {
             val state = awaitItem()
-            assertEquals("scorable", state.autoNavigateEventId)
+            assertEquals("scorable", state.suggestedGameId)
+            assertTrue(state.canScoreGameIds.contains("scorable"))
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `autoNavigateEventId is null when suggested game is not scorable`() = runTest {
+    fun `suggestedGameId is null when suggested game is not scorable`() = runTest {
         val now = Instant.now()
         val futureGame = makeGame("future", now.plus(180, ChronoUnit.MINUTES))
 
@@ -287,13 +288,14 @@ class GamesViewModelTest {
 
         viewModel.uiState.test {
             val state = awaitItem()
-            assertNull(state.autoNavigateEventId)
+            assertEquals("future", state.suggestedGameId)
+            assertFalse(state.canScoreGameIds.contains("future"))
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `consumeAutoNavigate clears autoNavigateEventId`() = runTest {
+    fun `ui state exposes no auto-navigate field after a refresh cycle`() = runTest {
         val now = Instant.now()
         val scorableGame = makeGame("scorable", now.plus(30, ChronoUnit.MINUTES))
 
@@ -305,39 +307,16 @@ class GamesViewModelTest {
         val viewModel = makeViewModel()
         advanceUntilIdle()
 
-        viewModel.consumeAutoNavigate()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertNull(state.autoNavigateEventId)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `autoNavigateEventId does not re-fire after consume`() = runTest {
-        val now = Instant.now()
-        val scorableGame = makeGame("scorable", now.plus(30, ChronoUnit.MINUTES))
-
-        coEvery { repository.observeGames() } returns flowOf(listOf(scorableGame))
-        coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
-        coEvery { repository.refreshGames() } returns Result.success(Unit)
-
-        val viewModel = makeViewModel()
-        advanceUntilIdle()
-
-        viewModel.consumeAutoNavigate()
-
-        // Trigger another refresh cycle
+        // Trigger another refresh cycle: the games list must never change in a
+        // way that pushes the user somewhere they did not ask to go.
         viewModel.refresh()
         advanceUntilIdle()
 
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertNull(state.autoNavigateEventId)
-            cancelAndIgnoreRemainingEvents()
-        }
+        val state = viewModel.uiState.value
+        assertEquals("scorable", state.suggestedGameId)
+        assertTrue(state.canScoreGameIds.contains("scorable"))
+        val fields = state::class.java.declaredFields.map { it.name }
+        assertFalse("auto-navigate state must be gone from the screen model", fields.contains("autoNavigateEventId"))
     }
 
     private fun makeGame(
