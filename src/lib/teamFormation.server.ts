@@ -7,6 +7,56 @@
 import { prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { balanceTeams } from "./elo.server";
+import type { Imatch } from "./random";
+import { applyFormationLayout } from "./teams";
+
+/**
+ * Re-derive every team's formation and slot layout from the members it
+ * actually has.
+ *
+ * A membership change must never leave a stored row describing a team that no
+ * longer exists: an appended or promoted player would sit outside the
+ * formation (written with `slot: null`), and a legacy draw may carry no
+ * formation id at all. The teams panel renders `TeamResult.formation`
+ * verbatim, so resolving the label against the sport and re-placing every
+ * member here is what keeps the label describing the split it labels.
+ * Members beyond the formation's slots stay unplaced — the panel shows them
+ * as "Not placed" instead of inventing a position.
+ */
+async function reconcileFormations(eventId: string, sport: string | null): Promise<void> {
+  const teams = await prisma.teamResult.findMany({
+    where: { eventId },
+    include: { members: true },
+  });
+  if (teams.length === 0) return;
+
+  const matches: Imatch[] = teams.map((team) => ({
+    team: team.name,
+    formation: team.formation,
+    players: team.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot })),
+  }));
+  const laidOut = applyFormationLayout(matches, sport);
+
+  const writes = laidOut.flatMap((match) => {
+    const team = teams.find((t) => t.name === match.team);
+    if (!team) return [];
+    const ops = [];
+    if (team.formation !== match.formation) {
+      ops.push(prisma.teamResult.update({ where: { id: team.id }, data: { formation: match.formation } }));
+    }
+    for (const player of match.players) {
+      const member = team.members.find((m) => m.name === player.name);
+      if (member && member.slot !== (player.slot ?? null)) {
+        ops.push(prisma.teamMember.update({ where: { id: member.id }, data: { slot: player.slot ?? null } }));
+      }
+    }
+    return ops;
+  });
+
+  if (writes.length > 0) {
+    await prisma.$transaction(writes);
+  }
+}
 
 /**
  * Validate that all team members are active players (order < maxPlayers).
@@ -42,6 +92,11 @@ export async function validateTeams(eventId: string, maxPlayers: number, current
  * If teams have been generated, add a player to the appropriate team.
  * When the event has balanced=true, triggers a full rebalance (minimum swaps).
  * Otherwise, adds to the team with fewer players.
+ *
+ * Only a player inside the active slice (order < maxPlayers) is ever drawn
+ * onto a team: a bench joiner appended here would sit under a formation that
+ * cannot hold them, which is exactly the label-contradicts-the-split state the
+ * teams panel must never render.
  */
 export async function addPlayerToTeams(eventId: string, playerName: string, currentGameId?: string | null) {
   const teams = await prisma.teamResult.findMany({
@@ -50,34 +105,33 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
   });
   if (teams.length === 0) return; // no teams generated yet
 
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true, currentGameId: true } });
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true, currentGameId: true, sport: true } });
   const gameId = currentGameId ?? event?.currentGameId;
+  const activeNames = (await getActiveRosterState(eventId, event?.maxPlayers ?? 0, gameId)).activeNames;
+  if (!activeNames.has(playerName)) return; // bench player — never onto the pitch
 
   if (event?.balanced && teams.length === 2) {
     // Full rebalance: include all current members + new player
-    const activeNames = (await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames;
-    // Only rebalance if new player is in active range
-    if (activeNames.has(playerName)) {
-      const ratings = await prisma.playerRating.findMany({ where: { eventId } });
-      const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
-      const playersWithRatings = [...activeNames].map((name) => ({
-        name,
-        rating: ratingMap.get(name) ?? 1000,
-      }));
-      const newMatches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
+    const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+    const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
+    const playersWithRatings = [...activeNames].map((name) => ({
+      name,
+      rating: ratingMap.get(name) ?? 1000,
+    }));
+    const newMatches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
 
-      await prisma.$transaction([
-        prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map(t => t.id) } } }),
-        ...newMatches.flatMap((match) => {
-          const teamId = teams.find(t => t.name === match.team)?.id;
-          if (!teamId) return [];
-          return match.players.map((p) =>
-            prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } })
-          );
-        }),
-      ]);
-      return;
-    }
+    await prisma.$transaction([
+      prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map(t => t.id) } } }),
+      ...newMatches.flatMap((match) => {
+        const teamId = teams.find(t => t.name === match.team)?.id;
+        if (!teamId) return [];
+        return match.players.map((p) =>
+          prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } })
+        );
+      }),
+    ]);
+    await reconcileFormations(eventId, event.sport);
+    return;
   }
 
   // Non-balanced: just add to smaller team
@@ -91,6 +145,10 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
       teamResultId: target.id,
     },
   });
+
+  // The draw no longer matches what it did when it was made: the label has to
+  // describe the teams as they now stand.
+  await reconcileFormations(eventId, event?.sport ?? null);
 }
 
 /**
@@ -105,7 +163,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
   });
   if (teams.length === 0) return;
 
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true, currentGameId: true } });
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true, currentGameId: true, sport: true } });
   const gameId = currentGameId ?? event?.currentGameId;
 
   // Balanced mode: full rebalance with current active players (excluding the leaving one, including promoted)
@@ -134,6 +192,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
           );
         }),
       ]);
+      await reconcileFormations(eventId, event.sport);
       return;
     }
   }
@@ -177,6 +236,10 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
       await tryBalancedSwap(eventId, promotedName, promotedTeamId);
     }
   }
+
+  // A leaving player frees a slot and a promoted one takes it: re-derive both
+  // teams' layouts so the stored formation still describes the split.
+  await reconcileFormations(eventId, event?.sport ?? null);
 }
 
 /**

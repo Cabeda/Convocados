@@ -512,7 +512,7 @@ describe("Team Roster Mutations: Minimal Movements", () => {
     }
   });
 
-  it("addPlayerToTeams with balanced event skips rebalance when player is on bench", async () => {
+  it("addPlayerToTeams with balanced event never draws a bench player onto the pitch", async () => {
     const event = await seedEvent({ balanced: true, maxPlayers: 10 });
 
     for (let i = 0; i < 12; i++) {
@@ -527,18 +527,22 @@ describe("Team Roster Mutations: Minimal Movements", () => {
     }
     await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
 
-    // Bench player (order >= maxPlayers) → falls through to smaller-team append
+    // Bench player (order >= maxPlayers) → never drawn onto the pitch
     await addPlayerToTeams(event.id, "P11");
 
     const teams = await prisma.teamResult.findMany({
       where: { eventId: event.id },
       include: { members: { orderBy: { order: "asc" } } },
     });
-    // P11 appended to the smaller team; team counts 5/6 (no full rebalance)
+    // P11 is outside the active slice, so no team absorbs them: the draw stays
+    // 5/5. Appending a bench player here used to yield 5/6 — a team carrying
+    // more members than its formation has slots, i.e. the teams panel showing
+    // a formation label that contradicts the split. That state is the bug this
+    // invariant forbids, so the old [5, 6] expectation is deliberately gone.
     const counts = teams.map(t => t.members.length).sort();
-    expect(counts).toEqual([5, 6]);
+    expect(counts).toEqual([5, 5]);
     const allNames = teams.flatMap(t => t.members.map(m => m.name));
-    expect(allNames).toContain("P11");
+    expect(allNames).not.toContain("P11");
   });
 
   it("addPlayerToTeams is a no-op when no teams exist yet", async () => {
