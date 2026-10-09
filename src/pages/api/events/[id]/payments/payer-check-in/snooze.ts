@@ -29,13 +29,19 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const game = await prisma.game.findUnique({
     where: { id: gameId },
-    select: { eventId: true, payerEventPlayer: { select: { userId: true } } },
+    select: { eventId: true, dateTime: true, payerEventPlayer: { select: { userId: true } } },
   });
   if (!game || game.eventId !== eventId) {
     return Response.json({ error: "Not found." }, { status: 404 });
   }
   if (game.payerEventPlayer?.userId !== session.user.id) {
     return Response.json({ error: "Only the payer can do this." }, { status: 403 });
+  }
+
+  // Only a game that has actually happened can be deferred this way.
+  const gameEnd = new Date(game.dateTime.getTime() + event.durationMinutes * 60_000);
+  if (gameEnd.getTime() > Date.now()) {
+    return Response.json({ error: "The game has not ended yet." }, { status: 409 });
   }
 
   const snoozedUntil = new Date(Date.now() + SNOOZE_HOURS * 60 * 60 * 1000);

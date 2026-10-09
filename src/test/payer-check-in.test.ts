@@ -388,6 +388,42 @@ describe("POST /api/events/[id]/payments/payer-check-in/mark-all-paid", () => {
     expect(rows.every((r) => r.markedBy === payer.id)).toBe(true);
   });
 
+  it("records the answered check-in so the sweep stays quiet", async () => {
+    const { payer, event, game } = await seedPayerGame();
+    mockGetSession.mockResolvedValue({ user: { id: payer.id } } as any);
+
+    const res = await postMarkAllPaid(postCtx({ id: event.id }, { gameId: game.id }));
+
+    expect(res.status).toBe(200);
+    const updated = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
+    expect(updated.payerCheckInSentAt).not.toBeNull();
+    expect(updated.payerCheckInSnoozedUntil).toBeNull();
+
+    // A share reappearing later must not re-open a question the payer answered.
+    await prisma.gamePayment.updateMany({
+      where: { gameId: game.id },
+      data: { status: "pending" },
+    });
+    const result = await processPayerCheckIns();
+    expect(result.asked).toHaveLength(0);
+    expect(mockSendPush).not.toHaveBeenCalled();
+  });
+
+  it("rejects settling a game that has not ended yet", async () => {
+    const { payer, event, game } = await seedPayerGame();
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { dateTime: new Date(Date.now() + 60 * 60 * 1000), status: "in_progress" },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: payer.id } } as any);
+
+    const res = await postMarkAllPaid(postCtx({ id: event.id }, { gameId: game.id }));
+
+    expect(res.status).toBe(409);
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows.some((r) => r.status !== "paid")).toBe(true);
+  });
+
   it("rejects callers who are not the payer", async () => {
     const { event, game } = await seedPayerGame();
     const stranger = await seedUser({ name: "Stranger" });
@@ -491,6 +527,25 @@ describe("POST /api/events/[id]/payments/payer-check-in/snooze", () => {
     const res = await postSnooze(postCtx({ id: event.id }, { gameId: game.id }));
 
     expect(res.status).toBe(403);
+    const unchanged = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
+    expect(unchanged.payerCheckInSnoozedUntil).toBeNull();
+  });
+
+  it("rejects snoozing a game that has not ended yet", async () => {
+    const payer = await seedUser({ name: "Payer" });
+    const event = await seedPastEvent(payer.id, 25);
+    const { game } = await seedGameWithPayments(event.id, [
+      { name: "Debtor", amount: 5, status: "pending", userId: null },
+    ], { payerUserId: payer.id });
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { dateTime: new Date(Date.now() + 60 * 60 * 1000), status: "in_progress" },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: payer.id } } as any);
+
+    const res = await postSnooze(postCtx({ id: event.id }, { gameId: game.id }));
+
+    expect(res.status).toBe(409);
     const unchanged = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
     expect(unchanged.payerCheckInSnoozedUntil).toBeNull();
   });

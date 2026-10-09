@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const game = await prisma.game.findUnique({
     where: { id: gameId },
-    select: { eventId: true, payerEventPlayer: { select: { userId: true } } },
+    select: { eventId: true, dateTime: true, payerEventPlayer: { select: { userId: true } } },
   });
   if (!game || game.eventId !== eventId) {
     return Response.json({ error: "Not found." }, { status: 404 });
@@ -38,8 +38,19 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Only the payer can do this." }, { status: 403 });
   }
 
+  // Only a game that has actually happened can be settled this way.
+  const gameEnd = new Date(game.dateTime.getTime() + event.durationMinutes * 60_000);
+  if (gameEnd.getTime() > Date.now()) {
+    return Response.json({ error: "The game has not ended yet." }, { status: 409 });
+  }
+
   try {
     const updated = await bulkSettleGame(eventId, gameId, session.user.id);
+    // The payer answered the check-in — stop asking about this game (#1236).
+    await prisma.game.update({
+      where: { id: gameId },
+      data: { payerCheckInSentAt: new Date(), payerCheckInSnoozedUntil: null },
+    });
     return Response.json({ ok: true, updated });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to settle game.";
