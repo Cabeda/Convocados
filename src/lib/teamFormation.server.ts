@@ -5,10 +5,14 @@
  * importing from an API route.
  */
 import { prisma } from "./db.server";
+import type { Prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { balanceTeams } from "./elo.server";
 import type { Imatch } from "./random";
 import { applyFormationLayout } from "./teams";
+
+/** Minimal client shape the reconcile needs — a `prisma` instance or the transaction a caller already opened. */
+type DbClient = Prisma.TransactionClient | typeof prisma;
 
 /**
  * Re-derive every team's formation and slot layout from the members it
@@ -22,9 +26,17 @@ import { applyFormationLayout } from "./teams";
  * member here is what keeps the label describing the split it labels.
  * Members beyond the formation's slots stay unplaced — the panel shows them
  * as "Not placed" instead of inventing a position.
+ *
+ * Every writer of team membership calls this — the roster flows and the
+ * organiser's manual save alike — so none of them can derive slots from a
+ * formation the team does not store.
+ *
+ * `db` is the client to read and write through: pass a caller's transaction so
+ * the layout joins it instead of committing on its own, and pass nothing to
+ * keep the standalone (own-transaction) behaviour the roster flows rely on.
  */
-async function reconcileFormations(eventId: string, sport: string | null): Promise<void> {
-  const teams = await prisma.teamResult.findMany({
+export async function reconcileFormations(eventId: string, sport: string | null, db: DbClient = prisma): Promise<void> {
+  const teams = await db.teamResult.findMany({
     where: { eventId },
     include: { members: true },
   });
@@ -48,7 +60,7 @@ async function reconcileFormations(eventId: string, sport: string | null): Promi
     if (!match) return [];
     const ops = [];
     if (team.formation !== match.formation) {
-      ops.push(prisma.teamResult.update({ where: { id: team.id }, data: { formation: match.formation } }));
+      ops.push(db.teamResult.update({ where: { id: team.id }, data: { formation: match.formation } }));
     }
     // `applyFormationLayout` preserves the input arrays, so laid-out player j
     // is member j of THIS team: a name lookup would collapse two members
@@ -56,14 +68,20 @@ async function reconcileFormations(eventId: string, sport: string | null): Promi
     for (const [j, player] of match.players.entries()) {
       const member = team.members[j];
       if (member && member.slot !== (player.slot ?? null)) {
-        ops.push(prisma.teamMember.update({ where: { id: member.id }, data: { slot: player.slot ?? null } }));
+        ops.push(db.teamMember.update({ where: { id: member.id }, data: { slot: player.slot ?? null } }));
       }
     }
     return ops;
   });
 
   if (writes.length > 0) {
-    await prisma.$transaction(writes);
+    if (db === prisma) {
+      await prisma.$transaction(writes);
+    } else {
+      // A caller's transaction already makes these writes atomic, and Prisma
+      // refuses to open a nested one on a transaction client.
+      for (const write of writes) await write;
+    }
   }
 }
 
