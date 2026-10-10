@@ -45,6 +45,8 @@ data class TeamMember(
     val id: String,
     val name: String,
     val order: Int,
+    /** Formation slot the member occupies; null when unplaced (or on teams that predate slots). */
+    val slot: Int? = null,
 )
 
 @Serializable
@@ -52,6 +54,8 @@ data class TeamResult(
     val id: String,
     val name: String,
     val members: List<TeamMember> = emptyList(),
+    /** Stored formation id (e.g. "2-2-2"); null on teams that predate formations. */
+    val formation: String? = null,
 )
 
 @Serializable

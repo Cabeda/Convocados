@@ -81,6 +81,24 @@ fun formationsForSport(sport: String?): List<Formation> =
 fun defaultFormation(sport: String?): Formation = formationsForSport(sport).first()
 
 /**
+ * Look up a specific formation for a sport. Returns null when the id is absent
+ * or is not one of the sport's formations (an id belonging to another sport
+ * does not resolve).
+ */
+fun getFormation(sport: String?, formationId: String?): Formation? {
+    if (formationId.isNullOrEmpty()) return null
+    return formationsForSport(sport).find { it.id == formationId }
+}
+
+/**
+ * The formation to render for a stored team: the team's own when it resolves
+ * for the event's sport, otherwise the sport default. Mirrors the web's
+ * `getFormation(sport, team.formation) ?? getDefaultFormation(sport)`.
+ */
+fun resolveFormation(sport: String?, formationId: String?): Formation =
+    getFormation(sport, formationId) ?: defaultFormation(sport)
+
+/**
  * Base position (0 = top of the pitch, 1 = bottom) of a slot, by team half.
  * Team 0 owns the top half (own goal at the top), team 1 the bottom half.
  */

@@ -30,21 +30,21 @@ class TeamFieldViewScreenshotTest {
         TeamResult(
             "t1", "Whites",
             listOf(
-                TeamMember("p1", "Marta", 0),
-                TeamMember("p3", "Alex", 1),
-                TeamMember("p5", "Rui", 2),
-                TeamMember("p7", "Nina", 3),
-                TeamMember("p9", "Paulo", 4),
+                TeamMember("p1", "Marta", 0, slot = 0),
+                TeamMember("p3", "Alex", 1, slot = 1),
+                TeamMember("p5", "Rui", 2, slot = 2),
+                TeamMember("p7", "Nina", 3, slot = 3),
+                TeamMember("p9", "Paulo", 4, slot = 4),
             ),
         ),
         TeamResult(
             "t2", "Blues",
             listOf(
-                TeamMember("p2", "João", 0),
-                TeamMember("p4", "Sofia", 1),
-                TeamMember("p6", "Tiago", 2),
-                TeamMember("p8", "Ana", 3),
-                TeamMember("p10", "Luís", 4),
+                TeamMember("p2", "João", 0, slot = 0),
+                TeamMember("p4", "Sofia", 1, slot = 1),
+                TeamMember("p6", "Tiago", 2, slot = 2),
+                TeamMember("p8", "Ana", 3, slot = 3),
+                TeamMember("p10", "Luís", 4, slot = 4),
             ),
         ),
     )
