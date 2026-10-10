@@ -251,4 +251,32 @@ describe("teams panel invariant: the stored formation always describes the split
     expect(teams.flatMap((t) => t.members).every((m) => typeof m.slot === "number" && m.slot! < SLOTS)).toBe(true);
     expect(teams.flatMap((t) => t.members).filter((m) => m.name === "Player 11")).toHaveLength(0);
   });
+
+  it("keeps the invariant through a balanced rebalance, where the draw is rebuilt wholesale", async () => {
+    const { event, gameId } = await seedEventWithGame(10);
+    await Promise.all(Array.from({ length: 10 }, (_, i) => seedActiveParticipant(gameId, event.id, `Player ${i + 1}`, i)));
+    await seedTeamWithSlots(event.id, "Ninjas", [["Player 1", 0], ["Player 2", 1], ["Player 3", 2], ["Player 4", 3], ["Player 5", null]]);
+    await seedTeamWithSlots(event.id, "Gunas", [["Player 6", 0], ["Player 7", 1], ["Player 8", 2], ["Player 9", 3], ["Player 10", 4]]);
+    await prisma.event.update({ where: { id: event.id }, data: { balanced: true } });
+
+    // The balanced branch throws the draw away and rebuilds it from ratings, so
+    // the formed-out invariant has to survive a path that never saw the old
+    // layout at all.
+    await addPlayerToTeams(event.id, "Player 10");
+
+    const teams = await loadTeams(event.id);
+    expect(teams).toHaveLength(2);
+    expect(teams.every((t) => getFormation(SPORT, t.formation) !== undefined)).toBe(true);
+    const all = teams.flatMap((t) => t.members);
+    expect(all).toHaveLength(10);
+    // The balanced rebuild creates members with no slot at all; the reconcile
+    // that follows it is what places them. Without it every member of the draw
+    // would sit here as slot: null, so this assertion is the wiring.
+    expect(all.filter((m) => m.slot === null)).toEqual([]);
+    for (const t of teams) {
+      const placed = t.members.flatMap((m) => (typeof m.slot === "number" ? [m.slot] : []));
+      expect(placed.every((s) => s < SLOTS)).toBe(true);
+      expect(new Set(placed).size).toBe(placed.length);
+    }
+  });
 });
