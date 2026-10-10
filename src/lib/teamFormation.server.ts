@@ -43,8 +43,15 @@ async function reconcileFormations(eventId: string, sport: string | null): Promi
   }));
   const laidOut = applyFormationLayout(matches, sport);
 
-  const writes = laidOut.flatMap((match, i) => {
-    const team = teams[i];
+  // Key the write-back by team name, not by array position: `matches` is built
+  // from `teams`, so the two agree today, but any future reordering of either
+  // side would silently stamp one team's layout onto another. `Imatch` carries
+  // no id, the name is the only identity it has.
+  const laidOutByTeam = new Map(laidOut.map((match) => [match.team, match]));
+
+  const writes = teams.flatMap((team) => {
+    const match = laidOutByTeam.get(team.name);
+    if (!match) return [];
     const ops = [];
     if (team.formation !== match.formation) {
       ops.push(prisma.teamResult.update({ where: { id: team.id }, data: { formation: match.formation } }));
