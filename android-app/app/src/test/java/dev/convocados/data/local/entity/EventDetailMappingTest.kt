@@ -39,4 +39,20 @@ class EventDetailMappingTest {
             EntityJson.decodeFromString<List<TeamResult>>(it).ifEmpty { null }
         })
     }
+
+    @Test
+    fun `toEntity round-trips member slots through the cached json`() {
+        val teams = listOf(
+            TeamResult(
+                id = "t1", name = "Ninjas",
+                members = listOf(
+                    TeamMember("m1", "Ana", 0, slot = 1),
+                    TeamMember("m2", "Beto", 1, slot = null),
+                ),
+            ),
+        )
+        val restored = EntityJson.decodeFromString<List<TeamResult>>(event(teams).toEntity().teamResultsJson!!)
+        assertEquals(1, restored[0].members[0].slot)
+        assertNull(restored[0].members[1].slot)
+    }
 }
