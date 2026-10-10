@@ -88,57 +88,65 @@ export async function assignTeams(
   });
   if (!event) throw new Error("Event not found");
 
-  if (event.teamResults.length < 2) {
-    await prisma.teamResult.deleteMany({ where: { eventId } });
-    await prisma.teamResult.createMany({
-      data: [
-        { name: event.teamOneName || "Team 1", eventId, formation: getDefaultFormation(sport).id },
-        { name: event.teamTwoName || "Team 2", eventId, formation: getDefaultFormation(sport).id },
-      ],
+  // One transaction for the whole save: members are written unplaced and laid
+  // out by the reconcile at the end, so committing them separately would leave
+  // every member of the event "Not placed" if anything failed in between — and
+  // nothing else would fix it until some later membership write.
+  await prisma.$transaction(async (tx) => {
+    if (event.teamResults.length < 2) {
+      await tx.teamResult.deleteMany({ where: { eventId } });
+      await tx.teamResult.createMany({
+        data: [
+          { name: event.teamOneName || "Team 1", eventId, formation: getDefaultFormation(sport).id },
+          { name: event.teamTwoName || "Team 2", eventId, formation: getDefaultFormation(sport).id },
+        ],
+      });
+    }
+
+    const teams = await tx.teamResult.findMany({
+      where: { eventId },
+      orderBy: { id: "asc" },
     });
-  }
 
-  const teams = await prisma.teamResult.findMany({
-    where: { eventId },
-    orderBy: { id: "asc" },
-  });
+    await tx.teamMember.deleteMany({
+      where: { teamResultId: { in: teams.map((t) => t.id) } },
+    });
 
-  await prisma.teamMember.deleteMany({
-    where: { teamResultId: { in: teams.map((t) => t.id) } },
-  });
+    const teamOne = teams[0];
+    const teamTwo = teams[1];
 
-  const teamOne = teams[0];
-  const teamTwo = teams[1];
+    // Slots belong to the formation each team stores, not to the sport's
+    // default: members are written unplaced and the reconcile below lays them
+    // onto it. Deriving them from `getDefaultFormation(sport)` here wrote a
+    // member `slot: null` whenever the default was narrower than the drawn team.
+    const memberCreates: { name: string; order: number; slot: number | null; teamResultId: string }[] = [];
+    const playerLookup = new Map(allPlayers.map((p) => [p.id, p.name]));
 
-  // Slots belong to the formation each team stores, not to the sport's
-  // default: members are written unplaced and the reconcile below lays them
-  // onto it. Deriving them from `getDefaultFormation(sport)` here wrote a
-  // member `slot: null` whenever the default was narrower than the drawn team.
-  const memberCreates: { name: string; order: number; slot: number | null; teamResultId: string }[] = [];
-  const playerLookup = new Map(allPlayers.map((p) => [p.id, p.name]));
-
-  for (let i = 0; i < input.teamOnePlayerIds.length; i++) {
-    const name = playerLookup.get(input.teamOnePlayerIds[i]);
-    if (name) {
-      memberCreates.push({ name, order: i, slot: null, teamResultId: teamOne.id });
+    for (let i = 0; i < input.teamOnePlayerIds.length; i++) {
+      const name = playerLookup.get(input.teamOnePlayerIds[i]);
+      if (name) {
+        memberCreates.push({ name, order: i, slot: null, teamResultId: teamOne.id });
+      }
     }
-  }
 
-  for (let i = 0; i < input.teamTwoPlayerIds.length; i++) {
-    const name = playerLookup.get(input.teamTwoPlayerIds[i]);
-    if (name) {
-      memberCreates.push({ name, order: i, slot: null, teamResultId: teamTwo.id });
+    for (let i = 0; i < input.teamTwoPlayerIds.length; i++) {
+      const name = playerLookup.get(input.teamTwoPlayerIds[i]);
+      if (name) {
+        memberCreates.push({ name, order: i, slot: null, teamResultId: teamTwo.id });
+      }
     }
-  }
 
-  if (memberCreates.length > 0) {
-    await prisma.teamMember.createMany({ data: memberCreates });
-  }
+    if (memberCreates.length > 0) {
+      await tx.teamMember.createMany({ data: memberCreates });
+    }
 
-  // Re-derive both teams' layouts from the saved split: a stored formation is
-  // only defaulted when it does not resolve for the sport, so the organiser's
-  // choice outlives a save and nobody is left outside the formation they see.
-  await reconcileFormations(eventId, sport);
+    // Re-derive both teams' layouts from the saved split: a stored formation is
+    // only defaulted when it does not resolve for the sport, so the organiser's
+    // choice outlives a save and nobody is left outside the formation they see.
+    // It reads and writes through this transaction — its reads have to see the
+    // members just written, and its writes have to commit with them.
+    await reconcileFormations(eventId, sport, tx);
+  });
 
   await dualWriteCurrentGameTeams(currentGameId, eventId);
 

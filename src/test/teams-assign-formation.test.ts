@@ -19,6 +19,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { getFormation, getDefaultFormation } from "~/lib/formations";
+import { reconcileFormations } from "~/lib/teamFormation.server";
 import { PATCH } from "~/pages/api/events/[id]/teams";
 
 const SPORT = "football-5v5";
@@ -323,4 +324,27 @@ describe("manual save keeps the draw coherent", () => {
     expect([...mirroredSlots.values()].every((slot) => typeof slot === "number")).toBe(true);
   });
 
+  it("writes the layout through the caller's transaction, so an aborted save leaves nothing behind", async () => {
+    const { event } = await seedEvent();
+    // A stored formation from another sport: it cannot label this draw, so the
+    // reconcile resolves it to the sport default. Committing that on its own
+    // would leave the label rewritten by a save that never happened.
+    await seedDrawnTeams(event.id, "4-4-2", [
+      ["Player 1", "Player 2", "Player 3", "Player 4", "Player 5"],
+      ["Player 6", "Player 7", "Player 8", "Player 9", "Player 10"],
+    ]);
+
+    await expect(
+      prisma.$transaction(async (tx) => {
+        await reconcileFormations(event.id, SPORT, tx);
+        throw new Error("save aborted");
+      }),
+    ).rejects.toThrow("save aborted");
+
+    const teams = await loadTeams(event.id);
+    expect(teams).toHaveLength(2);
+    for (const team of teams) {
+      expect(team.formation).toBe("4-4-2");
+    }
+  });
 });
