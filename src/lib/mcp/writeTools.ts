@@ -5,10 +5,14 @@ import { McpError } from "./errors";
 import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../rosterCore.server";
 import { getActiveRosterState } from "../roster.server";
 import { syncGamePayments } from "../settlement.server";
+import { syncGameFromTeamResults } from "../gameDualWrite.server";
+import { activeParticipantsWhere } from "../activeParticipants.server";
 import { addPlayerToTeams, validateTeams } from "../teamFormation.server";
 import { archiveAndLeave } from "../leave.server";
 import { Randomize } from "../random";
+import type { Imatch } from "../random";
 import { balanceTeams, processGame } from "../elo.server";
+import { applyFormationLayout } from "../teams";
 import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
 import { serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
@@ -156,7 +160,7 @@ async function randomizeTeams(args: Record<string, unknown>, ctx: AuthContext) {
   let allPlayers: { name: string; order: number }[];
   if (event.currentGameId) {
     const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: event.currentGameId, archivedAt: null, status: { not: "pending" } },
+      where: activeParticipantsWhere(event.currentGameId),
       include: { eventPlayer: { select: { name: true } } },
       orderBy: { order: "asc" },
     });
@@ -170,7 +174,7 @@ async function randomizeTeams(args: Record<string, unknown>, ctx: AuthContext) {
   if (players.length < 2) throw new McpError("Need at least 2 players.", -32001, 400);
 
   const balanced = args.balanced === true;
-  let matches: { team: string; players: { name: string; order: number }[] }[];
+  let matches: Imatch[];
   if (balanced) {
     const ratings = await prisma.playerRating.findMany({ where: { eventId } });
     const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
@@ -182,18 +186,44 @@ async function randomizeTeams(args: Record<string, unknown>, ctx: AuthContext) {
     matches = Randomize(players.map((p) => p.name), [event.teamOneName, event.teamTwoName]);
   }
 
+  // Same layout as POST /randomize: resolve each team's formation against the
+  // sport and place every member on a slot before storing, so an agent-drawn
+  // write is indistinguishable from an organiser-drawn one (#1286).
+  const laidOut = applyFormationLayout(matches, event.sport);
+
   await prisma.$transaction([
     prisma.teamResult.deleteMany({ where: { eventId } }),
-    ...matches.map((match) =>
+    ...laidOut.map((match) =>
       prisma.teamResult.create({
         data: {
           name: match.team,
+          formation: match.formation ?? null,
           eventId,
-          members: { create: match.players.map((p) => ({ name: p.name, order: p.order })) },
+          members: { create: match.players.map((p) => ({ name: p.name, order: p.order, slot: p.slot ?? null })) },
         },
       })
     ),
   ]);
+
+  // Same side effects as POST /randomize, in the same order, so an agent-drawn
+  // occurrence is indistinguishable from an organiser-drawn one (#1286): the
+  // activity-log row, then the draw landed on the occurrence Game (team
+  // names/formations, GameParticipant team/slot, GameHistory snapshot —
+  // ADR 0016), then the payment rows for who owes what.
+  await logEvent(eventId, "teams_randomized", null, ctx.userId, { balanced, playerCount: players.length });
+
+  if (event.currentGameId) {
+    const game = await prisma.game.findUnique({ where: { id: event.currentGameId } });
+    if (game) {
+      const teamResults = await prisma.teamResult.findMany({
+        where: { eventId },
+        include: { members: { orderBy: { order: "asc" } } },
+        orderBy: { id: "asc" },
+      });
+      await syncGameFromTeamResults(game, teamResults);
+    }
+    await syncGamePayments(event.currentGameId, eventId);
+  }
 
   return {
     ok: true,
