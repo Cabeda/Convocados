@@ -37,14 +37,15 @@ async function reconcileFormations(eventId: string, sport: string | null): Promi
   }));
   const laidOut = applyFormationLayout(matches, sport);
 
-  // Key the write-back by team name, not by array position: `matches` is built
-  // from `teams`, so the two agree today, but any future reordering of either
-  // side would silently stamp one team's layout onto another. `Imatch` carries
-  // no id, the name is the only identity it has.
-  const laidOutByTeam = new Map(laidOut.map((match) => [match.team, match]));
-
-  const writes = teams.flatMap((team) => {
-    const match = laidOutByTeam.get(team.name);
+  // Pair the write-back by array position: `matches`, and therefore `laidOut`,
+  // are built from `teams` in this one pass, so `laidOut[i]` is `teams[i]`'s
+  // layout by construction — `applyFormationLayout` maps in place. The team
+  // NAME is not an identity here: one event can hold two TeamResults that
+  // share it (neither event creation nor the team-name editor rejects equal
+  // names), and a Map keyed by name collapses the pair, stamping one team's
+  // formation and slots onto the other.
+  const writes = teams.flatMap((team, i) => {
+    const match = laidOut[i];
     if (!match) return [];
     const ops = [];
     if (team.formation !== match.formation) {
