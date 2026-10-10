@@ -131,7 +131,8 @@ describe("GET /api/events/[id] — inviteToken bypass", () => {
 
     expect(body.locked).toBe(true);
     expect(body.hasPassword).toBe(true);
-    expect(body.inviteExpired).toBe(true);
+    // The lock payload carries no dead "inviteExpired" hint — nothing reads it.
+    expect(body.inviteExpired).toBeUndefined();
     // Anonymous viewer of a stale token sees the lock, never the roster.
     expect(body.players).toBeUndefined();
     expect(body.teamResults).toBeUndefined();
@@ -181,6 +182,68 @@ describe("GET /api/events/[id] — inviteToken bypass", () => {
     expect(body.locked).toBe(true);
     const invite = await prisma.playerInvite.findUniqueOrThrow({ where: { token } });
     expect(invite.status).toBe("declined");
+  });
+
+  it("keeps the password bypass for an accepted invite on a game already played", async () => {
+    const owner = await seedUser("OwnerAccPast", "owner-accpast@example.com");
+    const invitee = await seedUser("InviteeAccPast", "invitee-accpast@example.com");
+    const event = await seedEventAt(owner.id, new Date(Date.now() - 48 * 60 * 60 * 1000));
+
+    const { token } = await createPlayerInvite({
+      eventId: event.id,
+      gameId: event.gameId,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://convocados.cabeda.dev",
+    });
+    await prisma.playerInvite.update({ where: { token }, data: { status: "accepted" } });
+
+    const res = await getEvent(ctx(event.id, token));
+    const body = await res.json();
+
+    // An accepted invite means this person played that occurrence — the token
+    // must not be revoked just because the game has kicked off.
+    expect(body.locked).toBeUndefined();
+    expect(body.id).toBe(event.id);
+    // …and the answer is never rewritten into an expiry.
+    const invite = await prisma.playerInvite.findUniqueOrThrow({ where: { token } });
+    expect(invite.status).toBe("accepted");
+  });
+
+  it("does not gate the bypass when the invite's game row is gone", async () => {
+    const owner = await seedUser("OwnerNoGame", "owner-nogame@example.com");
+    const invitee = await seedUser("InviteeNoGame", "invitee-nogame@example.com");
+    const event = await seedEvent(owner.id);
+
+    const { token } = await createPlayerInvite({
+      eventId: event.id,
+      gameId: event.gameId,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://convocados.cabeda.dev",
+    });
+
+    // Some SQLite deployments run with foreign keys off, so a PlayerInvite can
+    // outlive its Game. Re-point the FK at a game that does not exist to model
+    // that, then restore enforcement so the rest of the suite keeps its
+    // cascade-on-delete behaviour.
+    await prisma.$executeRawUnsafe("PRAGMA foreign_keys = OFF");
+    try {
+      await prisma.$executeRawUnsafe(
+        `UPDATE PlayerInvite SET gameId = 'missing-game-for-token' WHERE token = '${token}'`,
+      );
+    } finally {
+      await prisma.$executeRawUnsafe("PRAGMA foreign_keys = ON");
+    }
+
+    const res = await getEvent(ctx(event.id, token));
+    const body = await res.json();
+
+    // A missing game is not an expiry: the gate must stay out of the way
+    // exactly as it does on main, where the game was only consulted for
+    // the event match.
+    expect(body.locked).toBeUndefined();
+    expect(body.id).toBe(event.id);
   });
 
   it("still bypasses the password for an accepted invite on a game yet to kick off", async () => {
