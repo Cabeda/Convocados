@@ -99,6 +99,34 @@ async function seedDrawnTeams(eventId: string, formation: string, split: string[
   }
 }
 
+/**
+ * An event already past its first game: it has a current game and its roster
+ * lives on that game as `GameParticipant` rows, so the save resolves players
+ * through the game and mirrors the draw back onto it.
+ */
+async function seedEventWithCurrentGame() {
+  const { event, accessToken } = await seedEvent();
+  const game = await prisma.game.create({
+    data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" },
+  });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+  const rosterIds: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: `Player ${i + 1}` } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: i, status: "active" } });
+    rosterIds.push(ep.id);
+  }
+  return { event, accessToken, gameId: game.id, rosterIds };
+}
+
+async function loadParticipants(gameId: string) {
+  return prisma.gameParticipant.findMany({
+    where: { gameId },
+    include: { eventPlayer: { select: { name: true } } },
+  });
+}
+
 async function loadTeams(eventId: string) {
   return prisma.teamResult.findMany({
     where: { eventId },
@@ -110,6 +138,9 @@ beforeEach(async () => {
   resetApiRateLimitStore();
   await prisma.teamMember.deleteMany();
   await prisma.teamResult.deleteMany();
+  await prisma.gameParticipant.deleteMany();
+  await prisma.eventPlayer.deleteMany();
+  await prisma.game.deleteMany();
   await prisma.player.deleteMany();
   await prisma.oauthAccessToken.deleteMany();
   await prisma.oauthClient.deleteMany();
@@ -249,4 +280,47 @@ describe("manual save keeps the draw coherent", () => {
       expect(new Set(team.members.map((m) => m.slot))).toEqual(new Set([0, 1, 2, 3, 4]));
     }
   });
+
+  it("mirrors the reconciled slots onto the current game's participants", async () => {
+    const { event, accessToken, gameId, rosterIds } = await seedEventWithCurrentGame();
+    await seedDrawnTeams(event.id, CHOSEN_FORMATION, [
+      ["Player 1", "Player 2", "Player 3", "Player 4", "Player 5"],
+      ["Player 6", "Player 7", "Player 8", "Player 9", "Player 10"],
+    ]);
+
+    const res = await PATCH(
+      getContext(
+        { id: event.id },
+        {
+          teamOnePlayerIds: rosterIds.slice(0, 5),
+          teamTwoPlayerIds: rosterIds.slice(5),
+        },
+        { authorization: `Bearer ${accessToken}` },
+      ),
+    );
+    expect(res.status).toBe(200);
+
+    const teams = await loadTeams(event.id);
+    const participants = await loadParticipants(gameId);
+    expect(participants).toHaveLength(10);
+    const mirroredSlots = new Map(participants.map((p) => [p.eventPlayer.name, p.slot]));
+    const mirroredTeams = new Map(participants.map((p) => [p.eventPlayer.name, p.team]));
+
+    // The reconcile runs before the mirror, so each participant carries the
+    // slot its TeamMember ended up on.
+    for (const team of teams) {
+      const memberSlots = team.members.map((m) => m.slot);
+      expect(memberSlots, `team ${team.name} member slots`).toEqual([0, 1, 2, 3, 4]);
+      for (const member of team.members) {
+        expect(mirroredSlots.get(member.name), `${member.name} mirrored slot`).toBe(member.slot);
+        expect(mirroredTeams.get(member.name), `${member.name} mirrored team`).toBe(team.name);
+      }
+    }
+
+    // The mirror carried the reconciled layout, not the unplaced rows the
+    // members were written with: an all-null mirror would satisfy the equality
+    // above while describing a draw nobody can see on the pitch.
+    expect([...mirroredSlots.values()].every((slot) => typeof slot === "number")).toBe(true);
+  });
+
 });
