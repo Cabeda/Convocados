@@ -70,6 +70,7 @@ beforeEach(async () => {
   await prisma.rsvp.deleteMany();
   await prisma.gameParticipant.deleteMany();
   await prisma.eventPlayer.deleteMany();
+  await prisma.eventLog.deleteMany();
   await prisma.playerRating.deleteMany();
   await prisma.gameHistory.deleteMany();
   await prisma.eventFollow.deleteMany();
@@ -410,6 +411,60 @@ describe("MCP write tools — randomize_teams", () => {
       expect(team.formation).toBe(getDefaultFormation(event.sport).id);
       expect(team.members.map((m) => m.slot)).toEqual([0, 1]);
     }
+  });
+
+  it("mirrors the web draw's side effects: activity log, Game lineup and payments (#1286)", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id, { maxPlayers: 4 });
+    const game = await prisma.game.findUniqueOrThrow({ where: { id: event.currentGameId! } });
+    for (const [i, name] of ["Alice", "Bob", "Carol", "Dave"].entries()) {
+      await addActivePlayer(event.id, event.currentGameId!, name, i);
+    }
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 50 } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:teams"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_randomize_teams", { eventId: event.id })));
+    expect(res.status).toBe(200);
+
+    // The activity-log row the organiser-driven web draw writes.
+    const logRow = await prisma.eventLog.findFirst({ where: { eventId: event.id, action: "teams_randomized" } });
+    expect(logRow).not.toBeNull();
+    expect(JSON.parse(logRow!.details)).toMatchObject({ balanced: false, playerCount: 4 });
+
+    // Dual-write: the drawn teams land on the occurrence Game and on every
+    // GameParticipant (team + slot), exactly as POST /randomize syncs them.
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+      orderBy: { id: "asc" },
+    });
+    expect(teams).toHaveLength(2);
+    const gameRow = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
+    expect(gameRow.teamOneName).toBe(teams[0].name);
+    expect(gameRow.teamTwoName).toBe(teams[1].name);
+    expect(gameRow.teamOneFormation).toBe(teams[0].formation);
+    expect(gameRow.teamTwoFormation).toBe(teams[1].formation);
+    for (const team of teams) {
+      for (const m of team.members) {
+        const gp = await prisma.gameParticipant.findFirstOrThrow({
+          where: { gameId: game.id, eventPlayer: { name: m.name } },
+        });
+        expect(gp.team).toBe(team.name);
+        expect(gp.slot).toBe(m.slot);
+      }
+    }
+    expect(await prisma.gameParticipant.count({ where: { gameId: game.id, team: null } })).toBe(0);
+
+    // Money side: every lineup player is charged their share and the ledger
+    // holds the matching per_game_share debit.
+    const payments = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(payments).toHaveLength(4);
+    expect(payments.every((p) => p.archivedAt === null && p.amount === 12.5)).toBe(true);
+    const debits = await prisma.walletTransaction.findMany({
+      where: { eventId: event.id, reason: "per_game_share", direction: "debit" },
+    });
+    expect(debits).toHaveLength(4);
+    expect(debits.every((d) => d.amountCents === 1250)).toBe(true);
   });
 });
 

@@ -5,6 +5,8 @@ import { McpError } from "./errors";
 import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../rosterCore.server";
 import { getActiveRosterState } from "../roster.server";
 import { syncGamePayments } from "../settlement.server";
+import { syncGameFromTeamResults } from "../gameDualWrite.server";
+import { activeParticipantsWhere } from "../activeParticipants.server";
 import { addPlayerToTeams, validateTeams } from "../teamFormation.server";
 import { archiveAndLeave } from "../leave.server";
 import { Randomize } from "../random";
@@ -158,7 +160,7 @@ async function randomizeTeams(args: Record<string, unknown>, ctx: AuthContext) {
   let allPlayers: { name: string; order: number }[];
   if (event.currentGameId) {
     const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: event.currentGameId, archivedAt: null, status: { not: "pending" } },
+      where: activeParticipantsWhere(event.currentGameId),
       include: { eventPlayer: { select: { name: true } } },
       orderBy: { order: "asc" },
     });
@@ -202,6 +204,26 @@ async function randomizeTeams(args: Record<string, unknown>, ctx: AuthContext) {
       })
     ),
   ]);
+
+  // Same side effects as POST /randomize, in the same order, so an agent-drawn
+  // occurrence is indistinguishable from an organiser-drawn one (#1286): the
+  // activity-log row, then the draw landed on the occurrence Game (team
+  // names/formations, GameParticipant team/slot, GameHistory snapshot —
+  // ADR 0016), then the payment rows for who owes what.
+  await logEvent(eventId, "teams_randomized", null, ctx.userId, { balanced, playerCount: players.length });
+
+  if (event.currentGameId) {
+    const game = await prisma.game.findUnique({ where: { id: event.currentGameId } });
+    if (game) {
+      const teamResults = await prisma.teamResult.findMany({
+        where: { eventId },
+        include: { members: { orderBy: { order: "asc" } } },
+        orderBy: { id: "asc" },
+      });
+      await syncGameFromTeamResults(game, teamResults);
+    }
+    await syncGamePayments(event.currentGameId, eventId);
+  }
 
   return {
     ok: true,
