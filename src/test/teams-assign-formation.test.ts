@@ -10,7 +10,10 @@
  * The draw has to keep the same invariant as every other membership change:
  * every saved member sits in a slot of the formation the team actually stores,
  * and a stored formation is only defaulted when it does not resolve for the
- * sport.
+ * sport. The one honest exception is a team larger than its formation — no
+ * formation of a sport has a different slot count, so the surplus stays on the
+ * team and is reported `slot: null` rather than fabricated onto a slot that is
+ * not there.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
@@ -158,6 +161,63 @@ describe("manual save keeps the draw coherent", () => {
     for (const team of teams) {
       expect(getFormation(SPORT, team.formation), `team ${team.name} formation ${team.formation}`).toBeDefined();
       expect(team.formation).toBe(CHOSEN_FORMATION);
+    }
+  });
+
+  it("leaves a team larger than its stored formation honestly unplaced", async () => {
+    const { event, accessToken } = await seedEvent();
+    const players = await seedPlayers(event.id, 10);
+    await seedDrawnTeams(event.id, CHOSEN_FORMATION, [
+      ["Player 1", "Player 2", "Player 3", "Player 4", "Player 5"],
+      ["Player 6", "Player 7", "Player 8", "Player 9", "Player 10"],
+    ]);
+
+    // Six members onto one five-slot formation: no formation of this sport has
+    // a different slot count, so a team genuinely larger than its formation
+    // cannot have everyone placed. The surplus must stay on the team and be
+    // reported unplaced — never fabricated onto a slot that is not there, and
+    // never dropped to keep every row placed.
+    const res = await PATCH(
+      getContext(
+        { id: event.id },
+        {
+          teamOnePlayerIds: players.slice(0, 6).map((p) => p.id),
+          teamTwoPlayerIds: players.slice(6).map((p) => p.id),
+        },
+        { authorization: `Bearer ${accessToken}` },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(6).toBeGreaterThan(SLOTS);
+
+    const teams = await loadTeams(event.id);
+    // Nobody is dropped from the save.
+    expect(teams.flatMap((t) => t.members)).toHaveLength(10);
+
+    const oversubscribed = teams.find((t) => t.members.length === 6)!;
+    expect(oversubscribed.members).toHaveLength(6);
+
+    // Every member except the surplus sits in a distinct slot of the stored
+    // formation — the whole formation is used, no slot twice, none invented.
+    const placed = oversubscribed.members.filter((m) => m.slot !== null);
+    expect(placed).toHaveLength(SLOTS);
+    expect(placed.map((m) => m.slot)).toEqual([0, 1, 2, 3, 4]);
+
+    // The surplus is the one member the formation cannot describe.
+    const surplus = oversubscribed.members.filter((m) => m.slot === null);
+    expect(surplus).toHaveLength(1);
+    expect(surplus[0].slot).toBeNull();
+    expect(surplus[0].name).toBe("Player 6");
+
+    // The other team still fits its formation, so nobody there is unplaced.
+    const fitted = teams.find((t) => t.members.length === 4)!;
+    expect(fitted.members.every((m) => m.slot !== null)).toBe(true);
+    expect(fitted.members.map((m) => m.slot)).toEqual([0, 1, 2, 3]);
+
+    // The stored formation is still the organiser's choice, not the default.
+    for (const team of teams) {
+      expect(team.formation).toBe(CHOSEN_FORMATION);
+      expect(getFormation(SPORT, team.formation)).toBeDefined();
     }
   });
 
