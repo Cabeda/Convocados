@@ -17,6 +17,7 @@ import dev.convocados.wear.R
 import dev.convocados.designsystem.ExpressiveSemanticRole
 import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.roundBezelClip
+import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.theme.expressiveTokens
 
 @Composable
@@ -80,7 +81,7 @@ internal fun SaveQuickGameContent(
                             text = stringResource(R.string.save_quick_saved),
                             style = MaterialTheme.typography.bodyMedium,
                             color = tokens.colorFor(ExpressiveSemanticRole.Success),
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                         )
                     }
                 } else {
@@ -101,7 +102,7 @@ internal fun SaveQuickGameContent(
                                 },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
                             )
                         }
                     }
@@ -109,7 +110,7 @@ internal fun SaveQuickGameContent(
                     items(state.events, key = { it.id }) { event ->
                         Button(
                             onClick = { onSave(event.id) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                             enabled = state.saving == null,
                             label = {
                                 Text(text = event.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -123,7 +124,7 @@ internal fun SaveQuickGameContent(
                                 text = stringResource(R.string.save_quick_no_events),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
                             )
                         }
                     }
@@ -135,7 +136,7 @@ internal fun SaveQuickGameContent(
                             text = error,
                             style = MaterialTheme.typography.labelSmall,
                             color = tokens.colorFor(ExpressiveSemanticRole.Error),
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                         )
                     }
                 }

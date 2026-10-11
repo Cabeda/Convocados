@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -16,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +36,9 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundBezelClip
+
+/** Marks the loading row; the spinner itself carries no semantics. */
+const val MVP_LOADING_ROW = "mvp_voting_loading_row"
 
 @Composable
 fun MvpVotingScreen(
@@ -81,7 +84,7 @@ fun MvpVotingScreen(
                 when {
                     state.isLoading -> item {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().roundListInset().testTag(MVP_LOADING_ROW),
                             horizontalArrangement = Arrangement.Center,
                         ) {
                             CircularProgressIndicator()
@@ -89,7 +92,7 @@ fun MvpVotingScreen(
                     }
                     state.error != null -> item {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
@@ -105,10 +108,12 @@ fun MvpVotingScreen(
                     }
                     state.response?.isVotingOpen == true && state.response?.hasVoted != null -> {
                         item {
-                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                            Column(modifier = Modifier.fillMaxWidth().roundListInset()) {
                                 Text(
                                     text = stringResource(R.string.mvp_vote_prompt),
                                     style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 if (state.response?.hasVoted == true) {
                                     Text(
@@ -148,7 +153,9 @@ fun MvpVotingScreen(
                             text = stringResource(R.string.mvp_not_eligible),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     else -> {
@@ -157,7 +164,9 @@ fun MvpVotingScreen(
                                 text = stringResource(R.string.mvp_voting_closed),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         val winners = state.response?.mvp.orEmpty()
@@ -167,7 +176,9 @@ fun MvpVotingScreen(
                                     text = stringResource(R.string.mvp_no_votes),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                    modifier = Modifier.fillMaxWidth().roundListInset(),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         } else {

@@ -15,7 +15,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.roundBezelClip
+import dev.convocados.wear.ui.roundListInset
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -84,14 +86,16 @@ fun GameSettingsScreen(
                     Text(
                         text = "Kickoff $time" + if (state.isKickoffOverridden) " (set)" else "",
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().roundListInset(),
                         textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 item {
                     Button(
                         onClick = { viewModel.kickoffNow() },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().roundListInset(),
                     ) { Text("Kick off now") }
                 }
                 item {
@@ -109,7 +113,7 @@ fun GameSettingsScreen(
                         checked = state.keepScreenOn,
                         onCheckedChange = { viewModel.setKeepScreenOn(it) },
                         label = { Text(stringResource(R.string.keep_screen_on_label)) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().roundListInset(),
                     )
                 }
 
@@ -119,17 +123,21 @@ fun GameSettingsScreen(
                         checked = state.vibrationEnabled,
                         onCheckedChange = { viewModel.setVibrationEnabled(it) },
                         label = { Text("Vibration alerts") },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().roundListInset(),
                     )
                 }
 
                 if (state.vibrationEnabled) {
                     item {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().roundListInset()) {
                             Text(
                                 text = "Every",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
