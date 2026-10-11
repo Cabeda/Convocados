@@ -12,12 +12,14 @@ import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.ScreenScaffold
 
-/** Test tag for the [RoundSafeReferenceRow] anchor itself. */
-const val ROUND_SAFE_ANCHOR_TAG = "round_safe_reference_row"
-
-/** Test tag for the [RoundSafeReferenceRow] list, so a test can tell it apart
- * from the screen's own list. */
-const val ROUND_SAFE_ANCHOR_LIST_TAG = "round_safe_reference_list"
+/**
+ * Test tag for the [RoundSafeReferenceRow] anchor itself, and for the list that
+ * carries it. Internal: both exist so the wear tests can address them, and a
+ * test source set is their only home — production must not export a tag just
+ * to be assertable (GH #1276).
+ */
+internal const val ROUND_SAFE_ANCHOR_TAG = "round_safe_reference_row"
+internal const val ROUND_SAFE_ANCHOR_LIST_TAG = "round_safe_reference_list"
 
 /**
  * A control that uses the very affordance the wear screens use for their

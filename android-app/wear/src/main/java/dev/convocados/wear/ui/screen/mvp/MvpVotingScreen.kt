@@ -37,8 +37,14 @@ import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.roundSafeTextLines
 
-/** Marks the loading row; the spinner itself carries no semantics. */
-const val MVP_LOADING_ROW = "mvp_voting_loading_row"
+/**
+ * Marks the loading row; the spinner itself carries no semantics.
+ *
+ * Private, like every other test anchor in this module's screens: production
+ * exports no public constant just so a test can address a row. The wear tests
+ * own the literal they look for (GH #1276).
+ */
+private const val MVP_LOADING_ROW = "mvp_voting_loading_row"
 
 @Composable
 fun MvpVotingScreen(
