@@ -88,8 +88,15 @@ overrides:
   ws@>=8.0.0 <8.20.1: '>=8.20.1'
 auditConfig:
   ignoreGhsas:
-    # extract-zip <=2.0.1 (GHSA-jmr9-qjv8-65gv, GHSA-7pqw-9j4j-h8q3): patched
-    # 2.0.2 not yet on npm. Dev-only (@lhci -> puppeteer chain). Remove ignores
-    # once 2.0.2 publishes, then add override `extract-zip@<=2.0.1: '>=2.0.2'`.
+    # extract-zip <=2.0.1: symlink path traversal, arbitrary file writes
+    # (GHSA-jmr9-qjv8-65gv = CVE-2026-56876, GHSA-7pqw-9j4j-h8q3 =
+    # CVE-2026-19693). Both advisories report first_patched_version: null and
+    # 2.0.1 is still npm latest, so `extract-zip@<=2.0.1: '>=2.0.2'` has
+    # nothing to resolve to — do not add that override before 2.0.2 ships.
+    # Dev-only (@lhci/cli -> lighthouse -> puppeteer-core -> @puppeteer/
+    # browsers); never in `dependencies`. Exempted 2026-08-22 (GHSA-jmr9)
+    # and 2026-09-09 (GHSA-7pqw), re-verified 2026-10-11. Remove both ignores
+    # once 2.0.2 publishes, then add the override and regen the lock.
+    # Ratchet: src/test/extract-zip-audit-exemption.test.ts.
     - GHSA-jmr9-qjv8-65gv
     - GHSA-7pqw-9j4j-h8q3
