@@ -68,6 +68,13 @@ const DB_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 /** Interval for the eager recurring-occurrence advance sweep (issue #1176) */
 const RECURRING_ADVANCE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
+/**
+ * Interval for the pending-invite expiry sweep (GH #1273). Invites for games
+ * that have kicked off are expired by the lazy path only when someone opens
+ * the current game, so stale occurrences need a sweep of their own.
+ */
+const INVITE_EXPIRY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 /** UTC hours the Open Pickup sweep runs (ADR-0021: twice daily) */
 const PICKUP_SWEEP_HOURS = [9, 21];
 
@@ -148,6 +155,23 @@ async function triggerRecurringAdvance(): Promise<void> {
   }
 }
 
+async function triggerInviteExpiry(): Promise<void> {
+  const res = await fetch(`${APP_URL}/api/cron/invite-expiry`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${CRON_SECRET}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Invite expiry cron failed: ${res.status} ${res.statusText}`);
+  }
+
+  const body = await res.json() as Record<string, unknown>;
+  if (Number(body.expired ?? 0) > 0) {
+    console.log("[scheduler] Invite expiry completed:", JSON.stringify(body));
+  }
+}
+
 async function runLoop() {
   let pollInterval = POLL_IDLE_MS;
   let lastMaintenance = 0;
@@ -155,6 +179,7 @@ async function runLoop() {
   let lastDbMaintenance = 0;
   let lastPickupSweep = 0;
   let lastRecurringAdvance = 0;
+  let lastInviteExpiry = 0;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -211,6 +236,17 @@ async function runLoop() {
         lastRecurringAdvance = start;
       } catch (err) {
         console.error("[scheduler] Recurring advance error:", err);
+      }
+    }
+
+    // Eager pending-invite expiry (GH #1273) — keeps "Invited" pills from
+    // living on past occurrences, which no read path can reach.
+    if (start - lastInviteExpiry >= INVITE_EXPIRY_INTERVAL_MS) {
+      try {
+        await triggerInviteExpiry();
+        lastInviteExpiry = start;
+      } catch (err) {
+        console.error("[scheduler] Invite expiry error:", err);
       }
     }
 
