@@ -70,11 +70,6 @@ export const POST: APIRoute = async ({ params, request }) => {
     enqueuePushSetupHintSafe(userId, eventId);
   }
 
-  // Re-sync teams if the restored player is in the active range
-  if (order < event.maxPlayers) {
-    await addPlayerToTeams(eventId, name, event.currentGameId);
-  }
-
   // ADR 0016: restore GameParticipant for the current Game. The removal
   // wrote Rsvp="no" (Declined roster) — restoring presence resets it to "yes".
   if (event.currentGameId) {
@@ -93,6 +88,15 @@ export const POST: APIRoute = async ({ params, request }) => {
         update: { status: "yes", respondedAt: new Date() },
       });
     }
+  }
+
+  // Re-sync teams if the restored player is in the active range. This must run
+  // AFTER the GameParticipant restore above: addPlayerToTeams derives the
+  // active slice from the current game's participants, so calling it while the
+  // leaver is still archived sees them as bench and silently skips them —
+  // leaving the restored player off the draw entirely.
+  if (order < event.maxPlayers) {
+    await addPlayerToTeams(eventId, name, event.currentGameId);
   }
 
   // Validate teams: ensure no bench players are in teams after undo
