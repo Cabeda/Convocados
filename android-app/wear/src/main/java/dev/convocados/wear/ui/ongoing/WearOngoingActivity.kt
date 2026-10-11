@@ -90,9 +90,9 @@ internal fun shouldClearOngoing(enabled: Boolean): Boolean = !enabled
  * chip resumes the live session rather than the games list.
  *
  * The same policy's tile clause is satisfied by the quick-game tile: its tap
- * payload is [dev.convocados.wear.tile.QuickGameTileLaunchAction], which while
- * a quick game is live carries [EXTRA_QUICK_GAME] into the same entry point
- * this file's touch intent uses. Upcoming, paused and idle taps stay a plain
+ * payload ([dev.convocados.wear.tile.quickGameTileModifiers]) carries
+ * [EXTRA_QUICK_GAME] into the same entry point this file's touch intent uses
+ * while a quick game is live. Upcoming, paused and idle taps stay a plain
  * launcher open.
  */
 object WearOngoingActivity {
