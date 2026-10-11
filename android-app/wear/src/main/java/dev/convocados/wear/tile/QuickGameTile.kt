@@ -18,6 +18,16 @@ data class QuickGameTileData(
     val hasGame: Boolean get() = status != QuickGameTileStatus.NONE
 }
 
+/**
+ * Whether the tile's tap should deep-link straight into the quick game.
+ *
+ * Play's tile guidance expects a tile showing an in-progress activity to open
+ * that activity, so only [QuickGameTileStatus.LIVE] earns the deep link; an
+ * upcoming, paused or absent game keeps the tap a plain launcher open.
+ */
+fun shouldLaunchQuickGame(status: QuickGameTileStatus): Boolean =
+    status == QuickGameTileStatus.LIVE
+
 /** Derive the tile content from the persisted quick game and the current time. */
 fun quickGameTileData(state: QuickGameState, nowMs: Long): QuickGameTileData {
     val status = when {
