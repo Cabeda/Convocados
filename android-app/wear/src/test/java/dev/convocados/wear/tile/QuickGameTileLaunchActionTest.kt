@@ -72,6 +72,35 @@ class QuickGameTileLaunchActionTest {
         assertNull(quickExtra(clickable(kickoff + hour + 1)))
     }
 
+    // GH #993 / dex pytzuddq — the finished score and the tap disagreed: the
+    // tile presented a game whose tap was only a launcher open.
+    @Test
+    fun `a finished game tile presents nothing and stays a plain launcher open`() {
+        val data = tileData(kickoff + hour + 1)
+        assertFalse("the tile must not present a score the tap cannot open", data.hasGame)
+        assertNull(quickExtra(clickable(kickoff + hour + 1)))
+    }
+
+    @Test
+    fun `the tile never presents a game whose tap does not deep link into it`() {
+        listOf(
+            kickoff - 1,
+            kickoff,
+            kickoff + 10 * 60_000L,
+            kickoff + hour,
+            kickoff + hour + 1,
+            kickoff + 3 * hour,
+        ).forEach { now ->
+            val data = tileData(now)
+            val deepLinks = quickExtra(clickable(now)) != null
+            assertEquals(
+                "at ${now - kickoff}ms the tile publishes a ${data.status} game",
+                data.hasGame,
+                deepLinks,
+            )
+        }
+    }
+
     @Test
     fun `tile deep links only while the quick game is live`() {
         assertTrue(shouldLaunchQuickGame(QuickGameTileStatus.LIVE))
