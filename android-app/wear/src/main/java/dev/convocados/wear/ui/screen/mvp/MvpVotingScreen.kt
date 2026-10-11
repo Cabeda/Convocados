@@ -37,6 +37,9 @@ import dev.convocados.wear.R
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundBezelClip
 
+/** Marks the loading row; the spinner itself carries no semantics. */
+const val MVP_LOADING_ROW = "mvp_voting_loading_row"
+
 @Composable
 fun MvpVotingScreen(
     viewModel: MvpVotingViewModel,
