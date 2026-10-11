@@ -57,6 +57,22 @@ function bucket(platform: string | null): "android" | "ios" | "web" {
 }
 
 /**
+ * Platform evidence, strongest first (GH #1152).
+ *
+ * A user can heartbeat on more than one client inside the window, and a row
+ * that declared no platform ("unknown"/null) is the weakest evidence there is.
+ * The split therefore reads *every* row and lets the strongest declared
+ * platform win — android or ios beat "web", and "web" beats "unknown".
+ */
+const PLATFORM_PRECEDENCE: ("android" | "ios" | "web")[] = ["android", "ios", "web"];
+
+/** The bucket a user's heartbeats add up to, by the precedence above. */
+function bucketForUser(platforms: Iterable<string | null>): "android" | "ios" | "web" {
+  const declared = new Set(platforms);
+  return PLATFORM_PRECEDENCE.find((candidate) => declared.has(candidate)) ?? "web";
+}
+
+/**
  * DAU over time from UserAppOpen (one row per user per day) and the platform
  * recorded on the row itself. Windows are UTC-day based to match the stored
  * `day` values exactly.
@@ -118,15 +134,31 @@ export async function getUsageSummary() {
 
   // Platform split from the heartbeat rows' own platform column (native clients
   // create no session, so user-agent inference is impossible for them).
+  //
+  // No `distinct: ["userId"]` here: with several rows per user the database
+  // returns an arbitrary one of them, so the bucket would follow the order the
+  // heartbeats were written instead of the evidence. Read them all and let
+  // `bucketForUser` apply the precedence (GH #1152).
   const platformRows = await prisma.userAppOpen.findMany({
     where: { day: { gte: thirtyDaysAgo } },
     select: { userId: true, platform: true },
-    distinct: ["userId"],
   });
 
-  const platforms = { android: 0, ios: 0, web: 0 };
+  const platformsByUser = new Map<string, Set<string | null>>();
   for (const row of platformRows) {
-    platforms[bucket(row.platform)]++;
+    const declared = platformsByUser.get(row.userId) ?? new Set<string | null>();
+    declared.add(row.platform);
+    platformsByUser.set(row.userId, declared);
+  }
+
+  const platforms = { android: 0, ios: 0, web: 0 };
+  const webUsers = new Set<string>();
+  for (const [userId, declared] of platformsByUser) {
+    const split = bucketForUser(declared);
+    platforms[split]++;
+    // Web-ness follows the same precedence, so the drill-down and the split
+    // above can never disagree about a user.
+    if (split === "web") webUsers.add(userId);
   }
 
   const recentSessions = await prisma.session.findMany({
@@ -139,12 +171,6 @@ export async function getUsageSummary() {
   // read from the heartbeat's own platform column — never guessed from the
   // user agent (GH #1152). A native client's OAuth custom tab leaves a
   // browser-looking session; attributing it by UA would mint a web user.
-  // Users with no declarable platform (null/"unknown") count as web, same as
-  // the platform split above.
-  const webUsers = new Set(
-    platformRows.filter((row) => bucket(row.platform) === "web").map((row) => row.userId),
-  );
-
   const webDrillDown: WebDrillDown = { browsers: {}, os: {} };
   for (const s of recentSessions) {
     if (!webUsers.has(s.userId)) continue;

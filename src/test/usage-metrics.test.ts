@@ -165,6 +165,75 @@ describe("getUsageSummary", () => {
     expect(result.webDrillDown.os.macOS).toBe(1);
   });
 
+  // GH #1152 — a user can heartbeat on more than one client inside the window,
+  // and the split used to read whichever row the `distinct` query happened to
+  // return, so the bucket followed insertion order rather than evidence.
+  describe("a user heartbeating on several platforms", () => {
+    const day = (daysAgo: number) =>
+      new Date(new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z").getTime() - daysAgo * 86400_000);
+
+    /** Heartbeat `platforms` on consecutive days, in the given write order. */
+    async function seedHeartbeats(platforms: string[]) {
+      const user = await seedUser();
+      for (const [index, platform] of platforms.entries()) {
+        await prisma.userAppOpen.create({
+          data: { userId: user.id, day: day(index), platform },
+        });
+      }
+      await prisma.session.create({
+        data: {
+          id: sid(),
+          token: sid(),
+          userId: user.id,
+          userAgent: "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0",
+          expiresAt: new Date(Date.now() + 86400_000),
+        },
+      });
+      return user;
+    }
+
+    it("buckets by the strongest evidence, not by the order the rows were written", async () => {
+      await seedHeartbeats(["unknown", "android"]);
+      await seedHeartbeats(["android", "unknown"]);
+
+      const result = await getUsageSummary();
+      // Both users carry exactly the same evidence, so they must land in the
+      // same bucket: android is declared, "unknown" is not, and a declared
+      // platform wins.
+      expect(result.platforms.android).toBe(2);
+      expect(result.platforms.web).toBe(0);
+      // The browser drill-down follows the same split, and it is counted once.
+      expect(result.webDrillDown.browsers.Chrome).toBeUndefined();
+    });
+
+    it("prefers a declared web platform over an undeclared one", async () => {
+      await seedHeartbeats(["unknown", "web"]);
+
+      const result = await getUsageSummary();
+      expect(result.platforms.web).toBe(1);
+      expect(result.webDrillDown.browsers.Chrome).toBe(1);
+    });
+
+    it("returns the same split on every call", async () => {
+      await seedHeartbeats(["unknown", "ios"]);
+
+      const runs = await Promise.all([getUsageSummary(), getUsageSummary()]);
+      for (const result of runs) {
+        expect(result.platforms.ios).toBe(1);
+        expect(result.platforms.android).toBe(0);
+        expect(result.platforms.web).toBe(0);
+      }
+    });
+
+    it("counts a user once however many days they heartbeated", async () => {
+      await seedHeartbeats(["android", "android", "android"]);
+
+      const result = await getUsageSummary();
+      expect(result.platforms.android).toBe(1);
+      expect(result.mau).toBe(1);
+    });
+  });
+
   it("detects various browsers: Firefox, Edge, Safari, Opera, Samsung", async () => {
     const agents = [
       { ua: "Mozilla/5.0 Firefox/115.0", browser: "Firefox" },
