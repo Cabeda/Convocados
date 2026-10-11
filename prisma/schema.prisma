@@ -1379,8 +1379,9 @@ model UserAppOpen {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   day        DateTime // truncated to date (UTC)
   // Which client produced this heartbeat: "web" (middleware page navigation),
-  // "android" or "ios" (native POST /api/me/app-open). Null for rows written
-  // before this column existed.
+  // "android" or "ios" (native POST /api/me/app-open), "unknown" (native
+  // heartbeat that declared no platform — counted as web in the admin split).
+  // Null for rows written before this column existed.
   platform   String?
   // App version (e.g. "1.2.0") from native clients. Null for web or older clients.
   // Not PII — version string only. Helps diagnose issues like missing push tokens.

@@ -51,7 +51,7 @@ describe("POST /api/me/app-open", () => {
     expect(rows[0].platform).toBe("android");
   });
 
-  it("records the platform from the body (ios), defaulting to android", async () => {
+  it("records the platform from the body (ios), unknown when none is declared", async () => {
     const iosUser = await seedUser();
     const legacyUser = await seedUser();
     mockAuth.mockResolvedValueOnce({ userId: iosUser.id, scopes: [], authMethod: "oauth", clientId: "c1" });
@@ -60,7 +60,7 @@ describe("POST /api/me/app-open", () => {
     await POST(ctx()); // older clients send no body
 
     expect((await prisma.userAppOpen.findFirstOrThrow({ where: { userId: iosUser.id } })).platform).toBe("ios");
-    expect((await prisma.userAppOpen.findFirstOrThrow({ where: { userId: legacyUser.id } })).platform).toBe("android");
+    expect((await prisma.userAppOpen.findFirstOrThrow({ where: { userId: legacyUser.id } })).platform).toBe("unknown");
   });
 
   it("records an explicit web platform verbatim", async () => {
