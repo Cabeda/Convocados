@@ -4,37 +4,34 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performScrollToNode
 import dev.convocados.wear.data.api.MvpParticipant
 import dev.convocados.wear.data.api.MvpResponse
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.style.TextOverflow
-import dev.convocados.wear.ui.ROUND_LIST_INSET
 import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_LIST_TAG
-import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_TAG
 import dev.convocados.wear.ui.RoundSafeReferenceRow
+import dev.convocados.wear.ui.assertEllipsised
+import dev.convocados.wear.ui.assertFillsDisplay
+import dev.convocados.wear.ui.assertNotLineLimited
+import dev.convocados.wear.ui.assertRowFillsBand
+import dev.convocados.wear.ui.assertRowInsideBand
+import dev.convocados.wear.ui.assertWraps
+import dev.convocados.wear.ui.boundsOf
+import dev.convocados.wear.ui.displayWidth
+import dev.convocados.wear.ui.roundSafeBand
+import dev.convocados.wear.ui.screenList
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.abs
 
 /**
  * GH #1276 — the MVP rows (loading, prompt, error, eligibility and closing
@@ -54,12 +51,6 @@ class MvpVotingScreenRoundSafeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    /**
-     * The screen's own list. The composition also renders the reference row's
-     * list, which the anchor tag excludes.
-     */
-    private val screenList = hasScrollAction().and(hasTestTag(ROUND_SAFE_ANCHOR_LIST_TAG).not())
-
     private val flow = MutableStateFlow(MvpVotingUiState())
 
     private val longNameOne = "Bernardo Maria Silva Carvalho e Sousa"
@@ -73,9 +64,9 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(votingOpen())
 
-        val band = roundSafeBand()
-        assertRowFillsBand("vote button", boundsOf("vote button", hasText(longNameOne, substring = true)), band)
-        assertRowInsideBand("vote prompt", boundsOf("vote prompt", hasText(VOTE_PROMPT)), band)
+        val band = roundSafeBand(composeRule)
+        assertRowFillsBand("vote button", boundsOf(composeRule, "vote button", hasText(longNameOne, substring = true)), band)
+        assertRowInsideBand("vote prompt", boundsOf(composeRule, "vote prompt", hasText(VOTE_PROMPT)), band)
     }
 
     @Test
@@ -84,9 +75,9 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(votingClosed())
 
-        val band = roundSafeBand()
-        assertRowFillsBand("voting closed", boundsOf("voting closed", hasText(VOTING_CLOSED)), band)
-        assertRowFillsBand("no votes", boundsOf("no votes", hasText(NO_VOTES)), band)
+        val band = roundSafeBand(composeRule)
+        assertRowFillsBand("voting closed", boundsOf(composeRule, "voting closed", hasText(VOTING_CLOSED)), band)
+        assertRowFillsBand("no votes", boundsOf(composeRule, "no votes", hasText(NO_VOTES)), band)
     }
 
     @Test
@@ -95,10 +86,10 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
 
         render(MvpVotingUiState(isLoading = true))
-        assertRowFillsBand("loading row", loadingRowBounds(), roundSafeBand())
+        assertRowFillsBand("loading row", loadingRowBounds(), roundSafeBand(composeRule))
 
         render(MvpVotingUiState(isLoading = false, error = errorText))
-        assertRowFillsBand("error message", boundsOf("error message", hasText(errorText)), roundSafeBand())
+        assertRowFillsBand("error message", boundsOf(composeRule, "error message", hasText(errorText)), roundSafeBand(composeRule))
     }
 
     @Test
@@ -107,7 +98,7 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(notEligible())
 
-        assertRowFillsBand("not eligible", boundsOf("not eligible", hasText(NOT_ELIGIBLE)), roundSafeBand())
+        assertRowFillsBand("not eligible", boundsOf(composeRule, "not eligible", hasText(NOT_ELIGIBLE)), roundSafeBand(composeRule))
     }
 
     @Test
@@ -115,13 +106,13 @@ class MvpVotingScreenRoundSafeTest {
     fun `square mvp rows keep filling the display`() {
         setContent()
 
-        val displayWidth = composeRule.onRoot().fetchSemanticsNode().size.width.toFloat()
+        val width = displayWidth(composeRule)
         render(MvpVotingUiState(isLoading = true))
-        assertFillsDisplay("loading row", loadingRowBounds(), displayWidth)
+        assertFillsDisplay("loading row", loadingRowBounds(), width)
 
         render(votingClosed())
-        assertFillsDisplay("voting closed", boundsOf("voting closed", hasText(VOTING_CLOSED)), displayWidth)
-        assertFillsDisplay("no votes", boundsOf("no votes", hasText(NO_VOTES)), displayWidth)
+        assertFillsDisplay("voting closed", boundsOf(composeRule, "voting closed", hasText(VOTING_CLOSED)), width)
+        assertFillsDisplay("no votes", boundsOf(composeRule, "no votes", hasText(NO_VOTES)), width)
     }
 
     // GH #1276 review — the ellipsis that keeps a long label off the round
@@ -133,8 +124,8 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(votingOpen())
 
-        assertNotLineLimited("vote prompt", hasText(VOTE_PROMPT))
-        assertNotLineLimited("vote button", hasText(longNameOne, substring = true))
+        assertNotLineLimited(composeRule, "vote prompt", hasText(VOTE_PROMPT))
+        assertNotLineLimited(composeRule, "vote button", hasText(longNameOne, substring = true))
     }
 
     @Test
@@ -143,7 +134,7 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(MvpVotingUiState(isLoading = false, error = errorText))
 
-        assertWraps("error message", hasText(errorText, substring = true), atLeastLines = 2)
+        assertWraps(composeRule, "error message", hasText(errorText, substring = true), atLeastLines = 2)
     }
 
     @Test
@@ -152,8 +143,8 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(votingOpen())
 
-        assertEllipsised("vote prompt", hasText(VOTE_PROMPT), roundLines = 1)
-        assertEllipsised("vote button", hasText(longNameOne, substring = true), roundLines = 1)
+        assertEllipsised(composeRule, "vote prompt", hasText(VOTE_PROMPT), roundLines = 1)
+        assertEllipsised(composeRule, "vote button", hasText(longNameOne, substring = true), roundLines = 1)
     }
 
     // ── states ──────────────────────────────────────────────────────────
@@ -214,142 +205,17 @@ class MvpVotingScreenRoundSafeTest {
 
     // ── bounds ──────────────────────────────────────────────────────────
 
-    private fun loadingRowBounds(): Rect =
+    private fun loadingRowBounds() =
         composeRule.onNodeWithTag(MVP_LOADING_ROW).fetchSemanticsNode().boundsInRoot
 
-    private fun boundsOf(label: String, matcher: SemanticsMatcher): Rect {
-        composeRule.onNode(screenList).performScrollToNode(matcher)
-        composeRule.waitForIdle()
-        return composeRule.onNode(matcher).fetchSemanticsNode(label).boundsInRoot
-    }
-
-    /**
-     * The band the screen's round-safe rows occupy, measured from the
-     * reference control. Guarded on the reference really being inset from the
-     * list by the documented [ROUND_LIST_INSET], otherwise comparing against it
-     * proves nothing.
-     */
-    private fun roundSafeBand(): Rect {
-        val band = composeRule.onNodeWithTag(ROUND_SAFE_ANCHOR_TAG).fetchSemanticsNode().boundsInRoot
-        val list = composeRule.onNode(screenList).fetchSemanticsNode().boundsInRoot
-        val inset = with(composeRule.density) { ROUND_LIST_INSET.toPx() }
-        val tolerance = 0.5f
-        assertTrue(
-            ("reference row is inset %.1fpx/%.1fpx from the list, expected at least %.1fpx on each side " +
-                "— the reference is no longer round-safe")
-                .format(band.left - list.left, list.right - band.right, inset - tolerance),
-            band.left - list.left >= inset - tolerance && list.right - band.right >= inset - tolerance,
-        )
-        return band
-    }
-
-    private fun assertRowFillsBand(label: String, bounds: Rect, band: Rect) {
-        val tolerance = 0.5f
-        assertTrue(
-            ("%s spans [%.1f, %.1f], expected the round-safe band [%.1f, %.1f] — the row is laid out " +
-                "at the bezel-crossing width on a round display")
-                .format(label, bounds.left, bounds.right, band.left, band.right),
-            abs(bounds.left - band.left) <= tolerance && abs(bounds.right - band.right) <= tolerance,
-        )
-    }
-
-    private fun assertRowInsideBand(label: String, bounds: Rect, band: Rect) {
-        val tolerance = 0.5f
-        assertTrue(
-            ("%s spans [%.1f, %.1f], expected inside the round-safe band [%.1f, %.1f] — the row " +
-                "crosses the circular bezel")
-                .format(label, bounds.left, bounds.right, band.left, band.right),
-            bounds.left >= band.left - tolerance && bounds.right <= band.right + tolerance,
-        )
-    }
-
-    /**
-     * The inset is a no-op on square displays, so the rows must still fill the
-     * display there — the fix must not shrink every form factor.
-     */
-    private fun assertFillsDisplay(label: String, bounds: Rect, displayWidth: Float) {
-        val fraction = bounds.width / displayWidth
-        assertTrue(
-            ("%s spans %.1f%% of the display width, expected at least %.1f%% — the round-only inset " +
-                "must not be applied on square displays")
-                .format(label, fraction * 100, MIN_SQUARE_FILL_FRACTION * 100),
-            fraction >= MIN_SQUARE_FILL_FRACTION,
-        )
-    }
-
-    // ── line budget ─────────────────────────────────────────────────────
-
-    /**
-     * How the label actually laid out. A clipped text still reports the whole
-     * string in its semantics, so the ellipsis is only visible here.
-     */
-    private fun textLayout(label: String, matcher: SemanticsMatcher): TextLayoutResult {
-        composeRule.onNode(screenList).performScrollToNode(matcher)
-        composeRule.waitForIdle()
-        val node = composeRule.onNode(matcher).fetchSemanticsNode(label)
-        val results = mutableListOf<TextLayoutResult>()
-        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
-        return results.firstOrNull()
-            ?: throw AssertionError("$label carries no text layout, so its clipping cannot be measured")
-    }
-
-    /**
-     * The ellipsis is a round-only affordance: on a square display the row is
-     * full width and the label must keep the default budget, wrapping as it
-     * did before the inset fix.
-     */
-    private fun assertNotLineLimited(label: String, matcher: SemanticsMatcher) {
-        val layout = textLayout(label, matcher)
-        assertEquals(
-            "$label is limited to ${layout.layoutInput.maxLines} line(s) on a square display — " +
-                "the round-only ellipsis clips text that used to wrap",
-            Int.MAX_VALUE,
-            layout.layoutInput.maxLines,
-        )
-        assertEquals(
-            "$label clips on a square display",
-            TextOverflow.Clip,
-            layout.layoutInput.overflow,
-        )
-    }
-
-    /** A long prompt really does get its second line on a square display. */
-    private fun assertWraps(label: String, matcher: SemanticsMatcher, atLeastLines: Int) {
-        val layout = textLayout(label, matcher)
-        assertTrue(
-            ("%s laid out on %d line(s), expected at least %d — the text is clipped before it " +
-                "can wrap")
-                .format(label, layout.lineCount, atLeastLines),
-            layout.lineCount >= atLeastLines,
-        )
-    }
-
-    /** The round half of the same bargain: one ellipsised line at most. */
-    private fun assertEllipsised(label: String, matcher: SemanticsMatcher, roundLines: Int) {
-        val layout = textLayout(label, matcher)
-        assertEquals(
-            "$label must be ellipsised on a round display",
-            TextOverflow.Ellipsis,
-            layout.layoutInput.overflow,
-        )
-        assertTrue(
-            "$label is allowed ${layout.layoutInput.maxLines} line(s), expected at most $roundLines",
-            layout.layoutInput.maxLines <= roundLines,
-        )
-    }
-
     private companion object {
+        /** Mirrors the loading row's own private tag, which it keeps to itself. */
+        const val MVP_LOADING_ROW = "mvp_voting_loading_row"
         const val EVENT_ID = "event-1"
         const val HISTORY_ID = "history-1"
         const val VOTE_PROMPT = "Vote for MVP"
         const val NOT_ELIGIBLE = "Only players in this game can vote"
         const val VOTING_CLOSED = "Voting closed"
         const val NO_VOTES = "No votes recorded"
-
-        /**
-         * A blanket 20dp inset on both sides of a 390dp display would leave
-         * ~79%; a correct square layout spans ~89%.
-         */
-        const val MIN_SQUARE_FILL_FRACTION = 0.85f
     }
 }

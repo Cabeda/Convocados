@@ -4,35 +4,26 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.style.TextOverflow
-import dev.convocados.wear.ui.ROUND_LIST_INSET
-import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_LIST_TAG
-import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_TAG
 import dev.convocados.wear.ui.RoundSafeReferenceRow
+import dev.convocados.wear.ui.assertEllipsised
+import dev.convocados.wear.ui.assertFillsDisplay
+import dev.convocados.wear.ui.assertNotLineLimited
+import dev.convocados.wear.ui.assertRowFillsBand
+import dev.convocados.wear.ui.boundsOf
+import dev.convocados.wear.ui.displayWidth
+import dev.convocados.wear.ui.roundSafeBand
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.abs
 
 /**
  * GH #1276 — the game-settings rows (kickoff label and button, both switches
@@ -53,12 +44,6 @@ class GameSettingsScreenRoundSafeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    /**
-     * The screen's own list. The composition also renders the reference row's
-     * list, which the anchor tag excludes.
-     */
-    private val screenList = hasScrollAction().and(hasTestTag(ROUND_SAFE_ANCHOR_LIST_TAG).not())
-
     private val flow = MutableStateFlow(
         GameSettingsUiState(
             isLoading = false,
@@ -73,13 +58,13 @@ class GameSettingsScreenRoundSafeTest {
     @Config(qualifiers = "w390dp-h390dp-round")
     fun `round kickoff, switch and vibration rows fill the round-safe band`() {
         setContent()
-        val band = roundSafeBand()
+        val band = roundSafeBand(composeRule)
 
-        assertRowFillsBand("kickoff label", boundsOf("kickoff label", hasText(KICKOFF_LABEL, substring = true)), band)
-        assertRowFillsBand("kick off now", boundsOf("kick off now", hasText(KICK_OFF_NOW)), band)
-        assertRowFillsBand("keep screen on", boundsOf("keep screen on", hasText(KEEP_SCREEN_ON)), band)
-        assertRowFillsBand("vibration alerts", boundsOf("vibration alerts", hasText(VIBRATION_ALERTS)), band)
-        assertRowFillsBand("interval label", boundsOf("interval label", hasText(EVERY_LABEL)), band)
+        assertRowFillsBand("kickoff label", boundsOf(composeRule, "kickoff label", hasText(KICKOFF_LABEL, substring = true)), band)
+        assertRowFillsBand("kick off now", boundsOf(composeRule, "kick off now", hasText(KICK_OFF_NOW)), band)
+        assertRowFillsBand("keep screen on", boundsOf(composeRule, "keep screen on", hasText(KEEP_SCREEN_ON)), band)
+        assertRowFillsBand("vibration alerts", boundsOf(composeRule, "vibration alerts", hasText(VIBRATION_ALERTS)), band)
+        assertRowFillsBand("interval label", boundsOf(composeRule, "interval label", hasText(EVERY_LABEL)), band)
     }
 
     @Test
@@ -87,12 +72,12 @@ class GameSettingsScreenRoundSafeTest {
     fun `square settings rows keep filling the display`() {
         setContent()
 
-        val displayWidth = composeRule.onRoot().fetchSemanticsNode().size.width.toFloat()
-        assertFillsDisplay("kickoff label", boundsOf("kickoff label", hasText(KICKOFF_LABEL, substring = true)), displayWidth)
-        assertFillsDisplay("kick off now", boundsOf("kick off now", hasText(KICK_OFF_NOW)), displayWidth)
-        assertFillsDisplay("keep screen on", boundsOf("keep screen on", hasText(KEEP_SCREEN_ON)), displayWidth)
-        assertFillsDisplay("vibration alerts", boundsOf("vibration alerts", hasText(VIBRATION_ALERTS)), displayWidth)
-        assertFillsDisplay("interval label", boundsOf("interval label", hasText(EVERY_LABEL)), displayWidth)
+        val width = displayWidth(composeRule)
+        assertFillsDisplay("kickoff label", boundsOf(composeRule, "kickoff label", hasText(KICKOFF_LABEL, substring = true)), width)
+        assertFillsDisplay("kick off now", boundsOf(composeRule, "kick off now", hasText(KICK_OFF_NOW)), width)
+        assertFillsDisplay("keep screen on", boundsOf(composeRule, "keep screen on", hasText(KEEP_SCREEN_ON)), width)
+        assertFillsDisplay("vibration alerts", boundsOf(composeRule, "vibration alerts", hasText(VIBRATION_ALERTS)), width)
+        assertFillsDisplay("interval label", boundsOf(composeRule, "interval label", hasText(EVERY_LABEL)), width)
     }
 
     // GH #1276 review — the round bezel's ellipsis was applied on square
@@ -102,8 +87,8 @@ class GameSettingsScreenRoundSafeTest {
     fun `square settings labels keep their full line budget`() {
         setContent()
 
-        assertNotLineLimited("kickoff label", hasText(KICKOFF_LABEL, substring = true))
-        assertNotLineLimited("interval label", hasText(EVERY_LABEL))
+        assertNotLineLimited(composeRule, "kickoff label", hasText(KICKOFF_LABEL, substring = true))
+        assertNotLineLimited(composeRule, "interval label", hasText(EVERY_LABEL))
     }
 
     @Test
@@ -111,41 +96,8 @@ class GameSettingsScreenRoundSafeTest {
     fun `round settings labels stay on ellipsised lines`() {
         setContent()
 
-        assertEllipsised("kickoff label", hasText(KICKOFF_LABEL, substring = true), roundLines = 2)
-        assertEllipsised("interval label", hasText(EVERY_LABEL), roundLines = 1)
-    }
-
-    // ── line budget ─────────────────────────────────────────────────────
-
-    /** How the label actually laid out; a clipped text still reports the whole string. */
-    private fun textLayout(label: String, matcher: SemanticsMatcher): TextLayoutResult {
-        composeRule.onNode(screenList).performScrollToNode(matcher)
-        composeRule.waitForIdle()
-        val node = composeRule.onNode(matcher).fetchSemanticsNode(label)
-        val results = mutableListOf<TextLayoutResult>()
-        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
-        return results.firstOrNull()
-            ?: throw AssertionError("$label carries no text layout, so its clipping cannot be measured")
-    }
-
-    private fun assertNotLineLimited(label: String, matcher: SemanticsMatcher) {
-        val layout = textLayout(label, matcher)
-        assertEquals(
-            "$label is limited to ${layout.layoutInput.maxLines} line(s) on a square display — " +
-                "the round-only ellipsis clips text that used to wrap",
-            Int.MAX_VALUE,
-            layout.layoutInput.maxLines,
-        )
-        assertEquals("$label clips on a square display", TextOverflow.Clip, layout.layoutInput.overflow)
-    }
-
-    private fun assertEllipsised(label: String, matcher: SemanticsMatcher, roundLines: Int) {
-        val layout = textLayout(label, matcher)
-        assertEquals("$label must be ellipsised on a round display", TextOverflow.Ellipsis, layout.layoutInput.overflow)
-        assertTrue(
-            "$label is allowed ${layout.layoutInput.maxLines} line(s), expected at most $roundLines",
-            layout.layoutInput.maxLines <= roundLines,
-        )
+        assertEllipsised(composeRule, "kickoff label", hasText(KICKOFF_LABEL, substring = true), roundLines = 2)
+        assertEllipsised(composeRule, "interval label", hasText(EVERY_LABEL), roundLines = 1)
     }
 
     // ── render ──────────────────────────────────────────────────────────
@@ -167,69 +119,11 @@ class GameSettingsScreenRoundSafeTest {
         composeRule.waitForIdle()
     }
 
-    // ── bounds ──────────────────────────────────────────────────────────
-
-    private fun boundsOf(label: String, matcher: SemanticsMatcher): Rect {
-        composeRule.onNode(screenList).performScrollToNode(matcher)
-        composeRule.waitForIdle()
-        return composeRule.onNode(matcher).fetchSemanticsNode(label).boundsInRoot
-    }
-
-    /**
-     * The band a round-safe row occupies, measured from the reference control.
-     * Guarded on the reference really being inset from the list by the
-     * documented [ROUND_LIST_INSET], otherwise comparing against it proves
-     * nothing.
-     */
-    private fun roundSafeBand(): Rect {
-        val band = composeRule.onNodeWithTag(ROUND_SAFE_ANCHOR_TAG).fetchSemanticsNode().boundsInRoot
-        val list = composeRule.onNode(screenList).fetchSemanticsNode().boundsInRoot
-        val inset = with(composeRule.density) { ROUND_LIST_INSET.toPx() }
-        val tolerance = 0.5f
-        assertTrue(
-            ("reference row is inset %.1fpx/%.1fpx from the list, expected at least %.1fpx on each side " +
-                "— the reference is no longer round-safe")
-                .format(band.left - list.left, list.right - band.right, inset - tolerance),
-            band.left - list.left >= inset - tolerance && list.right - band.right >= inset - tolerance,
-        )
-        return band
-    }
-
-    private fun assertRowFillsBand(label: String, bounds: Rect, band: Rect) {
-        val tolerance = 0.5f
-        assertTrue(
-            ("%s spans [%.1f, %.1f], expected the round-safe band [%.1f, %.1f] — the row is laid out " +
-                "at the bezel-crossing width on a round display")
-                .format(label, bounds.left, bounds.right, band.left, band.right),
-            abs(bounds.left - band.left) <= tolerance && abs(bounds.right - band.right) <= tolerance,
-        )
-    }
-
-    /**
-     * The inset is a no-op on square displays, so the rows must still fill the
-     * display there — the fix must not shrink every form factor.
-     */
-    private fun assertFillsDisplay(label: String, bounds: Rect, displayWidth: Float) {
-        val fraction = bounds.width / displayWidth
-        assertTrue(
-            ("%s spans %.1f%% of the display width, expected at least %.1f%% — the round-only inset " +
-                "must not be applied on square displays")
-                .format(label, fraction * 100, MIN_SQUARE_FILL_FRACTION * 100),
-            fraction >= MIN_SQUARE_FILL_FRACTION,
-        )
-    }
-
     private companion object {
         const val KICKOFF_LABEL = "Kickoff"
         const val KICK_OFF_NOW = "Kick off now"
         const val KEEP_SCREEN_ON = "Keep screen on"
         const val VIBRATION_ALERTS = "Vibration alerts"
         const val EVERY_LABEL = "Every"
-
-        /**
-         * A blanket 20dp inset on both sides of a 390dp display would leave
-         * ~79%; a correct square layout spans ~89%.
-         */
-        const val MIN_SQUARE_FILL_FRACTION = 0.85f
     }
 }

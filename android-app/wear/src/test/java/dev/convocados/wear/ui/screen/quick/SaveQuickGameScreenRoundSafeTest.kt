@@ -4,37 +4,28 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performScrollToNode
 import dev.convocados.wear.data.local.QuickGameState
 import dev.convocados.wear.data.local.entity.WearGameEntity
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.style.TextOverflow
-import dev.convocados.wear.ui.ROUND_LIST_INSET
-import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_LIST_TAG
-import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_TAG
 import dev.convocados.wear.ui.RoundSafeReferenceRow
+import dev.convocados.wear.ui.assertEllipsised
+import dev.convocados.wear.ui.assertFillsDisplay
+import dev.convocados.wear.ui.assertNotLineLimited
+import dev.convocados.wear.ui.assertRowFillsBand
+import dev.convocados.wear.ui.boundsOf
+import dev.convocados.wear.ui.displayWidth
+import dev.convocados.wear.ui.roundSafeBand
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.abs
 
 /**
  * GH #1276 — the save-quick-game rows (score summary, event buttons, empty and
@@ -55,22 +46,16 @@ class SaveQuickGameScreenRoundSafeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    /**
-     * The screen's own list. The composition also renders the reference row's
-     * list, which the anchor tag excludes.
-     */
-    private val screenList = hasScrollAction().and(hasTestTag(ROUND_SAFE_ANCHOR_LIST_TAG).not())
-
     private var state by mutableStateOf(eventsState())
 
     @Test
     @Config(qualifiers = "w390dp-h390dp-round")
     fun `round score and event rows fill the round-safe band`() {
         setContent()
-        val band = roundSafeBand()
+        val band = roundSafeBand(composeRule)
 
-        assertRowFillsBand("score summary", boundsOf("score summary", hasText(SCORE_SUMMARY)), band)
-        assertRowFillsBand("event button", boundsOf("event button", hasText(EVENT_TITLE)), band)
+        assertRowFillsBand("score summary", boundsOf(composeRule, "score summary", hasText(SCORE_SUMMARY)), band)
+        assertRowFillsBand("event button", boundsOf(composeRule, "event button", hasText(EVENT_TITLE)), band)
     }
 
     @Test
@@ -79,15 +64,15 @@ class SaveQuickGameScreenRoundSafeTest {
         setContent()
 
         state = SaveQuickGameUiState(saved = true)
-        assertRowFillsBand("saved", boundsOf("saved", hasText(SAVED)), roundSafeBand())
+        assertRowFillsBand("saved", boundsOf(composeRule, "saved", hasText(SAVED)), roundSafeBand(composeRule))
 
         state = SaveQuickGameUiState(
             quick = QuickGameState(scoreOne = 1, scoreTwo = 0),
             error = ERROR_TEXT,
         )
-        val band = roundSafeBand()
-        assertRowFillsBand("no events", boundsOf("no events", hasText(NO_EVENTS)), band)
-        assertRowFillsBand("error message", boundsOf("error message", hasText(ERROR_TEXT)), band)
+        val band = roundSafeBand(composeRule)
+        assertRowFillsBand("no events", boundsOf(composeRule, "no events", hasText(NO_EVENTS)), band)
+        assertRowFillsBand("error message", boundsOf(composeRule, "error message", hasText(ERROR_TEXT)), band)
     }
 
     @Test
@@ -95,15 +80,15 @@ class SaveQuickGameScreenRoundSafeTest {
     fun `square save rows keep filling the display`() {
         setContent()
 
-        val displayWidth = composeRule.onRoot().fetchSemanticsNode().size.width.toFloat()
-        assertFillsDisplay("score summary", boundsOf("score summary", hasText(SCORE_SUMMARY)), displayWidth)
-        assertFillsDisplay("event button", boundsOf("event button", hasText(EVENT_TITLE)), displayWidth)
+        val width = displayWidth(composeRule)
+        assertFillsDisplay("score summary", boundsOf(composeRule, "score summary", hasText(SCORE_SUMMARY)), width)
+        assertFillsDisplay("event button", boundsOf(composeRule, "event button", hasText(EVENT_TITLE)), width)
 
         state = SaveQuickGameUiState(
             quick = QuickGameState(scoreOne = 1, scoreTwo = 0),
             error = ERROR_TEXT,
         )
-        assertFillsDisplay("no events", boundsOf("no events", hasText(NO_EVENTS)), displayWidth)
+        assertFillsDisplay("no events", boundsOf(composeRule, "no events", hasText(NO_EVENTS)), width)
     }
 
     // GH #1276 review — the round bezel's ellipsis was applied on square
@@ -113,7 +98,7 @@ class SaveQuickGameScreenRoundSafeTest {
     fun `square event button keeps its full line budget`() {
         setContent()
 
-        assertNotLineLimited("event button", hasText(EVENT_TITLE))
+        assertNotLineLimited(composeRule, "event button", hasText(EVENT_TITLE))
     }
 
     @Test
@@ -121,40 +106,7 @@ class SaveQuickGameScreenRoundSafeTest {
     fun `round event button stays on one ellipsised line`() {
         setContent()
 
-        assertEllipsised("event button", hasText(EVENT_TITLE), roundLines = 1)
-    }
-
-    // ── line budget ─────────────────────────────────────────────────────
-
-    /** How the label actually laid out; a clipped text still reports the whole string. */
-    private fun textLayout(label: String, matcher: SemanticsMatcher): TextLayoutResult {
-        composeRule.onNode(screenList).performScrollToNode(matcher)
-        composeRule.waitForIdle()
-        val node = composeRule.onNode(matcher).fetchSemanticsNode(label)
-        val results = mutableListOf<TextLayoutResult>()
-        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
-        return results.firstOrNull()
-            ?: throw AssertionError("$label carries no text layout, so its clipping cannot be measured")
-    }
-
-    private fun assertNotLineLimited(label: String, matcher: SemanticsMatcher) {
-        val layout = textLayout(label, matcher)
-        assertEquals(
-            "$label is limited to ${layout.layoutInput.maxLines} line(s) on a square display — " +
-                "the round-only ellipsis clips text that used to wrap",
-            Int.MAX_VALUE,
-            layout.layoutInput.maxLines,
-        )
-        assertEquals("$label clips on a square display", TextOverflow.Clip, layout.layoutInput.overflow)
-    }
-
-    private fun assertEllipsised(label: String, matcher: SemanticsMatcher, roundLines: Int) {
-        val layout = textLayout(label, matcher)
-        assertEquals("$label must be ellipsised on a round display", TextOverflow.Ellipsis, layout.layoutInput.overflow)
-        assertTrue(
-            "$label is allowed ${layout.layoutInput.maxLines} line(s), expected at most $roundLines",
-            layout.layoutInput.maxLines <= roundLines,
-        )
+        assertEllipsised(composeRule, "event button", hasText(EVENT_TITLE), roundLines = 1)
     }
 
     // ── states ──────────────────────────────────────────────────────────
@@ -192,69 +144,11 @@ class SaveQuickGameScreenRoundSafeTest {
         composeRule.waitForIdle()
     }
 
-    // ── bounds ──────────────────────────────────────────────────────────
-
-    private fun boundsOf(label: String, matcher: SemanticsMatcher): Rect {
-        composeRule.onNode(screenList).performScrollToNode(matcher)
-        composeRule.waitForIdle()
-        return composeRule.onNode(matcher).fetchSemanticsNode(label).boundsInRoot
-    }
-
-    /**
-     * The band a round-safe row occupies, measured from the reference control.
-     * Guarded on the reference really being inset from the list by the
-     * documented round list inset, otherwise comparing against it proves
-     * nothing.
-     */
-    private fun roundSafeBand(): Rect {
-        val band = composeRule.onNodeWithTag(ROUND_SAFE_ANCHOR_TAG).fetchSemanticsNode().boundsInRoot
-        val list = composeRule.onNode(screenList).fetchSemanticsNode().boundsInRoot
-        val inset = with(composeRule.density) { ROUND_LIST_INSET.toPx() }
-        val tolerance = 0.5f
-        assertTrue(
-            ("reference row is inset %.1fpx/%.1fpx from the list, expected at least %.1fpx on each side " +
-                "— the reference is no longer round-safe")
-                .format(band.left - list.left, list.right - band.right, inset - tolerance),
-            band.left - list.left >= inset - tolerance && list.right - band.right >= inset - tolerance,
-        )
-        return band
-    }
-
-    private fun assertRowFillsBand(label: String, bounds: Rect, band: Rect) {
-        val tolerance = 0.5f
-        assertTrue(
-            ("%s spans [%.1f, %.1f], expected the round-safe band [%.1f, %.1f] — the row is laid out " +
-                "at the bezel-crossing width on a round display")
-                .format(label, bounds.left, bounds.right, band.left, band.right),
-            abs(bounds.left - band.left) <= tolerance && abs(bounds.right - band.right) <= tolerance,
-        )
-    }
-
-    /**
-     * The inset is a no-op on square displays, so the rows must still fill the
-     * display there — the fix must not shrink every form factor.
-     */
-    private fun assertFillsDisplay(label: String, bounds: Rect, displayWidth: Float) {
-        val fraction = bounds.width / displayWidth
-        assertTrue(
-            ("%s spans %.1f%% of the display width, expected at least %.1f%% — the round-only inset " +
-                "must not be applied on square displays")
-                .format(label, fraction * 100, MIN_SQUARE_FILL_FRACTION * 100),
-            fraction >= MIN_SQUARE_FILL_FRACTION,
-        )
-    }
-
     private companion object {
         const val EVENT_TITLE = "Tuesday night football at the Julias"
         const val SCORE_SUMMARY = "Score 1 - 0"
         const val SAVED = "Saved"
         const val NO_EVENTS = "No compatible events available"
         const val ERROR_TEXT = "Couldn't save quick game. Check your connection and try again while offline"
-
-        /**
-         * A blanket 20dp inset on both sides of a 390dp display would leave
-         * ~79%; a correct square layout spans ~89%.
-         */
-        const val MIN_SQUARE_FILL_FRACTION = 0.85f
     }
 }
