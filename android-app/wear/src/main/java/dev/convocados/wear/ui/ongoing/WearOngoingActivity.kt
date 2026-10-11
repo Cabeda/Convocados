@@ -88,6 +88,11 @@ internal fun shouldClearOngoing(enabled: Boolean): Boolean = !enabled
  * chip. Pairing an ongoing notification with an [OngoingActivity] is what makes
  * the device render those indicators, and [OngoingLaunch] ensures tapping the
  * chip resumes the live session rather than the games list.
+ *
+ * The same policy's tile clause is covered by
+ * [dev.convocados.wear.tile.QuickGameTileService]: a tile exists, and while a
+ * quick game is live its tap carries [EXTRA_QUICK_GAME] so it also resumes the
+ * live session. Upcoming, paused and idle taps stay a plain launcher open.
  */
 object WearOngoingActivity {
     const val NOTIFICATION_ID = 7447

@@ -33,16 +33,16 @@ class QuickGameTileLaunchActionTest {
 
     @Test
     fun `tile launch action opens the launcher activity itself`() {
-        val activity = tileLaunchAction(QuickGameTileStatus.LIVE, packageName, WearActivity::class.java.name)
-            .androidActivity
+        val launch = tileLaunchAction(QuickGameTileStatus.LIVE, packageName, WearActivity::class.java.name)
+        val activity = launch.androidActivity!!
         assertEquals(packageName, activity.packageName)
         assertEquals(WearActivity::class.java.name, activity.className)
     }
 
     @Test
     fun `live tile launch action carries the quick game deep link`() {
-        val activity = tileLaunchAction(QuickGameTileStatus.LIVE, packageName, WearActivity::class.java.name)
-            .androidActivity
+        val launch = tileLaunchAction(QuickGameTileStatus.LIVE, packageName, WearActivity::class.java.name)
+        val activity = launch.androidActivity!!
         val extra = activity.keyToExtraMapping[WearOngoingActivity.EXTRA_QUICK_GAME]
         assertTrue("live tile must carry the quick-game deep link", extra is ActionBuilders.AndroidBooleanExtra)
         assertTrue((extra as ActionBuilders.AndroidBooleanExtra).value)
@@ -55,7 +55,8 @@ class QuickGameTileLaunchActionTest {
             QuickGameTileStatus.UPCOMING,
             QuickGameTileStatus.PAUSED,
         ).forEach { status ->
-            val activity = tileLaunchAction(status, packageName, WearActivity::class.java.name).androidActivity
+            val launch = tileLaunchAction(status, packageName, WearActivity::class.java.name)
+            val activity = launch.androidActivity!!
             assertNull(
                 "$status must not deep-link into the quick game",
                 activity.keyToExtraMapping[WearOngoingActivity.EXTRA_QUICK_GAME],
