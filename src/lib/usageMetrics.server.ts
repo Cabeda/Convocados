@@ -2,19 +2,13 @@
  * Anonymous usage metrics derived from existing Session + UserAppOpen tables.
  * No individual tracking — only aggregated counts.
  *
- * Platform split: Android (native app) vs Web (everything else).
+ * Platform split: Android and iOS (native app) vs Web (everything else),
+ * read from the `platform` recorded on each UserAppOpen heartbeat — never
+ * inferred from a session user agent, because native clients authenticate
+ * with an OAuth bearer and leave no usable session behind.
  * Web drill-down: browser (Chrome, Safari, Firefox, etc.) + OS (Windows, macOS, Linux, iOS, Android).
  */
 import { prisma } from "./db.server";
-
-// ponytail: "android" = native app (user-agent contains "Convocados" or specific
-// Android WebView patterns from the native app's Ktor client). Everything else = web.
-function isAndroidApp(ua: string | null): boolean {
-  if (!ua) return false;
-  const lower = ua.toLowerCase();
-  // The native Android app uses Ktor which includes "ktor" or the app sets a custom UA with "Convocados"
-  return lower.includes("convocados") || (lower.includes("ktor") && lower.includes("android"));
-}
 
 function parseBrowser(ua: string | null): string {
   if (!ua) return "Unknown";
@@ -135,17 +129,25 @@ export async function getUsageSummary() {
     platforms[bucket(row.platform)]++;
   }
 
-  // Web drill-down (browser/OS) still comes from sessions — it only concerns
-  // browser clients. Native users have no session and are not counted here.
   const recentSessions = await prisma.session.findMany({
     where: { createdAt: { gte: thirtyDaysAgo } },
     select: { userId: true, userAgent: true },
     distinct: ["userId"],
   });
 
+  // Web drill-down (browser/OS) still comes from sessions, but web-ness is
+  // read from the heartbeat's own platform column — never guessed from the
+  // user agent (GH #1152). A native client's OAuth custom tab leaves a
+  // browser-looking session; attributing it by UA would mint a web user.
+  // Users with no declarable platform (null/"unknown") count as web, same as
+  // the platform split above.
+  const webUsers = new Set(
+    platformRows.filter((row) => bucket(row.platform) === "web").map((row) => row.userId),
+  );
+
   const webDrillDown: WebDrillDown = { browsers: {}, os: {} };
   for (const s of recentSessions) {
-    if (isAndroidApp(s.userAgent)) continue;
+    if (!webUsers.has(s.userId)) continue;
     const browser = parseBrowser(s.userAgent);
     const os = parseOS(s.userAgent);
     webDrillDown.browsers[browser] = (webDrillDown.browsers[browser] ?? 0) + 1;

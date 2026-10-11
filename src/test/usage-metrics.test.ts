@@ -105,6 +105,66 @@ describe("getUsageSummary", () => {
     expect(result.webDrillDown.os.Windows).toBe(1);
   });
 
+  it("attributes the web drill-down from the heartbeat platform, not the session UA", async () => {
+    const nativeUser = await seedUser();
+    const webUser = await seedUser();
+    const today = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+
+    await prisma.userAppOpen.createMany({
+      data: [
+        { userId: nativeUser.id, day: today, platform: "android" },
+        { userId: webUser.id, day: today, platform: "web" },
+      ],
+    });
+    // The native client's OAuth custom tab leaves a browser-looking session;
+    // the UA must not mint a web user out of a native heartbeat.
+    await prisma.session.createMany({
+      data: [
+        {
+          id: sid(),
+          token: sid(),
+          userId: nativeUser.id,
+          userAgent: "Mozilla/5.0 (Linux; Android 10) Chrome/120.0",
+          expiresAt: new Date(Date.now() + 86400_000),
+        },
+        {
+          id: sid(),
+          token: sid(),
+          userId: webUser.id,
+          userAgent: "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0 Safari/537.36",
+          expiresAt: new Date(Date.now() + 86400_000),
+        },
+      ],
+    });
+
+    const result = await getUsageSummary();
+    expect(result.platforms.android).toBe(1);
+    expect(result.webDrillDown.browsers.Chrome).toBe(1);
+    expect(result.webDrillDown.os.Windows).toBe(1);
+    expect(result.webDrillDown.os.Android).toBeUndefined();
+  });
+
+  it("counts a session whose user has an unknown platform as web", async () => {
+    const legacyUser = await seedUser();
+    const today = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+
+    await prisma.userAppOpen.create({ data: { userId: legacyUser.id, day: today, platform: "unknown" } });
+    await prisma.session.create({
+      data: {
+        id: sid(),
+        token: sid(),
+        userId: legacyUser.id,
+        userAgent: "Mozilla/5.0 (Macintosh) Safari/604.1",
+        expiresAt: new Date(Date.now() + 86400_000),
+      },
+    });
+
+    const result = await getUsageSummary();
+    expect(result.platforms.web).toBe(1);
+    expect(result.webDrillDown.browsers.Safari).toBe(1);
+    expect(result.webDrillDown.os.macOS).toBe(1);
+  });
+
   it("detects various browsers: Firefox, Edge, Safari, Opera, Samsung", async () => {
     const agents = [
       { ua: "Mozilla/5.0 Firefox/115.0", browser: "Firefox" },
