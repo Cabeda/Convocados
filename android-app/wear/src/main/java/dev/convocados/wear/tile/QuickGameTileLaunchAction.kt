@@ -1,7 +1,34 @@
 package dev.convocados.wear.tile
 
 import androidx.wear.protolayout.ActionBuilders
+import androidx.wear.protolayout.DimensionBuilders
+import androidx.wear.protolayout.ModifiersBuilders
 import dev.convocados.wear.ui.ongoing.WearOngoingActivity
+
+/** The id of the whole-tile clickable the service installs. */
+internal const val TILE_CLICKABLE_ID = "quick_game"
+
+/** The tile's whole-surface modifiers: padding, then the tap payload. */
+fun quickGameTileModifiers(
+    data: QuickGameTileData,
+    packageName: String,
+    activityClassName: String,
+): ModifiersBuilders.Modifiers =
+    ModifiersBuilders.Modifiers.Builder()
+        .setPadding(ModifiersBuilders.Padding.Builder().setAll(DimensionBuilders.dp(12f)).build())
+        .setClickable(
+            ModifiersBuilders.Clickable.Builder()
+                .setId(TILE_CLICKABLE_ID)
+                .setOnClick(
+                    tileLaunchAction(
+                        status = data.status,
+                        packageName = packageName,
+                        activityClassName = activityClassName,
+                    ),
+                )
+                .build(),
+        )
+        .build()
 
 /**
  * The LaunchAction the tile fires on tap: a whole-tile launch into

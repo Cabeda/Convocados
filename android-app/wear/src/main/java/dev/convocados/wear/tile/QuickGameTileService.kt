@@ -32,11 +32,9 @@ private const val FRESHNESS_MS = 30_000L
  * one-tap quick-game CTA. Tapping anywhere opens [WearActivity] (a LaunchAction
  * to the launcher activity — no renderable-action artifact needed).
  *
- * This tap target doubles as the tile-side reference to the Ongoing Activity
- * required by Play's Wear App Quality policy: while a quick game is live, the
- * ongoing notification ([dev.convocados.wear.ui.ongoing.WearOngoingActivity])
- * points at the same entry point, so the tile carousel always offers a way
- * back into the running session.
+ * The tap payload is built by [quickGameTileModifiers]: while a quick game is
+ * live it carries the deep link into the running session, which is what Play's
+ * tile clause for an in-progress activity asks for.
  */
 @AndroidEntryPoint
 class QuickGameTileService : TileService() {
@@ -93,25 +91,11 @@ class QuickGameTileService : TileService() {
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
             .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
             .setModifiers(
-                ModifiersBuilders.Modifiers.Builder()
-                    .setPadding(
-                        ModifiersBuilders.Padding.Builder()
-                            .setAll(DimensionBuilders.dp(12f))
-                            .build(),
-                    )
-                    .setClickable(
-                        ModifiersBuilders.Clickable.Builder()
-                            .setId("quick_game")
-                            .setOnClick(
-                                tileLaunchAction(
-                                    status = data.status,
-                                    packageName = packageName,
-                                    activityClassName = WearActivity::class.java.name,
-                                ),
-                            )
-                            .build(),
-                    )
-                    .build(),
+                quickGameTileModifiers(
+                    data = data,
+                    packageName = packageName,
+                    activityClassName = WearActivity::class.java.name,
+                ),
             )
             .addContent(column.build())
             .build()
