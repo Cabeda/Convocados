@@ -123,57 +123,74 @@ async function triggerDbMaintenance(): Promise<void> {
   console.log("[scheduler] DB maintenance completed:", JSON.stringify(body));
 }
 
-async function triggerPickupSweep(): Promise<void> {
-  const res = await fetch(`${APP_URL}/api/cron/pickups`, {
+/**
+ * POST one internal cron endpoint and log what it reports.
+ *
+ * Every trigger is the same request — POST, bearer token, timeout, throw on a
+ * non-2xx — so they differ only in the path, the label used in the error and
+ * log lines, and which body counts are worth reporting. `countKeys` names the
+ * counts that earn a log line when non-zero; an empty list logs every pass.
+ */
+async function triggerCron(
+  path: string,
+  label: string,
+  countKeys: readonly string[] = [],
+): Promise<void> {
+  const res = await fetch(`${APP_URL}${path}`, {
     method: "POST",
     headers: { authorization: `Bearer ${CRON_SECRET}` },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) {
-    throw new Error(`Pickup sweep cron failed: ${res.status} ${res.statusText}`);
+    throw new Error(`${label} cron failed: ${res.status} ${res.statusText}`);
   }
 
   const body = await res.json() as Record<string, unknown>;
-  console.log("[scheduler] Pickup sweep completed:", JSON.stringify(body));
-}
-
-async function triggerRecurringAdvance(): Promise<void> {
-  const res = await fetch(`${APP_URL}/api/cron/advance-recurring`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${CRON_SECRET}` },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Recurring advance cron failed: ${res.status} ${res.statusText}`);
-  }
-
-  const body = await res.json() as Record<string, unknown>;
-  if (Number(body.advanced ?? 0) > 0 || Number(body.failed ?? 0) > 0) {
-    console.log("[scheduler] Recurring advance completed:", JSON.stringify(body));
+  if (countKeys.length === 0 || countKeys.some((key) => Number(body[key] ?? 0) > 0)) {
+    console.log(`[scheduler] ${label} completed:`, JSON.stringify(body));
   }
 }
 
-async function triggerInviteExpiry(): Promise<void> {
-  const res = await fetch(`${APP_URL}/api/cron/invite-expiry`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${CRON_SECRET}` },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+const triggerPickupSweep = (): Promise<void> => triggerCron("/api/cron/pickups", "Pickup sweep");
 
-  if (!res.ok) {
-    throw new Error(`Invite expiry cron failed: ${res.status} ${res.statusText}`);
-  }
+const triggerRecurringAdvance = (): Promise<void> =>
+  triggerCron("/api/cron/advance-recurring", "Recurring advance", ["advanced", "failed"]);
 
-  const body = await res.json() as Record<string, unknown>;
-  if (Number(body.expired ?? 0) > 0) {
-    console.log("[scheduler] Invite expiry completed:", JSON.stringify(body));
+const triggerInviteExpiry = (): Promise<void> =>
+  triggerCron("/api/cron/invite-expiry", "Invite expiry", ["expired"]);
+
+/**
+ * Run one periodic trigger at most once per `intervalMs`, and only while
+ * `gate` allows — the pickup sweep is pinned to fixed UTC hours. Failures are
+ * logged and swallowed so a broken cron cannot stall the loop, and the stamp
+ * advances only on success, so a failing trigger is retried on the next tick
+ * rather than being skipped for a whole interval.
+ */
+async function runTick(
+  trigger: () => Promise<void>,
+  label: string,
+  intervalMs: number,
+  last: number,
+  now: number,
+  gate?: () => boolean,
+): Promise<number> {
+  if (now - last < intervalMs) return last;
+  if (gate && !gate()) return last;
+
+  try {
+    await trigger();
+  } catch (err) {
+    console.error(`[scheduler] ${label} error:`, err);
+    return last;
   }
+  return now;
 }
 
 async function runLoop() {
-  let pollInterval = POLL_IDLE_MS;
+  // No initialiser: every branch of the poll below assigns before the value is
+  // read, so seeding it with POLL_IDLE_MS would be a dead assignment.
+  let pollInterval: number;
   let lastMaintenance = 0;
   let lastCourtWatch = 0;
   let lastDbMaintenance = 0;
@@ -181,7 +198,6 @@ async function runLoop() {
   let lastRecurringAdvance = 0;
   let lastInviteExpiry = 0;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const start = Date.now();
 
@@ -217,38 +233,27 @@ async function runLoop() {
     }
 
     // Twice-daily Open Pickup sweep (09:00 / 21:00 UTC, at most once per hour).
-    const utcHour = new Date().getUTCHours();
-    if (PICKUP_SWEEP_HOURS.includes(utcHour) && start - lastPickupSweep >= 60 * 60 * 1000) {
-      try {
-        await triggerPickupSweep();
-        lastPickupSweep = start;
-      } catch (err) {
-        console.error("[scheduler] Pickup sweep error:", err);
-      }
-    }
+    lastPickupSweep = await runTick(
+      triggerPickupSweep,
+      "Pickup sweep",
+      60 * 60 * 1000,
+      lastPickupSweep,
+      start,
+      () => PICKUP_SWEEP_HOURS.includes(new Date().getUTCHours()),
+    );
 
     // Eager recurring-occurrence advance (issue #1176) — keeps recurring
     // events listed on Discover and next-occurrence reminders armed without
     // waiting for someone to open the event page.
-    if (start - lastRecurringAdvance >= RECURRING_ADVANCE_INTERVAL_MS) {
-      try {
-        await triggerRecurringAdvance();
-        lastRecurringAdvance = start;
-      } catch (err) {
-        console.error("[scheduler] Recurring advance error:", err);
-      }
-    }
+    lastRecurringAdvance = await runTick(
+      triggerRecurringAdvance, "Recurring advance", RECURRING_ADVANCE_INTERVAL_MS, lastRecurringAdvance, start,
+    );
 
     // Eager pending-invite expiry (GH #1273) — keeps "Invited" pills from
     // living on past occurrences, which no read path can reach.
-    if (start - lastInviteExpiry >= INVITE_EXPIRY_INTERVAL_MS) {
-      try {
-        await triggerInviteExpiry();
-        lastInviteExpiry = start;
-      } catch (err) {
-        console.error("[scheduler] Invite expiry error:", err);
-      }
-    }
+    lastInviteExpiry = await runTick(
+      triggerInviteExpiry, "Invite expiry", INVITE_EXPIRY_INTERVAL_MS, lastInviteExpiry, start,
+    );
 
     try {
       const jobs = await fetchDueJobs();
