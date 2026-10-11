@@ -16,8 +16,8 @@ import androidx.compose.ui.res.stringResource
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundSafeTextLines
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -83,13 +83,14 @@ fun GameSettingsScreen(
                 item {
                     val time = Instant.ofEpochMilli(state.kickoffEpochMs)
                         .atZone(ZoneId.systemDefault()).format(timeFormat)
+                    val kickoffLines = roundSafeTextLines(roundLines = 2)
                     Text(
                         text = "Kickoff $time" + if (state.isKickoffOverridden) " (set)" else "",
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.fillMaxWidth().roundListInset(),
                         textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = kickoffLines.maxLines,
+                        overflow = kickoffLines.overflow,
                     )
                 }
                 item {
@@ -129,6 +130,7 @@ fun GameSettingsScreen(
 
                 if (state.vibrationEnabled) {
                     item {
+                        val everyLines = roundSafeTextLines()
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().roundListInset()) {
                             Text(
                                 text = "Every",
@@ -136,8 +138,8 @@ fun GameSettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                maxLines = everyLines.maxLines,
+                                overflow = everyLines.overflow,
                             )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,

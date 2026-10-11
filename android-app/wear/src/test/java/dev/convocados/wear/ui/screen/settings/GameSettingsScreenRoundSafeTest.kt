@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
@@ -13,6 +14,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextOverflow
 import dev.convocados.wear.ui.ROUND_LIST_INSET
 import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_LIST_TAG
 import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_TAG
@@ -21,6 +24,7 @@ import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -89,6 +93,59 @@ class GameSettingsScreenRoundSafeTest {
         assertFillsDisplay("keep screen on", boundsOf("keep screen on", hasText(KEEP_SCREEN_ON)), displayWidth)
         assertFillsDisplay("vibration alerts", boundsOf("vibration alerts", hasText(VIBRATION_ALERTS)), displayWidth)
         assertFillsDisplay("interval label", boundsOf("interval label", hasText(EVERY_LABEL)), displayWidth)
+    }
+
+    // GH #1276 review — the round bezel's ellipsis was applied on square
+    // displays too, where the inset is a no-op and the text used to wrap.
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun `square settings labels keep their full line budget`() {
+        setContent()
+
+        assertNotLineLimited("kickoff label", hasText(KICKOFF_LABEL, substring = true))
+        assertNotLineLimited("interval label", hasText(EVERY_LABEL))
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun `round settings labels stay on ellipsised lines`() {
+        setContent()
+
+        assertEllipsised("kickoff label", hasText(KICKOFF_LABEL, substring = true), roundLines = 2)
+        assertEllipsised("interval label", hasText(EVERY_LABEL), roundLines = 1)
+    }
+
+    // ── line budget ─────────────────────────────────────────────────────
+
+    /** How the label actually laid out; a clipped text still reports the whole string. */
+    private fun textLayout(label: String, matcher: SemanticsMatcher): TextLayoutResult {
+        composeRule.onNode(screenList).performScrollToNode(matcher)
+        composeRule.waitForIdle()
+        val node = composeRule.onNode(matcher).fetchSemanticsNode(label)
+        val results = mutableListOf<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+        return results.firstOrNull()
+            ?: throw AssertionError("$label carries no text layout, so its clipping cannot be measured")
+    }
+
+    private fun assertNotLineLimited(label: String, matcher: SemanticsMatcher) {
+        val layout = textLayout(label, matcher)
+        assertEquals(
+            "$label is limited to ${layout.layoutInput.maxLines} line(s) on a square display — " +
+                "the round-only ellipsis clips text that used to wrap",
+            Int.MAX_VALUE,
+            layout.layoutInput.maxLines,
+        )
+        assertEquals("$label clips on a square display", TextOverflow.Clip, layout.layoutInput.overflow)
+    }
+
+    private fun assertEllipsised(label: String, matcher: SemanticsMatcher, roundLines: Int) {
+        val layout = textLayout(label, matcher)
+        assertEquals("$label must be ellipsised on a round display", TextOverflow.Ellipsis, layout.layoutInput.overflow)
+        assertTrue(
+            "$label is allowed ${layout.layoutInput.maxLines} line(s), expected at most $roundLines",
+            layout.layoutInput.maxLines <= roundLines,
+        )
     }
 
     // ── render ──────────────────────────────────────────────────────────

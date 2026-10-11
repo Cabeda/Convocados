@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
@@ -18,11 +19,14 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToNode
 import dev.convocados.wear.data.local.QuickGameState
 import dev.convocados.wear.data.local.entity.WearGameEntity
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextOverflow
 import dev.convocados.wear.ui.ROUND_LIST_INSET
 import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_LIST_TAG
 import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_TAG
 import dev.convocados.wear.ui.RoundSafeReferenceRow
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -100,6 +104,57 @@ class SaveQuickGameScreenRoundSafeTest {
             error = ERROR_TEXT,
         )
         assertFillsDisplay("no events", boundsOf("no events", hasText(NO_EVENTS)), displayWidth)
+    }
+
+    // GH #1276 review — the round bezel's ellipsis was applied on square
+    // displays too, where the inset is a no-op and the text used to wrap.
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun `square event button keeps its full line budget`() {
+        setContent()
+
+        assertNotLineLimited("event button", hasText(EVENT_TITLE))
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun `round event button stays on one ellipsised line`() {
+        setContent()
+
+        assertEllipsised("event button", hasText(EVENT_TITLE), roundLines = 1)
+    }
+
+    // ── line budget ─────────────────────────────────────────────────────
+
+    /** How the label actually laid out; a clipped text still reports the whole string. */
+    private fun textLayout(label: String, matcher: SemanticsMatcher): TextLayoutResult {
+        composeRule.onNode(screenList).performScrollToNode(matcher)
+        composeRule.waitForIdle()
+        val node = composeRule.onNode(matcher).fetchSemanticsNode(label)
+        val results = mutableListOf<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+        return results.firstOrNull()
+            ?: throw AssertionError("$label carries no text layout, so its clipping cannot be measured")
+    }
+
+    private fun assertNotLineLimited(label: String, matcher: SemanticsMatcher) {
+        val layout = textLayout(label, matcher)
+        assertEquals(
+            "$label is limited to ${layout.layoutInput.maxLines} line(s) on a square display — " +
+                "the round-only ellipsis clips text that used to wrap",
+            Int.MAX_VALUE,
+            layout.layoutInput.maxLines,
+        )
+        assertEquals("$label clips on a square display", TextOverflow.Clip, layout.layoutInput.overflow)
+    }
+
+    private fun assertEllipsised(label: String, matcher: SemanticsMatcher, roundLines: Int) {
+        val layout = textLayout(label, matcher)
+        assertEquals("$label must be ellipsised on a round display", TextOverflow.Ellipsis, layout.layoutInput.overflow)
+        assertTrue(
+            "$label is allowed ${layout.layoutInput.maxLines} line(s), expected at most $roundLines",
+            layout.layoutInput.maxLines <= roundLines,
+        )
     }
 
     // ── states ──────────────────────────────────────────────────────────

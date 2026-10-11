@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
@@ -15,6 +16,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToNode
 import dev.convocados.wear.data.api.MvpParticipant
 import dev.convocados.wear.data.api.MvpResponse
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextOverflow
 import dev.convocados.wear.ui.ROUND_LIST_INSET
 import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_LIST_TAG
 import dev.convocados.wear.ui.ROUND_SAFE_ANCHOR_TAG
@@ -23,6 +26,7 @@ import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -118,6 +122,38 @@ class MvpVotingScreenRoundSafeTest {
         render(votingClosed())
         assertFillsDisplay("voting closed", boundsOf("voting closed", hasText(VOTING_CLOSED)), displayWidth)
         assertFillsDisplay("no votes", boundsOf("no votes", hasText(NO_VOTES)), displayWidth)
+    }
+
+    // GH #1276 review — the ellipsis that keeps a long label off the round
+    // bezel was applied on square displays too, where the inset is a no-op and
+    // the text used to wrap. A square display must not be line-limited.
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun `square vote prompt and names keep their full line budget`() {
+        setContent()
+        render(votingOpen())
+
+        assertNotLineLimited("vote prompt", hasText(VOTE_PROMPT))
+        assertNotLineLimited("vote button", hasText(longNameOne, substring = true))
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun `square long prompt wraps instead of being clipped`() {
+        setContent()
+        render(MvpVotingUiState(isLoading = false, error = errorText))
+
+        assertWraps("error message", hasText(errorText, substring = true), atLeastLines = 2)
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun `round vote prompt and names stay on one ellipsised line`() {
+        setContent()
+        render(votingOpen())
+
+        assertEllipsised("vote prompt", hasText(VOTE_PROMPT), roundLines = 1)
+        assertEllipsised("vote button", hasText(longNameOne, substring = true), roundLines = 1)
     }
 
     // ── states ──────────────────────────────────────────────────────────
@@ -238,6 +274,67 @@ class MvpVotingScreenRoundSafeTest {
                 "must not be applied on square displays")
                 .format(label, fraction * 100, MIN_SQUARE_FILL_FRACTION * 100),
             fraction >= MIN_SQUARE_FILL_FRACTION,
+        )
+    }
+
+    // ── line budget ─────────────────────────────────────────────────────
+
+    /**
+     * How the label actually laid out. A clipped text still reports the whole
+     * string in its semantics, so the ellipsis is only visible here.
+     */
+    private fun textLayout(label: String, matcher: SemanticsMatcher): TextLayoutResult {
+        composeRule.onNode(screenList).performScrollToNode(matcher)
+        composeRule.waitForIdle()
+        val node = composeRule.onNode(matcher).fetchSemanticsNode(label)
+        val results = mutableListOf<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+        return results.firstOrNull()
+            ?: throw AssertionError("$label carries no text layout, so its clipping cannot be measured")
+    }
+
+    /**
+     * The ellipsis is a round-only affordance: on a square display the row is
+     * full width and the label must keep the default budget, wrapping as it
+     * did before the inset fix.
+     */
+    private fun assertNotLineLimited(label: String, matcher: SemanticsMatcher) {
+        val layout = textLayout(label, matcher)
+        assertEquals(
+            "$label is limited to ${layout.layoutInput.maxLines} line(s) on a square display — " +
+                "the round-only ellipsis clips text that used to wrap",
+            Int.MAX_VALUE,
+            layout.layoutInput.maxLines,
+        )
+        assertEquals(
+            "$label clips on a square display",
+            TextOverflow.Clip,
+            layout.layoutInput.overflow,
+        )
+    }
+
+    /** A long prompt really does get its second line on a square display. */
+    private fun assertWraps(label: String, matcher: SemanticsMatcher, atLeastLines: Int) {
+        val layout = textLayout(label, matcher)
+        assertTrue(
+            ("%s laid out on %d line(s), expected at least %d — the text is clipped before it " +
+                "can wrap")
+                .format(label, layout.lineCount, atLeastLines),
+            layout.lineCount >= atLeastLines,
+        )
+    }
+
+    /** The round half of the same bargain: one ellipsised line at most. */
+    private fun assertEllipsised(label: String, matcher: SemanticsMatcher, roundLines: Int) {
+        val layout = textLayout(label, matcher)
+        assertEquals(
+            "$label must be ellipsised on a round display",
+            TextOverflow.Ellipsis,
+            layout.layoutInput.overflow,
+        )
+        assertTrue(
+            "$label is allowed ${layout.layoutInput.maxLines} line(s), expected at most $roundLines",
+            layout.layoutInput.maxLines <= roundLines,
         )
     }
 
