@@ -147,6 +147,43 @@ class EventDetailViewModelTest {
     }
 
     @Test
+    fun `a moved player takes a free slot on the destination team`() = runTest {
+        val teamEvent = mockEvent.copy(
+            sport = "football-5v5",
+            players = listOf(
+                Player("p1", "Alice", 0),
+                Player("p2", "Bob", 1),
+                Player("p3", "Caio", 2),
+            ),
+            teamResults = listOf(
+                TeamResult("t1", "Ninjas", listOf(TeamMember("p1", "Alice", 0, slot = 1))),
+                TeamResult("t2", "Gunas", listOf(TeamMember("p2", "Bob", 0, slot = 0))),
+            ),
+        )
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(teamEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(teamEvent.players)
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        val releaseUpdate = CompletableDeferred<OkResponse>()
+        coEvery { api.updateTeams(eventId, any(), any()) } coAnswers { releaseUpdate.await() }
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+
+            viewModel.movePlayerToTeam(eventId, "p1", "Alice", toTeamOne = false)
+            runCurrent()
+
+            val destination = expectMostRecentItem().event?.teamResults?.get(1)
+            assertEquals(1, destination?.members?.first { it.name == "Alice" }?.slot)
+
+            releaseUpdate.complete(OkResponse(true))
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `load fetches event details and history`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())

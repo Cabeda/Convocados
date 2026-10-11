@@ -72,8 +72,6 @@ fun TeamFieldView(
     modifier: Modifier = Modifier,
 ) {
     if (teams.size != 2) return
-    val formation = remember(sport) { defaultFormation(sport) }
-    val slotCount = formation.slots.size
     var pitchHeight by remember { mutableIntStateOf(0) }
     var drag by remember { mutableStateOf<FieldDrag?>(null) }
 
@@ -101,6 +99,10 @@ fun TeamFieldView(
         )
         Column(Modifier.fillMaxSize()) {
             teams.forEachIndexed { teamIndex, team ->
+                // Each team keeps its own stored formation; only a missing or
+                // unresolvable one falls back to the sport default.
+                val formation = remember(sport, team.formation) { resolveFormation(sport, team.formation) }
+                val slotCount = formation.slots.size
                 TeamHalf(
                     team = team,
                     teamIndex = teamIndex,
@@ -152,9 +154,7 @@ private fun TeamHalf(
     modifier: Modifier = Modifier,
 ) {
     val slotCount = formation.slots.size
-    val members = team.members
-    val placed = members.take(slotCount)
-    val unplaced = members.drop(slotCount)
+    val layout = remember(team.members, slotCount) { applyFormationLayout(team.members, slotCount) }
 
     Column(
         modifier
@@ -176,24 +176,24 @@ private fun TeamHalf(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                "${members.size}",
+                "${team.members.size}",
                 color = Color.White.copy(alpha = 0.8f),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
             )
         }
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            placed.forEachIndexed { slotIndex, member ->
-                val slot = formation.slots[slotIndex]
+            layout.placed.forEach { placed ->
+                val slot = formation.slots[placed.slot]
                 val xFraction = slot.y
                 val yFraction = if (teamIndex == 0) slot.x else 1f - slot.x
                 PlayerToken(
-                    name = member.name,
-                    rating = ratings?.get(member.name),
-                    draggable = canEdit && playerIds.containsKey(member.name),
-                    dragging = drag?.name == member.name,
-                    dragOffset = if (drag?.name == member.name) drag.offset else Offset.Zero,
-                    onDragStart = { onDragStart(member.name, slotIndex) },
+                    name = placed.member.name,
+                    rating = ratings?.get(placed.member.name),
+                    draggable = canEdit && playerIds.containsKey(placed.member.name),
+                    dragging = drag?.name == placed.member.name,
+                    dragOffset = if (drag?.name == placed.member.name) drag.offset else Offset.Zero,
+                    onDragStart = { onDragStart(placed.member.name, placed.slot) },
                     onDrag = onDrag,
                     onDragEnd = onDragEnd,
                     onDragCancel = onDragCancel,
@@ -201,7 +201,7 @@ private fun TeamHalf(
                 )
             }
         }
-        if (unplaced.isNotEmpty()) {
+        if (layout.unplaced.isNotEmpty()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -212,7 +212,7 @@ private fun TeamHalf(
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
-                unplaced.forEach { member ->
+                layout.unplaced.forEach { member ->
                     PlayerToken(
                         name = member.name,
                         rating = ratings?.get(member.name),

@@ -724,7 +724,12 @@ class EventDetailViewModel @Inject constructor(
                 member.id == playerId || (isSource && member.name == playerName)
             }
             val updatedMembers = if (isDestination) {
-                remainingMembers + TeamMember(playerId, playerName, remainingMembers.size)
+                // The field places members by their stored slot, so the moved
+                // player needs one before the server answers — the destination
+                // team's first free slot, as the web's `firstFreeSlot` does.
+                val slotCount = resolveFormation(event.sport, team.formation).slots.size
+                val freeSlot = (0 until slotCount).firstOrNull { slot -> remainingMembers.none { it.slot == slot } }
+                remainingMembers + TeamMember(playerId, playerName, remainingMembers.size, slot = freeSlot)
             } else {
                 remainingMembers
             }
@@ -2461,8 +2466,8 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
         ownerId = "u_demo", ownerName = "João", isAdmin = true, eloEnabled = true, splitCostsEnabled = true, mvpEnabled = true,
         players = players,
         teamResults = listOf(
-            TeamResult("t1", "Whites", listOf(TeamMember("p1", "Marta", 0), TeamMember("p3", "Alex", 1), TeamMember("p5", "Rui", 2))),
-            TeamResult("t2", "Blues", listOf(TeamMember("p2", "João", 0), TeamMember("p4", "Sofia", 1), TeamMember("p6", "Tiago", 2))),
+            TeamResult("t1", "Whites", listOf(TeamMember("p1", "Marta", 0, slot = 0), TeamMember("p3", "Alex", 1, slot = 1), TeamMember("p5", "Rui", 2, slot = 2))),
+            TeamResult("t2", "Blues", listOf(TeamMember("p2", "João", 0, slot = 0), TeamMember("p4", "Sofia", 1, slot = 1), TeamMember("p6", "Tiago", 2, slot = 2))),
         ),
         invited = listOf(RosterPlayer("i1", "Hugo"), RosterPlayer("i2", "Beatriz")),
         declined = listOf(RosterPlayer("d1", "Marco")),

@@ -69,6 +69,36 @@ class ModelsTest {
     }
 
     @Test
+    fun `decodes the stored formation of a team`() {
+        val team = json.decodeFromString<TeamResult>(
+            """{"id":"t1","name":"Whites","formation":"2-2-2","members":[]}"""
+        )
+        assertEquals("2-2-2", team.formation)
+    }
+
+    @Test
+    fun `defaults a team formation to null when absent`() {
+        val team = json.decodeFromString<TeamResult>("""{"id":"t1","name":"Whites","members":[]}""")
+        assertNull(team.formation)
+    }
+
+    @Test
+    fun `decodes the stored slot of a team member`() {
+        val team = json.decodeFromString<TeamResult>(
+            """{"id":"t1","name":"Whites","members":[{"id":"m1","name":"Ana","order":0,"slot":2}]}"""
+        )
+        assertEquals(2, team.members[0].slot)
+    }
+
+    @Test
+    fun `defaults a team member slot to null when absent`() {
+        val team = json.decodeFromString<TeamResult>(
+            """{"id":"t1","name":"Whites","members":[{"id":"m1","name":"Ana","order":0}]}"""
+        )
+        assertNull(team.members[0].slot)
+    }
+
+    @Test
     fun `decodes rankStanding crew pointsDelta and result-card fields`() {
         val status = json.decodeFromString<PostGameStatus>(
             """
