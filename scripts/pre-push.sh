@@ -23,13 +23,13 @@ if [ $? -ne 0 ]; then
 fi
 
 # Dex ledger integrity — .dex/tasks.jsonl is merge=union, so a rebase/merge
-# across main can splice duplicate task lines silently. Same check as CI
-# (`dex-ledger` job); a duplicated id corrupts the ledger.
+# across main can splice duplicate task lines silently. Warn only: the check
+# reads the working tree, and a duplicate sitting in it should not block a push
+# unrelated to the ledger. The `dex-ledger` CI job is the blocking backstop.
 echo "→ Checking dex ledger for duplicates..."
 node "$root/scripts/dex-dedupe.mjs" --check
 if [ $? -ne 0 ]; then
-  echo "✗ Duplicate task id in .dex/tasks.jsonl. Run 'node scripts/dex-dedupe.mjs' and commit."
-  exit 1
+  echo "⚠ Duplicate task id in .dex/tasks.jsonl — run 'node scripts/dex-dedupe.mjs' and commit. CI will fail otherwise."
 fi
 
 # SAST (semgrep) — optional, slow (~60s). Warn-only in pre-push, CI enforces.

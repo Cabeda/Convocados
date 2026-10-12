@@ -126,11 +126,17 @@ describe("agent environment guardrails", () => {
     expect(ci).toMatch(/^\s{2}pr-links-issue:\s*$/m);
     expect(ci).toMatch(/^\s{2}dex-ledger:\s*$/m);
     expect(ci).toMatch(/node scripts\/dex-dedupe\.mjs --check/);
+    // The closing-keyword logic is a tested module, not an inline snippet.
+    expect(ci).toMatch(/node scripts\/check-pr-closing-keyword\.mjs/);
+    // `labeled`/`unlabeled` re-run the job so the `no-issue` hatch can turn it
+    // green; `edited` re-checks a body changed after green.
+    expect(ci).toMatch(/types: \[[^\]]*\blabeled\b[^\]]*\]/);
+    expect(ci).toMatch(/types: \[[^\]]*\bedited\b[^\]]*\]/);
     expect(ci).toMatch(/needs: \[[^\]]*\bdex-ledger\b[^\]]*\]/);
     expect(ci).toMatch(/needs: \[[^\]]*\bpr-links-issue\b[^\]]*\]/);
 
-    // The ledger check also runs locally: the hazard (a union-merge splice of
-    // duplicate lines) happens during a rebase, before CI ever sees it.
+    // The ledger check also runs locally (warn-only; CI blocks): the hazard (a
+    // union-merge splice of duplicate lines) happens during a rebase.
     const hook = await read("scripts/pre-push.sh");
     expect(hook).toMatch(/dex-dedupe\.mjs" --check/);
   });
