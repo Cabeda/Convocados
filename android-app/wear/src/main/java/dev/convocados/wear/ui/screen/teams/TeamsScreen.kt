@@ -28,7 +28,11 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import dev.convocados.wear.ui.RememberKeepScreenOn
+import dev.convocados.wear.ui.MIN_TOUCH_TARGET
+import dev.convocados.wear.ui.WearChoiceRow
+import dev.convocados.wear.ui.WearStepButton
 import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundSafeTextLines
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 import java.time.Instant
@@ -139,7 +143,7 @@ fun TeamsScreen(
                             } else {
                                 PlayerChip(
                                     player = player,
-                                    targetTeam = "2",
+                                    targetTeam = state.teamTwoName.ifBlank { "2" },
                                     isArrived = player.id in state.arrivedIds,
                                     onMove = { viewModel.movePlayerToTeamTwo(player) },
                                     onToggleArrived = { viewModel.toggleArrived(player.id) },
@@ -176,7 +180,7 @@ fun TeamsScreen(
                             } else {
                                 PlayerChip(
                                     player = player,
-                                    targetTeam = "1",
+                                    targetTeam = state.teamOneName.ifBlank { "1" },
                                     isArrived = player.id in state.arrivedIds,
                                     onMove = { viewModel.movePlayerToTeamOne(player) },
                                     onToggleArrived = { viewModel.toggleArrived(player.id) },
@@ -199,6 +203,8 @@ fun TeamsScreen(
                             items(state.unassigned, key = { "u-${it.id}" }) { player ->
                                 UnassignedPlayerChip(
                                     player = player,
+                                    teamOneName = state.teamOneName.ifBlank { "1" },
+                                    teamTwoName = state.teamTwoName.ifBlank { "2" },
                                     onMoveToOne = { viewModel.movePlayerToTeamOne(player) },
                                     onMoveToTwo = { viewModel.movePlayerToTeamTwo(player) },
                                 )
@@ -293,16 +299,23 @@ fun TeamsScreen(
                             }
                         }
                         item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.Center,
-                            ) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    CompactButton(onClick = { settingsViewModel.nudgeKickoff(-1) }) { Text("−1m") }
-                                    CompactButton(onClick = { settingsViewModel.nudgeKickoff(1) }) { Text("+1m") }
-                                    if (settingsState.isKickoffOverridden) {
-                                        CompactButton(onClick = { settingsViewModel.resetKickoff() }) { Text("Reset") }
-                                    }
+                            WearChoiceRow(modifier = Modifier.roundListInset()) {
+                                Button(
+                                    onClick = { settingsViewModel.nudgeKickoff(-1) },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.filledTonalButtonColors(),
+                                ) { Text("−1m") }
+                                Button(
+                                    onClick = { settingsViewModel.nudgeKickoff(1) },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.filledTonalButtonColors(),
+                                ) { Text("+1m") }
+                                if (settingsState.isKickoffOverridden) {
+                                    Button(
+                                        onClick = { settingsViewModel.resetKickoff() },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.filledTonalButtonColors(),
+                                    ) { Text("Reset") }
                                 }
                             }
                         }
@@ -313,7 +326,7 @@ fun TeamsScreen(
                                 checked = settingsState.keepScreenOn,
                                 onCheckedChange = { settingsViewModel.setKeepScreenOn(it) },
                                 label = { Text(stringResource(R.string.keep_screen_on_label)) },
-                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                modifier = Modifier.fillMaxWidth().roundListInset().heightIn(min = MIN_TOUCH_TARGET),
                             )
                         }
 
@@ -323,7 +336,7 @@ fun TeamsScreen(
                                 checked = settingsState.gameEndVibration,
                                 onCheckedChange = { settingsViewModel.setGameEndVibration(it) },
                                 label = { Text(stringResource(R.string.game_end_vibration_label)) },
-                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                modifier = Modifier.fillMaxWidth().roundListInset().heightIn(min = MIN_TOUCH_TARGET),
                             )
                         }
 
@@ -333,7 +346,7 @@ fun TeamsScreen(
                                 checked = settingsState.vibrationEnabled,
                                 onCheckedChange = { settingsViewModel.setVibrationEnabled(it) },
                                 label = { Text("Vibration alerts") },
-                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                modifier = Modifier.fillMaxWidth().roundListInset().heightIn(min = MIN_TOUCH_TARGET),
                             )
                         }
 
@@ -345,17 +358,27 @@ fun TeamsScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    Row(
+                                    WearChoiceRow(
+                                        modifier = Modifier.roundListInset(),
+                                        arrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center,
                                     ) {
-                                        CompactButton(onClick = { settingsViewModel.setVibrationInterval(settingsState.vibrationIntervalMinutes - 1) }) { Text("−") }
+                                        WearStepButton(
+                                            label = "−",
+                                            contentDescription = "Decrease rotation interval by 1 minute",
+                                            onClick = { settingsViewModel.setVibrationInterval(settingsState.vibrationIntervalMinutes - 1) },
+                                        )
                                         Text(
                                             text = "${settingsState.vibrationIntervalMinutes} min",
                                             style = MaterialTheme.typography.titleMedium,
-                                            modifier = Modifier.padding(horizontal = 12.dp),
+                                            modifier = Modifier.weight(1f),
+                                            textAlign = TextAlign.Center,
                                         )
-                                        CompactButton(onClick = { settingsViewModel.setVibrationInterval(settingsState.vibrationIntervalMinutes + 1) }) { Text("+") }
+                                        WearStepButton(
+                                            label = "+",
+                                            contentDescription = "Increase rotation interval by 1 minute",
+                                            onClick = { settingsViewModel.setVibrationInterval(settingsState.vibrationIntervalMinutes + 1) },
+                                        )
                                     }
                                 }
                             }
@@ -370,17 +393,20 @@ fun TeamsScreen(
                                             color = MaterialTheme.colorScheme.error,
                                             textAlign = TextAlign.Center,
                                         )
-                                        CompactButton(onClick = {
-                                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                                                runCatching {
-                                                    context.startActivity(
-                                                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                                                            .setData(android.net.Uri.parse("package:${context.packageName}"))
-                                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                                    )
+                                        Button(
+                                            onClick = {
+                                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                                    runCatching {
+                                                        context.startActivity(
+                                                            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                                                .setData(android.net.Uri.parse("package:${context.packageName}"))
+                                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                                        )
+                                                    }
                                                 }
-                                            }
-                                        }) { Text("Allow") }
+                                            },
+                                            colors = ButtonDefaults.filledTonalButtonColors(),
+                                        ) { Text("Allow") }
                                     }
                                 }
                             }
@@ -389,7 +415,10 @@ fun TeamsScreen(
                         // Add player button
                         item {
                             Spacer(modifier = Modifier.height(4.dp))
-                            CompactButton(onClick = onAddPlayer) {
+                            Button(
+                                onClick = onAddPlayer,
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                            ) {
                                 Text(stringResource(R.string.add_player_button))
                             }
                         }
@@ -397,7 +426,11 @@ fun TeamsScreen(
                         // Done button
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
-                            CompactButton(onClick = onDone) {
+                            Button(
+                                onClick = onDone,
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                colors = ButtonDefaults.filledTonalButtonColors(),
+                            ) {
                                 Text(stringResource(R.string.done))
                             }
                         }
@@ -435,13 +468,14 @@ private fun PlayerChip(
                         modifier = Modifier
                             .fillMaxWidth()
                             .roundListInset()
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+                            .clip(MaterialTheme.shapes.large)
                             .background(MaterialTheme.colorScheme.secondaryContainer)
                             .combinedClickable(
                                 onClick = onMove,
                                 onLongClick = onToggleArrived,
                             )
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            .heightIn(min = MIN_TOUCH_TARGET)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
         Text(
             text = if (isArrived) "✓ ${player.name}" else player.name,
@@ -450,19 +484,26 @@ private fun PlayerChip(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        val targetLines = roundSafeTextLines()
         Text(
             text = stringResource(R.string.move_to_team, targetTeam) +
                 if (isArrived) " · " + stringResource(R.string.arrived_label) else "",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            maxLines = targetLines.maxLines,
+            overflow = targetLines.overflow,
         )
     }
 }
 
 @Composable
-private fun UnassignedPlayerChip(player: WearPlayerEntity, onMoveToOne: () -> Unit, onMoveToTwo: () -> Unit) {
+private fun UnassignedPlayerChip(
+    player: WearPlayerEntity,
+    teamOneName: String,
+    teamTwoName: String,
+    onMoveToOne: () -> Unit,
+    onMoveToTwo: () -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth().roundListInset(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = player.name,
@@ -477,21 +518,28 @@ private fun UnassignedPlayerChip(player: WearPlayerEntity, onMoveToOne: () -> Un
             modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
             horizontalArrangement = Arrangement.Center,
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                CompactButton(onClick = onMoveToOne) {
+            WearChoiceRow {
+                val destinationLines = roundSafeTextLines()
+                Button(
+                    onClick = onMoveToOne,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                ) {
                     Text(
-                        text = stringResource(R.string.move_to_team, "1"),
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = stringResource(R.string.move_to_team, teamOneName),
+                        maxLines = destinationLines.maxLines,
+                        overflow = destinationLines.overflow,
                     )
                 }
-                CompactButton(onClick = onMoveToTwo) {
+                Button(
+                    onClick = onMoveToTwo,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                ) {
                     Text(
-                        text = stringResource(R.string.move_to_team, "2"),
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = stringResource(R.string.move_to_team, teamTwoName),
+                        maxLines = destinationLines.maxLines,
+                        overflow = destinationLines.overflow,
                     )
                 }
             }

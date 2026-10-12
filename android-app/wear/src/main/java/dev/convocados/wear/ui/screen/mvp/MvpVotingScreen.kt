@@ -23,7 +23,6 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.CircularProgressIndicator
-import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.ListHeaderDefaults
 import androidx.wear.compose.material3.MaterialTheme
@@ -107,7 +106,10 @@ fun MvpVotingScreen(
                                 color = MaterialTheme.colorScheme.error,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            CompactButton(onClick = { viewModel.load(eventId, historyId) }) {
+                            Button(
+                                onClick = { viewModel.load(eventId, historyId) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
                                 Text(stringResource(R.string.mvp_retry))
                             }
                         }

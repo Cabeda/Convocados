@@ -40,6 +40,16 @@ class WearShapeScreenshotTest {
     @Config(qualifiers = "w390dp-h390dp-round")
     fun quickGameRound() = shot("round_quick_game") { quickGame() }
 
+    // A 1-minute alarm on a 60-minute game is the densest tick pattern the
+    // settings allow; it is the case that made the ring read as noise.
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun alarmTicksRound() = shot("round_alarm_ticks") { denseAlarms() }
+
+    @Test
+    @Config(qualifiers = "w227dp-h227dp-round")
+    fun alarmTicksSmallRound() = shot("small_round_alarm_ticks") { denseAlarms() }
+
     @Test
     @Config(qualifiers = "w390dp-h390dp-round")
     fun tennisRound() = shot("round_tennis") { tennis() }
@@ -130,6 +140,23 @@ class WearShapeScreenshotTest {
     @Config(qualifiers = "w390dp-h390dp-round")
     fun quickSetupBottomRound() =
         shotScrolledTo("round_quick_setup_bottom", "Start") { quickSetup() }
+
+    /** 60 one-minute alarms across a 60-minute game, the next one emphasised. */
+    @Composable
+    private fun denseAlarms() {
+        ScoreFixtureContent(
+            state = WearFixtures.liveScore.copy(
+                alarmFractions = (1..60).map { it / 60f },
+                nextAlarmFraction = 17 / 60f,
+            ),
+            now = WearFixtures.now,
+            onIncrementOne = {},
+            onIncrementTwo = {},
+            onDecrementOne = {},
+            onDecrementTwo = {},
+            onUndo = {},
+        )
+    }
 
     @Composable
     private fun liveScore() {

@@ -115,7 +115,9 @@ fun ScoreScreen(
                     state.history == null -> {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(16.dp),
+                            // Horizontal only: a full vertical padding eats the budget the trailing
+                            // button needs, and Column squeezes its last child before it overflows.
+                            modifier = Modifier.padding(horizontal = 16.dp),
                         ) {
                             Text(
                                 text = state.game?.title ?: stringResource(R.string.score_title),
@@ -150,7 +152,11 @@ fun ScoreScreen(
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
-                            CompactButton(onClick = onTeams) {
+                            Button(
+                                onClick = onTeams,
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                colors = ButtonDefaults.filledTonalButtonColors(),
+                            ) {
                                 Text(stringResource(R.string.teams_title))
                             }
                         }
@@ -277,7 +283,9 @@ private fun OffWindowGameContent(
     }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(16.dp),
+        // Horizontal only: a full vertical padding eats the budget the trailing
+        // button needs, and Column squeezes its last child before it overflows.
+        modifier = Modifier.padding(horizontal = 16.dp),
     ) {
         Text(
             text = state.game?.title ?: stringResource(R.string.score_title),
@@ -302,7 +310,11 @@ private fun OffWindowGameContent(
             maxLines = 2,
         )
         Spacer(modifier = Modifier.height(8.dp))
-        CompactButton(onClick = onTeams) {
+        Button(
+            onClick = onTeams,
+            modifier = Modifier.fillMaxWidth().roundListInset(),
+            colors = ButtonDefaults.filledTonalButtonColors(),
+        ) {
             Text(stringResource(R.string.open_teams))
         }
     }

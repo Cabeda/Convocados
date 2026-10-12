@@ -151,10 +151,11 @@ internal fun SaveQuickGameContent(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        CompactButton(
+                        Button(
                             onClick = onDone,
                             // Keep the trailing action clear of the round bezel.
                             modifier = Modifier.roundSafeWidth(),
+                            colors = ButtonDefaults.filledTonalButtonColors(),
                         ) {
                             Text(stringResource(R.string.done_label))
                         }

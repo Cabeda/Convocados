@@ -47,7 +47,10 @@ fun WearGamesFixtureContent(
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(20.dp)) {
                         Text(stringResource(if (offline) R.string.offline_cached else R.string.no_games), textAlign = TextAlign.Center)
                         Spacer(Modifier.height(8.dp))
-                        CompactButton(onClick = onQuickGame) { Text(stringResource(R.string.quick_game))        }
+                        Button(
+                            onClick = onQuickGame,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(stringResource(R.string.quick_game)) }
     }
                 }
             } else {
@@ -96,15 +99,16 @@ fun WearGamesFixtureContent(
                         )
                     }
                     item {
-                        CompactButton(
+                        Button(
                             onClick = onQuickGame,
-                            modifier = Modifier.roundListInset(),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                         ) { Text(stringResource(R.string.quick_game)) }
                     }
                     item {
-                        CompactButton(
+                        Button(
                             onClick = onHistory,
-                            modifier = Modifier.roundListInset(),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
+                            colors = ButtonDefaults.filledTonalButtonColors(),
                         ) { Text(stringResource(R.string.history_title)) }
                     }
                 }

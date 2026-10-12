@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -16,6 +17,9 @@ import dev.convocados.wear.data.local.QUICK_SPORT_PADEL
 import dev.convocados.wear.data.local.QUICK_SPORT_STANDARD
 import dev.convocados.wear.data.local.QUICK_SPORT_TENNIS
 import dev.convocados.wear.data.local.QuickGameState
+import dev.convocados.wear.ui.MIN_TOUCH_TARGET
+import dev.convocados.wear.ui.WearChoiceRow
+import dev.convocados.wear.ui.WearStepButton
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.roundSafeWidth
@@ -73,9 +77,10 @@ fun QuickSetupScreen(
                         }
                     }
                     item {
-                        CompactButton(
+                        Button(
                             onClick = onRestart,
                             modifier = Modifier.fillMaxWidth().roundListInset(),
+                            colors = ButtonDefaults.filledTonalButtonColors(),
                         ) {
                             Text(stringResource(R.string.restart_quick_game))
                         }
@@ -96,14 +101,14 @@ fun QuickSetupScreen(
                         )
                         Column(
                             modifier = Modifier.fillMaxWidth().roundListInset(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             listOf(
                                 QUICK_SPORT_STANDARD to R.string.sport_standard,
                                 QUICK_SPORT_TENNIS to R.string.sport_tennis,
                                 QUICK_SPORT_PADEL to R.string.sport_padel,
                             ).forEach { (value, labelRes) ->
-                                CompactButton(
+                                Button(
                                     onClick = { sport = value },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = if (sport == value) {
@@ -127,17 +132,25 @@ fun QuickSetupScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Row(
+                        WearChoiceRow(
+                            modifier = Modifier.roundListInset(),
+                            arrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
                         ) {
-                            CompactButton(onClick = { duration = maxOf(10, duration - 10) }) { Text("−") }
+                            WearStepButton(
+                                label = "−",
+                                contentDescription = "Decrease duration by 10 minutes",
+                                onClick = { duration = maxOf(10, duration - 10) },
+                            )
                             Text(
                                 text = stringResource(R.string.minutes_value, duration),
                                 style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(horizontal = 12.dp),
                             )
-                            CompactButton(onClick = { duration = minOf(120, duration + 10) }) { Text("+") }
+                            WearStepButton(
+                                label = "+",
+                                contentDescription = "Increase duration by 10 minutes",
+                                onClick = { duration = minOf(120, duration + 10) },
+                            )
                         }
                     }
                 }
@@ -148,7 +161,7 @@ fun QuickSetupScreen(
                         checked = vibrationEnabled,
                         onCheckedChange = { vibrationEnabled = it },
                         label = { Text("Vibration alerts") },
-                        modifier = Modifier.fillMaxWidth().roundListInset(),
+                        modifier = Modifier.fillMaxWidth().roundListInset().heightIn(min = MIN_TOUCH_TARGET),
                     )
                 }
 
@@ -162,13 +175,11 @@ fun QuickSetupScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             // Rotation presets (padel/tennis-friendly intervals).
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                            WearChoiceRow(modifier = Modifier.roundListInset()) {
                                 listOf(5, 10, 15).forEach { preset ->
-                                    CompactButton(
+                                    Button(
                                         onClick = { alarmInterval = preset },
+                                        modifier = Modifier.weight(1f),
                                         colors = if (alarmInterval == preset) {
                                             ButtonDefaults.buttonColors()
                                         } else {
@@ -177,17 +188,27 @@ fun QuickSetupScreen(
                                     ) { Text("$preset") }
                                 }
                             }
-                            Row(
+                            WearChoiceRow(
+                                modifier = Modifier.roundListInset(),
+                                arrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
                             ) {
-                                CompactButton(onClick = { alarmInterval = maxOf(1, alarmInterval - 1) }) { Text("−") }
+                                WearStepButton(
+                                    label = "−",
+                                    contentDescription = "Decrease rotation interval by 1 minute",
+                                    onClick = { alarmInterval = maxOf(1, alarmInterval - 1) },
+                                )
                                 Text(
                                     text = stringResource(R.string.minutes_value, alarmInterval),
                                     style = MaterialTheme.typography.titleMedium,
-                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center,
                                 )
-                                CompactButton(onClick = { alarmInterval = minOf(30, alarmInterval + 1) }) { Text("+") }
+                                WearStepButton(
+                                    label = "+",
+                                    contentDescription = "Increase rotation interval by 1 minute",
+                                    onClick = { alarmInterval = minOf(30, alarmInterval + 1) },
+                                )
                             }
                         }
                     }
