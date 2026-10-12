@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -115,6 +116,36 @@ private fun Modifier.equatorInscribedSize(
 @Composable
 fun Modifier.roundListInset(horizontal: Dp = ROUND_LIST_INSET): Modifier =
     if (LocalConfiguration.current.isScreenRound) padding(horizontal = horizontal) else this
+
+/**
+ * How many lines a row's text may take, and what happens past them.
+ *
+ * Paired because the two only mean anything together: [maxLines] without an
+ * [overflow] just cuts the text at the layout boundary, and an
+ * [TextOverflow.Ellipsis] without [maxLines] never kicks in.
+ */
+data class RoundSafeTextLines(val maxLines: Int, val overflow: TextOverflow)
+
+/**
+ * The line budget for a row's text, round-aware.
+ *
+ * On a round display a long label can spill across the bezel, so it is clipped
+ * to [roundLines] ellipsised lines. On a square display the inset such a row
+ * also carries is a documented no-op, so the text wraps as written instead —
+ * clipping it there would eat text that used to be readable (GH #1276, where
+ * an ellipsis was added to every row, square displays included).
+ *
+ * A square display asks for the platform default (`Int.MAX_VALUE` lines,
+ * `TextOverflow.Clip`), so passing this in changes nothing about a layout that
+ * never clipped in the first place.
+ */
+@Composable
+fun roundSafeTextLines(roundLines: Int = 1): RoundSafeTextLines =
+    if (LocalConfiguration.current.isScreenRound) {
+        RoundSafeTextLines(roundLines, TextOverflow.Ellipsis)
+    } else {
+        RoundSafeTextLines(Int.MAX_VALUE, TextOverflow.Clip)
+    }
 
 /**
  * Clips drawing to the circular display bounds on round screens so list

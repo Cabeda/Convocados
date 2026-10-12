@@ -51,7 +51,7 @@ describe("POST /api/me/app-open", () => {
     expect(rows[0].platform).toBe("android");
   });
 
-  it("records the platform from the body (ios), defaulting to android", async () => {
+  it("records the platform from the body (ios), unknown when none is declared", async () => {
     const iosUser = await seedUser();
     const legacyUser = await seedUser();
     mockAuth.mockResolvedValueOnce({ userId: iosUser.id, scopes: [], authMethod: "oauth", clientId: "c1" });
@@ -60,7 +60,40 @@ describe("POST /api/me/app-open", () => {
     await POST(ctx()); // older clients send no body
 
     expect((await prisma.userAppOpen.findFirstOrThrow({ where: { userId: iosUser.id } })).platform).toBe("ios");
-    expect((await prisma.userAppOpen.findFirstOrThrow({ where: { userId: legacyUser.id } })).platform).toBe("android");
+    expect((await prisma.userAppOpen.findFirstOrThrow({ where: { userId: legacyUser.id } })).platform).toBe("unknown");
+  });
+
+  it("records an explicit web platform verbatim", async () => {
+    const user = await seedUser();
+    mockAuth.mockResolvedValue({ userId: user.id, scopes: [], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx({ platform: "web" }));
+    expect(res.status).toBe(200);
+
+    const rows = await prisma.userAppOpen.findMany({ where: { userId: user.id } });
+    expect(rows[0].platform).toBe("web");
+  });
+
+  it("records an unknown platform when the body declares none", async () => {
+    const user = await seedUser();
+    mockAuth.mockResolvedValue({ userId: user.id, scopes: [], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx());
+    expect(res.status).toBe(200);
+
+    const rows = await prisma.userAppOpen.findMany({ where: { userId: user.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].platform).toBe("unknown");
+  });
+
+  it("rejects an unrecognized platform instead of counting it as android", async () => {
+    const user = await seedUser();
+    mockAuth.mockResolvedValue({ userId: user.id, scopes: [], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx({ platform: "wear" }));
+    expect(res.status).toBe(400);
+
+    expect(await prisma.userAppOpen.count({ where: { userId: user.id } })).toBe(0);
   });
 
   it("is idempotent per UTC day", async () => {

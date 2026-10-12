@@ -2,19 +2,13 @@
  * Anonymous usage metrics derived from existing Session + UserAppOpen tables.
  * No individual tracking — only aggregated counts.
  *
- * Platform split: Android (native app) vs Web (everything else).
+ * Platform split: Android and iOS (native app) vs Web (everything else),
+ * read from the `platform` recorded on each UserAppOpen heartbeat — never
+ * inferred from a session user agent, because native clients authenticate
+ * with an OAuth bearer and leave no usable session behind.
  * Web drill-down: browser (Chrome, Safari, Firefox, etc.) + OS (Windows, macOS, Linux, iOS, Android).
  */
 import { prisma } from "./db.server";
-
-// ponytail: "android" = native app (user-agent contains "Convocados" or specific
-// Android WebView patterns from the native app's Ktor client). Everything else = web.
-function isAndroidApp(ua: string | null): boolean {
-  if (!ua) return false;
-  const lower = ua.toLowerCase();
-  // The native Android app uses Ktor which includes "ktor" or the app sets a custom UA with "Convocados"
-  return lower.includes("convocados") || (lower.includes("ktor") && lower.includes("android"));
-}
 
 function parseBrowser(ua: string | null): string {
   if (!ua) return "Unknown";
@@ -60,6 +54,22 @@ function utcDay(at: Date = new Date()): Date {
 /** A heartbeat's platform bucket. Pre-column rows (null) counted as web. */
 function bucket(platform: string | null): "android" | "ios" | "web" {
   return platform === "android" || platform === "ios" ? platform : "web";
+}
+
+/**
+ * Platform evidence, strongest first (GH #1152).
+ *
+ * A user can heartbeat on more than one client inside the window, and a row
+ * that declared no platform ("unknown"/null) is the weakest evidence there is.
+ * The split therefore reads *every* row and lets the strongest declared
+ * platform win — android or ios beat "web", and "web" beats "unknown".
+ */
+const PLATFORM_PRECEDENCE: ("android" | "ios" | "web")[] = ["android", "ios", "web"];
+
+/** The bucket a user's heartbeats add up to, by the precedence above. */
+function bucketForUser(platforms: Iterable<string | null>): "android" | "ios" | "web" {
+  const declared = new Set(platforms);
+  return PLATFORM_PRECEDENCE.find((candidate) => declared.has(candidate)) ?? "web";
 }
 
 /**
@@ -124,28 +134,46 @@ export async function getUsageSummary() {
 
   // Platform split from the heartbeat rows' own platform column (native clients
   // create no session, so user-agent inference is impossible for them).
+  //
+  // No `distinct: ["userId"]` here: with several rows per user the database
+  // returns an arbitrary one of them, so the bucket would follow the order the
+  // heartbeats were written instead of the evidence. Read them all and let
+  // `bucketForUser` apply the precedence (GH #1152).
   const platformRows = await prisma.userAppOpen.findMany({
     where: { day: { gte: thirtyDaysAgo } },
     select: { userId: true, platform: true },
-    distinct: ["userId"],
   });
 
-  const platforms = { android: 0, ios: 0, web: 0 };
+  const platformsByUser = new Map<string, Set<string | null>>();
   for (const row of platformRows) {
-    platforms[bucket(row.platform)]++;
+    const declared = platformsByUser.get(row.userId) ?? new Set<string | null>();
+    declared.add(row.platform);
+    platformsByUser.set(row.userId, declared);
   }
 
-  // Web drill-down (browser/OS) still comes from sessions — it only concerns
-  // browser clients. Native users have no session and are not counted here.
+  const platforms = { android: 0, ios: 0, web: 0 };
+  const webUsers = new Set<string>();
+  for (const [userId, declared] of platformsByUser) {
+    const split = bucketForUser(declared);
+    platforms[split]++;
+    // Web-ness follows the same precedence, so the drill-down and the split
+    // above can never disagree about a user.
+    if (split === "web") webUsers.add(userId);
+  }
+
   const recentSessions = await prisma.session.findMany({
     where: { createdAt: { gte: thirtyDaysAgo } },
     select: { userId: true, userAgent: true },
     distinct: ["userId"],
   });
 
+  // Web drill-down (browser/OS) still comes from sessions, but web-ness is
+  // read from the heartbeat's own platform column — never guessed from the
+  // user agent (GH #1152). A native client's OAuth custom tab leaves a
+  // browser-looking session; attributing it by UA would mint a web user.
   const webDrillDown: WebDrillDown = { browsers: {}, os: {} };
   for (const s of recentSessions) {
-    if (isAndroidApp(s.userAgent)) continue;
+    if (!webUsers.has(s.userId)) continue;
     const browser = parseBrowser(s.userAgent);
     const os = parseOS(s.userAgent);
     webDrillDown.browsers[browser] = (webDrillDown.browsers[browser] ?? 0) + 1;

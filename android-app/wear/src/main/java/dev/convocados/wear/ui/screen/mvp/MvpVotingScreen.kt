@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -16,8 +15,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
@@ -36,6 +35,16 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundBezelClip
+import dev.convocados.wear.ui.roundSafeTextLines
+
+/**
+ * Marks the loading row; the spinner itself carries no semantics.
+ *
+ * Private, like every other test anchor in this module's screens: production
+ * exports no public constant just so a test can address a row. The wear tests
+ * own the literal they look for (GH #1276).
+ */
+private const val MVP_LOADING_ROW = "mvp_voting_loading_row"
 
 @Composable
 fun MvpVotingScreen(
@@ -81,7 +90,7 @@ fun MvpVotingScreen(
                 when {
                     state.isLoading -> item {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().roundListInset().testTag(MVP_LOADING_ROW),
                             horizontalArrangement = Arrangement.Center,
                         ) {
                             CircularProgressIndicator()
@@ -89,7 +98,7 @@ fun MvpVotingScreen(
                     }
                     state.error != null -> item {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
@@ -105,10 +114,13 @@ fun MvpVotingScreen(
                     }
                     state.response?.isVotingOpen == true && state.response?.hasVoted != null -> {
                         item {
-                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                            val promptLines = roundSafeTextLines()
+                            Column(modifier = Modifier.fillMaxWidth().roundListInset()) {
                                 Text(
                                     text = stringResource(R.string.mvp_vote_prompt),
                                     style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = promptLines.maxLines,
+                                    overflow = promptLines.overflow,
                                 )
                                 if (state.response?.hasVoted == true) {
                                     Text(
@@ -123,6 +135,7 @@ fun MvpVotingScreen(
                             items = state.response?.participants.orEmpty(),
                             key = { it.playerId },
                         ) { participant ->
+                            val nameLines = roundSafeTextLines()
                             Button(
                                 onClick = { viewModel.vote(participant.playerId) },
                                 enabled = !state.isSubmitting,
@@ -130,8 +143,8 @@ fun MvpVotingScreen(
                                 label = {
                                     Text(
                                         text = participant.playerName,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                        maxLines = nameLines.maxLines,
+                                        overflow = nameLines.overflow,
                                     )
                                 },
                                 secondaryLabel = {
@@ -144,34 +157,44 @@ fun MvpVotingScreen(
                         }
                     }
                     state.response?.isVotingOpen == true -> item {
+                        val notEligibleLines = roundSafeTextLines()
                         Text(
                             text = stringResource(R.string.mvp_not_eligible),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
+                            maxLines = notEligibleLines.maxLines,
+                            overflow = notEligibleLines.overflow,
                         )
                     }
                     else -> {
                         item {
+                            val closedLines = roundSafeTextLines()
                             Text(
                                 text = stringResource(R.string.mvp_voting_closed),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                maxLines = closedLines.maxLines,
+                                overflow = closedLines.overflow,
                             )
                         }
                         val winners = state.response?.mvp.orEmpty()
                         if (winners.isEmpty()) {
                             item {
+                                val noVotesLines = roundSafeTextLines()
                                 Text(
                                     text = stringResource(R.string.mvp_no_votes),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                    modifier = Modifier.fillMaxWidth().roundListInset(),
+                                    maxLines = noVotesLines.maxLines,
+                                    overflow = noVotesLines.overflow,
                                 )
                             }
                         } else {
                             items(winners, key = { it.playerId }) { winner ->
+                                val winnerLines = roundSafeTextLines()
                                 Button(
                                     onClick = {},
                                     enabled = false,
@@ -179,8 +202,8 @@ fun MvpVotingScreen(
                                     label = {
                                         Text(
                                             text = winner.playerName,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                            maxLines = winnerLines.maxLines,
+                                            overflow = winnerLines.overflow,
                                         )
                                     },
                                     secondaryLabel = {

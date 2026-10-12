@@ -491,7 +491,7 @@ export async function isRsvpCutoffSent(eventId: string) {
 export async function recordAppOpen(
   userId: string,
   at: Date = new Date(),
-  platform: "web" | "android" | "ios" | null = null,
+  platform: "web" | "android" | "ios" | "unknown" | null = null,
   appVersion: string | null = null,
 ) {
   const day = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()));
