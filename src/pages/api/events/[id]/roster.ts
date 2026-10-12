@@ -8,7 +8,7 @@ import { createPlayerInvite, createGuestPlayerInvite } from "~/lib/invite.server
 import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.server";
 import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "~/lib/rosterCore.server";
 import { syncGamePayments } from "~/lib/settlement.server";
-import { addPlayerToTeams, validateTeams } from "../../../../lib/teamFormation.server";
+import { finishRosterAdd } from "../../../../lib/teamFormation.server";
 
 /**
  * POST /api/events/[id]/roster — unified roster mutation (ADR 0025, #814).
@@ -197,10 +197,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     update: { userId: target.userId ?? undefined, archivedAt: null },
   });
   await syncGamePayments(event.currentGameId, eventId);
-  if (rosterState.activeCount < event.maxPlayers) {
-    await addPlayerToTeams(eventId, target.name, event.currentGameId);
-    await validateTeams(eventId, event.maxPlayers, event.currentGameId);
-  }
+  // Team sync seam: place when active, evict stale members, draw when full.
+  await finishRosterAdd(eventId, ep.name, event.maxPlayers, event.currentGameId);
 
   return Response.json({ ok: true, name: target.name, userId: target.userId });
 };

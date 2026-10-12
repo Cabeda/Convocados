@@ -73,7 +73,7 @@ beforeEach(async () => {
 });
 
 describe("players.ts remaining coverage — team edges", () => {
-  it("removePlayerFromTeams on a balanced event with a single team calls tryBalancedSwap and returns early", async () => {
+  it("removePlayerFromTeams on a balanced event with a single team falls back to remove+promote", async () => {
     const event = await seedEvent({ balanced: true, teamNames: true });
 
     await prisma.player.create({ data: { name: "P0", eventId: event.id, order: 0 } });
@@ -86,9 +86,8 @@ describe("players.ts remaining coverage — team edges", () => {
       },
     });
 
-    // Balanced event but only 1 team → skips the full-rebalance branch, removes
-    // P0, promotes P10, then re-checks balanced and calls tryBalancedSwap, which
-    // returns early because there aren't exactly 2 teams.
+    // Balanced event but only 1 team → skips the 2-team re-draw branches and
+    // falls back to the manual remove + slot-fill promote.
     await removePlayerFromTeams(event.id, "P0", "P10");
 
     const teams = await prisma.teamResult.findMany({ where: { eventId: event.id }, include: { members: true } });
