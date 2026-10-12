@@ -33,6 +33,16 @@ Gradle multi-module project — `:app` (phone/tablet) and `:wear` (Wear OS).
 - **Build**: minSdk 35 (Wear OS 5.1+) — Credential Manager's Google provider is unavailable below API 35
 - **Package**: `com.cabeda.Convocados` / namespace `dev.convocados.wear`
 - **Distribution**: dedicated Wear OS track in Play Console (form-factor opt-in required)
+- **Verification**: **every** Wear UI change is checked on **both** a round and a
+  square display before it ships. `RoundSafeLayout.kt` has a round branch and a
+  square "else", so a fix written against one shape silently no-ops on the other.
+  Minimum: `./gradlew :wear:recordRoborazziDebug`, then **open and look at** the
+  `round_*` and `square_*` PNGs in `wear/src/test/screenshots/shapes/` — a green
+  `verifyRoborazziDebug` only proves the render did not change, not that it is
+  right. Also check `w227dp-h227dp-round`, the small-round case where a flat
+  inset costs the most width. Where a watch is reachable, install the **release**
+  APK (`:wear:assembleRelease`, signed by `keystore.properties`) rather than
+  debug — debug is too slow to judge motion and interaction.
 
 ## Mission
 
@@ -627,6 +637,7 @@ Before submitting a PR:
 - [ ] Within 400 changed lines and 20 files, or the issue was split
 - [ ] i18n strings added to all 6 locales
 - [ ] Platform parity considered (web ↔ Android apps)
+- [ ] Wear UI verified on **both** round and square goldens — `recordRoborazziDebug` then actually looked at the PNGs, not just green `verify`
 - [ ] Database migrations included (if schema changed)
 - [ ] Documentation updated (if API changed)
 - [ ] No console errors in browser
