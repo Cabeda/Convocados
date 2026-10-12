@@ -12,6 +12,7 @@ import {
   processJob,
   claimJob,
   countFailedJobs,
+  getRecentJobFailures,
   CLAIM_LEASE_MS,
 } from "~/lib/scheduler.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
@@ -165,6 +166,9 @@ describe("processJob — backoff", () => {
     expect(updated!.failedAt).toBeNull();
     expect(updated!.claimedAt).toBeNull(); // claim released for the retry
     expect(updated!.runAt.getTime()).toBeGreaterThan(Date.now() + 5_000); // backoff, not immediate re-fetch
+    // The reason is captured on the row, so a retrying job is diagnosable too.
+    expect(updated!.lastError).toContain("boom");
+    expect(updated!.lastError).not.toBe("");
 
     // Not due again until the backoff elapses — worker polls find nothing.
     expect(await getDueJobs()).toHaveLength(0);
@@ -185,6 +189,63 @@ describe("processJob — backoff", () => {
     expect(updated!.claimedAt).toBeNull();
     expect(await getDueJobs()).toHaveLength(0);
     expect(await countFailedJobs()).toBe(1);
+    expect(updated!.lastError).toContain("boom");
+
+    // The failure list carries the reason, so a human can diagnose without
+    // production DB access or log history that no longer exists.
+    const failed = await getRecentJobFailures();
+    expect(failed).toHaveLength(1);
+    expect(failed[0].id).toBe(job.id);
+    expect(failed[0].lastError).toContain("boom");
+    expect(failed[0].failedAt).not.toBeNull();
+    expect(failed[0].deadLettered).toBe(true);
+  });
+
+  it("lists retrying jobs too, flagged as not yet dead-lettered", async () => {
+    const user = await seedUser("user-retrying");
+    const event = await seedEvent(user.id, new Date(Date.now() + 25 * 3600_000), "evt-retrying");
+    await prisma.player.create({ data: { name: "P1", eventId: event.id, userId: user.id } });
+    const job = await seedDueReminderJob(event.id);
+
+    vi.mocked(notificationQueue.enqueueNotification).mockRejectedValueOnce(new Error("boom"));
+    await expect(processJob(job.id)).rejects.toThrow("boom");
+
+    // Retrying: lastError set, failedAt still null — must still be visible to an
+    // operator (the body's "diagnosable without prod access" claim depends on it).
+    const failures = await getRecentJobFailures();
+    expect(failures).toHaveLength(1);
+    expect(failures[0].id).toBe(job.id);
+    expect(failures[0].deadLettered).toBe(false);
+    expect(failures[0].lastError).toContain("boom");
+  });
+
+  it("truncates a pathological error message instead of bloating the row", async () => {
+    const user = await seedUser("user-long");
+    const event = await seedEvent(user.id, new Date(Date.now() + 25 * 3600_000), "evt-long");
+    await prisma.player.create({ data: { name: "P1", eventId: event.id, userId: user.id } });
+    const job = await seedDueReminderJob(event.id);
+
+    vi.mocked(notificationQueue.enqueueNotification).mockRejectedValueOnce(new Error("x".repeat(5000)));
+    await expect(processJob(job.id)).rejects.toThrow();
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.lastError!.length).toBe(1001); // 1000 chars + ellipsis
+    expect(updated!.lastError!.endsWith("…")).toBe(true);
+  });
+
+  it("clears lastError when a job finally succeeds", async () => {
+    const user = await seedUser("user-clear");
+    const event = await seedEvent(user.id, new Date(Date.now() + 25 * 3600_000), "evt-clear");
+    await prisma.player.create({ data: { name: "P1", eventId: event.id, userId: user.id } });
+    const job = await seedDueReminderJob(event.id);
+    // A prior attempt failed; this one succeeds.
+    await prisma.scheduledJob.update({ where: { id: job.id }, data: { lastError: "boom" } });
+
+    expect(await processJob(job.id)).toBe("processed");
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+    expect(updated!.lastError).toBeNull();
   });
 });
 

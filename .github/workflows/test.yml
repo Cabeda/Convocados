@@ -7,6 +7,10 @@ on:
   pull_request:
     branches:
       - main
+    # `labeled`/`unlabeled` re-run the job so applying the `no-issue` hatch can
+    # turn it green; `edited` re-checks a body changed after it passed green (the
+    # #1114/#1199 failure mode). opened/synchronize/reopened are the defaults.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   workflow_dispatch:
   # Merge queue: required checks run against the queued merge result, so a
   # combination that only breaks after merging is caught before it lands.
@@ -97,6 +101,41 @@ jobs:
           run_install: false
       - name: Audit dependencies (fail on high/critical)
         run: pnpm audit --audit-level high
+
+  # ── PR hygiene: every PR must name the issue it closes ───────────────────
+  # GitHub closes an issue only when the PR body carries a closing keyword
+  # ("Closes #123"). Without one the issue lingers open after the fix ships, and
+  # stale open state misleads the next reader (it cost a session: #1114 closed
+  # by hand 20h after its merge, #1199 11 days after). `no-issue` is the escape
+  # hatch, for a PR that genuinely closes nothing. The check itself is a module
+  # (scripts/check-pr-closing-keyword.mjs) with unit tests, so a regex typo here
+  # cannot ship green.
+  pr-links-issue:
+    name: PR Links Issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the PR body names the issue it closes
+        env:
+          # Passed via env, never interpolated into the shell — body text is
+          # untrusted input.
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: node scripts/check-pr-closing-keyword.mjs
+
+  # ── Ledger integrity: a union merge can splice duplicate task lines ───────
+  # .dex/tasks.jsonl is merge=union, so a rebase/merge across main can duplicate
+  # lines without a conflict (it did: 197 duplicate lines). The same check runs
+  # in the pre-push hook and is documented in AGENTS.md — keep the three in step.
+  dex-ledger:
+    name: Dex Ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - run: node scripts/dex-dedupe.mjs --check
 
   # ── Seed smoke: catches dev-script breakage fast ────────────────────────
   # Runs against a throwaway DB so the seed script can't pass by reusing
@@ -480,7 +519,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear]
+    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear, dex-ledger, pr-links-issue]
     steps:
       - name: Check results
         run: |

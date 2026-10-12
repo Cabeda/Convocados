@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, mkdtempSync, writeFileSync, chmodSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -130,5 +132,96 @@ describe("agent environment guardrails", () => {
     // The production-inspection pointer names a real runbook; that file and its
     // own existence check ship in the prod-inspection Change.
     expect(agents).toContain("docs/runbooks/production-inspection.md");
+  });
+
+  it("ships a read-only production query wrapper and stops citing the absent sqlite3 CLI", async () => {
+    const scriptPath = "scripts/prod-query.sh";
+    expect(existsSync(join(root, scriptPath))).toBe(true);
+    // Executable: the runbooks call it directly.
+    expect(statSync(join(root, scriptPath)).mode & 0o111).not.toBe(0);
+
+    const script = await read(scriptPath);
+    // Read-only is the point — a wrapper that can write to production is worse
+    // than no wrapper.
+    expect(script).toMatch(/better-sqlite3/);
+    expect(script).toMatch(/readonly:\s*true/);
+    expect(script).toMatch(/only SELECT/);
+
+    // The runbook documents why the wrapper exists and where jobs execute.
+    const runbook = await read("docs/runbooks/production-inspection.md");
+    expect(runbook).toContain("scripts/prod-query.sh");
+    expect(runbook).toMatch(/no `sqlite3` CLI/);
+    // The failure list is `jobFailures` (retrying + dead-lettered), not the old
+    // dead-letter-only name, and the runbook states what NotificationJob really
+    // stores rather than claiming it persists a reason.
+    expect(runbook).toContain("jobFailures");
+    expect(runbook).not.toContain("deadLetterJobs");
+    expect(runbook).toContain("DEAD_LETTER_TTL_DAYS");
+
+    // Recovery runbooks run inside `fly ssh console` (the app may be stopped),
+    // where the workstation-only wrapper is absent — so they must use the
+    // in-machine driver, never scripts/prod-query.sh.
+    for (const doc of [
+      "docs/runbooks/full-recovery-from-zero.md",
+      "docs/runbooks/point-in-time-recovery.md",
+    ]) {
+      expect(await read(doc)).not.toContain("scripts/prod-query.sh");
+    }
+
+    // The disaster-recovery verify step must not tell a reader to run the
+    // binary the image does not have: `sqlite3 /data/db.sqlite` over fly ssh.
+    const dr = await read("docs/disaster-recovery.md");
+    expect(dr).not.toMatch(/^sqlite3 \/data\/db\.sqlite/m);
+    expect(dr).toContain("better-sqlite3");
+  });
+
+  it("refuses a write through prod-query.sh without opening an SSH session", () => {
+    // Behaviour, not prose: the read-only claim is only real if a write is
+    // rejected before any remote connection. A stub `fly` proves no ssh ran.
+    const stubDir = mkdtempSync(join(tmpdir(), "prod-query-stub-"));
+    const marker = join(stubDir, "fly-was-called");
+    const stubFly = join(stubDir, "fly");
+    writeFileSync(stubFly, `#!/bin/sh\ntouch "${marker}"\nexit 0\n`);
+    chmodSync(stubFly, 0o755);
+
+    let status = 0;
+    try {
+      execFileSync("sh", ["scripts/prod-query.sh", "DELETE FROM ScheduledJob"], {
+        env: { ...process.env, PATH: `${stubDir}:${process.env.PATH ?? ""}` },
+        stdio: "pipe",
+      });
+    } catch (err) {
+      status = (err as { status?: number }).status ?? -1;
+    }
+
+    expect(status).toBe(2);
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("enforces a PR closing keyword and the dex ledger check in CI and pre-push", async () => {
+    // A PR without a closing keyword leaves its issue open after the fix ships
+    // (#1114/#1199); the template primes the keyword and CI enforces it.
+    const template = await read(".github/PULL_REQUEST_TEMPLATE.md");
+    expect(template).toMatch(/Closes #/);
+
+    const ci = await read(".github/workflows/test.yml");
+    // The check must be a job the aggregate gate depends on, or it never runs
+    // as a required check.
+    expect(ci).toMatch(/^\s{2}pr-links-issue:\s*$/m);
+    expect(ci).toMatch(/^\s{2}dex-ledger:\s*$/m);
+    expect(ci).toMatch(/node scripts\/dex-dedupe\.mjs --check/);
+    // The closing-keyword logic is a tested module, not an inline snippet.
+    expect(ci).toMatch(/node scripts\/check-pr-closing-keyword\.mjs/);
+    // `labeled`/`unlabeled` re-run the job so the `no-issue` hatch can turn it
+    // green; `edited` re-checks a body changed after green.
+    expect(ci).toMatch(/types: \[[^\]]*\blabeled\b[^\]]*\]/);
+    expect(ci).toMatch(/types: \[[^\]]*\bedited\b[^\]]*\]/);
+    expect(ci).toMatch(/needs: \[[^\]]*\bdex-ledger\b[^\]]*\]/);
+    expect(ci).toMatch(/needs: \[[^\]]*\bpr-links-issue\b[^\]]*\]/);
+
+    // The ledger check also runs locally (warn-only; CI blocks): the hazard (a
+    // union-merge splice of duplicate lines) happens during a rebase.
+    const hook = await read("scripts/pre-push.sh");
+    expect(hook).toMatch(/dex-dedupe\.mjs" --check/);
   });
 });
