@@ -146,7 +146,7 @@ Expected output:
 ## Step 9: Verify database integrity
 
 ```bash
-sqlite3 /data/db.sqlite "PRAGMA integrity_check;"
+scripts/prod-query.sh "PRAGMA integrity_check"
 ```
 
 Expected output: `ok`
@@ -154,10 +154,10 @@ Expected output: `ok`
 Spot-check key tables:
 
 ```bash
-sqlite3 /data/db.sqlite "SELECT count(*) FROM User;"
-sqlite3 /data/db.sqlite "SELECT count(*) FROM Event;"
-sqlite3 /data/db.sqlite "SELECT count(*) FROM Player;"
-sqlite3 /data/db.sqlite "SELECT count(*) FROM GameHistory;"
+scripts/prod-query.sh "SELECT count(*) FROM User"
+scripts/prod-query.sh "SELECT count(*) FROM Event"
+scripts/prod-query.sh "SELECT count(*) FROM Player"
+scripts/prod-query.sh "SELECT count(*) FROM GameHistory"
 ```
 
 Compare these counts against what you expect for the target timestamp.
@@ -228,7 +228,7 @@ The restored database is corrupted. Try restoring to a slightly earlier timestam
 ```bash
 rm -f /data/db.sqlite /data/db.sqlite-wal /data/db.sqlite-shm
 litestream restore -config /app/litestream.yml -timestamp "2026-04-10T14:00:00Z" /data/db.sqlite
-sqlite3 /data/db.sqlite "PRAGMA integrity_check;"
+scripts/prod-query.sh "PRAGMA integrity_check"
 ```
 
 If all snapshots are corrupted, see the [Full Recovery from Zero](./full-recovery-from-zero.md) runbook.

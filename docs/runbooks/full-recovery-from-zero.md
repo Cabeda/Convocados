@@ -185,10 +185,10 @@ Expected output:
 SSH into the machine and spot-check:
 
 ```bash
-fly ssh console -C "sqlite3 /data/db.sqlite 'PRAGMA integrity_check;'"
-fly ssh console -C "sqlite3 /data/db.sqlite 'SELECT count(*) FROM User;'"
-fly ssh console -C "sqlite3 /data/db.sqlite 'SELECT count(*) FROM Event;'"
-fly ssh console -C "sqlite3 /data/db.sqlite 'SELECT count(*) FROM Player;'"
+scripts/prod-query.sh "PRAGMA integrity_check"
+scripts/prod-query.sh "SELECT count(*) FROM User"
+scripts/prod-query.sh "SELECT count(*) FROM Event"
+scripts/prod-query.sh "SELECT count(*) FROM Player"
 ```
 
 Compare these counts against what you saw in the local preview (Step 2).
@@ -232,7 +232,7 @@ litestream restore -config /app/litestream.yml /data/db.sqlite
 ### Verify
 
 ```bash
-sqlite3 /data/db.sqlite "PRAGMA integrity_check;"
+scripts/prod-query.sh "PRAGMA integrity_check"
 ```
 
 ### Restart
@@ -318,7 +318,7 @@ The database may not have been restored. Check:
 
 ```bash
 fly ssh console -C "ls -la /data/db.sqlite"
-fly ssh console -C "sqlite3 /data/db.sqlite 'PRAGMA integrity_check;'"
+scripts/prod-query.sh "PRAGMA integrity_check"
 ```
 
 If the file doesn't exist, the restore failed silently. Run the manual restore steps above.

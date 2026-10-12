@@ -113,4 +113,29 @@ describe("agent environment guardrails", () => {
     );
     expect(standards).not.toContain("--to-schema-datamodel prisma");
   });
+
+  it("ships a read-only production query wrapper and stops citing the absent sqlite3 CLI", async () => {
+    const scriptPath = "scripts/prod-query.sh";
+    expect(existsSync(join(root, scriptPath))).toBe(true);
+    // Executable: the runbooks call it directly.
+    expect(statSync(join(root, scriptPath)).mode & 0o111).not.toBe(0);
+
+    const script = await read(scriptPath);
+    // Read-only is the point — a wrapper that can write to production is worse
+    // than no wrapper.
+    expect(script).toMatch(/better-sqlite3/);
+    expect(script).toMatch(/readonly:\s*true/);
+    expect(script).toMatch(/only SELECT/);
+
+    // The runbook documents why the wrapper exists and where jobs execute.
+    const runbook = await read("docs/runbooks/production-inspection.md");
+    expect(runbook).toContain("scripts/prod-query.sh");
+    expect(runbook).toMatch(/no `sqlite3` CLI/);
+
+    // The disaster-recovery verify step must not tell a reader to run the
+    // binary the image does not have: `sqlite3 /data/db.sqlite` over fly ssh.
+    const dr = await read("docs/disaster-recovery.md");
+    expect(dr).not.toMatch(/^sqlite3 \/data\/db\.sqlite/m);
+    expect(dr).toContain("better-sqlite3");
+  });
 });

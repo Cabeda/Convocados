@@ -35,8 +35,9 @@ things must be true for sign-in to keep working afterwards:
 
 - Do **not** delete the `jwks` rows by hand while the guard is deployed; the
   guard does it safely on boot. Manual cleanup is only needed for a deployment
-  that predates the guard:
+  that predates the guard (the image has no `sqlite3`; use the bundled driver,
+  and note this is a **write** — `scripts/prod-query.sh` is read-only):
   ```sh
-  sqlite3 /data/db.sqlite "DELETE FROM jwks;"
+  fly ssh console -a convocados -C "node -e \"const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite');db.exec('DELETE FROM jwks');console.log('jwks rows deleted');\""
   ```
 - Do **not** rotate to a secret shorter than 32 chars, or one with low entropy.
