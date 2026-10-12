@@ -2,6 +2,16 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "../lib/db.server";
 import { resetApiRateLimitStore } from "../lib/apiRateLimit.server";
 import { validateTeams, removePlayerFromTeams, addPlayerToTeams } from "~/lib/teamFormation.server";
+import { PUT as saveTeamNames } from "~/pages/api/events/[id]/team-names";
+
+function putCtx(params: Record<string, string>, body: unknown) {
+  const request = new Request("http://localhost/api/test", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { request, params } as any;
+}
 
 // Helper to create test user
 async function seedUser(email: string, name: string) {
@@ -553,5 +563,79 @@ describe("Team Roster Mutations: Minimal Movements", () => {
     await addPlayerToTeams(event.id, "P0");
     const teams = await prisma.teamResult.findMany({ where: { eventId: event.id } });
     expect(teams).toHaveLength(0);
+  });
+
+  it("renaming both teams also renames the stored TeamResult labels", async () => {
+    const event = await seedEvent({ balanced: true });
+    await seedTeams(event.id, ["P0", "P1"], ["P2", "P3"]);
+
+    const res = await saveTeamNames(putCtx({ id: event.id }, { teamOneName: "Eagles", teamTwoName: "Lions" }));
+    expect(res.status).toBe(200);
+
+    // The Event labels and the TeamResult rows must carry the same names:
+    // the balanced rebalance keys its draw by Event labels and writes members
+    // back by TeamResult name.
+    const stored = await prisma.teamResult.findMany({ where: { eventId: event.id } });
+    expect(stored.map((t) => t.name)).toEqual(["Eagles", "Lions"]);
+  });
+
+  it("a rebalance after renaming both teams keeps both lineups intact", async () => {
+    const event = await seedEvent({ balanced: true, maxPlayers: 10 });
+
+    for (let i = 0; i < 10; i++) {
+      await prisma.player.create({ data: { name: `P${i}`, eventId: event.id, order: i } });
+      await prisma.playerRating.create({ data: { eventId: event.id, name: `P${i}`, rating: 1000 } });
+    }
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    await saveTeamNames(putCtx({ id: event.id }, { teamOneName: "Eagles", teamTwoName: "Lions" }));
+
+    // Membership change → full rebalance on the renamed event
+    await addPlayerToTeams(event.id, "P3");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+    expect(teams.map((t) => t.name)).toEqual(["Eagles", "Lions"]);
+    expect(teams).toHaveLength(2);
+    for (const t of teams) {
+      expect(t.members).toHaveLength(5);
+    }
+    const all = teams.flatMap((t) => t.members.map((m) => m.name)).sort();
+    expect(all).toEqual(
+      ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"].sort(),
+    );
+  });
+
+  it("rebalance still fills both lineups when TeamResult labels lag a legacy rename", async () => {
+    const event = await seedEvent({ balanced: true, maxPlayers: 10 });
+
+    for (let i = 0; i < 10; i++) {
+      await prisma.player.create({ data: { name: `P${i}`, eventId: event.id, order: i } });
+      await prisma.playerRating.create({ data: { eventId: event.id, name: `P${i}`, rating: 1000 } });
+    }
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // Pre-fix renames touched only the Event: rows keep the old labels.
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { teamOneName: "Eagles", teamTwoName: "Lions" },
+    });
+
+    await addPlayerToTeams(event.id, "P3");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+    expect(teams).toHaveLength(2);
+    for (const t of teams) {
+      expect(t.members).toHaveLength(5);
+    }
+    const all = teams.flatMap((t) => t.members.map((m) => m.name)).sort();
+    expect(all).toEqual(
+      ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"].sort(),
+    );
   });
 });

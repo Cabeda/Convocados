@@ -109,9 +109,15 @@ async function rebalanceTeams(eventId: string, teams: { id: string; name: string
 
   await prisma.$transaction([
     prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map((t) => t.id) } } }),
-    ...newMatches.flatMap((match) => {
-      const teamId = teams.find((t) => t.name === match.team)?.id;
-      if (!teamId) return [];
+    ...newMatches.flatMap((match, i) => {
+      // Anchor on the team RESULT id, not the label: the draw is keyed by the
+      // Event's names, and a label that no longer matches any row (a rename
+      // applied to the Event only) must not drop the whole side — the delete
+      // above already runs in this transaction, so a miss would silently empty
+      // both lineups. Name first (the invariant the rename keeps), then side
+      // position: `newMatches[i]` is `teamNames[i]`, and `teams` are created
+      // team-one-first — the convention GET /teams reads teamResults[0] with.
+      const teamId = teams.find((t) => t.name === match.team)?.id ?? teams[i].id;
       return match.players.map((p) => prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } }));
     }),
   ]);
