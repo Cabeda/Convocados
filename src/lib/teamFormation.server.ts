@@ -8,8 +8,10 @@ import { prisma } from "./db.server";
 import type { Prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { balanceTeams } from "./elo.server";
+import { Randomize } from "./random";
 import type { Imatch } from "./random";
 import { applyFormationLayout } from "./teams";
+import { logEvent } from "./eventLog.server";
 
 /** Minimal client shape the reconcile needs — a `prisma` instance or the transaction a caller already opened. */
 type DbClient = Prisma.TransactionClient | typeof prisma;
@@ -98,18 +100,15 @@ async function loadRatingMap(eventId: string): Promise<Map<string, number>> {
 }
 
 /**
- * Replace both teams' memberships with a balanced draw of `playerNames`.
- * The delete and the creates share one transaction: a half-applied draw
- * would leave a team nameless or short. Formations are re-derived after, so
- * each stored label still describes the split it labels.
+ * Replace both teams' memberships with `matches`. The delete and the creates
+ * share one transaction: a half-applied draw would leave a team nameless or
+ * short. Formations are re-derived after, so each stored label still
+ * describes the split it labels.
  */
-async function rebalanceTeams(eventId: string, teams: { id: string; name: string }[], playerNames: string[], teamNames: [string, string], sport: string | null): Promise<void> {
-  const ratingMap = await loadRatingMap(eventId);
-  const newMatches = balanceTeams(playerNames.map((name) => ({ name, rating: ratingMap.get(name) ?? 1000 })), teamNames);
-
+async function replaceTeamMembers(eventId: string, teams: { id: string; name: string }[], matches: Imatch[], sport: string | null): Promise<void> {
   await prisma.$transaction([
     prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map((t) => t.id) } } }),
-    ...newMatches.flatMap((match) => {
+    ...matches.flatMap((match) => {
       const teamId = teams.find((t) => t.name === match.team)?.id;
       if (!teamId) return [];
       return match.players.map((p) => prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } }));
@@ -117,6 +116,15 @@ async function rebalanceTeams(eventId: string, teams: { id: string; name: string
   ]);
 
   await reconcileFormations(eventId, sport);
+}
+
+/**
+ * Replace both teams' memberships with a balanced (ELO) draw of `playerNames`.
+ */
+async function rebalanceTeams(eventId: string, teams: { id: string; name: string }[], playerNames: string[], teamNames: [string, string], sport: string | null): Promise<void> {
+  const ratingMap = await loadRatingMap(eventId);
+  const newMatches = balanceTeams(playerNames.map((name) => ({ name, rating: ratingMap.get(name) ?? 1000 })), teamNames);
+  await replaceTeamMembers(eventId, teams, newMatches, sport);
 }
 
 /**
@@ -152,6 +160,68 @@ export async function validateTeams(eventId: string, maxPlayers: number, current
 }
 
 /**
+ * Auto-randomize teams when the game becomes full (active players === maxPlayers)
+ * and no teams have been drawn yet. The manual "Randomize" button remains
+ * available at all times for re-randomization.
+ *
+ * Empty TeamResult shells left behind by the non-destructive recurrence reset
+ * (advanceOccurrence clears members but keeps the rows) do NOT count as a
+ * draw: they must neither block this trigger nor receive incremental
+ * placements — otherwise a new occurrence shows teams from the first joiner
+ * and never re-draws at full strength (prod: cmmkfrx8b0000o2ixrix1yp2m).
+ */
+export async function autoRandomizeIfFull(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<void> {
+  // Only trigger when no POPULATED teams exist yet
+  const existingTeams = await prisma.teamResult.count({
+    where: { eventId, members: { some: {} } },
+  });
+  if (existingTeams > 0) return;
+
+  // Count active players
+  const activeNames = (await getActiveRosterState(eventId, maxPlayers, currentGameId)).activeNames;
+  if (activeNames.size < maxPlayers) return;
+
+  // Game is full and no teams — auto-generate
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { balanced: true, teamOneName: true, teamTwoName: true, sport: true },
+  });
+  if (!event) return;
+
+  const players = [...activeNames];
+  let matches: Imatch[];
+
+  if (event.balanced) {
+    const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+    const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
+    const playersWithRatings = players.map((name) => ({
+      name,
+      rating: ratingMap.get(name) ?? 1000,
+    }));
+    matches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
+  } else {
+    matches = Randomize(players, [event.teamOneName, event.teamTwoName]);
+  }
+
+  await prisma.$transaction([
+    // Replace any empty shells so the draw cannot land next to stale rows.
+    prisma.teamResult.deleteMany({ where: { eventId } }),
+    ...applyFormationLayout(matches, event.sport).map((match) =>
+      prisma.teamResult.create({
+        data: {
+          name: match.team,
+          formation: match.formation ?? null,
+          eventId,
+          members: { create: match.players.map((p) => ({ name: p.name, order: p.order, slot: p.slot ?? null })) },
+        },
+      })
+    ),
+  ]);
+
+  logEvent(eventId, "teams_randomized", null, null, { balanced: event.balanced, playerCount: players.length, auto: true }).catch(() => {});
+}
+
+/**
  * If teams have been generated, add a player to the appropriate team.
  * When the event has balanced=true, triggers a full rebalance (minimum swaps).
  * Otherwise, adds to the team with fewer players.
@@ -166,7 +236,9 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
     where: { eventId },
     include: { members: true },
   });
-  if (teams.length === 0) return; // no teams generated yet
+  // No teams yet, or only empty shells from the recurrence reset — placement
+  // waits for the full-roster draw (autoRandomizeIfFull) or the manual button.
+  if (teams.length === 0 || teams.every((t) => t.members.length === 0)) return;
 
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: TEAM_EVENT_SELECT });
   const gameId = currentGameId ?? event?.currentGameId;
@@ -197,6 +269,29 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
 }
 
 /**
+ * Shared tail of every roster-add entry point (join, re-join, admin grant,
+ * MCP add, undo, invite accept, priority confirm): place the player when they
+ * hold an active slot, evict any member who fell off the active slice, and
+ * draw teams the first time the game becomes full.
+ *
+ * Each step is self-guarding — addPlayerToTeams no-ops for bench players and
+ * absent/empty teams, validateTeams no-ops without teams, autoRandomizeIfFull
+ * only fires on a full roster with no populated draw — so callers can invoke
+ * it unconditionally without duplicating the bench/full checks that used to
+ * drift apart across the six call sites.
+ */
+export async function finishRosterAdd(
+  eventId: string,
+  rosterName: string,
+  maxPlayers: number,
+  currentGameId?: string | null,
+): Promise<void> {
+  await addPlayerToTeams(eventId, rosterName, currentGameId);
+  await validateTeams(eventId, maxPlayers, currentGameId);
+  await autoRandomizeIfFull(eventId, maxPlayers, currentGameId);
+}
+
+/**
  * If teams have been generated, remove a player from their team.
  * If a promoted bench player name is given, slot them into the same team.
  * When the event has balanced=true, triggers a full rebalance instead of a single swap.
@@ -211,12 +306,27 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: TEAM_EVENT_SELECT });
   const gameId = currentGameId ?? event?.currentGameId;
 
-  // Balanced mode: full rebalance with current active players (excluding the leaving one, including promoted)
-  if (event?.balanced && teams.length === 2) {
-    const activeNames = [...(await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames].filter(n => n !== playerName);
-    if (promotedName && !activeNames.includes(promotedName)) {
+  // Bench promotion at full strength: the roster composition changed, so
+  // re-run the event's draw instead of letting the promoted player inherit
+  // the leaver's slot — ELO rebalance when balanced, fresh random otherwise.
+  if (promotedName && teams.length === 2 && event) {
+    const activeNames = [...(await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames].filter((n) => n !== playerName);
+    if (!activeNames.includes(promotedName)) {
       activeNames.push(promotedName);
     }
+    if (activeNames.length >= 2) {
+      if (event.balanced) {
+        await rebalanceTeams(eventId, teams, activeNames, [event.teamOneName, event.teamTwoName], event.sport);
+      } else {
+        await replaceTeamMembers(eventId, teams, Randomize(activeNames, [event.teamOneName, event.teamTwoName]), event.sport);
+      }
+      return;
+    }
+  }
+
+  // Balanced mode without a promotion: rebalance the remaining players
+  if (event?.balanced && teams.length === 2) {
+    const activeNames = [...(await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames].filter(n => n !== playerName);
 
     if (activeNames.length >= 2) {
       await rebalanceTeams(eventId, teams, activeNames, [event.teamOneName, event.teamTwoName], event?.sport ?? null);
@@ -224,9 +334,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
     }
   }
 
-  // Non-balanced: manual remove + optional promote
-  let promotedTeamId: string | null = null;
-
+  // Non-balanced, no promotion: remove the leaver, keep everyone else in place
   for (const team of teams) {
     const member = team.members.find((m) => m.name === playerName);
     if (!member) continue;
@@ -243,6 +351,8 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
     }
 
     if (promotedName) {
+      // Degenerate fallback: promotion with <2 active names or a single team —
+      // the normal 2-team promotion re-draws above.
       await prisma.teamMember.create({
         data: {
           name: promotedName,
@@ -250,83 +360,12 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
           teamResultId: team.id,
         },
       });
-      promotedTeamId = team.id;
     }
 
     break;
   }
 
-  // Non-balanced: try single swap for minor improvement
-  if (promotedName && promotedTeamId) {
-    const eventCheck = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true } });
-    if (eventCheck?.balanced) {
-      await tryBalancedSwap(eventId, promotedName, promotedTeamId);
-    }
-  }
-
   // A leaving player frees a slot and a promoted one takes it: re-derive both
   // teams' layouts so the stored formation still describes the split.
   await reconcileFormations(eventId, event?.sport ?? null);
-}
-
-/**
- * After a promoted player is placed on a team, check if swapping them
- * with a player on the other team would improve ELO balance.
- * Only performs the swap if it strictly reduces the gap — at most 1 swap.
- */
-async function tryBalancedSwap(eventId: string, promotedName: string, promotedTeamId: string) {
-  const teams = await prisma.teamResult.findMany({
-    where: { eventId },
-    include: { members: true },
-  });
-  if (teams.length !== 2) return;
-
-  const promotedTeam = teams.find(t => t.id === promotedTeamId);
-  const otherTeam = teams.find(t => t.id !== promotedTeamId);
-  if (!promotedTeam || !otherTeam) return;
-
-  // Get ELO ratings
-  const ratingMap = await loadRatingMap(eventId);
-  const getRating = (name: string) => ratingMap.get(name) ?? 1000;
-
-  const promotedRating = getRating(promotedName);
-
-  // Current team totals
-  const promotedTeamTotal = promotedTeam.members.reduce((sum, m) => sum + getRating(m.name), 0);
-  const otherTeamTotal = otherTeam.members.reduce((sum, m) => sum + getRating(m.name), 0);
-  const currentGap = Math.abs(promotedTeamTotal - otherTeamTotal);
-
-  // Try swapping promoted player with each player on the other team
-  let bestSwap: { otherMember: typeof otherTeam.members[0]; newGap: number } | null = null;
-
-  for (const otherMember of otherTeam.members) {
-    const otherRating = getRating(otherMember.name);
-    // After swap: promoted goes to other team, otherMember goes to promoted team
-    const newPromotedTeamTotal = promotedTeamTotal - promotedRating + otherRating;
-    const newOtherTeamTotal = otherTeamTotal - otherRating + promotedRating;
-    const newGap = Math.abs(newPromotedTeamTotal - newOtherTeamTotal);
-
-    if (newGap < currentGap && (!bestSwap || newGap < bestSwap.newGap)) {
-      bestSwap = { otherMember, newGap };
-    }
-  }
-
-  if (!bestSwap) return; // No swap improves balance
-
-  // Perform the swap
-  const promotedMember = promotedTeam.members.find(m => m.name === promotedName);
-  if (!promotedMember) return;
-  const swapTarget = bestSwap.otherMember;
-
-  // Move promoted player to other team
-  await prisma.teamMember.update({
-    where: { id: promotedMember.id },
-    data: { teamResultId: otherTeam.id, order: swapTarget.order },
-  });
-
-  // Move swap target to promoted team
-  await prisma.teamMember.update({
-    where: { id: swapTarget.id },
-    data: { teamResultId: promotedTeam.id, order: promotedMember.order },
-  });
 }
