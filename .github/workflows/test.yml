@@ -98,6 +98,49 @@ jobs:
       - name: Audit dependencies (fail on high/critical)
         run: pnpm audit --audit-level high
 
+  # ── PR hygiene: every PR must name the issue it closes ───────────────────
+  # GitHub closes an issue only when the PR body carries a closing keyword
+  # ("Closes #123"). Without one the issue lingers open after the fix ships, and
+  # stale open state misleads the next reader (it cost a session: #1114 closed
+  # by hand 20h after its merge, #1199 11 days after). `no-issue` is the escape
+  # hatch, for a PR that genuinely closes nothing.
+  pr-links-issue:
+    name: PR Links Issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const labels = (pr.labels ?? []).map((l) => l.name);
+            if (labels.includes("no-issue")) {
+              core.notice("`no-issue` label present — skipping the closing-keyword check.");
+              return;
+            }
+            const re = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#\d+\b/i;
+            if (re.test(pr.body ?? "")) {
+              core.notice("Closing keyword found.");
+              return;
+            }
+            core.setFailed(
+              "PR body has no closing keyword (e.g. `Closes #123`). Add one so the linked " +
+              "issue closes on merge, or apply the `no-issue` label if this PR closes no issue."
+            );
+
+  # ── Ledger integrity: a union merge can splice duplicate task lines ───────
+  # .dex/tasks.jsonl is merge=union, so a rebase/merge across main can duplicate
+  # lines without a conflict (it did: 197 duplicate lines). The same check runs
+  # in the pre-push hook and is documented in AGENTS.md — keep the three in step.
+  dex-ledger:
+    name: Dex Ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - run: node scripts/dex-dedupe.mjs --check
+
   # ── Seed smoke: catches dev-script breakage fast ────────────────────────
   # Runs against a throwaway DB so the seed script can't pass by reusing
   # stale state. pnpm + tsx resolution has bitten us before — keep this
@@ -480,7 +523,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear]
+    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear, dex-ledger, pr-links-issue]
     steps:
       - name: Check results
         run: |
