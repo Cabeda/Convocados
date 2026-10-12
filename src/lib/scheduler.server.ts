@@ -134,14 +134,18 @@ export async function countFailedJobs(): Promise<number> {
 }
 
 /**
- * Dead-lettered jobs with their failure reason, newest first. The count alone
- * tells a human "something broke"; this tells them what and where, so diagnosis
- * does not need production DB access or logs that no longer exist.
+ * Jobs that have recorded a failure reason, newest first — retrying jobs
+ * (`lastError` set, `failedAt` null) as well as dead-lettered ones. The count
+ * alone tells a human "something broke"; this tells them what and where, so
+ * diagnosis does not need production DB access or logs that no longer exist.
+ * `deadLettered` distinguishes the two: a retrying job may still recover.
  */
-export async function getFailedJobs(limit = 50) {
-  return prisma.scheduledJob.findMany({
-    where: { failedAt: { not: null } },
-    orderBy: { failedAt: "desc" },
+export async function getRecentJobFailures(limit = 50) {
+  const rows = await prisma.scheduledJob.findMany({
+    where: { lastError: { not: null } },
+    // Dead-letters first (non-null failedAt), then retrying jobs (null sorts
+    // last under DESC); runAt breaks ties deterministically.
+    orderBy: [{ failedAt: "desc" }, { runAt: "desc" }],
     take: limit,
     select: {
       id: true,
@@ -153,6 +157,7 @@ export async function getFailedJobs(limit = 50) {
       lastError: true,
     },
   });
+  return rows.map((r) => ({ ...r, deadLettered: r.failedAt !== null }));
 }
 
 /**

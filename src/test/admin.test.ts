@@ -199,7 +199,7 @@ describe("getAdminStats", () => {
     expect(stats.sportDistribution).toEqual({});
   });
 
-  it("surfaces scheduler dead-letter jobs with their failure reason", async () => {
+  it("surfaces scheduler job failures with their reason", async () => {
     await prisma.scheduledJob.create({
       data: {
         id: "dl-1",
@@ -213,8 +213,9 @@ describe("getAdminStats", () => {
     const { getAdminStats } = await import("~/lib/admin.server");
     const stats = await getAdminStats();
 
-    expect(stats.deadLetterJobs).toHaveLength(1);
-    expect(stats.deadLetterJobs[0].lastError).toBe("Unique constraint failed");
+    expect(stats.jobFailures).toHaveLength(1);
+    expect(stats.jobFailures[0].lastError).toBe("Unique constraint failed");
+    expect(stats.jobFailures[0].deadLettered).toBe(true);
   });
 
   it("counts active games: future, in-progress, or recurring (non-archived)", async () => {

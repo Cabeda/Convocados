@@ -40,6 +40,18 @@ interface AdminStats {
   pickupsDetected: number;
   pickupsAdopted: number;
   pickupAdoptionRate: number;
+  jobFailures: JobFailure[];
+}
+
+interface JobFailure {
+  id: string;
+  type: string;
+  eventId: string | null;
+  runAt: string;
+  retryCount: number;
+  failedAt: string | null;
+  lastError: string | null;
+  deadLettered: boolean;
 }
 
 interface UserRow {
@@ -394,6 +406,47 @@ export default function AdminDashboardPage() {
                 )}
 
                 <GrowthChart growthData={growthData} growthRange={growthRange} setGrowthRange={setGrowthRange} loadingGrowth={loadingGrowth} />
+
+                {/* Scheduler job failures — retrying (recoverable) and dead-lettered,
+                    with the recorded reason. Persisted on the row precisely so this
+                    is visible without production DB access. */}
+                {stats.jobFailures.length > 0 && (
+                  <Paper elevation={1} sx={{ p: 3 }}>
+                    <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminJobFailures")}</Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>{t("adminJobType")}</TableCell>
+                            <TableCell>{t("adminJobStatus")}</TableCell>
+                            <TableCell>{t("adminJobLastError")}</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {stats.jobFailures.map((f) => (
+                            <TableRow key={f.id}>
+                              <TableCell>{f.type}</TableCell>
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  color={f.deadLettered ? "error" : "warning"}
+                                  label={
+                                    f.deadLettered
+                                      ? t("adminJobDeadLettered")
+                                      : `${t("adminJobRetrying")} (${f.retryCount})`
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell sx={{ fontFamily: "monospace", fontSize: 12, maxWidth: 480, overflowWrap: "anywhere" }}>
+                                {f.lastError}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                )}
 
                 {/* Usage Metrics — DAU, platform breakdown */}
                 <Paper elevation={1} sx={{ p: 3 }}>
