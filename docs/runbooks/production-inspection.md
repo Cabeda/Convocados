@@ -40,8 +40,9 @@ holds user emails and other PII; query it where it lives, read-only.
 - `type` — `reminder_24h` / `reminder_2h` / `reminder_1h` / `post_game` / `backfill_merged_identity`.
 - `runAt` — when it becomes due (backoff pushes this forward on retry).
 - `retryCount` — attempts so far; the 3rd failure dead-letters the job.
-- `failedAt` — set on dead-letter. `lastError` carries the (truncated) reason, so a
-  dead-letter is diagnosable from the row. Before `lastError` existed, the reason
+- `failedAt` — set on dead-letter. `lastError` carries the (truncated) reason and is
+  written on **every** failed attempt (cleared on success), so both a retrying and a
+  dead-lettered job are diagnosable from the row. Before `lastError` existed, the reason
   lived only in stdout — which is retained for minutes, not months.
 
 Note that `countFailedJobs()` / `/api/health`'s `failedJobs` is **cumulative**: a
@@ -49,13 +50,13 @@ dead-letter row is never pruned, so the count includes fixes from long ago. Chec
 `lastError` and `failedAt` before treating any of it as live.
 
 ```bash
-# Dead-letters with their reason, newest first:
-scripts/prod-query.sh "SELECT type, datetime(failedAt/1000,'unixepoch') AS failed, lastError FROM ScheduledJob WHERE failedAt IS NOT NULL ORDER BY failedAt DESC"
+# Any job with a recorded failure (retrying or dead-lettered), newest first:
+scripts/prod-query.sh "SELECT type, lastError, datetime(failedAt/1000,'unixepoch') AS dead_at FROM ScheduledJob WHERE lastError IS NOT NULL ORDER BY failedAt DESC"
 ```
 
-Admin users also see the dead-letter list via `GET /api/admin/stats`
-(`deadLetterJobs`); the public `/api/health` shows only the count and never
-echoes internal error text.
+Admin users also see this list rendered on `/admin` (a "Scheduler job failures" table) and
+via `GET /api/admin/stats` (`jobFailures`, each flagged `deadLettered`); the public
+`/api/health` shows only the count and never echoes internal error text.
 
 ## Logs
 
@@ -65,8 +66,13 @@ fly logs -a convocados-scheduler # the poll loop; rarely what you want
 ```
 
 Fly retains logs for a short window and the app has no error sink, so a failure
-older than a few minutes is gone from logs. This is exactly why `ScheduledJob.lastError`
-and `NotificationJob` dead-letter rows persist the reason on the row instead.
+older than a few minutes is gone from logs. That is why `ScheduledJob.lastError`
+persists the reason **on the row**.
+
+The other queue is different: `NotificationJob` (the notification outbox) stores only
+`failedAt` for a dead-letter, **not** a reason, and prunes dead-letters after 30 days
+(`DEAD_LETTER_TTL_DAYS`). To chase a notification failure, read the notification job's
+`failedAt` and correlate with logs while they are still live.
 
 ## Health
 

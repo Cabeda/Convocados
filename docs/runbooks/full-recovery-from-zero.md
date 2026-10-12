@@ -182,13 +182,11 @@ Expected output:
 
 ## Step 7: Verify data integrity
 
-SSH into the machine and spot-check:
+SSH into the machine and spot-check (the image has no `sqlite3`; use the bundled driver):
 
 ```bash
-scripts/prod-query.sh "PRAGMA integrity_check"
-scripts/prod-query.sh "SELECT count(*) FROM User"
-scripts/prod-query.sh "SELECT count(*) FROM Event"
-scripts/prod-query.sh "SELECT count(*) FROM Player"
+node -e "const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite',{readonly:true});console.log(db.pragma('integrity_check'));"
+node -e "const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite',{readonly:true});for(const t of ['User','Event','Player'])console.log(t,db.prepare('SELECT count(*) c FROM '+t).get().c);"
 ```
 
 Compare these counts against what you saw in the local preview (Step 2).
@@ -232,7 +230,7 @@ litestream restore -config /app/litestream.yml /data/db.sqlite
 ### Verify
 
 ```bash
-scripts/prod-query.sh "PRAGMA integrity_check"
+node -e "const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite',{readonly:true});console.log(db.pragma('integrity_check'));"
 ```
 
 ### Restart
@@ -318,7 +316,7 @@ The database may not have been restored. Check:
 
 ```bash
 fly ssh console -C "ls -la /data/db.sqlite"
-scripts/prod-query.sh "PRAGMA integrity_check"
+node -e "const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite',{readonly:true});console.log(db.pragma('integrity_check'));"
 ```
 
 If the file doesn't exist, the restore failed silently. Run the manual restore steps above.

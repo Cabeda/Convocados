@@ -27,6 +27,18 @@ if [ -z "$SQL" ]; then
   exit 2
 fi
 
+# Refuse a write locally, before opening any SSH session. The remote guard below
+# repeats this (defence in depth against a modified script), but failing here
+# keeps the read-only contract testable without a live Fly app.
+head_kw=$(printf '%s' "$SQL" | sed 's/^[[:space:]]*//' | cut -d' ' -f1 | tr 'A-Z' 'a-z')
+case "$head_kw" in
+  select|pragma|with) ;;
+  *)
+    echo "read-only: only SELECT / PRAGMA / WITH are allowed (got '$head_kw')" >&2
+    exit 2
+    ;;
+esac
+
 # The query crosses an SSH boundary, a remote shell and a JS string literal.
 # Base64-encoding it removes every quoting failure mode at once.
 B64=$(printf '%s' "$SQL" | base64 | tr -d '\n')
