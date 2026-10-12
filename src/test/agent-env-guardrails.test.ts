@@ -198,6 +198,59 @@ describe("agent environment guardrails", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
+  it("runs the prod-query remote harness against a real DB, surviving the SSH boundary", () => {
+    // The harness crosses an SSH boundary, so it must not depend on a
+    // shell-escaped backslash: an earlier version used split(/\s+/), lost the
+    // backslash in transit (`\s` became `s`), and rejected *every* query as if
+    // it were a write. Recover the harness the way remote `sh` would receive it
+    // — base64 through a stub `fly` — then execute it.
+    const stubDir = mkdtempSync(join(tmpdir(), "prod-query-harness-"));
+    const stubFly = join(stubDir, "fly");
+    writeFileSync(
+      stubFly,
+      '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do if [ "$1" = "-C" ]; then printf \'%s\' "$2"; exit 0; fi; shift; done\n',
+    );
+    chmodSync(stubFly, 0o755);
+
+    const env = { ...process.env, PATH: `${stubDir}:${process.env.PATH ?? ""}` };
+    const payload = execFileSync("sh", ["scripts/prod-query.sh", "SELECT 1"], { env, encoding: "utf8" });
+    const match = payload.match(/Buffer\.from\('([A-Za-z0-9+/=]+)'/);
+    expect(match, `no harness in payload: ${payload}`).not.toBeNull();
+    const harness = Buffer.from(match![1], "base64").toString("utf8");
+    expect(harness).not.toContain("\\s");
+
+    // Build a real DB and run the harness against it with the paths overridden.
+    const dbPath = join(stubDir, "h.db");
+    execFileSync(
+      "node",
+      [
+        "-e",
+        "const D=require('better-sqlite3');const db=new D(process.argv[1]);db.exec('CREATE TABLE t (n INTEGER); INSERT INTO t VALUES (1),(2);');db.close();",
+        dbPath,
+      ],
+      { stdio: "pipe" },
+    );
+    const harnessEnv = { ...process.env, PROD_SQLITE_MODULE: "better-sqlite3", PROD_DB_PATH: dbPath };
+    const withSql = (sql: string) =>
+      harness.replace(
+        /Buffer\.from\('[A-Za-z0-9+/=]+','base64'\)/,
+        `Buffer.from('${Buffer.from(sql).toString("base64")}','base64')`,
+      );
+
+    // A SELECT runs and returns rows.
+    const out = execFileSync("node", ["-e", withSql("SELECT n FROM t")], { env: harnessEnv, encoding: "utf8" });
+    expect(out).toContain("2");
+
+    // The remote guard still rejects a write (belt and braces with the local guard).
+    let status = 0;
+    try {
+      execFileSync("node", ["-e", withSql("DELETE FROM t")], { env: harnessEnv, stdio: "pipe" });
+    } catch (err) {
+      status = (err as { status?: number }).status ?? -1;
+    }
+    expect(status).toBe(2);
+  });
+
   it("enforces a PR closing keyword and the dex ledger check in CI and pre-push", async () => {
     // A PR without a closing keyword leaves its issue open after the fix ships
     // (#1114/#1199); the template primes the keyword and CI enforces it.
