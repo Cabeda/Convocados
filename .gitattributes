@@ -1,0 +1,8 @@
+# Append-only ledgers union cleanly; derived state files must not.
+#
+# .dex/tasks.jsonl is one JSON object per line, append-only: a union merge
+# keeps every line from both sides, so integration branches stop conflicting
+# on it. .dex/sync-state.json is derived bookkeeping that dex rewrites — let
+# the checked-out side win rather than corrupting the JSON.
+.dex/tasks.jsonl merge=union
+.dex/sync-state.json merge=ours
