@@ -19,10 +19,9 @@ describe("jsdom teardown: better-auth session store (GH #1209)", () => {
   });
 
   it("flushes the deferred session-store unmount before the environment dies", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(new Response(null, { status: 401 }))
-    );
+    // better-auth captured `fetch` at import (config.mjs -> customFetchImpl),
+    // so a global stub installed here cannot intercept the mount-fetch issued
+    // during the 1.1s flush; it reaches localhost:3000 and fails closed.
     const removeSpy = vi.spyOn(window, "removeEventListener");
     const session = authClient.$store.atoms.session;
 
