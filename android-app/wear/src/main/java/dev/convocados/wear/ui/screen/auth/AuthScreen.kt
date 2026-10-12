@@ -25,6 +25,7 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.input.RemoteInputIntentHelper
 import dev.convocados.wear.BuildConfig
+import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.TextMuted
@@ -170,19 +171,16 @@ fun AuthScreen(
                     // Dev-only: one-tap login with pre-filled credentials
                     if (hasDevCreds) {
                         item {
-                            CompactButton(
+                            Button(
                                 onClick = {
                                     viewModel.onEmailChanged(devEmail)
                                     viewModel.onPasswordChanged(devPassword)
                                     viewModel.loginWithEmail()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.filledTonalButtonColors(),
                             ) {
-                                Text(
-                                    text = "Dev Login",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
+                                Text(text = "Dev Login")
                             }
                         }
                     }
@@ -234,18 +232,16 @@ fun AuthScreen(
 
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
-                    CompactButton(
+                    Button(
                         onClick = onQuickGame,
                         // Bottom bezel inset so release builds (no backend
                         // selector below) don't clip this last item on round.
-                        modifier = Modifier.minimumVerticalContentPadding(
+                        modifier = Modifier.fillMaxWidth().roundListInset().minimumVerticalContentPadding(
                             ButtonDefaults.minimumVerticalListContentPadding
                         ),
+                        colors = ButtonDefaults.filledTonalButtonColors(),
                     ) {
-                        Text(
-                            text = stringResource(R.string.quick_game),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
+                        Text(stringResource(R.string.quick_game))
                     }
                 }
 

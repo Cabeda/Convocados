@@ -106,9 +106,10 @@ fun AddPlayerScreen(
                 }
 
                 item {
-                    CompactButton(
+                    Button(
                         onClick = onDone,
                         modifier = Modifier.fillMaxWidth().roundListInset(),
+                        colors = ButtonDefaults.filledTonalButtonColors(),
                     ) {
                         Text(stringResource(R.string.done_label))
                     }

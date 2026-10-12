@@ -41,6 +41,7 @@ import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.expressiveTokens
 import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.util.GameListTimeState
 import dev.convocados.wear.util.PullToRefreshProgress
@@ -167,7 +168,7 @@ fun GamesScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp).roundSafeWidth(),
                         ) {
                             Text(
                                 text = stringResource(
@@ -179,15 +180,26 @@ fun GamesScreen(
                                 textAlign = TextAlign.Center,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            CompactButton(onClick = { viewModel.refresh() }) {
+                            Button(
+                                onClick = { viewModel.refresh() },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
                                 Text(stringResource(R.string.refresh))
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            CompactButton(onClick = onQuickGame) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Button(
+                                onClick = onQuickGame,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.filledTonalButtonColors(),
+                            ) {
                                 Text(stringResource(R.string.quick_game))
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            CompactButton(onClick = onSignOut) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Button(
+                                onClick = onSignOut,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.filledTonalButtonColors(),
+                            ) {
                                 Text(stringResource(R.string.sign_out))
                             }
                         }
@@ -300,15 +312,16 @@ fun GamesScreen(
                         if (state.pastGames.isNotEmpty()) {
                             item {
                                 Spacer(modifier = Modifier.height(4.dp))
-                                CompactButton(
+                                Button(
                                     onClick = { viewModel.togglePastGames() },
+                                    modifier = Modifier.fillMaxWidth().roundListInset(),
+                                    colors = ButtonDefaults.filledTonalButtonColors(),
                                 ) {
                                     Text(
                                         text = stringResource(
                                             if (state.showPastGames) R.string.hide_past_games
                                             else R.string.show_past_games
                                         ),
-                                        style = MaterialTheme.typography.labelSmall,
                                     )
                                 }
                             }
@@ -327,13 +340,12 @@ fun GamesScreen(
 
                                 if (state.visiblePastCount < state.pastGames.size) {
                                     item {
-                                        CompactButton(
+                                        Button(
                                             onClick = { viewModel.loadMorePast() },
+                                            modifier = Modifier.fillMaxWidth().roundListInset(),
+                                            colors = ButtonDefaults.filledTonalButtonColors(),
                                         ) {
-                                            Text(
-                                                text = stringResource(R.string.load_more),
-                                                style = MaterialTheme.typography.labelSmall,
-                                            )
+                                            Text(stringResource(R.string.load_more))
                                         }
                                     }
                                 }
@@ -342,25 +354,22 @@ fun GamesScreen(
 
                         item {
                             Spacer(modifier = Modifier.height(4.dp))
-                            CompactButton(
+                            Button(
                                 onClick = onQuickGame,
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
                             ) {
-                                Text(
-                                    text = stringResource(R.string.quick_game),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
+                                Text(stringResource(R.string.quick_game))
                             }
                         }
 
                         item {
                             Spacer(modifier = Modifier.height(4.dp))
-                            CompactButton(
+                            Button(
                                 onClick = onHistory,
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
+                                colors = ButtonDefaults.filledTonalButtonColors(),
                             ) {
-                                Text(
-                                    text = stringResource(R.string.history_title),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
+                                Text(stringResource(R.string.history_title))
                             }
                         }
                     }
