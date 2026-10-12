@@ -165,6 +165,8 @@ interface Props {
   onResetPlayerOrder: () => Promise<void>;
   onRandomize: () => void;
   onConfirmReRandomize: () => void;
+  /** Confirm dialog when randomizing with fewer than maxPlayers joined. */
+  onConfirmEarlyRandomize?: () => void;
   /** True while the server is applying a team randomization. */
   isRandomizing?: boolean;
   canRemovePlayer: (player: Player) => boolean;
@@ -228,7 +230,7 @@ export function PlayerList({
   players, maxPlayers, isOwner, hasTeams,
   availableSuggestions, playerError, onPlayerErrorChange,
   onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
-  onRandomize, onConfirmReRandomize, isRandomizing = false, canRemovePlayer,
+  onRandomize, onConfirmReRandomize, onConfirmEarlyRandomize, isRandomizing = false, canRemovePlayer,
   currentUserId: _currentUserId,
   myRsvpStatus: _myRsvpStatus,
   guestRsvpMap: _guestRsvpMap,
@@ -1050,7 +1052,18 @@ export function PlayerList({
               disabled={active.length < 2 || isRandomizing}
               aria-busy={isRandomizing ? "true" : undefined}
               sx={{ px: 4, py: 1.5 }}
-              onClick={() => hasTeams ? onConfirmReRandomize() : onRandomize()}>
+              onClick={() => {
+                // Teams exist → re-randomize confirm (existing). No teams yet →
+                // confirm an early draw when the roster is below full; draw
+                // directly once full (the auto-draw already ran).
+                if (hasTeams) {
+                  onConfirmReRandomize();
+                } else if (active.length < maxPlayers && onConfirmEarlyRandomize) {
+                  onConfirmEarlyRandomize();
+                } else {
+                  onRandomize();
+                }
+              }}>
               {t("randomizeTeams")}
             </Button>
           </Box>

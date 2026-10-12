@@ -122,6 +122,8 @@ const de: TranslationKeys = {
   vs: "vs",
   rerandomizeTitle: "Teams neu auslosen?",
   rerandomizeDesc: "Die Teams wurden bereits festgelegt. Eine neue Auslosung ersetzt die aktuelle Zuordnung.",
+  randomizeEarlyTitle: "Ohne fehlende Spieler auslosen?",
+  randomizeEarlyDesc: "Nur {n} von {max} Spielern sind dabei. Du kannst jetzt auslosen — Späte werden den Teams hinzugefügt — oder auf die anderen warten.",
   cancel: "Abbrechen",
   randomize: "Auslosen",
   linkCopied: "Link kopiert!",

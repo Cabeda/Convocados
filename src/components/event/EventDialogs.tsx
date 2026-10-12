@@ -9,6 +9,11 @@ interface Props {
   confirmOpen: boolean;
   onConfirmClose: () => void;
   onConfirmRandomize: () => void;
+  // Early-draw confirmation (no teams yet, roster below full)
+  earlyDrawOpen: boolean;
+  onEarlyDrawClose: () => void;
+  onEarlyDrawConfirm: () => void;
+  earlyDrawCount: { n: number; max: number };
   // Relinquish ownership
   relinquishConfirmOpen: boolean;
   onRelinquishClose: () => void;
@@ -30,6 +35,7 @@ interface Props {
 
 export function EventDialogs({
   confirmOpen, onConfirmClose, onConfirmRandomize,
+  earlyDrawOpen, onEarlyDrawClose, onEarlyDrawConfirm, earlyDrawCount,
   relinquishConfirmOpen, onRelinquishClose, onRelinquishConfirm,
   cancelConfirmOpen, onCancelConfirmClose, onCancelConfirm, cancelConfirmBusy, isRecurring,
   snackbar, onSnackbarClose,
@@ -47,6 +53,19 @@ export function EventDialogs({
         <DialogActions>
           <Button onClick={onConfirmClose}>{t("cancel")}</Button>
           <Button onClick={onConfirmRandomize} variant="contained">{t("randomize")}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={earlyDrawOpen} onClose={onEarlyDrawClose}>
+        <DialogTitle>{t("randomizeEarlyTitle")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {t("randomizeEarlyDesc", { n: earlyDrawCount.n, max: earlyDrawCount.max })}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onEarlyDrawClose}>{t("cancel")}</Button>
+          <Button onClick={onEarlyDrawConfirm} variant="contained">{t("randomize")}</Button>
         </DialogActions>
       </Dialog>
 
