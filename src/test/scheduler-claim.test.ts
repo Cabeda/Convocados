@@ -12,6 +12,7 @@ import {
   processJob,
   claimJob,
   countFailedJobs,
+  getFailedJobs,
   CLAIM_LEASE_MS,
 } from "~/lib/scheduler.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
@@ -165,6 +166,9 @@ describe("processJob — backoff", () => {
     expect(updated!.failedAt).toBeNull();
     expect(updated!.claimedAt).toBeNull(); // claim released for the retry
     expect(updated!.runAt.getTime()).toBeGreaterThan(Date.now() + 5_000); // backoff, not immediate re-fetch
+    // The reason is captured on the row, so a retrying job is diagnosable too.
+    expect(updated!.lastError).toContain("boom");
+    expect(updated!.lastError).not.toBe("");
 
     // Not due again until the backoff elapses — worker polls find nothing.
     expect(await getDueJobs()).toHaveLength(0);
@@ -185,6 +189,30 @@ describe("processJob — backoff", () => {
     expect(updated!.claimedAt).toBeNull();
     expect(await getDueJobs()).toHaveLength(0);
     expect(await countFailedJobs()).toBe(1);
+    expect(updated!.lastError).toContain("boom");
+
+    // The dead-letter list carries the reason, so a human can diagnose without
+    // production DB access or log history that no longer exists.
+    const failed = await getFailedJobs();
+    expect(failed).toHaveLength(1);
+    expect(failed[0].id).toBe(job.id);
+    expect(failed[0].lastError).toContain("boom");
+    expect(failed[0].failedAt).not.toBeNull();
+  });
+
+  it("clears lastError when a job finally succeeds", async () => {
+    const user = await seedUser("user-clear");
+    const event = await seedEvent(user.id, new Date(Date.now() + 25 * 3600_000), "evt-clear");
+    await prisma.player.create({ data: { name: "P1", eventId: event.id, userId: user.id } });
+    const job = await seedDueReminderJob(event.id);
+    // A prior attempt failed; this one succeeds.
+    await prisma.scheduledJob.update({ where: { id: job.id }, data: { lastError: "boom" } });
+
+    expect(await processJob(job.id)).toBe("processed");
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+    expect(updated!.lastError).toBeNull();
   });
 });
 

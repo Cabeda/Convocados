@@ -89,6 +89,17 @@ export const CLAIM_LEASE_MS = 2 * 60 * 1000;
 const RETRY_BASE_MS = 10_000;
 const MAX_ATTEMPTS = 3;
 
+/** Cap stored failure text so a pathological error can't bloat the row. */
+const MAX_LAST_ERROR_CHARS = 1000;
+
+/** Render a thrown value for storage on the job row. */
+function describeJobError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.length > MAX_LAST_ERROR_CHARS
+    ? `${message.slice(0, MAX_LAST_ERROR_CHARS)}…`
+    : message;
+}
+
 /** Default bound for due-job fetches; callers may pass a smaller take. */
 export const DEFAULT_DUE_LIMIT = 50;
 
@@ -120,6 +131,28 @@ export async function claimJob(jobId: string) {
 /** Dead-lettered jobs (retry exhausted) — surfaced via /api/health. */
 export async function countFailedJobs(): Promise<number> {
   return prisma.scheduledJob.count({ where: { failedAt: { not: null } } });
+}
+
+/**
+ * Dead-lettered jobs with their failure reason, newest first. The count alone
+ * tells a human "something broke"; this tells them what and where, so diagnosis
+ * does not need production DB access or logs that no longer exist.
+ */
+export async function getFailedJobs(limit = 50) {
+  return prisma.scheduledJob.findMany({
+    where: { failedAt: { not: null } },
+    orderBy: { failedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      type: true,
+      eventId: true,
+      runAt: true,
+      retryCount: true,
+      failedAt: true,
+      lastError: true,
+    },
+  });
 }
 
 /**
@@ -170,16 +203,17 @@ export async function processJob(jobId: string): Promise<"processed" | "skipped"
 
     await prisma.scheduledJob.update({
       where: { id: jobId },
-      data: { processedAt: new Date(), claimedAt: null, claimedBy: null },
+      data: { processedAt: new Date(), claimedAt: null, claimedBy: null, lastError: null },
     });
     return "processed";
   } catch (err) {
     log.error({ jobId, type: job.type, err }, "Failed to process scheduled job");
     const nextRetry = job.retryCount + 1;
+    const lastError = describeJobError(err);
     if (nextRetry >= MAX_ATTEMPTS) {
       await prisma.scheduledJob.update({
         where: { id: jobId },
-        data: { failedAt: new Date(), processedAt: null, claimedAt: null, claimedBy: null },
+        data: { failedAt: new Date(), processedAt: null, claimedAt: null, claimedBy: null, lastError },
       });
     } else {
       await prisma.scheduledJob.update({
@@ -189,6 +223,7 @@ export async function processJob(jobId: string): Promise<"processed" | "skipped"
           runAt: new Date(Date.now() + RETRY_BASE_MS * 2 ** (nextRetry - 1)),
           claimedAt: null,
           claimedBy: null,
+          lastError,
         },
       });
     }

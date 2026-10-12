@@ -1,4 +1,5 @@
 import { prisma } from "./db.server";
+import { getFailedJobs } from "./scheduler.server";
 
 /**
  * Returns the configured admin emails from env as a Set.
@@ -94,6 +95,10 @@ export async function getAdminStats() {
     sportDistribution[s.sport] = s._count.sport;
   }
 
+  // Dead-lettered scheduler jobs with their reason — admin-only (the public
+  // /api/health shows the count only, and never echoes internal error text).
+  const deadLetterJobs = await getFailedJobs();
+
   return {
     totalUsers,
     totalEvents,
@@ -110,6 +115,7 @@ export async function getAdminStats() {
     pickupsDetected,
     pickupsAdopted,
     pickupAdoptionRate: pickupsDetected > 0 ? pickupsAdopted / pickupsDetected : 0,
+    deadLetterJobs,
   };
 }
 
