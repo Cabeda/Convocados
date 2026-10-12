@@ -116,6 +116,24 @@ describe("agent environment guardrails", () => {
     expect(standards).not.toContain("--to-schema-datamodel prisma");
   });
 
+  it("pins the AGENTS.md pointer to the extracted development guide", async () => {
+    // The prune moved reference blocks out of AGENTS.md behind this pointer.
+    // A dropped pointer or a moved/deleted guide silently strands every future
+    // agent at a dead link — the class this suite exists to catch.
+    const agents = await read("AGENTS.md");
+    expect(agents).toContain("docs/development-guide.md");
+
+    const guidePath = "docs/development-guide.md";
+    expect(existsSync(join(root, guidePath))).toBe(true);
+    const guide = await read(guidePath);
+    // The moved sections actually landed in the guide.
+    expect(guide).toContain("## Event Lifecycle & Game Phases");
+    expect(guide).toContain("## Common Patterns");
+    // The production-inspection pointer names a real runbook; that file and its
+    // own existence check ship in the prod-inspection Change.
+    expect(agents).toContain("docs/runbooks/production-inspection.md");
+  });
+
   it("ships a read-only production query wrapper and stops citing the absent sqlite3 CLI", async () => {
     const scriptPath = "scripts/prod-query.sh";
     expect(existsSync(join(root, scriptPath))).toBe(true);
