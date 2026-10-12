@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
@@ -67,13 +67,13 @@ function routeFetch(handlers: Record<string, unknown>) {
 }
 
 function renderEvent(players: Row[]) {
-  globalThis.fetch = routeFetch({
+  vi.stubGlobal("fetch", routeFetch({
     "/known-players": { players: [] },
     "/rsvp": {},
     "/co-players": { players: [] },
     "/suggestions": { suggestions: [] },
     "/api/events/evt-1": makeEvent(players),
-  }) as unknown as typeof fetch;
+  }) as unknown as typeof fetch);
   renderWithTheme(<EventPage eventId="evt-1" />);
 }
 
@@ -92,6 +92,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("EventPage — self-leave on an unlinked roster row (#1269)", () => {
@@ -148,12 +149,34 @@ describe("EventPage — self-leave on an unlinked roster row (#1269)", () => {
     renderEvent([{ id: "p-linked", name: "Ze", userId: "u-1" }]);
 
     expect(await screen.findByText("You joined as Ze")).toBeInTheDocument();
+    // Deliberate behaviour change (F4): the linked path now confirms first,
+    // same as the unlinked path, then fires the existing /leave endpoint.
     await user.click(screen.getByRole("button", { name: "Leave" }));
+    expect(await screen.findByText("Leave this game?")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("leave-dialog-confirm"));
+
+    await waitFor(() => {
+      const all = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls as Array<
+        [string, RequestInit | undefined]
+      >;
+      expect(all.some(([url, init]) => String(url).includes("/api/events/evt-1/leave") && init?.method === "POST")).toBe(true);
+    });
+  });
+
+  it("linked self-leave does NOT fire the /leave call until the dialog is confirmed", async () => {
+    const user = userEvent.setup();
+    renderEvent([{ id: "p-linked", name: "Ze", userId: "u-1" }]);
+
+    await user.click(await screen.findByRole("button", { name: "Leave" }));
+    await screen.findByText("Leave this game?");
 
     const all = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls as Array<
       [string, RequestInit | undefined]
     >;
-    expect(all.some(([url, init]) => String(url).includes("/api/events/evt-1/leave") && init?.method === "POST")).toBe(true);
-    expect(screen.queryByTestId("leave-dialog-confirm")).toBeNull();
+    expect(all.some(([url, init]) => String(url).includes("/leave") && init?.method === "POST")).toBe(false);
+
+    await user.click(screen.getByTestId("leave-dialog-cancel"));
+    expect(all.some(([url, init]) => String(url).includes("/leave") && init?.method === "POST")).toBe(false);
   });
 });

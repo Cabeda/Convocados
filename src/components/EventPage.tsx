@@ -89,7 +89,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelConfirmBusy, setCancelConfirmBusy] = useState(false);
-  // #1269: self-leave confirm for a name-only roster row (no userId to match on).
+  // #1269: self-leave confirm for the hero row — both the linked (userId) and
+  // the name-matched unlinked path go through it (review F4 consistency).
   const [selfLeave, setSelfLeave] = useState<{
     open: boolean; benchEmptyAfter: boolean; within48h: boolean; busy: boolean;
   }>({ open: false, benchEmptyAfter: false, within48h: false, busy: false });
@@ -1188,8 +1189,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       color="error"
                       size="small"
                       onClick={() => {
-                        // Linked: unchanged — the /leave endpoint resolves the row by userId.
-                        if (!unlinked) { void handleSetMyRsvp("no"); return; }
                         setSelfLeave({
                           open: true,
                           benchEmptyAfter: computeBenchEmptyAfter(
@@ -1203,25 +1202,30 @@ export default function EventPage({ eventId }: { eventId: string }) {
                     >
                       {t("leave")}
                     </Button>
-                    {unlinked && (
-                      <ConfirmLeaveDialog
-                        open={selfLeave.open}
-                        onClose={() => setSelfLeave((d) => ({ ...d, open: false }))}
-                        onConfirm={async () => {
-                          const rowId = myPlayer.id;
-                          setSelfLeave((d) => ({ ...d, busy: true }));
-                          // Removal only — never links the row to the account.
-                          try { await removePlayer(rowId); } finally {
-                            setSelfLeave((d) => ({ ...d, open: false, busy: false }));
+                    <ConfirmLeaveDialog
+                      open={selfLeave.open}
+                      onClose={() => setSelfLeave((d) => ({ ...d, open: false }))}
+                      onConfirm={async () => {
+                        const rowId = myPlayer.id;
+                        setSelfLeave((d) => ({ ...d, busy: true }));
+                        try {
+                          if (unlinked) {
+                            // Removal only — never links the row to the account.
+                            await removePlayer(rowId);
+                          } else {
+                            // Linked: the /leave endpoint resolves the row by userId.
+                            await handleSetMyRsvp("no");
                           }
-                        }}
-                        context="self"
-                        playerName={myPlayer.name}
-                        benchEmptyAfter={selfLeave.benchEmptyAfter}
-                        within48h={selfLeave.within48h}
-                        busy={selfLeave.busy}
-                      />
-                    )}
+                        } finally {
+                          setSelfLeave((d) => ({ ...d, open: false, busy: false }));
+                        }
+                      }}
+                      context="self"
+                      playerName={myPlayer.name}
+                      benchEmptyAfter={selfLeave.benchEmptyAfter}
+                      within48h={selfLeave.within48h}
+                      busy={selfLeave.busy}
+                    />
                   </Paper>
                 );
               }
