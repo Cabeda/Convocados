@@ -31,6 +31,16 @@ function sh(cmd: string, args: string[], cwd = ROOT, allowFail = false): string 
   }
 }
 
+/** Run and report success explicitly: "" is a valid output for both outcomes. */
+function runCapture(cmd: string, args: string[], cwd = ROOT): { ok: boolean; out: string } {
+  try {
+    return { ok: true, out: execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim() };
+  } catch (error) {
+    const e = error as { stdout?: string; stderr?: string };
+    return { ok: false, out: `${e.stdout ?? ""}\n${e.stderr ?? ""}`.trim() };
+  }
+}
+
 function ghJson<T>(args: string[]): T {
   return JSON.parse(sh("gh", args)) as T;
 }
@@ -115,14 +125,19 @@ function main(): void {
 
   runAgent(worktree, number);
 
-  const gate = sh("bash", ["scripts/factory/gate.sh"], worktree, true);
+  const gate = runCapture("bash", ["scripts/factory/gate.sh"], worktree);
   const gateLog = join(ROOT, `.nightshift/gate-${number}.log`);
-  writeFileSync(gateLog, gate);
-  measureCoverage(worktree, gate);
+  writeFileSync(gateLog, gate.out);
+  measureCoverage(worktree, gate.out);
 
-  // A non-empty push is the signal the gate passed; gate.sh exits non-zero on
-  // failure and `sh` would have returned "" for stdout. Push only when we have a
-  // diff against origin/main.
+  // The gate result is the gate result: a red Gate 1 never reaches the remote,
+  // whatever the working tree happens to contain. An empty green run means the
+  // agent produced nothing, which the diff check below catches.
+  if (!gate.ok) {
+    record({ event: "worker-blocked", issue: number, reason: "gate red", log: gateLog });
+    process.exit(1);
+  }
+
   const diff = sh("git", ["diff", "--stat", "origin/main...HEAD"], worktree, true);
   if (!diff) {
     record({ event: "worker-blocked", issue: number, reason: "no diff" });

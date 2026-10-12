@@ -101,6 +101,18 @@ NIGHTSHIFT_DRY_RUN=1 bash scripts/nightshift/run.sh
 cat .nightshift/ledger.jsonl | jq -r '.event + " " + (.issue // .pr | tostring)'
 ```
 
+To actually merge unattended, three things must be true, and the loop fails
+closed without each of them:
+
+1. `bash scripts/nightshift/relax-protection.sh --yes` has been run (no required
+   review on `main`), and
+2. `NIGHTSHIFT_REVIEWER_TOKEN` / `NIGHTSHIFT_REVIEWER_LOGIN` name a **second**
+   GitHub identity that can approve (GitHub forbids self-approval), and
+3. `NIGHTSHIFT_AUTHORS` names the identities the loop may merge for. There is no
+   implicit default from the ambient `gh` login: defaulting to the current login
+   would make every Change *you* authored loop-eligible — the opposite of "a
+   human's Change always gets a human".
+
 ## What this deliberately does not do
 
 - No cloud daemon. It is a local `while true`; GitHub holds all the durable state.

@@ -47,12 +47,12 @@ function ghJson<T>(args: string[], allowFail = false): T {
   return JSON.parse(out) as T;
 }
 
-function currentLogin(): string {
-  return gh(["api", "user", "--jq", ".login"], true) || "unknown";
-}
-
 function policy(): MergePolicy {
-  const authors = (process.env.NIGHTSHIFT_AUTHORS ?? currentLogin()).split(",").map((s) => s.trim()).filter(Boolean);
+  // No implicit author. Defaulting to the current gh login inverts guard 1 on
+  // the documented local setup (your own token): every human Change you authored
+  // becomes loop-eligible while the factory's are not. Authors are opt-in by
+  // name; without them, only the DEFAULT_POLICY identities merge — fail closed.
+  const authors = (process.env.NIGHTSHIFT_AUTHORS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const approvers = (process.env.NIGHTSHIFT_REVIEWERS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return {
     ...DEFAULT_POLICY,
@@ -94,9 +94,10 @@ function readCoverage(): CoverageFacts {
       // fall through to the fail-closed default
     }
   }
-  // Unknown coverage is not a proven-unchanged coverage. But a missing report
-  // should not wedge the loop, so the *gate* (merge-eligibility) treats a drop as
-  // a block; absence is reported to the ledger so it is visible.
+  // Unknown coverage is not a proven-unchanged coverage: the delta guard passes
+  // only because nothing measured it, so say so in the ledger instead of
+  // implying a number was checked.
+  record({ event: "coverage-report-missing", path: COVERAGE_FILE, note: "coverageDelta guard not measured" });
   return { delta: 0, thresholdsLowered: false };
 }
 

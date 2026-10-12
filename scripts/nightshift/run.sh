@@ -25,11 +25,28 @@ log() { printf '[nightshift] %s\n' "$*" >&2; }
 
 paused() { [ "${FACTORY_PAUSED:-}" = "true" ]; }
 
+# Minutes since local midnight when the loop started.
+START_MIN=$((10#$(date +%H) * 60 + 10#$(date +%M)))
+
+# UNTIL is a time of day (default 07:00) and overnight runs are the normal
+# case: a loop started at 23:00 must stop at 07:00, not on its first
+# iteration. Measure elapsed minutes since start against the stop point,
+# wrapping midnight once. Stops immediately when started exactly at UNTIL.
 past_stop() {
-  local now until
-  now=$(date +%H%M)
+  local now until_h until_m until stop_at elapsed
+  now=$((10#$(date +%H) * 60 + 10#$(date +%M)))
   until=$(printf '%s' "$UNTIL" | tr -d ':')
-  [ "$now" -ge "$until" ]
+  until_h=$((10#${until:0:2}))
+  until_m=$((10#${until:2:2}))
+  until=$((until_h * 60 + until_m))
+  [ "$until" -eq "$START_MIN" ] && return 0
+  if [ "$until" -gt "$START_MIN" ]; then
+    stop_at=$until
+  else
+    stop_at=$((until + 1440))
+  fi
+  elapsed=$(( (now - START_MIN + 1440) % 1440 ))
+  [ "$elapsed" -ge $((stop_at - START_MIN)) ]
 }
 
 # JSON array of issue numbers on stdin -> space-separated, at most $1 of them.
