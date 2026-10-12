@@ -171,9 +171,10 @@ docs: update AGENTS.md
 3. Implement feature
 4. Ensure all tests pass (`pnpm test`)
 5. Run type checking (`pnpm typecheck`)
-6. Create PR with a descriptive title, a summary, and a `Closes #<issue>` line in the body —
-   GitHub closes the linked issue the moment the PR merges. A PR that fixes an issue without
-   that keyword leaves the issue open, and the next agent reads a solved bug as live work.
+6. When the PR resolves an issue, put a `Closes #<issue>` line in the body — GitHub closes
+   the linked issue the moment the PR merges. A PR that fixes an issue without that keyword
+   leaves the issue open, and the next agent reads a solved bug as live work. A PR that
+   closes nothing carries the `no-issue` label instead.
 7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
 8. **Before merging**, always run the full test suite (`pnpm test`) and type checking (`pnpm typecheck`) to ensure the build will succeed in CI/CD
 
@@ -432,7 +433,7 @@ client, and is idempotent. Worked detail that only some tasks need lives in
 [`docs/development-guide.md`](docs/development-guide.md): dev-server/worktree management,
 Bruno API flows, event lifecycle & game phases, and common code patterns. To inspect
 production — read-only DB queries, the job queue, the scheduler — see
-[`docs/runbooks/`](docs/runbooks/).
+[`docs/runbooks/production-inspection.md`](docs/runbooks/production-inspection.md).
 
 ## Reviewing Checklist
 
@@ -478,8 +479,9 @@ dex sync               # Push tasks to GitHub Issues
   (`completed`, `updated_at` are rewritten in place), so if both sides edited the same
   task the ledger ends up with two lines sharing one id. Run
   `node scripts/dex-dedupe.mjs --check` before pushing and fix any duplicate it reports
-  (`node scripts/dex-dedupe.mjs` keeps the newest `updated_at` per id, then commit); the
-  `dex-ledger` CI job runs the same check.
+  (`node scripts/dex-dedupe.mjs` keeps the newest `updated_at` per id, then commit).
+  `src/test/agent-env-guardrails.test.ts` fails CI on a duplicate id, and the `dex-ledger`
+  CI job runs the same `--check`.
   `.dex/sync-state.json` is derived state with no merge attribute (`merge=ours` would be
   inert without a config-registered driver): on conflict take either side wholesale and
   delete the markers — never splice.
