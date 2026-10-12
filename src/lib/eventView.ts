@@ -10,6 +10,8 @@
  * the client and server share one definition.
  */
 
+import { normalizeForMatch } from "./stringMatch";
+
 export interface EventPermissionEvent {
   ownerId: string | null;
   isPublic: boolean;
@@ -74,4 +76,29 @@ export function canRemoveEventPlayer(
   if (viewerUserId && player.userId === viewerUserId) return true;
   if (!player.userId) return true;
   return false;
+}
+
+/**
+ * Which row of the CURRENT roster is the signed-in viewer (#1269).
+ *
+ * A row carries a `userId` only when it is linked to an account; an organizer-added
+ * anonymous player has none, so `userId` matching alone leaves those viewers with no
+ * self-leave affordance. When there is no linked row, fall back to the repo's own
+ * name normalization — the same rule invite/suggestion resolution uses — but ONLY on
+ * rows that are unlinked: a name is the strongest claim available, and claiming a row
+ * that belongs to someone else's account would be an identity guess.
+ *
+ * This grants no new authority: `canRemoveEventPlayer` already returns true for any
+ * viewer on an unlinked row, so the affordance only names a row the X could remove.
+ */
+export function findSelfRosterRow<T extends { name: string; userId?: string | null }>(
+  players: T[],
+  viewer: { id: string; name?: string | null } | null | undefined,
+): T | null {
+  if (!viewer?.id) return null;
+  const linked = players.find((p) => p.userId === viewer.id);
+  if (linked) return linked;
+  if (!viewer.name) return null;
+  const wanted = normalizeForMatch(viewer.name);
+  return players.find((p) => !p.userId && normalizeForMatch(p.name) === wanted) ?? null;
 }
