@@ -68,6 +68,10 @@ describe("agent environment guardrails", () => {
     expect(script).toMatch(/\.bin/);
     expect(script).toContain("google-services.json");
     expect(script).toContain("local.properties");
+    // The root .env is gitignored too and DATABASE_URL gates prisma generate,
+    // so the Prisma cost below cannot be paid without it.
+    expect(script).toContain('if [ -f "$SOURCE/.env" ] && [ ! -f .env ]; then');
+    expect(script).toContain('cp "$SOURCE/.env" .env');
     expect(script).toContain("pnpm db:generate");
     expect(script).toMatch(/if \[ ! -d src\/lib\/__generated__\/prisma \]/);
 

@@ -11,8 +11,9 @@
 #   2. The gitignored Android env files (google-services.json,
 #      local.properties) do not exist in a worktree, so :app:assembleDebug
 #      fails for reasons that have nothing to do with the change under test.
-#   3. The Prisma client is generated output; without it `pnpm typecheck`
-#      fails on the generated types.
+#   3. The gitignored root .env (DATABASE_URL etc.) and the generated Prisma
+#      client: without them `pnpm typecheck` fails on the generated types,
+#      because prisma's config resolves DATABASE_URL at generate time.
 #
 # Usage (from inside the worktree):
 #   scripts/worktree-bootstrap.sh
@@ -62,7 +63,14 @@ if [ -d "$SOURCE/node_modules/.bin" ]; then
   done
 fi
 
-# 2. Gitignored Android env files.
+# 2. Gitignored local env: the root .env (DATABASE_URL, BETTER_AUTH_URL —
+#    prisma's config file resolves DATABASE_URL at generate time) and the
+#    Android env files.
+if [ -f "$SOURCE/.env" ] && [ ! -f .env ]; then
+  echo "▶ copying .env"
+  cp "$SOURCE/.env" .env
+fi
+
 for envfile in google-services.json local.properties; do
   for candidate in \
     "$SOURCE/android-app/app/$envfile" \
