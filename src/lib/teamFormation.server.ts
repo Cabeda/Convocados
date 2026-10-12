@@ -106,12 +106,31 @@ async function loadRatingMap(eventId: string): Promise<Map<string, number>> {
  * describes the split it labels.
  */
 async function replaceTeamMembers(eventId: string, teams: { id: string; name: string }[], matches: Imatch[], sport: string | null): Promise<void> {
+  const claimed = new Set<string>();
   await prisma.$transaction([
     prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map((t) => t.id) } } }),
-    ...matches.flatMap((match) => {
-      const teamId = teams.find((t) => t.name === match.team)?.id;
-      if (!teamId) return [];
-      return match.players.map((p) => prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } }));
+    ...matches.flatMap((match, i) => {
+      // Anchor on the team RESULT id, not the label: the draw is keyed by the
+      // Event's names, and a label that no longer matches any row (a rename
+      // applied to the Event only) must not drop the whole side — the delete
+      // above already runs in this transaction, so a miss would silently empty
+      // both lineups. Name first (the invariant the rename keeps), then side
+      // position: `matches[i]` is the Event's i-th team name (draws are keyed
+      // [teamOneName, teamTwoName]), and `teams` are read team-one-first via
+      // `orderBy: { id: "asc" }` — the convention GET /teams reads
+      // teamResults[0] with. Every row may be claimed once: with duplicate
+      // labels (the rename route accepts identical names) or a stale row label
+      // equal to the OTHER side's Event name, a bare name lookup hands both
+      // drawn sides to the same row and empties the other — the very wipe this
+      // anchor exists to prevent.
+      const target =
+        teams.find((t) => t.name === match.team && !claimed.has(t.id)) ??
+        (teams[i] && !claimed.has(teams[i].id)
+          ? teams[i]
+          : teams.find((t) => !claimed.has(t.id)));
+      if (!target) return [];
+      claimed.add(target.id);
+      return match.players.map((p) => prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: target.id } }));
     }),
   ]);
 
@@ -235,6 +254,7 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
+    orderBy: { id: "asc" },
   });
   // No teams yet, or only empty shells from the recurrence reset — placement
   // waits for the full-roster draw (autoRandomizeIfFull) or the manual button.
@@ -300,6 +320,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
+    orderBy: { id: "asc" },
   });
   if (teams.length === 0) return;
 
