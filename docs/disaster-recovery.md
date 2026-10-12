@@ -48,10 +48,16 @@ litestream restore -config /app/litestream.yml -timestamp "2026-03-20T12:00:00Z"
 
 ### Verify the restored database
 
+The image has no `sqlite3` CLI (`executable file not found`). Query the restored
+file with the bundled `better-sqlite3`:
+
 ```bash
-sqlite3 /data/db.sqlite "PRAGMA integrity_check;"
-sqlite3 /data/db.sqlite "SELECT count(*) FROM Event;"
+node -e "const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite',{readonly:true});console.log('integrity',db.pragma('integrity_check'));console.log('events',db.prepare('SELECT count(*) c FROM Event').get().c);"
 ```
+
+For live reads of the running database from your machine, use
+[`scripts/prod-query.sh`](../scripts/prod-query.sh) — see
+[runbooks/production-inspection.md](runbooks/production-inspection.md).
 
 ### Restart the machine
 
