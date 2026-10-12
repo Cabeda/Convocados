@@ -38,7 +38,8 @@ import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
 import { SignInButton } from "./SignInButton";
 import { PushPromptBanner } from "./PushPromptBanner";
-import { deriveEventPermissions, canRemoveEventPlayer } from "~/lib/eventView";
+import { ConfirmLeaveDialog, computeBenchEmptyAfter, computeWithin48h } from "./event/ConfirmLeaveDialog";
+import { deriveEventPermissions, canRemoveEventPlayer, findSelfRosterRow } from "~/lib/eventView";
 import { decidePaymentGate } from "~/lib/paymentGate";
 
 
@@ -88,6 +89,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelConfirmBusy, setCancelConfirmBusy] = useState(false);
+  // #1269: self-leave confirm for a name-only roster row (no userId to match on).
+  const [selfLeave, setSelfLeave] = useState<{
+    open: boolean; benchEmptyAfter: boolean; within48h: boolean; busy: boolean;
+  }>({ open: false, benchEmptyAfter: false, within48h: false, busy: false });
   const [_postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
@@ -1167,23 +1172,56 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   </Paper>
                 );
               }
-              const myPlayer = session?.user?.id ? event.players.find((p) => p.userId === session.user!.id) ?? null : null;
-              const isOnList = !!myPlayer;
-              const isOnBench = isOnList && event.players.findIndex((p) => p.id === myPlayer!.id) >= event.maxPlayers;
-              if (isOnList) {
+              // #1269: a linked row still matches on userId; an anonymous row added by
+              // the organizer has no userId, so fall back to the normalized name match.
+              const myPlayer = session?.user?.id ? findSelfRosterRow(event.players, session.user!) : null;
+              if (myPlayer) {
+                const unlinked = !myPlayer.userId;
+                const isOnBench = event.players.findIndex((p) => p.id === myPlayer.id) >= event.maxPlayers;
                 return (
                   <Paper elevation={1} sx={{ borderRadius: 3, p: 2, display: "flex", alignItems: "center", gap: 1.5 }}>
                     <Typography variant="body2" fontWeight={600} sx={{ flex: 1, color: isOnBench ? "warning.main" : "primary.main" }}>
-                      {isOnBench ? t("onBench", { name: myPlayer!.name }) : t("youJoinedAs", { name: myPlayer!.name })}
+                      {isOnBench ? t("onBench", { name: myPlayer.name }) : t("youJoinedAs", { name: myPlayer.name })}
                     </Typography>
                     <Button
                       variant="outlined"
                       color="error"
                       size="small"
-                      onClick={() => handleSetMyRsvp("no")}
+                      onClick={() => {
+                        // Linked: unchanged — the /leave endpoint resolves the row by userId.
+                        if (!unlinked) { void handleSetMyRsvp("no"); return; }
+                        setSelfLeave({
+                          open: true,
+                          benchEmptyAfter: computeBenchEmptyAfter(
+                            myPlayer.id, event.players,
+                            event.players.slice(0, event.maxPlayers), event.maxPlayers,
+                          ),
+                          within48h: computeWithin48h(event.dateTime),
+                          busy: false,
+                        });
+                      }}
                     >
                       {t("leave")}
                     </Button>
+                    {unlinked && (
+                      <ConfirmLeaveDialog
+                        open={selfLeave.open}
+                        onClose={() => setSelfLeave((d) => ({ ...d, open: false }))}
+                        onConfirm={async () => {
+                          const rowId = myPlayer.id;
+                          setSelfLeave((d) => ({ ...d, busy: true }));
+                          // Removal only — never links the row to the account.
+                          try { await removePlayer(rowId); } finally {
+                            setSelfLeave((d) => ({ ...d, open: false, busy: false }));
+                          }
+                        }}
+                        context="self"
+                        playerName={myPlayer.name}
+                        benchEmptyAfter={selfLeave.benchEmptyAfter}
+                        within48h={selfLeave.within48h}
+                        busy={selfLeave.busy}
+                      />
+                    )}
                   </Paper>
                 );
               }
