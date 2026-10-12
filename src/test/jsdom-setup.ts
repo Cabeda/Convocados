@@ -3,23 +3,32 @@
 // in the components/ directory (which previously did not have a global setup)
 // can render MUI components without the missing-API error.
 
-import { afterEach } from "vitest";
+import { afterAll, afterEach } from "vitest";
+import { registerAuthSessionFlushHook } from "./auth-teardown";
 
 // better-auth mounts its session atom from a nanostores lifecycle timer, and
 // the atom itself defers `fetchSessionOnMount` by another 0ms timer. When a test
-// file finishes before those flush, the mount — and the cleanup it registers —
-// run after Vitest has torn down jsdom, and `window.removeEventListener` in
-// better-auth's `cleanupBroadcastSetup` throws "window is not defined". Vitest
-// reports that as an unhandled error and fails the entire shard with every test
-// green, which is how this reached CI three times across different component
-// files. Flushing a few macrotasks after each test lets the mount and its
-// cleanup run while `window` still exists, so the environment teardown is the
-// only thing left standing.
+// file finishes before those flush, the mount runs after Vitest has torn down
+// jsdom. Flushing a few macrotasks after each test lets the mount run while
+// `window` still exists.
 afterEach(async () => {
   for (let i = 0; i < 3; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 });
+
+// GH #1209: the *unmount* is the dangerous half. nanostores defers the
+// session atom's unmount destroys by STORE_UNMOUNT_DELAY (1000ms) after the
+// last unsubscribe — see nanostores lifecycle `off()`. One destroy is
+// better-auth's `refreshManager.cleanup()`, whose `cleanupBroadcastSetup`
+// closure calls bare `window.removeEventListener` with no `typeof window`
+// guard. The test file almost always finishes inside that 1s window, so
+// Vitest tore jsdom down first and the deferred destroy threw
+// "window is not defined" — an unhandled error that failed the whole shard
+// with every test green (SeasonListPage, SeasonConditionalStates, others).
+// Out-wait the delay in a file-level afterAll, which runs before environment
+// teardown, so the destroys land while `window` still exists.
+afterAll(registerAuthSessionFlushHook());
 
 if (typeof window !== "undefined") {
   if (!window.matchMedia) {
