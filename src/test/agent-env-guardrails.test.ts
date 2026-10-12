@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, mkdtempSync, writeFileSync, chmodSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -112,6 +114,70 @@ describe("agent environment guardrails", () => {
       "--to-schema prisma/schema.prisma --exit-code",
     );
     expect(standards).not.toContain("--to-schema-datamodel prisma");
+  });
+
+  it("ships a read-only production query wrapper and stops citing the absent sqlite3 CLI", async () => {
+    const scriptPath = "scripts/prod-query.sh";
+    expect(existsSync(join(root, scriptPath))).toBe(true);
+    // Executable: the runbooks call it directly.
+    expect(statSync(join(root, scriptPath)).mode & 0o111).not.toBe(0);
+
+    const script = await read(scriptPath);
+    // Read-only is the point — a wrapper that can write to production is worse
+    // than no wrapper.
+    expect(script).toMatch(/better-sqlite3/);
+    expect(script).toMatch(/readonly:\s*true/);
+    expect(script).toMatch(/only SELECT/);
+
+    // The runbook documents why the wrapper exists and where jobs execute.
+    const runbook = await read("docs/runbooks/production-inspection.md");
+    expect(runbook).toContain("scripts/prod-query.sh");
+    expect(runbook).toMatch(/no `sqlite3` CLI/);
+    // The failure list is `jobFailures` (retrying + dead-lettered), not the old
+    // dead-letter-only name, and the runbook states what NotificationJob really
+    // stores rather than claiming it persists a reason.
+    expect(runbook).toContain("jobFailures");
+    expect(runbook).not.toContain("deadLetterJobs");
+    expect(runbook).toContain("DEAD_LETTER_TTL_DAYS");
+
+    // Recovery runbooks run inside `fly ssh console` (the app may be stopped),
+    // where the workstation-only wrapper is absent — so they must use the
+    // in-machine driver, never scripts/prod-query.sh.
+    for (const doc of [
+      "docs/runbooks/full-recovery-from-zero.md",
+      "docs/runbooks/point-in-time-recovery.md",
+    ]) {
+      expect(await read(doc)).not.toContain("scripts/prod-query.sh");
+    }
+
+    // The disaster-recovery verify step must not tell a reader to run the
+    // binary the image does not have: `sqlite3 /data/db.sqlite` over fly ssh.
+    const dr = await read("docs/disaster-recovery.md");
+    expect(dr).not.toMatch(/^sqlite3 \/data\/db\.sqlite/m);
+    expect(dr).toContain("better-sqlite3");
+  });
+
+  it("refuses a write through prod-query.sh without opening an SSH session", () => {
+    // Behaviour, not prose: the read-only claim is only real if a write is
+    // rejected before any remote connection. A stub `fly` proves no ssh ran.
+    const stubDir = mkdtempSync(join(tmpdir(), "prod-query-stub-"));
+    const marker = join(stubDir, "fly-was-called");
+    const stubFly = join(stubDir, "fly");
+    writeFileSync(stubFly, `#!/bin/sh\ntouch "${marker}"\nexit 0\n`);
+    chmodSync(stubFly, 0o755);
+
+    let status = 0;
+    try {
+      execFileSync("sh", ["scripts/prod-query.sh", "DELETE FROM ScheduledJob"], {
+        env: { ...process.env, PATH: `${stubDir}:${process.env.PATH ?? ""}` },
+        stdio: "pipe",
+      });
+    } catch (err) {
+      status = (err as { status?: number }).status ?? -1;
+    }
+
+    expect(status).toBe(2);
+    expect(existsSync(marker)).toBe(false);
   });
 
   it("enforces a PR closing keyword and the dex ledger check in CI and pre-push", async () => {
