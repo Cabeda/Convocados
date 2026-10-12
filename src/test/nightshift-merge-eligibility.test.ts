@@ -78,10 +78,10 @@ describe("a human's Change is never auto-merged", () => {
 
 describe("a missing gate is not a passing gate", () => {
   it("rejects when a required check never ran", () => {
-    const checks = GREEN.filter((c) => c.name !== "Coverage Gate");
+    const checks = GREEN.filter((c) => c.name !== "Build");
     const verdict = decideMerge(pr({ checks }));
     expect(verdict.eligible).toBe(false);
-    expect(verdict.reasons.join()).toMatch(/Coverage Gate never ran/);
+    expect(verdict.reasons.join()).toMatch(/Build never ran/);
   });
 
   it("rejects when a required check is still pending", () => {
@@ -100,9 +100,12 @@ describe("a missing gate is not a passing gate", () => {
     }
   });
 
-  it("names the coverage gate, unlike the Dependabot policy", () => {
-    // Nightshift works source changes, so a skipped coverage run is a real gap.
-    expect(REQUIRED_CHECKS).toContain("Coverage Gate");
+  it("does not require Coverage Gate, because CI runs it on push only", () => {
+    // test.yml guards the Coverage Gate job with
+    // `if: github.event_name != 'pull_request'`, so it is skipped on every PR.
+    // Requiring it would make every Change permanently ineligible. Coverage is
+    // enforced instead by the local gate (gate.sh) and the coverageDelta guard.
+    expect([...REQUIRED_CHECKS]).not.toContain("Coverage Gate");
   });
 });
 

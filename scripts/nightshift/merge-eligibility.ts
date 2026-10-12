@@ -76,9 +76,16 @@ export const DEFAULT_POLICY: MergePolicy = {
 /**
  * A check that must be present *and* successful. A missing check is not a pass.
  *
- * `Coverage Gate` is included here, unlike the Dependabot policy: Nightshift
- * works source changes, so coverage always applies and a skipped coverage run is
- * a real gap rather than a dependency-only artifact.
+ * `Coverage Gate` is deliberately **absent**: `test.yml` guards that job with
+ * `if: github.event_name != 'pull_request'`, so it is skipped on every PR and
+ * requiring it would make every Change permanently ineligible — the policy dead
+ * on arrival. Coverage is enforced instead by the local gate (`gate.sh` runs
+ * `vitest run --coverage` against the thresholds) and by the `coverageDelta` and
+ * `coverageThresholdsLowered` guards below.
+ *
+ * `CI` and `Analyze (javascript-typescript)` are the two contexts the `main`
+ * rulesets actually require; the individual gates `CI` aggregates are named
+ * separately so a red member cannot hide behind a green aggregate.
  */
 export const REQUIRED_CHECKS = [
   "CI",
@@ -87,7 +94,6 @@ export const REQUIRED_CHECKS = [
   "Lint",
   "Dependency Audit",
   "Build",
-  "Coverage Gate",
 ];
 
 /**
