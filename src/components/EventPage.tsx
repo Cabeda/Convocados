@@ -79,6 +79,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── UI state ────────────────────────────────────────────────────────────────
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [earlyDrawOpen, setEarlyDrawOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [inviteShare, setInviteShare] = useState<{ url: string; name: string } | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -1220,6 +1221,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onResetPlayerOrder={resetPlayerOrder}
               onRandomize={doRandomize}
               onConfirmReRandomize={() => setConfirmOpen(true)}
+              onConfirmEarlyRandomize={() => setEarlyDrawOpen(true)}
               isRandomizing={isRandomizing}
               canRemovePlayer={canRemovePlayer}
               onSetMyRsvp={handleSetMyRsvp}
@@ -1314,6 +1316,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
           confirmOpen={confirmOpen}
           onConfirmClose={() => setConfirmOpen(false)}
           onConfirmRandomize={doRandomize}
+          earlyDrawOpen={earlyDrawOpen}
+          onEarlyDrawClose={() => setEarlyDrawOpen(false)}
+          onEarlyDrawConfirm={doRandomize}
+          earlyDrawCount={{ n: Math.min(event.players.length, event.maxPlayers), max: event.maxPlayers }}
           relinquishConfirmOpen={relinquishConfirmOpen}
           onRelinquishClose={() => setRelinquishConfirmOpen(false)}
           onRelinquishConfirm={handleRelinquishOwnership}
