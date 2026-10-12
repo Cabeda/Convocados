@@ -113,4 +113,31 @@ describe("agent environment guardrails", () => {
     );
     expect(standards).not.toContain("--to-schema-datamodel prisma");
   });
+
+  it("enforces a PR closing keyword and the dex ledger check in CI and pre-push", async () => {
+    // A PR without a closing keyword leaves its issue open after the fix ships
+    // (#1114/#1199); the template primes the keyword and CI enforces it.
+    const template = await read(".github/PULL_REQUEST_TEMPLATE.md");
+    expect(template).toMatch(/Closes #/);
+
+    const ci = await read(".github/workflows/test.yml");
+    // The check must be a job the aggregate gate depends on, or it never runs
+    // as a required check.
+    expect(ci).toMatch(/^\s{2}pr-links-issue:\s*$/m);
+    expect(ci).toMatch(/^\s{2}dex-ledger:\s*$/m);
+    expect(ci).toMatch(/node scripts\/dex-dedupe\.mjs --check/);
+    // The closing-keyword logic is a tested module, not an inline snippet.
+    expect(ci).toMatch(/node scripts\/check-pr-closing-keyword\.mjs/);
+    // `labeled`/`unlabeled` re-run the job so the `no-issue` hatch can turn it
+    // green; `edited` re-checks a body changed after green.
+    expect(ci).toMatch(/types: \[[^\]]*\blabeled\b[^\]]*\]/);
+    expect(ci).toMatch(/types: \[[^\]]*\bedited\b[^\]]*\]/);
+    expect(ci).toMatch(/needs: \[[^\]]*\bdex-ledger\b[^\]]*\]/);
+    expect(ci).toMatch(/needs: \[[^\]]*\bpr-links-issue\b[^\]]*\]/);
+
+    // The ledger check also runs locally (warn-only; CI blocks): the hazard (a
+    // union-merge splice of duplicate lines) happens during a rebase.
+    const hook = await read("scripts/pre-push.sh");
+    expect(hook).toMatch(/dex-dedupe\.mjs" --check/);
+  });
 });
