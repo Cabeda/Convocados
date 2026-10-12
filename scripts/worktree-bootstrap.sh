@@ -33,18 +33,16 @@ echo "▶ bootstrapping worktree: $ROOT (source: $SOURCE)"
 
 # 1. Install without running postinstall scripts (the native build is broken
 #    locally; the prebuilt binary is copied below instead).
-if [ ! -f node_modules/.modules.yaml ]; then
-  pnpm install --frozen-lockfile --ignore-scripts
-else
-  pnpm install --frozen-lockfile --ignore-scripts
-fi
+pnpm install --frozen-lockfile --ignore-scripts
 
 # 1a. Restore the better-sqlite3 native build directory from the source.
 #     Match by version directory name so the copy survives dependency bumps.
 if [ -d "$SOURCE/node_modules/.pnpm" ] && [ -d node_modules/.pnpm ]; then
   for native_dir in "$SOURCE"/node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3/build; do
     [ -d "$native_dir" ] || continue
-    version_dir=$(basename "$(dirname "$(dirname "$native_dir")")")
+    # .../.pnpm/better-sqlite3@X/node_modules/better-sqlite3/build ->
+    # three levels up from build/ lands on the version directory X.
+    version_dir=$(basename "$(dirname "$(dirname "$(dirname "$native_dir")")")")
     target="node_modules/.pnpm/$version_dir/node_modules/better-sqlite3/build"
     if [ ! -d "$target" ]; then
       echo "▶ restoring native build for $version_dir"
