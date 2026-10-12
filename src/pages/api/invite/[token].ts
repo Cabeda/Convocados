@@ -3,7 +3,7 @@ import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { expirePendingInvites, acceptPlayerInvite, declinePlayerInvite } from "~/lib/invite.server";
-import { addPlayerToTeams, validateTeams } from "~/lib/teamFormation.server";
+import { addPlayerToTeams, autoRandomizeIfFull, validateTeams } from "~/lib/teamFormation.server";
 import { syncGamePayments } from "~/lib/settlement.server";
 import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
 
@@ -148,12 +148,14 @@ export const POST: APIRoute = async ({ params, request }) => {
       });
 
       // Keep teams + per-game payments in sync with the new participant.
-      const playerName = actingUserId
-        ? (await prisma.user.findUnique({ where: { id: actingUserId }, select: { name: true } }))?.name ?? invite.eventPlayer.name
-        : invite.eventPlayer.name;
-      await addPlayerToTeams(invite.eventPlayer.eventId, playerName, invite.gameId);
+      // Placement is keyed on the canonical roster name, not the acting user's
+      // current display name.
+      await addPlayerToTeams(invite.eventPlayer.eventId, invite.eventPlayer.name, invite.gameId);
       await validateTeams(invite.eventPlayer.eventId, event?.maxPlayers ?? 0, invite.gameId);
       await syncGamePayments(invite.gameId, invite.eventPlayer.eventId);
+      // Same trigger as POST /players: an accepted invite that fills the
+      // active roster draws teams the first time.
+      await autoRandomizeIfFull(invite.eventPlayer.eventId, event?.maxPlayers ?? 0, invite.gameId);
 
       return Response.json({ ok: true, action: "accepted", bench: result.bench });
     }

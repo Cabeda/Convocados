@@ -8,8 +8,10 @@ import { prisma } from "./db.server";
 import type { Prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { balanceTeams } from "./elo.server";
+import { Randomize } from "./random";
 import type { Imatch } from "./random";
 import { applyFormationLayout } from "./teams";
+import { logEvent } from "./eventLog.server";
 
 /** Minimal client shape the reconcile needs — a `prisma` instance or the transaction a caller already opened. */
 type DbClient = Prisma.TransactionClient | typeof prisma;
@@ -152,6 +154,68 @@ export async function validateTeams(eventId: string, maxPlayers: number, current
 }
 
 /**
+ * Auto-randomize teams when the game becomes full (active players === maxPlayers)
+ * and no teams have been drawn yet. The manual "Randomize" button remains
+ * available at all times for re-randomization.
+ *
+ * Empty TeamResult shells left behind by the non-destructive recurrence reset
+ * (advanceOccurrence clears members but keeps the rows) do NOT count as a
+ * draw: they must neither block this trigger nor receive incremental
+ * placements — otherwise a new occurrence shows teams from the first joiner
+ * and never re-draws at full strength (prod: cmmkfrx8b0000o2ixrix1yp2m).
+ */
+export async function autoRandomizeIfFull(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<void> {
+  // Only trigger when no POPULATED teams exist yet
+  const existingTeams = await prisma.teamResult.count({
+    where: { eventId, members: { some: {} } },
+  });
+  if (existingTeams > 0) return;
+
+  // Count active players
+  const activeNames = (await getActiveRosterState(eventId, maxPlayers, currentGameId)).activeNames;
+  if (activeNames.size < maxPlayers) return;
+
+  // Game is full and no teams — auto-generate
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { balanced: true, teamOneName: true, teamTwoName: true, sport: true },
+  });
+  if (!event) return;
+
+  const players = [...activeNames];
+  let matches: Imatch[];
+
+  if (event.balanced) {
+    const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+    const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
+    const playersWithRatings = players.map((name) => ({
+      name,
+      rating: ratingMap.get(name) ?? 1000,
+    }));
+    matches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
+  } else {
+    matches = Randomize(players, [event.teamOneName, event.teamTwoName]);
+  }
+
+  await prisma.$transaction([
+    // Replace any empty shells so the draw cannot land next to stale rows.
+    prisma.teamResult.deleteMany({ where: { eventId } }),
+    ...applyFormationLayout(matches, event.sport).map((match) =>
+      prisma.teamResult.create({
+        data: {
+          name: match.team,
+          formation: match.formation ?? null,
+          eventId,
+          members: { create: match.players.map((p) => ({ name: p.name, order: p.order, slot: p.slot ?? null })) },
+        },
+      })
+    ),
+  ]);
+
+  logEvent(eventId, "teams_randomized", null, null, { balanced: event.balanced, playerCount: players.length, auto: true }).catch(() => {});
+}
+
+/**
  * If teams have been generated, add a player to the appropriate team.
  * When the event has balanced=true, triggers a full rebalance (minimum swaps).
  * Otherwise, adds to the team with fewer players.
@@ -166,7 +230,9 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
     where: { eventId },
     include: { members: true },
   });
-  if (teams.length === 0) return; // no teams generated yet
+  // No teams yet, or only empty shells from the recurrence reset — placement
+  // waits for the full-roster draw (autoRandomizeIfFull) or the manual button.
+  if (teams.length === 0 || teams.every((t) => t.members.length === 0)) return;
 
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: TEAM_EVENT_SELECT });
   const gameId = currentGameId ?? event?.currentGameId;

@@ -5,7 +5,7 @@ import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { confirmSpot } from "../../../../../lib/priority.server";
 import { grantActiveSpot } from "../../../../../lib/game.server";
 import { upsertEventPlayerForRoster } from "../../../../../lib/rosterCore.server";
-import { addPlayerToTeams, validateTeams } from "../../../../../lib/teamFormation.server";
+import { addPlayerToTeams, autoRandomizeIfFull, validateTeams } from "../../../../../lib/teamFormation.server";
 
 /** POST — player confirms their priority spot */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -75,6 +75,9 @@ export const POST: APIRoute = async ({ params, request }) => {
       if (spot.active) {
         await addPlayerToTeams(event.id, eventPlayer.name, event.currentGameId);
       }
+      // Same trigger as POST /players: a confirmation that fills the active
+      // roster draws teams the first time.
+      await autoRandomizeIfFull(event.id, event.maxPlayers, event.currentGameId);
     }
   }
 

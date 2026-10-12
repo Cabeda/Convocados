@@ -3,7 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
-import { addPlayerToTeams, validateTeams } from "../../../../lib/teamFormation.server";
+import { addPlayerToTeams, autoRandomizeIfFull, validateTeams } from "../../../../lib/teamFormation.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 
 const UNDO_WINDOW_MS = 60_000; // 60 seconds
@@ -101,6 +101,10 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Validate teams: ensure no bench players are in teams after undo
   await validateTeams(eventId, event.maxPlayers, event.currentGameId);
+
+  // Same trigger as POST /players: an undo that restores a full roster draws
+  // teams the first time if none exist yet.
+  await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
 
 
   return Response.json({ ok: true });
