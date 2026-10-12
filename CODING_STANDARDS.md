@@ -43,8 +43,9 @@ test surface.
 - New mutation routes: validate input early, apply rate limiting, return a specific status
   for "not allowed" (403) vs "not allowed yet" (409).
 - Schema/migration pairs: `prisma migrate diff --from-migrations prisma/migrations
-  --to-schema-datamodel prisma/schema.prisma --exit-code` must print "No difference
-  detected." — drift here regenerates a table rebuild on every future `migrate dev`.
+  --to-schema prisma/schema.prisma --exit-code` must print "No difference detected." —
+  drift here regenerates a table rebuild on every future `migrate dev`. (`--to-schema` is
+  the flag this Prisma version ships; the older `--to-schema-datamodel` errors out.)
 - Coverage and audit thresholds move up only; an exemption in
   `pnpm-workspace.yaml#auditConfig.ignoreGhsas` names the GHSA ids, the reason, and a
   re-review date — verified by deriving the advisory set from `pnpm audit --json`, never

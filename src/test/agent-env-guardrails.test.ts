@@ -97,4 +97,16 @@ describe("agent environment guardrails", () => {
     expect(agents).toContain("CODING_STANDARDS.md");
     expect(agents).toContain("scripts/dex-dedupe.mjs");
   });
+
+  it("keeps the reviewer checklist's drift command runnable on this Prisma version", async () => {
+    const standards = await read("CODING_STANDARDS.md");
+
+    // The checklist cites commands a reviewer runs verbatim; the old
+    // --to-schema-datamodel flag was removed and errors out — a dead
+    // checklist entry silently skips the drift check.
+    expect(standards).toContain(
+      "--to-schema prisma/schema.prisma --exit-code",
+    );
+    expect(standards).not.toContain("--to-schema-datamodel prisma");
+  });
 });
