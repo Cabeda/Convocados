@@ -88,8 +88,24 @@ overrides:
   ws@>=8.0.0 <8.20.1: '>=8.20.1'
 auditConfig:
   ignoreGhsas:
-    # extract-zip <=2.0.1 (GHSA-jmr9-qjv8-65gv, GHSA-7pqw-9j4j-h8q3): patched
-    # 2.0.2 not yet on npm. Dev-only (@lhci -> puppeteer chain). Remove ignores
-    # once 2.0.2 publishes, then add override `extract-zip@<=2.0.1: '>=2.0.2'`.
+    # extract-zip <=2.0.1 — symlink path traversal / arbitrary file writes.
+    # Dependabot #266 (CVE-2026-19693, GHSA-7pqw-9j4j-h8q3) and #256
+    # (CVE-2026-56876, GHSA-jmr9-qjv8-65gv), both development scope.
+    #
+    # Patched 2.0.2 is unpublished: `npm view extract-zip dist-tags` still
+    # reports latest 2.0.1, and the only upstream escape is a lighthouse major
+    # (12 -> 13) because @lhci/cli pins lighthouse exactly. Do not add the
+    # override early — pnpm cannot resolve `>=2.0.2`.
+    #
+    # Exposure is dev-only and unreachable from the server runtime:
+    # @lhci/cli -> lighthouse -> puppeteer-core -> @puppeteers/browsers ->
+    # extract-zip. extract-zip runs inside puppeteer's browser installer, never
+    # in our code, and @lhci/cli is a devDependency, so nothing in
+    # `dependencies` can reach it.
+    #
+    # Reviewed by Cabeda on 2026-10-11; re-review by 2026-11-10, or sooner if
+    # extract-zip 2.0.2 publishes. Both ids are pinned by
+    # src/test/dependency-audit-governance.test.ts, which fails if the ids,
+    # CVEs, reason or review date go missing.
     - GHSA-jmr9-qjv8-65gv
     - GHSA-7pqw-9j4j-h8q3

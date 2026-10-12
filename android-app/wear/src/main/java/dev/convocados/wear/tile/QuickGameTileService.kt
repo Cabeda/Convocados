@@ -1,6 +1,5 @@
 package dev.convocados.wear.tile
 
-import androidx.wear.protolayout.ActionBuilders
 import androidx.wear.protolayout.ColorBuilders
 import androidx.wear.protolayout.DimensionBuilders
 import androidx.wear.protolayout.LayoutElementBuilders
@@ -18,7 +17,6 @@ import dev.convocados.wear.data.local.QuickGameStore
 import dev.convocados.wear.data.local.QUICK_SPORT_PADEL
 import dev.convocados.wear.data.local.QUICK_SPORT_TENNIS
 import dev.convocados.wear.ui.WearActivity
-import dev.convocados.wear.ui.ongoing.WearOngoingActivity
 import javax.inject.Inject
 
 private const val COLOR_TEXT = 0xFFFFFFFF.toInt()
@@ -34,11 +32,9 @@ private const val FRESHNESS_MS = 30_000L
  * one-tap quick-game CTA. Tapping anywhere opens [WearActivity] (a LaunchAction
  * to the launcher activity — no renderable-action artifact needed).
  *
- * This tap target doubles as the tile-side reference to the Ongoing Activity
- * required by Play's Wear App Quality policy: while a quick game is live, the
- * ongoing notification ([dev.convocados.wear.ui.ongoing.WearOngoingActivity])
- * points at the same entry point, so the tile carousel always offers a way
- * back into the running session.
+ * The tap payload is built by [quickGameTileModifiers]: while a quick game is
+ * live it carries the deep link into the running session, which is what Play's
+ * tile clause for an in-progress activity asks for.
  */
 @AndroidEntryPoint
 class QuickGameTileService : TileService() {
@@ -95,19 +91,11 @@ class QuickGameTileService : TileService() {
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
             .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
             .setModifiers(
-                ModifiersBuilders.Modifiers.Builder()
-                    .setPadding(
-                        ModifiersBuilders.Padding.Builder()
-                            .setAll(DimensionBuilders.dp(12f))
-                            .build(),
-                    )
-                    .setClickable(
-                        ModifiersBuilders.Clickable.Builder()
-                            .setId("quick_game")
-                            .setOnClick(launchApp(openQuickGame = data.hasGame))
-                            .build(),
-                    )
-                    .build(),
+                quickGameTileModifiers(
+                    data = data,
+                    packageName = packageName,
+                    activityClassName = WearActivity::class.java.name,
+                ),
             )
             .addContent(column.build())
             .build()
@@ -177,22 +165,4 @@ class QuickGameTileService : TileService() {
             )
             .addContent(text(label, 14f, true, COLOR_ON_PRIMARY))
             .build()
-
-    private fun launchApp(openQuickGame: Boolean): ActionBuilders.LaunchAction {
-        val activity = ActionBuilders.AndroidActivity.Builder()
-            .setPackageName(packageName)
-            .setClassName(WearActivity::class.java.name)
-        // While a quick game exists, the tile resumes it instead of landing on
-        // the games list — the tile-side reference Play's ongoing-activity gate
-        // expects, and the user's "reopened and it didn't open in the game".
-        if (openQuickGame) {
-            activity.addKeyToExtraMapping(
-                WearOngoingActivity.EXTRA_QUICK_GAME,
-                ActionBuilders.booleanExtra(true),
-            )
-        }
-        return ActionBuilders.LaunchAction.Builder()
-            .setAndroidActivity(activity.build())
-            .build()
-    }
 }

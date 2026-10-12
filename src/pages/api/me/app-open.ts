@@ -20,15 +20,24 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Platform drives the admin Android/iOS/Web split. Body is optional: older
-  // clients send none and are attributed to "android" (the only native client
-  // when this endpoint shipped); iOS sends "ios".
+  // Platform drives the admin Android/iOS/Web split (GH #1152). A heartbeat
+  // that declares nothing is recorded as "unknown" — counted as web in the
+  // split, never coerced into "android" — and an unrecognized value is a 400
+  // rather than a silent misattribution.
   // appVersion (e.g. "1.2.0") is optional and stored for diagnostics.
-  let platform: "android" | "ios" = "android";
+  const platforms = ["android", "ios", "web"] as const;
+  type Platform = (typeof platforms)[number];
+
+  let platform: Platform | "unknown" = "unknown";
   let appVersion: string | null = null;
   const body = await request.json().catch(() => null) as { platform?: unknown; appVersion?: unknown } | null;
   const rawPlatform = typeof body?.platform === "string" ? body.platform.trim().toLowerCase() : "";
-  if (rawPlatform === "ios") platform = "ios";
+  if (rawPlatform) {
+    if (!(platforms as readonly string[]).includes(rawPlatform)) {
+      return Response.json({ error: "Invalid platform" }, { status: 400 });
+    }
+    platform = rawPlatform as Platform;
+  }
   const rawVersion = typeof body?.appVersion === "string" ? body.appVersion.trim() : "";
   if (rawVersion) appVersion = rawVersion.slice(0, 20); // cap length
 

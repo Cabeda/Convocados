@@ -39,13 +39,57 @@ class QuickGameTileTest {
     fun beforeKickoff_isUpcoming() {
         val started = state(kickoff)
         assertEquals(QuickGameTileStatus.UPCOMING, quickGameTileData(started, kickoff - 1).status)
-        assertTrue(quickGameTileData(started, kickoff - 1).hasGame)
+        // The tap gate is LIVE-only, so an upcoming game is announced nowhere
+        // else on the watch either: the tile stays the idle CTA.
+        assertFalse(quickGameTileData(started, kickoff - 1).hasGame)
     }
 
     @Test
     fun afterWindow_isPaused() {
         val started = state(kickoff)
         assertEquals(QuickGameTileStatus.PAUSED, quickGameTileData(started, kickoff + hour + 1).status)
+    }
+
+    // GH #993 / dex pytzuddq — a finished game has no destination: the tap gate
+    // is LIVE-only, the ongoing activity is already gone and the games list
+    // hides the only "continue" CTA, so the tile must stop presenting a score
+    // the tap cannot open.
+    @Test
+    fun afterWindow_presentsNoGame() {
+        val data = quickGameTileData(state(kickoff), kickoff + hour + 1)
+        assertEquals(QuickGameTileStatus.PAUSED, data.status)
+        assertFalse("a finished score is a tap with nowhere to land", data.hasGame)
+    }
+
+    @Test
+    fun insideWindow_presentsTheRunningGame() {
+        assertTrue(quickGameTileData(state(kickoff), kickoff + 30 * 60_000L).hasGame)
+        assertTrue(quickGameTileData(state(kickoff), kickoff + hour).hasGame)
+    }
+
+    @Test
+    fun presentsContentExactlyWhileTheGameIsLive() {
+        val started = state(kickoff)
+        listOf(
+            kickoff - hour to false,
+            kickoff to true,
+            kickoff + 30 * 60_000L to true,
+            kickoff + hour to true,
+            kickoff + hour + 1 to false,
+            kickoff + 2 * hour to false,
+        ).forEach { (now, presents) ->
+            val data = quickGameTileData(started, now)
+            assertEquals(
+                "at ${now - kickoff}ms the game is ${data.status}",
+                data.status == QuickGameTileStatus.LIVE,
+                presents,
+            )
+            assertEquals(
+                "at ${now - kickoff}ms the tile publishes a ${data.status} game",
+                data.status == QuickGameTileStatus.LIVE,
+                data.hasGame,
+            )
+        }
     }
 
     @Test

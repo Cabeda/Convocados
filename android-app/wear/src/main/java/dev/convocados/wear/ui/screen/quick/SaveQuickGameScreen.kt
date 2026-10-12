@@ -5,7 +5,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
@@ -17,6 +16,8 @@ import dev.convocados.wear.R
 import dev.convocados.designsystem.ExpressiveSemanticRole
 import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.roundBezelClip
+import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundSafeTextLines
 import dev.convocados.wear.ui.theme.expressiveTokens
 
 @Composable
@@ -80,7 +81,7 @@ internal fun SaveQuickGameContent(
                             text = stringResource(R.string.save_quick_saved),
                             style = MaterialTheme.typography.bodyMedium,
                             color = tokens.colorFor(ExpressiveSemanticRole.Success),
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                         )
                     }
                 } else {
@@ -101,18 +102,23 @@ internal fun SaveQuickGameContent(
                                 },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
                             )
                         }
                     }
 
                     items(state.events, key = { it.id }) { event ->
+                        val titleLines = roundSafeTextLines()
                         Button(
                             onClick = { onSave(event.id) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                             enabled = state.saving == null,
                             label = {
-                                Text(text = event.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    text = event.title,
+                                    maxLines = titleLines.maxLines,
+                                    overflow = titleLines.overflow,
+                                )
                             },
                         )
                     }
@@ -123,7 +129,7 @@ internal fun SaveQuickGameContent(
                                 text = stringResource(R.string.save_quick_no_events),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                modifier = Modifier.fillMaxWidth().roundListInset(),
                             )
                         }
                     }
@@ -135,7 +141,7 @@ internal fun SaveQuickGameContent(
                             text = error,
                             style = MaterialTheme.typography.labelSmall,
                             color = tokens.colorFor(ExpressiveSemanticRole.Error),
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            modifier = Modifier.fillMaxWidth().roundListInset(),
                         )
                     }
                 }
