@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { authClient } from "~/lib/auth.client";
 import {
+  flushHookRegistrationCount,
   flushPendingAuthSessionUnmount,
   hasPendingAuthSessionUnmount,
 } from "../auth-teardown";
@@ -39,5 +40,14 @@ describe("jsdom teardown: better-auth session store (GH #1209)", () => {
     // The destroy ran while window existed: better-auth removed its storage
     // listener instead of blowing up post-teardown.
     expect(removeSpy).toHaveBeenCalledWith("storage", expect.any(Function));
+  });
+
+  // The harness above only proves the internals; the fix for #1209 is the
+  // wiring — jsdom-setup.ts's file-level `afterAll(registerAuthSessionFlushHook())`.
+  // This counter is incremented only by that registration call, so deleting
+  // the setup-file hook goes red here instead of silently reintroducing the
+  // shard-level false failure.
+  it("jsdom-setup registers the file-level flush hook", () => {
+    expect(flushHookRegistrationCount()).toBeGreaterThanOrEqual(1);
   });
 });

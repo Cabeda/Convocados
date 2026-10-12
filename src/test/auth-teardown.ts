@@ -64,3 +64,25 @@ export async function flushPendingAuthSessionUnmount(): Promise<void> {
     setTimeout(resolve, STORE_UNMOUNT_DELAY_MS + FLUSH_MARGIN_MS)
   );
 }
+
+/**
+ * File-level flush-hook registrations. Only `registerAuthSessionFlushHook()`
+ * increments it, so a test asserting `flushHookRegistrationCount() >= 1`
+ * proves jsdom-setup.ts still wires the `afterAll` — deleting that line is
+ * the silent regression this counter exists to catch (GH #1209).
+ */
+let flushHookRegistrations = 0;
+
+export function flushHookRegistrationCount(): number {
+  return flushHookRegistrations;
+}
+
+/**
+ * Count a file-level registration and return the callback for
+ * `afterAll(registerAuthSessionFlushHook())` in jsdom-setup.ts. Registration
+ * and flush are one call so the wiring cannot be separated from the signal.
+ */
+export function registerAuthSessionFlushHook(): () => Promise<void> {
+  flushHookRegistrations += 1;
+  return flushPendingAuthSessionUnmount;
+}

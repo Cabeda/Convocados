@@ -4,7 +4,7 @@
 // can render MUI components without the missing-API error.
 
 import { afterAll, afterEach } from "vitest";
-import { flushPendingAuthSessionUnmount } from "./auth-teardown";
+import { registerAuthSessionFlushHook } from "./auth-teardown";
 
 // better-auth mounts its session atom from a nanostores lifecycle timer, and
 // the atom itself defers `fetchSessionOnMount` by another 0ms timer. When a test
@@ -28,7 +28,7 @@ afterEach(async () => {
 // with every test green (SeasonListPage, SeasonConditionalStates, others).
 // Out-wait the delay in a file-level afterAll, which runs before environment
 // teardown, so the destroys land while `window` still exists.
-afterAll(() => flushPendingAuthSessionUnmount());
+afterAll(registerAuthSessionFlushHook());
 
 if (typeof window !== "undefined") {
   if (!window.matchMedia) {
