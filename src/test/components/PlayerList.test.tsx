@@ -685,6 +685,56 @@ describe("PlayerList — randomize motion state", () => {
   });
 });
 
+describe("PlayerList — randomize confirm routing", () => {
+  const fullRoster: Player[] = Array.from({ length: 10 }, (_, i) => ({
+    id: `p${i}`, name: `Player ${i}`, userId: null,
+  }));
+
+  it("confirms an early draw when there are no teams and the roster is below full", async () => {
+    const user = userEvent.setup();
+    const onConfirmEarlyRandomize = vi.fn();
+    renderWithTheme(<PlayerList {...baseProps} onConfirmEarlyRandomize={onConfirmEarlyRandomize} />);
+
+    await user.click(screen.getByRole("button", { name: /randomize teams/i }));
+    expect(onConfirmEarlyRandomize).toHaveBeenCalled();
+    expect(baseProps.onRandomize).not.toHaveBeenCalled();
+    expect(baseProps.onConfirmReRandomize).not.toHaveBeenCalled();
+  });
+
+  it("draws directly when there are no teams and the roster is full", async () => {
+    const user = userEvent.setup();
+    const onConfirmEarlyRandomize = vi.fn();
+    renderWithTheme(
+      <PlayerList {...baseProps} players={fullRoster} onConfirmEarlyRandomize={onConfirmEarlyRandomize} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /randomize teams/i }));
+    expect(baseProps.onRandomize).toHaveBeenCalled();
+    expect(onConfirmEarlyRandomize).not.toHaveBeenCalled();
+  });
+
+  it("keeps the re-randomize confirm when teams already exist", async () => {
+    const user = userEvent.setup();
+    const onConfirmEarlyRandomize = vi.fn();
+    renderWithTheme(
+      <PlayerList {...baseProps} players={fullRoster} hasTeams onConfirmEarlyRandomize={onConfirmEarlyRandomize} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /randomize teams/i }));
+    expect(baseProps.onConfirmReRandomize).toHaveBeenCalled();
+    expect(onConfirmEarlyRandomize).not.toHaveBeenCalled();
+    expect(baseProps.onRandomize).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a direct draw when no early-confirm handler is wired", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<PlayerList {...baseProps} />);
+
+    await user.click(screen.getByRole("button", { name: /randomize teams/i }));
+    expect(baseProps.onRandomize).toHaveBeenCalled();
+  });
+});
+
 describe("PlayerList — invited roster: channel chips + resend (ADR 0025 follow-up)", () => {
   const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 

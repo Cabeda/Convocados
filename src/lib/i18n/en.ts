@@ -130,6 +130,8 @@ const en = {
   vs: "vs",
   rerandomizeTitle: "Re-randomize teams?",
   rerandomizeDesc: "Teams have already been set. Randomizing again will replace the current assignment.",
+  randomizeEarlyTitle: "Randomize with missing players?",
+  randomizeEarlyDesc: "Only {n} of {max} players have joined. You can randomize now — players joining later are added to the teams — or wait for the rest.",
   cancel: "Cancel",
   randomize: "Randomize",
   linkCopied: "Link copied!",

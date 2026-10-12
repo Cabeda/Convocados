@@ -7,6 +7,31 @@ import { useT } from "~/lib/useT";
 
 export type LeaveContext = "self" | "organizer";
 
+/**
+ * Pure helpers for the dialog's inputs — extracted out of component bodies so the
+ * Date.now() inside doesn't trip the eslint react-hooks/purity rule. They run in
+ * event handlers, never during render.
+ */
+export function computeBenchEmptyAfter(
+  playerId: string,
+  players: { id: string }[],
+  active: { id: string }[],
+  maxPlayers: number,
+): boolean {
+  const wasActive = active.some((p) => p.id === playerId);
+  if (!wasActive) return false; // bench player leaving — not "no replacement" for the active roster
+  // Bench is currently empty iff total players fit within maxPlayers. If there are already
+  // bench players, the leave flow promotes the first one to active, so the slot IS filled.
+  return players.length <= maxPlayers;
+}
+
+export function computeWithin48h(eventDateTime: string | undefined): boolean {
+  if (!eventDateTime) return false;
+  const kickoff = new Date(eventDateTime).getTime();
+  const hoursUntil = (kickoff - Date.now()) / (60 * 60 * 1000);
+  return hoursUntil > 0 && hoursUntil <= 48;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;

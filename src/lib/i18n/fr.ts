@@ -122,6 +122,8 @@ const fr: TranslationKeys = {
   vs: "vs",
   rerandomizeTitle: "Retirer les équipes au sort ?",
   rerandomizeDesc: "Les équipes ont déjà été définies. Un nouveau tirage remplacera la répartition actuelle.",
+  randomizeEarlyTitle: "Tirer au sort avec des joueurs manquants ?",
+  randomizeEarlyDesc: "Seulement {n} joueurs sur {max} se sont inscrits. Vous pouvez tirer maintenant — les arrivées tardives seront ajoutées aux équipes — ou attendre le reste.",
   cancel: "Annuler",
   randomize: "Tirer au sort",
   linkCopied: "Lien copié !",

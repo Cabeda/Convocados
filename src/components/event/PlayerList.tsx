@@ -28,32 +28,10 @@ import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
 import { playerInputPasswordManagerProps } from "./PlayerAutocomplete";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
-import { ConfirmLeaveDialog, type LeaveContext } from "./ConfirmLeaveDialog";
+import { ConfirmLeaveDialog, type LeaveContext, computeBenchEmptyAfter, computeWithin48h } from "./ConfirmLeaveDialog";
 import type { RsvpStatus } from "~/lib/rsvp";
 
 export type { RsvpStatus } from "~/lib/rsvp";
-
-/** Pure helpers — extracted out of the component body so Date.now() inside doesn't trip the
- *  eslint react-hooks/purity rule. They run in event handlers, never during render. */
-function computeBenchEmptyAfter(
-  playerId: string,
-  players: Player[],
-  active: Player[],
-  maxPlayers: number,
-): boolean {
-  const wasActive = active.some((p) => p.id === playerId);
-  if (!wasActive) return false; // bench player leaving — not "no replacement" for the active roster
-  // Bench is currently empty iff total players fit within maxPlayers. If there are already
-  // bench players, the leave flow promotes the first one to active, so the slot IS filled.
-  return players.length <= maxPlayers;
-}
-
-function computeWithin48h(eventDateTime: string | undefined): boolean {
-  if (!eventDateTime) return false;
-  const kickoff = new Date(eventDateTime).getTime();
-  const hoursUntil = (kickoff - Date.now()) / (60 * 60 * 1000);
-  return hoursUntil > 0 && hoursUntil <= 48;
-}
 
 function isEmailLike(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -165,6 +143,8 @@ interface Props {
   onResetPlayerOrder: () => Promise<void>;
   onRandomize: () => void;
   onConfirmReRandomize: () => void;
+  /** Confirm dialog when randomizing with fewer than maxPlayers joined. */
+  onConfirmEarlyRandomize?: () => void;
   /** True while the server is applying a team randomization. */
   isRandomizing?: boolean;
   canRemovePlayer: (player: Player) => boolean;
@@ -228,7 +208,7 @@ export function PlayerList({
   players, maxPlayers, isOwner, hasTeams,
   availableSuggestions, playerError, onPlayerErrorChange,
   onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
-  onRandomize, onConfirmReRandomize, isRandomizing = false, canRemovePlayer,
+  onRandomize, onConfirmReRandomize, onConfirmEarlyRandomize, isRandomizing = false, canRemovePlayer,
   currentUserId: _currentUserId,
   myRsvpStatus: _myRsvpStatus,
   guestRsvpMap: _guestRsvpMap,
@@ -1050,7 +1030,18 @@ export function PlayerList({
               disabled={active.length < 2 || isRandomizing}
               aria-busy={isRandomizing ? "true" : undefined}
               sx={{ px: 4, py: 1.5 }}
-              onClick={() => hasTeams ? onConfirmReRandomize() : onRandomize()}>
+              onClick={() => {
+                // Teams exist → re-randomize confirm (existing). No teams yet →
+                // confirm an early draw when the roster is below full; draw
+                // directly once full (the auto-draw already ran).
+                if (hasTeams) {
+                  onConfirmReRandomize();
+                } else if (active.length < maxPlayers && onConfirmEarlyRandomize) {
+                  onConfirmEarlyRandomize();
+                } else {
+                  onRandomize();
+                }
+              }}>
               {t("randomizeTeams")}
             </Button>
           </Box>

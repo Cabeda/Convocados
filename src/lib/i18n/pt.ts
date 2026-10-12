@@ -131,6 +131,8 @@ const pt: TranslationKeys = {
   vs: "vs",
   rerandomizeTitle: "Sortear equipas novamente?",
   rerandomizeDesc: "As equipas já foram definidas. Sortear novamente irá substituir a distribuição atual.",
+  randomizeEarlyTitle: "Sortear com jogadores em falta?",
+  randomizeEarlyDesc: "Apenas {n} de {max} jogadores se juntaram. Podes sortear agora — quem se juntar depois é adicionado às equipas — ou esperar pelo resto.",
   cancel: "Cancelar",
   randomize: "Sortear",
   linkCopied: "Link copiado!",
