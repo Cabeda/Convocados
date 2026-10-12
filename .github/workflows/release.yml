@@ -116,10 +116,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json
-          # A rerun checks out the same pre-bump SHA, so the version it computes
-          # is the one the previous attempt already committed. Guard the commit
-          # AND the push: pushing an ancestor of main is a non-fast-forward
-          # rejection, and a re-run must be a no-op here, not a failure.
+          # On the observed rerun path the checkout is the pre-bump SHA, so the
+          # version does change here, the commit is made, and `git pull --rebase`
+          # drops it as already applied on main — the rebase is what makes the
+          # push a no-op. The guard covers the other path, a checkout that
+          # already carries the bump (a run whose SHA *is* the bump commit):
+          # there `git commit` would fail with "nothing to commit" and the push
+          # would be a non-fast-forward rejection of an ancestor of main.
           if git diff --cached --quiet; then
             echo "package.json already at $NEW_VERSION — nothing to bump (rerun)"
           else
@@ -178,7 +181,13 @@ jobs:
             // rerun refreshes the notes rather than failing before the deploy.
             const existing = await github.rest.repos
               .getReleaseByTag({ owner: context.repo.owner, repo: context.repo.repo, tag })
-              .catch(() => null);
+              .catch((error) => {
+                // 404 is the only "no release yet" answer. Letting any other
+                // error become null would turn a transient API failure into a
+                // 422 from createRelease further down.
+                if (error.status === 404) return null;
+                throw error;
+              });
 
             if (existing) {
               await github.rest.repos.updateRelease({
