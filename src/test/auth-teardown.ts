@@ -79,8 +79,11 @@ export function flushHookRegistrationCount(): number {
 
 /**
  * Count a file-level registration and return the callback for
- * `afterAll(registerAuthSessionFlushHook())` in jsdom-setup.ts. Registration
- * and flush are one call so the wiring cannot be separated from the signal.
+ * `afterAll(registerAuthSessionFlushHook())` in jsdom-setup.ts. The count
+ * moves on CALL, so deleting the whole line in jsdom-setup — the realistic
+ * refactor — goes red. It does not catch the line being unwrapped to a bare
+ * `registerAuthSessionFlushHook();` (call kept, no `afterAll`), because the
+ * test cannot observe whether `afterAll` actually held the callback.
  */
 export function registerAuthSessionFlushHook(): () => Promise<void> {
   flushHookRegistrations += 1;

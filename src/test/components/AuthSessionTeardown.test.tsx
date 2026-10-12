@@ -15,7 +15,6 @@ import {
 // by driving the harness directly.
 describe("jsdom teardown: better-auth session store (GH #1209)", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
