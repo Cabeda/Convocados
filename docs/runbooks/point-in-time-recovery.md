@@ -145,8 +145,10 @@ Expected output:
 
 ## Step 9: Verify database integrity
 
+Inside the machine (the image has no `sqlite3`; use the bundled driver):
+
 ```bash
-sqlite3 /data/db.sqlite "PRAGMA integrity_check;"
+node -e "const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite',{readonly:true});console.log(db.pragma('integrity_check'));"
 ```
 
 Expected output: `ok`
@@ -154,10 +156,7 @@ Expected output: `ok`
 Spot-check key tables:
 
 ```bash
-sqlite3 /data/db.sqlite "SELECT count(*) FROM User;"
-sqlite3 /data/db.sqlite "SELECT count(*) FROM Event;"
-sqlite3 /data/db.sqlite "SELECT count(*) FROM Player;"
-sqlite3 /data/db.sqlite "SELECT count(*) FROM GameHistory;"
+node -e "const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite',{readonly:true});for(const t of ['User','Event','Player','GameHistory'])console.log(t,db.prepare('SELECT count(*) c FROM '+t).get().c);"
 ```
 
 Compare these counts against what you expect for the target timestamp.
@@ -228,7 +227,7 @@ The restored database is corrupted. Try restoring to a slightly earlier timestam
 ```bash
 rm -f /data/db.sqlite /data/db.sqlite-wal /data/db.sqlite-shm
 litestream restore -config /app/litestream.yml -timestamp "2026-04-10T14:00:00Z" /data/db.sqlite
-sqlite3 /data/db.sqlite "PRAGMA integrity_check;"
+node -e "const D=require('/app/node_modules/better-sqlite3');const db=new D('/data/db.sqlite',{readonly:true});console.log(db.pragma('integrity_check'));"
 ```
 
 If all snapshots are corrupted, see the [Full Recovery from Zero](./full-recovery-from-zero.md) runbook.

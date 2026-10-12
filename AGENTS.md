@@ -181,7 +181,10 @@ docs: update AGENTS.md
 3. Implement feature
 4. Ensure all tests pass (`pnpm test`)
 5. Run type checking (`pnpm typecheck`)
-6. Create PR with descriptive title and summary
+6. When the PR resolves an issue, put a `Closes #<issue>` line in the body — GitHub closes
+   the linked issue the moment the PR merges. A PR that fixes an issue without that keyword
+   leaves the issue open, and the next agent reads a solved bug as live work. A PR that
+   closes nothing carries the `no-issue` label instead.
 7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
 8. **Before merging**, always run the full test suite (`pnpm test`) and type checking (`pnpm typecheck`) to ensure the build will succeed in CI/CD
 
@@ -432,198 +435,15 @@ android-app/               # Native Android app (Gradle multi-module: :app, :wea
 └── build.gradle.kts       # Project-level plugins
 ```
 
-## Commands
+## Reference guides
 
-```bash
-# Development
-pnpm dev              # Start dev server
-
-# Testing
-pnpm test             # Run all tests
-pnpm test src/test/api.test.ts   # Run specific test file
-
-# Type Checking
-pnpm typecheck        # Check TypeScript types
-
-# Database
-pnpm db:generate      # Generate Prisma client
-pnpm db:migrate       # Run migrations
-pnpm db:studio         # Open Prisma Studio
-```
-
-## Dev Server Management (for AI agents)
-
-### Worktree bootstrap
-
-Before running any gate in a **fresh worktree**, run `scripts/worktree-bootstrap.sh`. A
-bare `pnpm install` leaves a half-broken tree on this machine (the `better-sqlite3` native
-build fails and `.bin` links are missing), and the gitignored Android env files
-(`google-services.json`, `local.properties`) do not exist in a worktree, so `:app` builds
-fail for environment reasons rather than change reasons. The script is idempotent — rerun
-it after any failed gate. `SOURCE=/path/to/healthy/checkout` overrides where it copies
-from (defaults to the main worktree).
-
-### Parallel previews / worktrees
-
-`pnpm dev` runs `scripts/dev.sh`, which makes every checkout self-contained so
-several previews can run at once (the main clone plus any number of
-`.worktrees/*`) without port collisions or a shared database:
-
-- **Port** — auto-allocated and cached in `<worktree>/.dev-port`, seeded from a
-  hash of the worktree path and scanned upward until free. Override with `PORT`.
-- **Database** — defaults to `<worktree>/dev.db` (created and migrated on first
-  run), so each preview has its own data. Override with `DATABASE_URL`.
-- **Auth** — `BETTER_AUTH_URL` defaults to `http://localhost:<port>`, so cookies
-  and OAuth callbacks work on the allocated port. Override explicitly if needed.
-- **Node** — `better-sqlite3` needs the Node 24 ABI; the script prefers a
-  Node 24 binary when it can find one. Override with `DEV_NODE=/path/to/node`.
-
-The script prints the URL and DB it picked. Different worktrees are different
-Astro project roots, so they run concurrently; Astro still refuses two dev
-servers in the *same* directory.
-
-```bash
-# Start a preview for this worktree (prints http://localhost:<port>)
-nohup pnpm dev > /tmp/convocados-dev.log 2>&1 &
-echo $! > /tmp/convocados-dev.pid
-
-# Wait for server to be ready (read the port the script chose)
-PORT=$(cat .dev-port)
-for i in $(seq 1 15); do
-  curl -s "http://localhost:$PORT/api/health" | grep -q '"ok"' && break
-  sleep 1
-done
-
-# Check server logs
-cat /tmp/convocados-dev.log
-
-# Stop server
-kill $(cat /tmp/convocados-dev.pid) 2>/dev/null
-```
-
-To run two previews side by side, run the above in two different worktrees — each
-writes its own `.dev-port` and `dev.db`. Pass an explicit `PORT` when you want a
-stable URL (e.g. for screenshots or Bruno).
-
-## Bruno API Testing
-
-The `bruno/` folder contains API test collections runnable via Bruno CLI.
-The OAuth flow uses a **trusted client** (configured via env vars) that skips
-the consent screen, allowing the full flow to run without a browser.
-
-```bash
-# Run from the bruno/ directory
-cd bruno
-
-# Run the full OAuth flow
-bru run auth/2-sign-in.bru \
-  oauth2/1-oidc-discovery.bru \
-  oauth2/3-generate-pkce.bru \
-  oauth2/4-authorize.bru \
-  oauth2/5-token-exchange.bru \
-  oauth2/6-userinfo.bru \
-  oauth2/7-introspect-token.bru \
-  oauth2/8-use-token-my-games.bru \
-  oauth2/9-use-token-my-stats.bru \
-  oauth2/10-refresh-token.bru \
-  oauth2/11-revoke-token.bru \
-  oauth2/12-verify-revoked.bru \
-  --env local
-
-# Run a single folder
-bru run oauth2 --env local
-
-# Run with verbose output
-bru run oauth2 --env local --verbose
-```
-
-The local callback endpoint (`/api/oauth-callback`) returns the auth code as
-JSON so Bruno CLI can capture it without needing a browser redirect.
-
-## Event Lifecycle & Game Phases
-
-### Game Phases (progressive disclosure)
-
-The event page adapts its UI based on the current phase:
-
-| Phase | Condition | Header shows | Payment section |
-|-------|-----------|-------------|-----------------|
-| **Upcoming (normal)** | >24h before | Full date + recurrence | Hidden (no cost) or collapsed summary |
-| **Upcoming (soon)** | <24h before | Countdown + date | Prominent CTA if user owes |
-| **Upcoming (urgent)** | <2h before | Countdown only | Prominent CTA |
-| **Live** | During game | Pulsing "Live now" | Hidden |
-| **Past (one-off)** | After game | "Ended" (grey) | Hidden |
-| **Past (recurring)** | After game, has recurrence | "Next game: [date]" (blue) + recurrence pattern | Hidden |
-
-### Recurring Event Reset
-
-When `nextResetAt` passes (game end time), the lazy reset:
-- Creates a `GameHistory` snapshot (teams, payments)
-- Clears payments and team assignments
-- Advances `dateTime` to next occurrence
-- Marks old `Game` as "played", creates new `Game`
-- **Players persist** — they stay on the list for the next game
-- **Follows persist** — EventFollow records are event-scoped, not game-scoped
-
-### Follow & Notification Model
-
-**Philosophy:** Notifications go to the right people at the right time. Being on the player list = following = getting notified. No unnecessary noise for spectators.
-
-#### Follow rules:
-- **On player list** → automatically following (can't unfollow while playing)
-- **Not on player list** → can manually follow/unfollow via the Follow button
-- **Auto-follow triggers:** Quick Join, claim player, admin grant, push subscription
-- **Auto-unfollow:** only on self-removal from player list
-
-#### Notification tiers (ADR 0017):
-
-| Notification type | Players | Followers (not playing) |
-|---|---|---|
-| Game reminders (24h, 2h) | ✅ | ❌ |
-| Player activity (joins/leaves) | ✅ | ❌ |
-| Post-game (score, MVP, payments) | ✅ | ❌ |
-| Event changes (date/location/title) | ✅ | ✅ |
-| Recruitment (spots available) | ✅ | ✅ |
-
-#### Resolution order for notification delivery:
-1. Per-user per-event override (`EventFollow.muteX` fields)
-2. Role-based default (non-players blocked from Tier 2)
-3. Global user preferences (`NotificationPreferences`)
-
-#### User-facing controls:
-- **Follow button** (EventHeader): shown only to non-players. Simple toggle.
-- **"My notifications" dialog** (More menu): shown to all authenticated users. Per-game toggle with clear descriptions. Shows effective state (push disabled warning, player-only gating).
-- **User account settings**: global push/email on/off, reminder timing.
-
-## Common Patterns
-
-### API Route Handler
-```typescript
-export const POST: APIRoute = async ({ params, request }) => {
-  const limited = rateLimitResponse(request, "write");
-  if (limited) return limited;
-
-  const body = await request.json();
-  // Validate body
-  // Process request
-  return Response.json({ ok: true });
-};
-```
-
-### React Component with i18n
-```typescript
-import { useT } from "~/lib/useT";
-
-export function MyComponent() {
-  const t = useT();
-  return <Button>{t("buttonLabel")}</Button>;
-}
-```
-
-### Adding New i18n Strings
-1. Add key to `src/lib/i18n/en.ts` (source of truth)
-2. Add translations to all locale files: `pt.ts`, `es.ts`, `fr.ts`, `de.ts`, `it.ts`
-3. Use `t("newKey")` in components
+Fresh worktree? Run `scripts/worktree-bootstrap.sh` once before any gate — it repairs the
+half-installed `node_modules`/`.bin` links, the gitignored Android env files, and the Prisma
+client, and is idempotent. Worked detail that only some tasks need lives in
+[`docs/development-guide.md`](docs/development-guide.md): dev-server/worktree management,
+Bruno API flows, event lifecycle & game phases, and common code patterns. To inspect
+production — read-only DB queries, the job queue, the scheduler — see
+[`docs/runbooks/production-inspection.md`](docs/runbooks/production-inspection.md).
 
 ## Reviewing Checklist
 
@@ -668,8 +488,11 @@ dex sync               # Push tasks to GitHub Issues
 - `.gitattributes` unions `.dex/tasks.jsonl` on merge, so integration branches do not
   conflict on the ledger. The union splices lines silently, and task records are mutable
   (`completed`, `updated_at` are rewritten in place), so if both sides edited the same
-  task the ledger ends up with two lines sharing one id. CI fails on duplicates — run
-  `node scripts/dex-dedupe.mjs` (keeps the newest `updated_at` per id) and commit.
+  task the ledger ends up with two lines sharing one id. Run
+  `node scripts/dex-dedupe.mjs --check` before pushing and fix any duplicate it reports
+  (`node scripts/dex-dedupe.mjs` keeps the newest `updated_at` per id, then commit).
+  `src/test/agent-env-guardrails.test.ts` fails CI on a duplicate id, and the `dex-ledger`
+  CI job runs the same `--check`.
   `.dex/sync-state.json` is derived state with no merge attribute (`merge=ours` would be
   inert without a config-registered driver): on conflict take either side wholesale and
   delete the markers — never splice.

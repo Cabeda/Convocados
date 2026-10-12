@@ -23,6 +23,9 @@ licenses over contributed code.
 4. All changes need tests — new features get coverage, bugs get regression
    tests.
 5. Never push to `main`: open a pull request and wait for CI.
+6. In the pull request body write `Closes #<issue>`, so merging closes the issue
+   automatically (the [PR template](./.github/PULL_REQUEST_TEMPLATE.md) prompts for it;
+   CI fails a PR body without a closing keyword unless it carries the `no-issue` label).
 
 ## 3. Quality gates
 
