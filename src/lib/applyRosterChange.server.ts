@@ -31,7 +31,7 @@ import { getActiveRosterState } from "./roster.server";
 import { acceptPendingAccountInviteForDirectJoin } from "./invite.server";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
 import { movePlayerToEndOfList, rejoinPlayerToCurrentGame } from "./rosterChange.server";
-import { addPlayerToTeams, autoRandomizeIfFull, validateTeams } from "./teamFormation.server";
+import { finishRosterAdd } from "./teamFormation.server";
 
 const log = createLogger("players-api");
 
@@ -341,12 +341,11 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           // placement just because the payload name is not the active-set key.
           rosterName = ep.name;
         }
-        // Bug fix: re-activated players must be added to teams if within active range
-        const readdIsOnBench = activeBefore >= event.maxPlayers;
-        if (!readdIsOnBench) {
-          await addPlayerToTeams(eventId, rosterName, event.currentGameId);
-          await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
-        }
+        // Team placement is keyed on the canonical roster name: a re-add under
+        // a different display name ("Cabeda" vs "José Cabeda") must not skip
+        // placement just because the payload name is not the active-set key.
+        // finishRosterAdd self-guards for bench players.
+        await finishRosterAdd(eventId, rosterName, event.maxPlayers, event.currentGameId);
         notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
         return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, reactivated: true, anonymous: linkedUserId === null } };
       }
@@ -381,11 +380,8 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
             update: {},
           });
           enqueuePushSetupHintSafe(linkedUserId!, eventId);
-          const promotedIsOnBench = activeBefore >= event.maxPlayers;
-          if (!promotedIsOnBench) {
-            await addPlayerToTeams(eventId, trimmed, event.currentGameId);
-            await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
-          }
+          // finishRosterAdd self-guards for bench players.
+          await finishRosterAdd(eventId, trimmed, event.maxPlayers, event.currentGameId);
           notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
           return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: false } };
         }
@@ -401,11 +397,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           // Same team obligations as every other re-join path: without this the
           // roster returns to full but the draw keeps the leaver's gap (prod:
           // final state 4v5 after leave → re-add on cmmkfrx8b0000o2ixrix1yp2m).
-          const rejoinIsOnBench = activeBefore >= event.maxPlayers;
-          if (!rejoinIsOnBench) {
-            await addPlayerToTeams(eventId, eventPlayer.name, event.currentGameId);
-            await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
-          }
+          await finishRosterAdd(eventId, eventPlayer.name, event.maxPlayers, event.currentGameId);
           notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
           return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
         }
@@ -415,13 +407,9 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           await movePlayerToEndOfList(eventId, existing.id, {
             linkUserId: linkedUserId && !existing.userId ? linkedUserId : null,
           });
-          // Bug fix: re-joining players must be added to teams if within active
-          // range — keyed on the canonical roster name, not the payload name.
-          const rejoinIsOnBench = activeBefore >= event.maxPlayers;
-          if (!rejoinIsOnBench) {
-            await addPlayerToTeams(eventId, eventPlayer.name, event.currentGameId);
-            await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
-          }
+          // Re-joining players sync teams under the canonical roster name, not
+          // the payload name — finishRosterAdd self-guards for bench players.
+          await finishRosterAdd(eventId, eventPlayer.name, event.maxPlayers, event.currentGameId);
           notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
           return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
         }
@@ -496,17 +484,9 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   const spotsLeft = isOnBench ? 0 : Math.max(0, event.maxPlayers - activeBefore - 1);
   const url = `${origin}/events/${eventId}`;
 
-  // Auto-sync teams
-  if (!isOnBench) {
-    await addPlayerToTeams(eventId, rosterName, event.currentGameId);
-  }
-
-  await validateTeams(eventId, event.maxPlayers, event.currentGameId);
-
-  // Auto-randomize: first randomization triggers when game is full
-  if (!isOnBench) {
-    await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
-  }
+  // Team sync: place when active, evict stale members, draw when the game
+  // first fills. All steps self-guard (bench / no teams / already drawn).
+  await finishRosterAdd(eventId, rosterName, event.maxPlayers, event.currentGameId);
 
   if (isOnBench) {
     // ADR 0018: Include bench position in notification body

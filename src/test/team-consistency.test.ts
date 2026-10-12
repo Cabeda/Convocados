@@ -238,7 +238,7 @@ describe("Team Roster Mutations: Minimal Movements", () => {
     await resetApiRateLimitStore();
   });
 
-  it("removePlayerFromTeams replaces leaving player with promoted bench player in same team", async () => {
+  it("removePlayerFromTeams with bench promotion re-draws the active roster", async () => {
     const event = await seedEvent();
 
     // 11 players: 10 active + 1 bench
@@ -251,7 +251,8 @@ describe("Team Roster Mutations: Minimal Movements", () => {
     // Teams: Ninjas=[P0,P1,P2,P3,P4], Gunas=[P5,P6,P7,P8,P9]
     await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
 
-    // P3 leaves, P10 (bench) gets promoted into P3's team (Ninjas)
+    // P3 leaves, P10 (bench) promoted → the draw is re-run over the new
+    // active roster (not slot-filled into P3's old team).
     await removePlayerFromTeams(event.id, "P3", "P10");
 
     const teams = await prisma.teamResult.findMany({
@@ -262,12 +263,12 @@ describe("Team Roster Mutations: Minimal Movements", () => {
     const ninjas = teams.find(t => t.name === "Ninjas")!;
     const gunas = teams.find(t => t.name === "Gunas")!;
 
-    // P10 should be in Ninjas (same team as P3 was)
-    expect(ninjas.members.map(m => m.name)).toContain("P10");
-    expect(ninjas.members.map(m => m.name)).not.toContain("P3");
-    // Gunas should be unchanged
-    expect(gunas.members.map(m => m.name)).toEqual(["P5", "P6", "P7", "P8", "P9"]);
-    // Both teams should have 5 players
+    // Leaver is gone, promoted player is on the pitch
+    const allNames = [...ninjas.members, ...gunas.members].map(m => m.name);
+    expect(allNames).not.toContain("P3");
+    expect(allNames).toContain("P10");
+    // Re-draw covers exactly the new active roster, evenly split
+    expect(allNames.sort()).toEqual(["P0", "P1", "P10", "P2", "P4", "P5", "P6", "P7", "P8", "P9"]);
     expect(ninjas.members).toHaveLength(5);
     expect(gunas.members).toHaveLength(5);
   });
@@ -448,7 +449,7 @@ describe("Team Roster Mutations: Minimal Movements", () => {
     expect(allNames).not.toContain("P4");
   });
 
-  it("removePlayerFromTeams without balanced flag does not attempt ELO swap", async () => {
+  it("removePlayerFromTeams without balanced flag re-draws randomly (no ELO influence)", async () => {
     const event = await seedEvent({ balanced: false });
 
     for (let i = 0; i < 11; i++) {
@@ -457,7 +458,8 @@ describe("Team Roster Mutations: Minimal Movements", () => {
       });
     }
 
-    // Heavily skewed ratings — but balanced is off, so no swap
+    // Heavily skewed ratings — but balanced is off, so the re-draw must not
+    // cluster high/low ELO: placement comes from Randomize, not balanceTeams.
     const ratings = [1500, 1400, 1300, 1200, 1100, 900, 800, 700, 600, 500, 1000];
     for (let i = 0; i < 11; i++) {
       await prisma.playerRating.create({
@@ -467,7 +469,7 @@ describe("Team Roster Mutations: Minimal Movements", () => {
 
     await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
 
-    // P4 leaves, P10 promoted — balanced is off, P10 stays in Ninjas
+    // P4 leaves, P10 promoted — non-balanced events re-draw with Randomize
     await removePlayerFromTeams(event.id, "P4", "P10");
 
     const teams = await prisma.teamResult.findMany({
@@ -476,9 +478,15 @@ describe("Team Roster Mutations: Minimal Movements", () => {
     });
 
     const ninjas = teams.find(t => t.name === "Ninjas")!;
+    const gunas = teams.find(t => t.name === "Gunas")!;
 
-    // P10 should stay in Ninjas (no ELO balancing when balanced=false)
-    expect(ninjas.members.map(m => m.name)).toContain("P10");
+    // Full re-draw of the new active roster: leaver gone, promoted placed
+    const allNames = [...ninjas.members, ...gunas.members].map(m => m.name);
+    expect(allNames).not.toContain("P4");
+    expect(allNames).toContain("P10");
+    expect(allNames.sort()).toEqual(["P0", "P1", "P10", "P2", "P3", "P5", "P6", "P7", "P8", "P9"]);
+    expect(ninjas.members).toHaveLength(5);
+    expect(gunas.members).toHaveLength(5);
   });
 
   it("addPlayerToTeams with balanced event full-rebalances when player is in active range", async () => {

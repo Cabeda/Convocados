@@ -5,7 +5,7 @@ import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { confirmSpot } from "../../../../../lib/priority.server";
 import { grantActiveSpot } from "../../../../../lib/game.server";
 import { upsertEventPlayerForRoster } from "../../../../../lib/rosterCore.server";
-import { addPlayerToTeams, autoRandomizeIfFull, validateTeams } from "../../../../../lib/teamFormation.server";
+import { finishRosterAdd } from "../../../../../lib/teamFormation.server";
 
 /** POST — player confirms their priority spot */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -64,20 +64,16 @@ export const POST: APIRoute = async ({ params, request }) => {
         userId: session.user.id,
         user: { id: session.user.id, name: rosterName },
       });
-      const spot = await grantActiveSpot(
+      await grantActiveSpot(
         event.id,
         event.currentGameId,
         eventPlayer.id,
         event.maxPlayers,
       );
-      // Resync teams after the roster changed (eviction or promotion).
-      await validateTeams(event.id, event.maxPlayers, event.currentGameId);
-      if (spot.active) {
-        await addPlayerToTeams(event.id, eventPlayer.name, event.currentGameId);
-      }
-      // Same trigger as POST /players: a confirmation that fills the active
-      // roster draws teams the first time.
-      await autoRandomizeIfFull(event.id, event.maxPlayers, event.currentGameId);
+      // Team sync seam: place when active (grantActiveSpot already evicted a
+      // non-priority player if needed — validateTeams inside the seam evicts
+      // them from the draw), draw when full and undrawn.
+      await finishRosterAdd(event.id, eventPlayer.name, event.maxPlayers, event.currentGameId);
     }
   }
 
