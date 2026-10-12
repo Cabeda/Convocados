@@ -32,6 +32,7 @@ import dev.convocados.wear.ui.MIN_TOUCH_TARGET
 import dev.convocados.wear.ui.WearChoiceRow
 import dev.convocados.wear.ui.WearStepButton
 import dev.convocados.wear.ui.roundListInset
+import dev.convocados.wear.ui.roundSafeTextLines
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 import java.time.Instant
@@ -142,7 +143,7 @@ fun TeamsScreen(
                             } else {
                                 PlayerChip(
                                     player = player,
-                                    targetTeam = "2",
+                                    targetTeam = state.teamTwoName.ifBlank { "2" },
                                     isArrived = player.id in state.arrivedIds,
                                     onMove = { viewModel.movePlayerToTeamTwo(player) },
                                     onToggleArrived = { viewModel.toggleArrived(player.id) },
@@ -179,7 +180,7 @@ fun TeamsScreen(
                             } else {
                                 PlayerChip(
                                     player = player,
-                                    targetTeam = "1",
+                                    targetTeam = state.teamOneName.ifBlank { "1" },
                                     isArrived = player.id in state.arrivedIds,
                                     onMove = { viewModel.movePlayerToTeamOne(player) },
                                     onToggleArrived = { viewModel.toggleArrived(player.id) },
@@ -202,6 +203,8 @@ fun TeamsScreen(
                             items(state.unassigned, key = { "u-${it.id}" }) { player ->
                                 UnassignedPlayerChip(
                                     player = player,
+                                    teamOneName = state.teamOneName.ifBlank { "1" },
+                                    teamTwoName = state.teamTwoName.ifBlank { "2" },
                                     onMoveToOne = { viewModel.movePlayerToTeamOne(player) },
                                     onMoveToTwo = { viewModel.movePlayerToTeamTwo(player) },
                                 )
@@ -481,19 +484,26 @@ private fun PlayerChip(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        val targetLines = roundSafeTextLines()
         Text(
             text = stringResource(R.string.move_to_team, targetTeam) +
                 if (isArrived) " · " + stringResource(R.string.arrived_label) else "",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            maxLines = targetLines.maxLines,
+            overflow = targetLines.overflow,
         )
     }
 }
 
 @Composable
-private fun UnassignedPlayerChip(player: WearPlayerEntity, onMoveToOne: () -> Unit, onMoveToTwo: () -> Unit) {
+private fun UnassignedPlayerChip(
+    player: WearPlayerEntity,
+    teamOneName: String,
+    teamTwoName: String,
+    onMoveToOne: () -> Unit,
+    onMoveToTwo: () -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth().roundListInset(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = player.name,
@@ -509,15 +519,16 @@ private fun UnassignedPlayerChip(player: WearPlayerEntity, onMoveToOne: () -> Un
             horizontalArrangement = Arrangement.Center,
         ) {
             WearChoiceRow {
+                val destinationLines = roundSafeTextLines()
                 Button(
                     onClick = onMoveToOne,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.filledTonalButtonColors(),
                 ) {
                     Text(
-                        text = stringResource(R.string.move_to_team, "1"),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = stringResource(R.string.move_to_team, teamOneName),
+                        maxLines = destinationLines.maxLines,
+                        overflow = destinationLines.overflow,
                     )
                 }
                 Button(
@@ -526,9 +537,9 @@ private fun UnassignedPlayerChip(player: WearPlayerEntity, onMoveToOne: () -> Un
                     colors = ButtonDefaults.filledTonalButtonColors(),
                 ) {
                     Text(
-                        text = stringResource(R.string.move_to_team, "2"),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = stringResource(R.string.move_to_team, teamTwoName),
+                        maxLines = destinationLines.maxLines,
+                        overflow = destinationLines.overflow,
                     )
                 }
             }

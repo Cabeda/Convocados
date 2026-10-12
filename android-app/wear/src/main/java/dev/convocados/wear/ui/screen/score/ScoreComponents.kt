@@ -193,7 +193,12 @@ internal fun GameEdgeProgress(
     val fillColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceContainer
     val tickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-    val alarmTickColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+    // Ticks sit *inside* the ring, so the outer silhouette stays a clean
+    // circle and the ring's own progress is never buried under them. The base
+    // colour is deliberately quiet: with a one-minute alarm on a 60-minute
+    // game there are 60 of them, and only the next one earns attention.
+    val alarmTickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val passedTickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f)
     val nextAlarmTickColor = MaterialTheme.colorScheme.primary
     val tokens = expressiveTokens()
     val endColor = tokens.colorFor(ExpressiveSemanticRole.Warning)
@@ -230,32 +235,41 @@ internal fun GameEdgeProgress(
         // Subtle reference dots (base ring). Alarm ticks render on top of these.
         val ticks = 12
         for (i in 0 until ticks) {
-            drawCircle(tickColor, radius = 1.5.dp.toPx(), center = measure.getPosition(measure.length * i / ticks))
+            drawCircle(tickColor, radius = 1.dp.toPx(), center = measure.getPosition(measure.length * i / ticks))
         }
 
         val center = Offset(cx, cy)
+        // Room between the ring's inner edge and the canvas edge, so every mark
+        // drawn inward stays clear of the bezel clip.
+        val inwardFrom = stroke / 2f + 1.dp.toPx()
 
         // End-of-game notch at full time.
         val endPos = measure.getPosition(measure.length)
-        drawTick(center, endPos, endColor, stroke, length = 1.6f, thickness = 2.2f)
+        drawRadialTick(
+            center = center, pos = endPos, color = endColor,
+            from = inwardFrom, to = inwardFrom + 9.dp.toPx(), width = 3.dp.toPx(),
+        )
 
-        // Alarm tick marks: emphasise the next upcoming one, dim passed ones.
+        // Alarm ticks: hairlines reaching inward, next one emphasised, passed
+        // ones dimmed. Deliberately thinner than the ring they mark, so 60 of
+        // them read as a fine toothed ring rather than a caterpillar.
+        val nextTickLength = 7.dp.toPx()
+        val tickLength = 4.dp.toPx()
         alarmFractions.forEach { f ->
             val pos = measure.getPosition(measure.length * f.coerceIn(0f, 1f))
             val isNext = f == nextAlarmFraction
-            val isPassed = f < progress
             val color = when {
                 isNext -> nextAlarmTickColor
-                isPassed -> alarmTickColor.copy(alpha = 0.3f) // dim passed ticks
+                f < progress -> passedTickColor
                 else -> alarmTickColor
             }
-            drawTick(
+            drawRadialTick(
                 center = center,
                 pos = pos,
                 color = color,
-                stroke = stroke,
-                length = if (isNext) 2.4f else 1.4f,
-                thickness = if (isNext) 2.4f else 1.6f,
+                from = inwardFrom,
+                to = inwardFrom + if (isNext) nextTickLength else tickLength,
+                width = if (isNext) 2.5.dp.toPx() else 1.5.dp.toPx(),
             )
         }
 
@@ -265,24 +279,32 @@ internal fun GameEdgeProgress(
     }
 }
 
-/** Draw a short radial tick mark extending outward from [center] through [pos]. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTick(
+/**
+ * A radial mark on the ring: a line from [from] to [to] pixels outwards from
+ * [center] along the ray to [pos].
+ *
+ * [from] of `stroke / 2` is the ring's inner edge, so passing a larger [from]
+ * starts the mark just inside the ring and [to] walks it inward — never back
+ * out toward the bezel, where the round clip would cut it.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRadialTick(
     center: Offset,
     pos: Offset,
     color: Color,
-    stroke: Float,
-    length: Float,
-    thickness: Float,
+    from: Float,
+    to: Float,
+    width: Float,
 ) {
     val dx = pos.x - center.x
     val dy = pos.y - center.y
     val norm = kotlin.math.sqrt(dx * dx + dy * dy)
-    if (norm == 0f) return
+    if (norm == 0f || to <= from) return
     val ux = dx / norm
     val uy = dy / norm
-    val start = Offset(pos.x - ux * length * stroke, pos.y - uy * length * stroke)
-    val end = Offset(pos.x + ux * length * stroke, pos.y + uy * length * stroke)
-    drawLine(color, start, end, strokeWidth = thickness * stroke, cap = StrokeCap.Round)
+    // Positive offsets move *away* from the centre, so negating them walks in.
+    val start = Offset(pos.x - ux * from, pos.y - uy * from)
+    val end = Offset(pos.x - ux * to, pos.y - uy * to)
+    drawLine(color, start, end, strokeWidth = width, cap = StrokeCap.Round)
 }
 
 /** Lightweight elapsed-time pill (m:ss). */
