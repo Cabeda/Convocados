@@ -654,6 +654,10 @@ model ScheduledJob {
   runAt       DateTime
   processedAt DateTime?
   failedAt    DateTime?
+  /// Failure reason (truncated), written on every failed attempt and cleared on
+  /// success. Without it a dead-lettered job is undiagnosable — the message used
+  /// to live only in stdout, and the host keeps no log history.
+  lastError   String?
   retryCount  Int       @default(0)
   /// Atomic claim: set by the winner of the guarded update before side
   /// effects run; cleared on completion/failure. Lease-based — a claim older

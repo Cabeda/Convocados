@@ -44,6 +44,7 @@ async function seedGameHistory(eventId: string, status = "played", dateTime = ne
 }
 
 beforeEach(async () => {
+  await prisma.scheduledJob.deleteMany();
   await prisma.gameHistory.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
@@ -196,6 +197,25 @@ describe("getAdminStats", () => {
     expect(stats.recurringEvents).toBe(0);
     expect(stats.oneOffEvents).toBe(0);
     expect(stats.sportDistribution).toEqual({});
+  });
+
+  it("surfaces scheduler job failures with their reason", async () => {
+    await prisma.scheduledJob.create({
+      data: {
+        id: "dl-1",
+        type: "reminder_1h",
+        runAt: new Date(),
+        failedAt: new Date(),
+        lastError: "Unique constraint failed",
+      },
+    });
+
+    const { getAdminStats } = await import("~/lib/admin.server");
+    const stats = await getAdminStats();
+
+    expect(stats.jobFailures).toHaveLength(1);
+    expect(stats.jobFailures[0].lastError).toBe("Unique constraint failed");
+    expect(stats.jobFailures[0].deadLettered).toBe(true);
   });
 
   it("counts active games: future, in-progress, or recurring (non-archived)", async () => {
