@@ -243,6 +243,13 @@ test:route-coverage`, `pnpm sync:feature-parity-docs`, Gradle `assembleDebug` fo
 and `:wear`, and `pnpm audit --audit-level high`. Playwright runs only when the diff
 touches `src/pages/**` or `e2e/**`. GATE 2 is GitHub CI. A Change over **400 changed lines
 or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate.
+The cap governs a **factory Change** (one ticket); a human-driven integration wave PR may
+exceed it only when every ticket merged into it individually stayed under the cap — and the
+wave PR description must **list the merged ticket PR numbers**, so the claim is checkable
+rather than prose. On a
+wave: run targeted tests after each merge and the full suite **once** at the end of the
+wave — re-running everything per merge re-pays for merging, not for the work, and CI is the
+backstop.
 
 `pnpm audit` sits in GATE 1 deliberately: a fresh CVE in a transitive dependency is not
 repairable by editing our code, so it must fail fast as Blocked instead of burning the CI
@@ -341,6 +348,10 @@ beforeEach(async () => {
 
 ## Code Style
 
+Judgement-call standards that a review enforces but no linter can (round-vs-square layouts
+on Wear, test-scaffolding extraction, fixture placement) live in
+[`CODING_STANDARDS.md`](CODING_STANDARDS.md) — read it during review, not implementation.
+
 ### TypeScript
 - Strict mode enabled
 - Avoid `any` - use proper types
@@ -427,10 +438,20 @@ pnpm typecheck        # Check TypeScript types
 # Database
 pnpm db:generate      # Generate Prisma client
 pnpm db:migrate       # Run migrations
-pnpm db:studio        # Open Prisma Studio
+pnpm db:studio         # Open Prisma Studio
 ```
 
 ## Dev Server Management (for AI agents)
+
+### Worktree bootstrap
+
+Before running any gate in a **fresh worktree**, run `scripts/worktree-bootstrap.sh`. A
+bare `pnpm install` leaves a half-broken tree on this machine (the `better-sqlite3` native
+build fails and `.bin` links are missing), and the gitignored Android env files
+(`google-services.json`, `local.properties`) do not exist in a worktree, so `:app` builds
+fail for environment reasons rather than change reasons. The script is idempotent — rerun
+it after any failed gate. `SOURCE=/path/to/healthy/checkout` overrides where it copies
+from (defaults to the main worktree).
 
 ### Parallel previews / worktrees
 
@@ -631,6 +652,16 @@ dex sync               # Push tasks to GitHub Issues
 - Use `dex` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
 - GitHub sync is enabled with `on_change = true` (auto-sync on every mutation)
 - Tasks are stored at `.dex/tasks.jsonl` (committed to repo) and synced to GitHub Issues
+- `dex` reads the **working tree**: never `git stash` or `git checkout --` the `.dex/`
+  directory while working, or the task list silently disappears
+- `.gitattributes` unions `.dex/tasks.jsonl` on merge, so integration branches do not
+  conflict on the ledger. The union splices lines silently, and task records are mutable
+  (`completed`, `updated_at` are rewritten in place), so if both sides edited the same
+  task the ledger ends up with two lines sharing one id. CI fails on duplicates — run
+  `node scripts/dex-dedupe.mjs` (keeps the newest `updated_at` per id) and commit.
+  `.dex/sync-state.json` is derived state with no merge attribute (`merge=ours` would be
+  inert without a config-registered driver): on conflict take either side wholesale and
+  delete the markers — never splice.
 
 ### Two ledgers, and the machine exception
 
@@ -644,6 +675,10 @@ issues cannot be dex tasks. The one exception to "use dex for ALL task tracking"
 
 > **Explorers and the Sentinel file GitHub issues directly**, labelled `factory:explored`,
 > and commit their reasoning to `docs/explorations/`. Humans keep dex.
+
+Agents running an implementation wave: exploration notes go in `docs/explorations/` (one
+file per wave), so the next session's implementers and reviewers can read them — `/tmp`
+notes die with the machine.
 
 An Explorer never applies `ready-for-agent` to its own issue. Promotion from
 `factory:explored` to `ready-for-agent` is the human's decision, always.

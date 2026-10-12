@@ -3,7 +3,7 @@ import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { expirePendingInvites, acceptPlayerInvite, declinePlayerInvite } from "~/lib/invite.server";
-import { addPlayerToTeams, validateTeams } from "~/lib/teamFormation.server";
+import { finishRosterAdd } from "~/lib/teamFormation.server";
 import { syncGamePayments } from "~/lib/settlement.server";
 import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
 
@@ -147,12 +147,9 @@ export const POST: APIRoute = async ({ params, request }) => {
         asGuest,
       });
 
-      // Keep teams + per-game payments in sync with the new participant.
-      const playerName = actingUserId
-        ? (await prisma.user.findUnique({ where: { id: actingUserId }, select: { name: true } }))?.name ?? invite.eventPlayer.name
-        : invite.eventPlayer.name;
-      await addPlayerToTeams(invite.eventPlayer.eventId, playerName, invite.gameId);
-      await validateTeams(invite.eventPlayer.eventId, event?.maxPlayers ?? 0, invite.gameId);
+      // Team sync seam (placement keyed on the canonical roster name) +
+      // per-game payments in sync with the new participant.
+      await finishRosterAdd(invite.eventPlayer.eventId, invite.eventPlayer.name, event?.maxPlayers ?? 0, invite.gameId);
       await syncGamePayments(invite.gameId, invite.eventPlayer.eventId);
 
       return Response.json({ ok: true, action: "accepted", bench: result.bench });
