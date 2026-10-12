@@ -15,6 +15,7 @@
     "check:play-listing": "node scripts/check-play-listing.mjs",
     "test:mutation": "node scripts/run-mutation.mjs",
     "test:route-coverage": "bash scripts/route-coverage.sh",
+    "nightshift": "bash scripts/nightshift/run.sh",
     "test:e2e": "npx playwright test",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
