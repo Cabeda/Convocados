@@ -638,4 +638,68 @@ describe("Team Roster Mutations: Minimal Movements", () => {
       ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"].sort(),
     );
   });
+
+  it("rebalance keeps both lineups when a stale row label equals the other side's name", async () => {
+    const event = await seedEvent({ balanced: true, maxPlayers: 10 });
+
+    for (let i = 0; i < 10; i++) {
+      await prisma.player.create({ data: { name: `P${i}`, eventId: event.id, order: i } });
+      await prisma.playerRating.create({ data: { eventId: event.id, name: `P${i}`, rating: 1000 } });
+    }
+    // Rows: team one "Ninjas", team two "Gunas".
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // Legacy drift: the Event's team ONE label matches no row, while its team
+    // TWO label ("Ninjas") equals the stale label on the TEAM ONE row. A
+    // name-first lookup therefore hands both drawn sides to the same row.
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { teamOneName: "Eagles", teamTwoName: "Ninjas" },
+    });
+
+    await addPlayerToTeams(event.id, "P3");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+    expect(teams).toHaveLength(2);
+    for (const t of teams) {
+      expect(t.members).toHaveLength(5);
+    }
+    const all = teams.flatMap((t) => t.members.map((m) => m.name)).sort();
+    expect(all).toEqual(
+      ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"].sort(),
+    );
+  });
+
+  it("renaming both teams to the same name still keeps both lineups intact", async () => {
+    const event = await seedEvent({ balanced: true, maxPlayers: 10 });
+
+    for (let i = 0; i < 10; i++) {
+      await prisma.player.create({ data: { name: `P${i}`, eventId: event.id, order: i } });
+      await prisma.playerRating.create({ data: { eventId: event.id, name: `P${i}`, rating: 1000 } });
+    }
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // The rename route accepts identical labels (nothing validates them apart),
+    // and now writes them onto both rows: both drawn sides then name-match the
+    // same row and the other lineup empties.
+    await saveTeamNames(putCtx({ id: event.id }, { teamOneName: "Lions", teamTwoName: "Lions" }));
+
+    await addPlayerToTeams(event.id, "P3");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+    expect(teams).toHaveLength(2);
+    for (const t of teams) {
+      expect(t.members).toHaveLength(5);
+    }
+    const all = teams.flatMap((t) => t.members.map((m) => m.name)).sort();
+    expect(all).toEqual(
+      ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"].sort(),
+    );
+  });
 });

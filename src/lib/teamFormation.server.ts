@@ -107,6 +107,7 @@ async function rebalanceTeams(eventId: string, teams: { id: string; name: string
   const ratingMap = await loadRatingMap(eventId);
   const newMatches = balanceTeams(playerNames.map((name) => ({ name, rating: ratingMap.get(name) ?? 1000 })), teamNames);
 
+  const claimed = new Set<string>();
   await prisma.$transaction([
     prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map((t) => t.id) } } }),
     ...newMatches.flatMap((match, i) => {
@@ -117,8 +118,18 @@ async function rebalanceTeams(eventId: string, teams: { id: string; name: string
       // both lineups. Name first (the invariant the rename keeps), then side
       // position: `newMatches[i]` is `teamNames[i]`, and `teams` are created
       // team-one-first — the convention GET /teams reads teamResults[0] with.
-      const teamId = teams.find((t) => t.name === match.team)?.id ?? teams[i].id;
-      return match.players.map((p) => prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } }));
+      // Every row may be claimed once: with duplicate labels (the rename route
+      // accepts identical names) or a stale row label equal to the OTHER side's
+      // Event name, a bare name lookup hands both drawn sides to the same row
+      // and empties the other — the very wipe this anchor exists to prevent.
+      const target =
+        teams.find((t) => t.name === match.team && !claimed.has(t.id)) ??
+        (teams[i] && !claimed.has(teams[i].id)
+          ? teams[i]
+          : teams.find((t) => !claimed.has(t.id)));
+      if (!target) return [];
+      claimed.add(target.id);
+      return match.players.map((p) => prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: target.id } }));
     }),
   ]);
 
@@ -171,6 +182,7 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
+    orderBy: { id: "asc" },
   });
   if (teams.length === 0) return; // no teams generated yet
 
@@ -211,6 +223,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
+    orderBy: { id: "asc" },
   });
   if (teams.length === 0) return;
 

@@ -28,7 +28,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
   // deleteMany, both lineups come back empty. Rows are created team-one-first
   // (the same convention GET /teams reads `teamResults[0]` as team one), so
   // position — not the old label — is the identity the rename maps by.
-  const teamRows = await prisma.teamResult.findMany({ where: { eventId }, select: { id: true } });
+  const teamRows = await prisma.teamResult.findMany({
+    where: { eventId },
+    select: { id: true },
+    orderBy: { id: "asc" },
+  });
 
   await prisma.$transaction([
     prisma.event.update({ where: { id: eventId }, data: { teamOneName: one, teamTwoName: two } }),
