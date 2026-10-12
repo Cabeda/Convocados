@@ -244,7 +244,9 @@ and `:wear`, and `pnpm audit --audit-level high`. Playwright runs only when the 
 touches `src/pages/**` or `e2e/**`. GATE 2 is GitHub CI. A Change over **400 changed lines
 or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate.
 The cap governs a **factory Change** (one ticket); a human-driven integration wave PR may
-exceed it only when every ticket merged into it individually stayed under the cap. On a
+exceed it only when every ticket merged into it individually stayed under the cap — and the
+wave PR description must **list the merged ticket PR numbers**, so the claim is checkable
+rather than prose. On a
 wave: run targeted tests after each merge and the full suite **once** at the end of the
 wave — re-running everything per merge re-pays for merging, not for the work, and CI is the
 backstop.
@@ -436,7 +438,7 @@ pnpm typecheck        # Check TypeScript types
 # Database
 pnpm db:generate      # Generate Prisma client
 pnpm db:migrate       # Run migrations
-pnpm db:studio           # Open Prisma Studio
+pnpm db:studio         # Open Prisma Studio
 ```
 
 ## Dev Server Management (for AI agents)
@@ -653,7 +655,13 @@ dex sync               # Push tasks to GitHub Issues
 - `dex` reads the **working tree**: never `git stash` or `git checkout --` the `.dex/`
   directory while working, or the task list silently disappears
 - `.gitattributes` unions `.dex/tasks.jsonl` on merge, so integration branches do not
-  conflict on the ledger; `.dex/sync-state.json` is derived state, one side wins
+  conflict on the ledger. The union splices lines silently, and task records are mutable
+  (`completed`, `updated_at` are rewritten in place), so if both sides edited the same
+  task the ledger ends up with two lines sharing one id. CI fails on duplicates — run
+  `node scripts/dex-dedupe.mjs` (keeps the newest `updated_at` per id) and commit.
+  `.dex/sync-state.json` is derived state with no merge attribute (`merge=ours` would be
+  inert without a config-registered driver): on conflict take either side wholesale and
+  delete the markers — never splice.
 
 ### Two ledgers, and the machine exception
 

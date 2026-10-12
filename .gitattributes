@@ -1,8 +1,12 @@
-# Append-only ledgers union cleanly; derived state files must not.
-#
-# .dex/tasks.jsonl is one JSON object per line, append-only: a union merge
-# keeps every line from both sides, so integration branches stop conflicting
-# on it. .dex/sync-state.json is derived bookkeeping that dex rewrites — let
-# the checked-out side win rather than corrupting the JSON.
+# .dex/tasks.jsonl is one mutable JSON object per line (dex rewrites
+# completed/updated_at in place). Union merge keeps every line from both
+# sides instead of conflicting, but it cannot dedupe: if both sides edited
+# the same task you get two lines with one id. The guard test fails CI on
+# duplicates — reconcile with `node scripts/dex-dedupe.mjs` (keeps the
+# newest updated_at per id) and commit.
 .dex/tasks.jsonl merge=union
-.dex/sync-state.json merge=ours
+
+# .dex/sync-state.json is derived bookkeeping dex rewrites. merge=ours would
+# be inert here (git honours it only when a driver is registered in local
+# config, which cannot be committed), so no attribute is shipped: on
+# conflict take either side wholesale and delete the markers — never splice.

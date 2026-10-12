@@ -15,7 +15,7 @@ pair to fix clipping on round and silently clips square displays, where the old 
 harmless.
 
 - Every width-constrained row gets its inset from `RoundSafeLayout` (`roundListInset()`,
-  `roundSafeTextLines()`), never a hand-written `padding(horizontal = ...)` — round only.
+  `roundSafeWidth()`), never a hand-written `padding(horizontal = ...)` — round only.
 - Any `maxLines`/`TextOverflow.Ellipsis` added to a row that fills the display must be
   **round-aware**: ellipsize inside the safe band on round, keep the square display's
   previous behaviour otherwise. A square leg in the test (≥85% fill, no clipping) is the
@@ -34,7 +34,7 @@ test surface.
 - Anchors, fixtures and reference rows used only by tests belong in the test source set;
   production keeps its `testTag` literals private (GamesScreen/TeamsScreen convention).
 - When the same Robolectric assertion scaffolding appears in sibling test files, extract
-  the shared helper (precedent: `RoundSafeAssertions.kt`) rather than copy-pasting a third
+  one shared helper seeded from the anchor pattern above rather than copy-pasting a third
   time. Duplicated scaffolding drifts; the drift is always in the direction of a weaker
   assertion.
 
@@ -47,6 +47,7 @@ test surface.
   detected." — drift here regenerates a table rebuild on every future `migrate dev`.
 - Coverage and audit thresholds move up only; an exemption in
   `pnpm-workspace.yaml#auditConfig.ignoreGhsas` names the GHSA ids, the reason, and a
-  re-review date, and `src/test/dependency-audit-governance.test.ts` guards it.
+  re-review date — verified by deriving the advisory set from `pnpm audit --json`, never
+  by trusting a named-only list.
 - A feature that ships on web ships on Android in the same change
   (`pnpm sync:feature-parity-docs` is the check, not the exception).
