@@ -3,7 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
-import { addPlayerToTeams, autoRandomizeIfFull, validateTeams } from "../../../../lib/teamFormation.server";
+import { finishRosterAdd } from "../../../../lib/teamFormation.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 
 const UNDO_WINDOW_MS = 60_000; // 60 seconds
@@ -95,16 +95,9 @@ export const POST: APIRoute = async ({ params, request }) => {
   // active slice from the current game's participants, so calling it while the
   // leaver is still archived sees them as bench and silently skips them —
   // leaving the restored player off the draw entirely.
-  if (order < event.maxPlayers) {
-    await addPlayerToTeams(eventId, name, event.currentGameId);
-  }
-
-  // Validate teams: ensure no bench players are in teams after undo
-  await validateTeams(eventId, event.maxPlayers, event.currentGameId);
-
-  // Same trigger as POST /players: an undo that restores a full roster draws
-  // teams the first time if none exist yet.
-  await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
+  // Team sync seam: place when active (self-guards on the restored order),
+  // evict stale members, draw when the roster is full and undrawn.
+  await finishRosterAdd(eventId, name, event.maxPlayers, event.currentGameId);
 
 
   return Response.json({ ok: true });

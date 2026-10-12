@@ -37,6 +37,14 @@ vi.mock("~/lib/webhook.server", () => ({
   fireWebhooks: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("~/lib/random", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/lib/random")>();
+  return { ...actual, Randomize: vi.fn(actual.Randomize) };
+});
+
+import { Randomize } from "~/lib/random";
+const mockRandomize = vi.mocked(Randomize);
+
 const mockGetSession = vi.mocked(getSession);
 
 function ctx(eventId: string, body: any, session: { user: { id: string; name: string } } | null) {
@@ -249,6 +257,40 @@ describe("auto-randomize triggers", () => {
       playerId: player.id,
       actor: { kind: "self", userId: user.id },
     });
+
+    const after = await teamMembers(event.id);
+    expect(after.total).toBe(4);
+    expect(after.names).toContain("Bench Guy");
+    expect(after.names).not.toContain("Leaver");
+  });
+
+  it("bench promotion on a non-balanced event re-runs the random draw", async () => {
+    // Agreed improvement: full game, one leaves, bench replaces → the draw is
+    // re-run (not just slot-filled) so the late change is reflected fairly.
+    const user = await seedUser("Leaver", "u-leaver");
+    const event = await seedRecurringEvent(4); // balanced=false by default
+
+    await join(event.id, "P1");
+    await join(event.id, "P2");
+    await join(event.id, "P3");
+    await join(event.id, "Leaver", { user: { id: user.id, name: user.name } });
+    await join(event.id, "Bench Guy");
+    expect((await teamMembers(event.id)).total).toBe(4);
+
+    mockRandomize.mockClear();
+
+    const player = await prisma.player.findFirstOrThrow({
+      where: { eventId: event.id, name: "Leaver" },
+    });
+    await archiveAndLeave({
+      eventId: event.id,
+      playerId: player.id,
+      actor: { kind: "self", userId: user.id },
+    });
+
+    expect(mockRandomize).toHaveBeenCalledTimes(1);
+    const [drawnNames] = mockRandomize.mock.calls[0];
+    expect([...drawnNames].sort()).toEqual(["Bench Guy", "P1", "P2", "P3"]);
 
     const after = await teamMembers(event.id);
     expect(after.total).toBe(4);

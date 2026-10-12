@@ -7,7 +7,7 @@ import { getActiveRosterState } from "../roster.server";
 import { syncGamePayments } from "../settlement.server";
 import { syncGameFromTeamResults } from "../gameDualWrite.server";
 import { activeParticipantsWhere } from "../activeParticipants.server";
-import { addPlayerToTeams, autoRandomizeIfFull, validateTeams } from "../teamFormation.server";
+import { finishRosterAdd } from "../teamFormation.server";
 import { archiveAndLeave } from "../leave.server";
 import { Randomize } from "../random";
 import type { Imatch } from "../random";
@@ -97,14 +97,12 @@ async function addPlayer(args: Record<string, unknown>, ctx: AuthContext) {
   });
   await syncGamePayments(event.currentGameId, eventId);
 
+  // Team sync seam: place when active, evict stale members, draw when full —
+  // same obligations as POST /players.
+  await finishRosterAdd(eventId, ep.name, event.maxPlayers, event.currentGameId);
+  // Response field: the pre-join active count decides whether this joiner got
+  // an active slot (roster was fetched before the upsert above).
   const isActive = roster.activeCount < event.maxPlayers;
-  if (isActive) {
-    await addPlayerToTeams(eventId, ep.name, event.currentGameId);
-    await validateTeams(eventId, event.maxPlayers, event.currentGameId);
-  }
-  // Same trigger as POST /players: a roster add that fills the active slots
-  // draws teams the first time, whatever the entry point.
-  await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
 
   // Auto-follow + ELO seat — same side effects as POST /players.
   if (target.userId) {
