@@ -116,15 +116,30 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json
-          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          # A rerun checks out the same pre-bump SHA, so the version it computes
+          # is the one the previous attempt already committed. Guard the commit
+          # AND the push: pushing an ancestor of main is a non-fast-forward
+          # rejection, and a re-run must be a no-op here, not a failure.
+          if git diff --cached --quiet; then
+            echo "package.json already at $NEW_VERSION — nothing to bump (rerun)"
+          else
+            git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
 
       - name: Create tag
         if: steps.version_bump.outputs.bump_type != 'none'
         run: |
-          git tag "v${{ steps.bump_version.outputs.new_version }}"
-          git push origin "v${{ steps.bump_version.outputs.new_version }}"
+          TAG="v${{ steps.bump_version.outputs.new_version }}"
+          # Reruns recompute the same version (same checked-out SHA), so the tag
+          # from the failed attempt is already there. Reuse it instead of dying.
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG already exists — reusing it (rerun)"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
 
       - name: Generate changelog
         id: changelog
@@ -156,18 +171,36 @@ jobs:
             const fs = require('fs');
             const newVersion = '${{ steps.bump_version.outputs.new_version }}';
             const changelog = fs.readFileSync('/tmp/changelog.md', 'utf8');
+            const tag = `v${newVersion}`;
 
-            await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: `v${newVersion}`,
-              name: `v${newVersion}`,
-              body: changelog,
-              draft: false,
-              prerelease: false
-            });
+            // createRelease 422s when the tag already has a release, which is
+            // exactly the state a rerun starts in. Get-or-update instead, so a
+            // rerun refreshes the notes rather than failing before the deploy.
+            const existing = await github.rest.repos
+              .getReleaseByTag({ owner: context.repo.owner, repo: context.repo.repo, tag })
+              .catch(() => null);
 
-            console.log(`Release v${newVersion} created successfully`);
+            if (existing) {
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existing.data.id,
+                name: tag,
+                body: changelog
+              });
+              console.log(`Release ${tag} already existed — updated its notes`);
+            } else {
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: tag,
+                body: changelog,
+                draft: false,
+                prerelease: false
+              });
+              console.log(`Release ${tag} created successfully`);
+            }
 
       - name: No release needed
         if: steps.version_bump.outputs.bump_type == 'none'
@@ -471,7 +504,11 @@ jobs:
             registry.fly.io/convocados:latest
 
       - name: Deploy to Fly.io
-        run: flyctl deploy --image registry.fly.io/convocados:${{ needs.release.outputs.version }} --strategy immediate --wait-timeout 60s
+        # 300s, not 60s: the release_command machine (shared-cpu-1x) has to cold-start,
+        # run scripts/release-migrate.sh, and stop. That cycle measured 61s on v3.236.1,
+        # so a 60s wait timed out and aborted the deploy AFTER the release command had
+        # already succeeded — which then skipped the scheduler deploy downstream.
+        run: flyctl deploy --image registry.fly.io/convocados:${{ needs.release.outputs.version }} --strategy immediate --wait-timeout 300s
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
 
