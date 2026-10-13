@@ -49,15 +49,19 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 
 /**
- * How much of the display's height the score overlays own, top and bottom.
+ * Nothing is reserved for the overlays, because they are drawn *over* the
+ * tiles rather than beside them — ScoreTimeOverlay is a sibling that paints on
+ * top, so the ring, the hint and the clock sit on the tiles and the tiles are
+ * free to take the largest rectangle the circle holds.
  *
- * The tiles take whatever rectangle the circle allows in the band between
- * these, so moving an overlay means moving its reserve with it: the 12-o'clock
- * hint pill sits at `top = 20.dp` and the Finish button that replaces it is a
- * 32dp CompactButton at the same offset; the clock pill sits at `bottom = 4.dp`.
+ * The reserves existed to keep the tiles clear of those overlays, which cost
+ * most of the display on a 212dp watch: a band 92dp tall in a 196dp box. The
+ * price is legibility where text lands on a tile, which the overlays already
+ * pay for — the hint and the clock carry their own pill backgrounds, and the
+ * offline status is drawn in a warning colour.
  */
-private val SCORE_TILES_TOP_RESERVE = 48.dp
-private val SCORE_TILES_BOTTOM_RESERVE = 56.dp
+private val SCORE_TILES_TOP_RESERVE = 0.dp
+private val SCORE_TILES_BOTTOM_RESERVE = 0.dp
 
 
 @Composable

@@ -44,11 +44,11 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 
 /**
- * Same reserves the live score screen uses: the hint pill and the Finish
- * button above, the clock and the offline status below. See ScoreScreen.kt.
+ * Same as the live score screen: no reserve, because the overlays paint on top
+ * of the tiles rather than beside them. See ScoreScreen.kt.
  */
-private val SCORE_TILES_TOP_RESERVE = 48.dp
-private val SCORE_TILES_BOTTOM_RESERVE = 56.dp
+private val SCORE_TILES_TOP_RESERVE = 0.dp
+private val SCORE_TILES_BOTTOM_RESERVE = 0.dp
 
 
 @Composable
