@@ -469,6 +469,12 @@ jobs:
           }
           EOF
 
+      # Lint compiles nothing, so it is cheap next to the build it sits beside,
+      # and it is the only thing that reads the rules `assembleDebug` cannot see.
+      - name: Lint phone
+        working-directory: android-app
+        run: ./gradlew :app:lintDebug --no-daemon
+
       - name: Build phone debug APK
         working-directory: android-app
         run: ./gradlew :app:assembleDebug --no-daemon
