@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { getSession, checkEventAdmin } from "~/lib/auth.helpers.server";
+import { getSession, checkEventAdmin, checkOwnership } from "~/lib/auth.helpers.server";
 import { checkAccess } from "~/lib/eventAccess";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { getStakesPreview, activeSeasonWhere } from "~/lib/stakesPreview.server";
@@ -8,9 +8,11 @@ import { getStakesPreview, activeSeasonWhere } from "~/lib/stakesPreview.server"
 /**
  * Stakes Preview for the Event's active Season (ADR 0050).
  *
- * Participant-only: any Season participant may read every lineup player's
- * projection; non-participants get 403. The three side-result scenarios are
- * computed server-side so raw Skill Rating never leaves the server.
+ * Participant-only, and only for the next unscored, non-friendly Game.
+ * Competitive data hidden from players (`showCompetitiveData = false`) hides
+ * the preview from everyone but the owner/admin. Per-player Rank movement is
+ * private: the response carries the viewer's own only. Scenarios are computed
+ * server-side so raw Skill Rating never leaves the server.
  */
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "read");
@@ -19,7 +21,14 @@ export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, ownerId: true, accessPassword: true, dateTime: true },
+    select: {
+      id: true,
+      ownerId: true,
+      accessPassword: true,
+      dateTime: true,
+      currentGameId: true,
+      showCompetitiveData: true,
+    },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -53,10 +62,35 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const membership = await prisma.seasonMembership.findUnique({
     where: { seasonId_userId: { seasonId: season.id, userId: session.user.id } },
-    select: { status: true },
+    select: { status: true, eventPlayer: { select: { name: true } } },
   });
   if (!membership || membership.status === "withdrawn") {
     return Response.json({ error: "Only Season participants can view the Stakes Preview." }, { status: 403 });
+  }
+
+  // Competitive data hidden from players hides the preview too (owner/admin keep it).
+  if (!event.showCompetitiveData) {
+    const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+    if (!isOwner && !isAdmin) return Response.json({ active: false });
+  }
+
+  // Only the next unscored, non-friendly Game: once the score is in, or the Game
+  // is Friendly/cancelled, there is nothing left to project.
+  const game = event.currentGameId
+    ? await prisma.game.findUnique({
+        where: { id: event.currentGameId },
+        select: { status: true, isFriendly: true, scoreOne: true, scoreTwo: true },
+      })
+    : null;
+  if (
+    !game ||
+    game.isFriendly ||
+    game.status === "played" ||
+    game.status === "cancelled" ||
+    game.scoreOne !== null ||
+    game.scoreTwo !== null
+  ) {
+    return Response.json({ active: false });
   }
 
   let body: { teamOne?: unknown; teamTwo?: unknown };
@@ -71,7 +105,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "teamOne and teamTwo lineups are required." }, { status: 400 });
   }
 
-  const preview = await getStakesPreview(eventId, event.dateTime, { teamOne, teamTwo });
+  const preview = await getStakesPreview(eventId, event.dateTime, { teamOne, teamTwo }, membership.eventPlayer.name);
   if (!preview) return Response.json({ active: false });
 
   return Response.json({ active: true, preview });

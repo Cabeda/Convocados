@@ -39,7 +39,7 @@ export interface SeasonRankPlayer {
   games: number;
   provisional: boolean;
   /** Whether the player carried a Rank from a prior Season (fast-K off). */
-  seeded: boolean;
+  seeded?: boolean;
   /** Rank Point change for each counted game, oldest first. */
   deltas: number[];
 }
@@ -217,7 +217,6 @@ export async function getSeasonRankPayload(eventId: string, seasonId: string): P
           tierName: TIER_NAMES[p.tier] ?? null,
           games: p.games,
           provisional: p.games < PROVISIONAL_MIN,
-          seeded: true,
           deltas: [],
         })),
         edges: event?.rankTierEdges ? (JSON.parse(event.rankTierEdges) as number[]) : [],

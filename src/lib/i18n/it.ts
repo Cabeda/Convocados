@@ -259,6 +259,7 @@ const it: TranslationKeys = {
   stakesPreviewNoRound: "Tutte le {n} giornate sono giocate — la classifica non può cambiare.",
   stakesPreviewCrewsTitle: "Crew",
   stakesPreviewCrewPlace: "#{place} in classifica",
+  stakesPreviewPtsTitle: "Punti previsti, arrotondati",
 
   // Historical Game Backfill
   addHistoricalGame: "Aggiungi partita manuale",

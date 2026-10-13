@@ -272,6 +272,7 @@ const en = {
   stakesPreviewNoRound: "All {n} rounds are played — the table can't change.",
   stakesPreviewCrewsTitle: "Crews",
   stakesPreviewCrewPlace: "#{place} of the table",
+  stakesPreviewPtsTitle: "Projected points, rounded to whole numbers",
 
   // Historical Game Backfill
   addHistoricalGame: "Add manual game",

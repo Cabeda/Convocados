@@ -52,6 +52,8 @@ interface Props {
   /** Per team panel, the Crew(s) represented on that side with their projection. */
   crewChipsByTeamIndex?: CrewHeaderChip[][];
   rankEnabled?: boolean;
+  /** The signed-in viewer — only their own Rank movement is shown. */
+  viewerName?: string;
 }
 
 export function TeamPicker({
@@ -65,6 +67,7 @@ export function TeamPicker({
   stakeMap,
   crewChipsByTeamIndex,
   rankEnabled = true,
+  viewerName,
 }: Props) {
   const theme = useTheme();
   const t = useT();
@@ -330,7 +333,7 @@ export function TeamPicker({
                               <Chip size="small" label={t("stakesPreviewFreeAgent")} sx={{ height: 20, color: "text.secondary" }} />
                             ))}
                             {stake && (
-                              <Box sx={{ display: { xs: "none", sm: "flex" }, alignItems: "center", gap: 0.5 }}>
+                              <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5, justifyContent: "flex-end" }}>
                                 {(() => {
                                   const pts = stake.contribution;
                                   const color = pts === 3 ? theme.palette.success.main : pts === 1 ? theme.palette.warning.main : theme.palette.text.disabled;
@@ -339,17 +342,19 @@ export function TeamPicker({
                                       data-testid={`team-player-points-${player.name}`}
                                       size="small"
                                       label={t("stakesPreviewPts", { n: pts })}
+                                      title={t("stakesPreviewPtsTitle")}
                                       sx={{ height: 20, fontWeight: 800, color, bgcolor: alpha(color, 0.14), border: `1px solid ${alpha(color, 0.4)}` }}
                                     />
                                   );
                                 })()}
-                                {rankEnabled && (stake.provisional ? (
+                                {/* Rank movement is the viewer's own; only they see it. */}
+                                {rankEnabled && player.name === viewerName && (stake.provisional ? (
                                   <Chip size="small" label={t("seasonRankProvisional")} sx={{ height: 20, color: "text.secondary" }} />
                                 ) : (
                                   <Chip
                                     data-testid={`team-player-rank-${player.name}`}
                                     size="small"
-                                    label={`${stake.rpDelta > 0 ? "+" : ""}${stake.rpDelta} RP${
+                                    label={`${t("stakesPreviewRankDelta", { delta: `${stake.rpDelta > 0 ? "+" : ""}${stake.rpDelta}` })}${
                                       stake.passed > 0 ? ` ▲${stake.passed}` : stake.passed < 0 ? ` ▼${Math.abs(stake.passed)}` : ""
                                     }`}
                                     sx={{

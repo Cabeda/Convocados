@@ -14,15 +14,25 @@ would move a player's Rank or a Crew's standings position.
 
 ## Decision
 
-Add a participant-only, collapsed **Stakes Preview** to the team view of the Event's next
-unscored **Game**. Using the current lineups it projects the three side results (Side A wins /
-draw / Side B wins), showing each player's **Crew**, their **Season Contribution** (3/1/0),
-each Crew's resulting **Crew Round Score**, and the per-scenario **Season Rank** movement and
-Crew standings position. Any Season participant may see every lineup player's projection;
-non-participants see nothing. Season Rank moves against the mean Skill Rating of the opposing
-lineup. Crew scores display as whole numbers (half-up) while ranking continues to use raw
-values. Projections are shown only while the Season still has an available Season Round (fewer
-than eight eligible Games played).
+Add a participant-only **Stakes Preview** to the team view of the Event's next **unscored,
+non-friendly Game** (once the score is in, or the Game is Friendly, there is nothing left to
+project). Using the current lineups it projects the three side results (Side A wins / draw /
+Side B wins), showing each player's **Crew**, their **Season Contribution** (3/1/0), each
+Crew's resulting **Crew Round Score**, and the per-scenario Crew standings position. Season
+Rank moves against the mean Skill Rating of the opposing lineup. Projections are shown only
+while the Season still has an available Season Round (fewer than eight eligible Games played).
+
+**Disclosure.** Any Season participant sees every lineup player's **Crew and points**. A
+player's **Rank movement is private**: the response carries the viewer's own projected delta
+and place movement only, matching the rest of the codebase (`rank.ts` strips the shared
+`deltas`). When the Event sets `showCompetitiveData = false`, the preview is hidden from
+everyone but the owner/admin, matching `computeLeaderboardPayload`.
+
+**Presentation.** Crew scores display as whole numbers (half-up) on **both** the preview and
+the Crew standings table, which supersedes the pilot's two-decimal Crew display; ranking and
+tie-breaks continue to use raw values. Withdrawn members are excluded from projected Crew
+means (withdrawal stops contribution), and only Crews the real standings table would show — or
+that are fielding someone now — appear in the projected race.
 
 The projection is computed **server-side** and returned whole; the client never receives raw
 **Skill Rating** values. This preserves the Rank-transparency rule (Skill Rating is

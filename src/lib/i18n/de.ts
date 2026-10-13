@@ -259,6 +259,7 @@ const de: TranslationKeys = {
   stakesPreviewNoRound: "Alle {n} Runden sind gespielt — die Tabelle kann sich nicht ändern.",
   stakesPreviewCrewsTitle: "Crews",
   stakesPreviewCrewPlace: "#{place} in der Tabelle",
+  stakesPreviewPtsTitle: "Erwartete Punkte, gerundet",
 
   // Historical Game Backfill
   addHistoricalGame: "Manuelles Spiel hinzufügen",

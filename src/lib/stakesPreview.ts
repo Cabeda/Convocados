@@ -106,6 +106,8 @@ export interface StakesPreviewData {
   rankEnabled: boolean;
   roundAvailable: boolean;
   roundsCounted: number;
+  /** The viewer's lineup name; per-player Rank movement is theirs alone. */
+  viewerName: string;
   lineup: StakesLineupPlayer[];
   /** Empty when the Season has no available round left. */
   scenarios: StakesScenario[];

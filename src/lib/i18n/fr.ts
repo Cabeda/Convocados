@@ -259,6 +259,7 @@ const fr: TranslationKeys = {
   stakesPreviewNoRound: "Les {n} tours sont joués — le classement ne peut plus changer.",
   stakesPreviewCrewsTitle: "Crews",
   stakesPreviewCrewPlace: "#{place} au classement",
+  stakesPreviewPtsTitle: "Points prévus, arrondis",
 
   // Historical Game Backfill
   addHistoricalGame: "Ajouter un match manuel",

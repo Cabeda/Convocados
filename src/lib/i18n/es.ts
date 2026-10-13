@@ -259,6 +259,7 @@ const es: TranslationKeys = {
   stakesPreviewNoRound: "Las {n} rondas están jugadas — la tabla no puede cambiar.",
   stakesPreviewCrewsTitle: "Crews",
   stakesPreviewCrewPlace: "#{place} en la tabla",
+  stakesPreviewPtsTitle: "Puntos previstos, redondeados",
 
   // Historical Game Backfill
   addHistoricalGame: "Añadir juego manual",

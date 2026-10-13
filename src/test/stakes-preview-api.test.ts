@@ -4,10 +4,11 @@ import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 const mockGetSession = vi.fn();
+const mockCheckOwnership = vi.fn().mockResolvedValue({ isOwner: false, isAdmin: false });
 vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: (...args: unknown[]) => mockGetSession(...args),
   checkEventAdmin: vi.fn().mockResolvedValue(false),
-  checkOwnership: vi.fn(),
+  checkOwnership: (...args: unknown[]) => mockCheckOwnership(...args),
 }));
 
 import { getStakesPreview } from "~/lib/stakesPreview.server";
@@ -25,11 +26,30 @@ function context(params: Record<string, string>, body?: unknown) {
 const WINDOW = { opens: new Date("2026-01-01T00:00:00Z"), closes: new Date("2026-03-01T00:00:00Z") };
 const GAME_DATE = new Date("2026-01-15T18:00:00Z");
 
-async function seedSeason(opts: { active?: boolean } = {}) {
+interface GameOverrides {
+  status?: string;
+  isFriendly?: boolean;
+  scoreOne?: number | null;
+  scoreTwo?: number | null;
+}
+
+async function seedSeason(opts: { active?: boolean; showCompetitiveData?: boolean; game?: GameOverrides } = {}) {
   const owner = await prisma.user.create({ data: { id: "u-owner", name: "Owner", email: "o@test" } });
   const event = await prisma.event.create({
-    data: { title: "T", location: "L", dateTime: GAME_DATE, maxPlayers: 10, ownerId: owner.id, rankEnabled: true },
+    data: {
+      title: "T",
+      location: "L",
+      dateTime: GAME_DATE,
+      maxPlayers: 10,
+      ownerId: owner.id,
+      rankEnabled: true,
+      showCompetitiveData: opts.showCompetitiveData ?? true,
+    },
   });
+  const game = await prisma.game.create({
+    data: { eventId: event.id, dateTime: GAME_DATE, status: "upcoming", ...(opts.game ?? {}) },
+  });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
   const season = await prisma.season.create({
     data: {
       eventId: event.id,
@@ -39,7 +59,7 @@ async function seedSeason(opts: { active?: boolean } = {}) {
       status: opts.active === false ? "registration" : "active",
     },
   });
-  return { event, season, owner };
+  return { event, season, owner, game };
 }
 
 interface MembershipInput {
@@ -47,6 +67,7 @@ interface MembershipInput {
   crew?: string;
   rating?: number;
   games?: number;
+  withdrawn?: boolean;
 }
 
 async function seedMembers(
@@ -73,7 +94,14 @@ async function seedMembers(
       }
     }
     await prisma.seasonMembership.create({
-      data: { seasonId, eventPlayerId: ep.id, userId: user.id, crewId, status: "active" },
+      data: {
+        seasonId,
+        eventPlayerId: ep.id,
+        userId: user.id,
+        crewId,
+        status: m.withdrawn ? "withdrawn" : "active",
+        withdrawnAt: m.withdrawn ? new Date("2026-01-10T00:00:00Z") : null,
+      },
     });
     byName.set(m.name, { userId: user.id });
   }
@@ -105,11 +133,13 @@ async function seedPlayedGame(eventId: string, date: string, one: string[], two:
 beforeEach(async () => {
   resetApiRateLimitStore();
   vi.clearAllMocks();
+  mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false });
   await prisma.seasonRankSnapshot.deleteMany();
   await prisma.seasonMembership.deleteMany();
   await prisma.crew.deleteMany();
   await prisma.season.deleteMany();
   await prisma.gameHistory.deleteMany();
+  await prisma.game.deleteMany();
   await prisma.playerRating.deleteMany();
   await prisma.eventPlayer.deleteMany();
   await prisma.event.deleteMany();
@@ -126,15 +156,18 @@ describe("getStakesPreview (server assembly)", () => {
       { name: "Dan", crew: "Wolves", rating: 1050 },
     ]);
 
-    const preview = await getStakesPreview(event.id, GAME_DATE, {
-      teamOne: ["Ana", "Caio"],
-      teamTwo: ["Bia", "Dan"],
-    });
+    const preview = await getStakesPreview(
+      event.id,
+      GAME_DATE,
+      { teamOne: ["Ana", "Caio"], teamTwo: ["Bia", "Dan"] },
+      "Ana",
+    );
 
     expect(preview).not.toBeNull();
     expect(preview!.roundAvailable).toBe(true);
     expect(preview!.roundsCounted).toBe(0);
     expect(preview!.scenarios).toHaveLength(3);
+    expect(preview!.viewerName).toBe("Ana");
 
     const oneWins = preview!.scenarios.find((s) => s.outcome === "teamOne")!;
     expect(oneWins.players.find((p) => p.name === "Ana")!.contribution).toBe(3);
@@ -146,6 +179,51 @@ describe("getStakesPreview (server assembly)", () => {
     expect(oneWins.crews.find((c) => c.name === "Wolves")!.roundScore).toBe(2);
   });
 
+  it("keeps per-player Rank movement for the viewer only", async () => {
+    const { event, season } = await seedSeason();
+    await seedMembers(event.id, season.id, [
+      { name: "Ana", crew: "Sharks", rating: 1200 },
+      { name: "Bia", crew: "Sharks", rating: 900 },
+    ]);
+
+    const preview = await getStakesPreview(
+      event.id,
+      GAME_DATE,
+      { teamOne: ["Ana"], teamTwo: ["Bia"] },
+      "Ana",
+    );
+    const oneWins = preview!.scenarios.find((s) => s.outcome === "teamOne")!;
+    const ana = oneWins.players.find((p) => p.name === "Ana")!;
+    const bia = oneWins.players.find((p) => p.name === "Bia")!;
+    expect(ana.rpDelta).not.toBe(0);
+    // Everyone else's movement is stripped server-side.
+    expect(bia.rpDelta).toBe(0);
+    expect(bia.passed).toBe(0);
+    expect(bia.positionAfter).toBe(bia.positionBefore);
+  });
+
+  it("excludes withdrawn members from projected Crew round scores", async () => {
+    const { event, season } = await seedSeason();
+    await seedMembers(event.id, season.id, [
+      { name: "Ana", crew: "Sharks", rating: 1200, withdrawn: true },
+      { name: "Bia", crew: "Sharks", rating: 900 },
+    ]);
+
+    const preview = await getStakesPreview(
+      event.id,
+      GAME_DATE,
+      { teamOne: ["Ana"], teamTwo: ["Bia"] },
+      "Bia",
+    );
+    const oneWins = preview!.scenarios.find((s) => s.outcome === "teamOne")!;
+    const sharks = oneWins.crews.find((c) => c.name === "Sharks")!;
+    // Ana (withdrawn) earns nothing: Sharks = mean over Bia alone = 0.
+    expect(sharks.membersInLineup).toBe(1);
+    expect(sharks.roundScore).toBe(0);
+    // A withdrawn member carries no Crew chip.
+    expect(preview!.lineup.find((p) => p.name === "Ana")!.crewId).toBeNull();
+  });
+
   it("returns no scenarios once the Season's eight rounds are consumed", async () => {
     const { event, season } = await seedSeason();
     await seedMembers(event.id, season.id, [{ name: "Ana", crew: "Sharks" }]);
@@ -154,10 +232,12 @@ describe("getStakesPreview (server assembly)", () => {
       await seedPlayedGame(event.id, `2026-01-${day}T18:00:00Z`, ["Ana"], ["Rival"]);
     }
 
-    const preview = await getStakesPreview(event.id, new Date("2026-02-15T18:00:00Z"), {
-      teamOne: ["Ana"],
-      teamTwo: ["Rival"],
-    });
+    const preview = await getStakesPreview(
+      event.id,
+      new Date("2026-02-15T18:00:00Z"),
+      { teamOne: ["Ana"], teamTwo: ["Rival"] },
+      "Ana",
+    );
 
     expect(preview!.roundsCounted).toBe(8);
     expect(preview!.roundAvailable).toBe(false);
@@ -166,7 +246,7 @@ describe("getStakesPreview (server assembly)", () => {
 
   it("returns null when no active Season covers the Game", async () => {
     const { event } = await seedSeason({ active: false });
-    const preview = await getStakesPreview(event.id, GAME_DATE, { teamOne: ["Ana"], teamTwo: ["Bia"] });
+    const preview = await getStakesPreview(event.id, GAME_DATE, { teamOne: ["Ana"], teamTwo: ["Bia"] }, "Ana");
     expect(preview).toBeNull();
   });
 });
@@ -185,6 +265,7 @@ describe("POST /api/events/:id/stakes-preview", () => {
     const body = await res.json();
     expect(body.active).toBe(true);
     expect(body.preview.scenarios).toHaveLength(3);
+    expect(body.preview.viewerName).toBe("Ana");
   });
 
   it("403s a non-participant", async () => {
@@ -212,6 +293,37 @@ describe("POST /api/events/:id/stakes-preview", () => {
     const res = await postStakes(context({ id: event.id }, { teamOne: ["Ana"], teamTwo: ["Bia"] }));
     expect(res.status).toBe(200);
     expect((await res.json()).active).toBe(false);
+  });
+
+  it("hides the preview once the Game is scored", async () => {
+    const { event, season } = await seedSeason({ game: { status: "played", scoreOne: 3, scoreTwo: 1 } });
+    const users = await seedMembers(event.id, season.id, [{ name: "Ana" }]);
+    mockGetSession.mockResolvedValue({ user: { id: users.get("Ana")!.userId } });
+
+    const res = await postStakes(context({ id: event.id }, { teamOne: ["Ana"], teamTwo: ["Bia"] }));
+    expect((await res.json()).active).toBe(false);
+  });
+
+  it("hides the preview for a Friendly Game", async () => {
+    const { event, season } = await seedSeason({ game: { isFriendly: true } });
+    const users = await seedMembers(event.id, season.id, [{ name: "Ana" }]);
+    mockGetSession.mockResolvedValue({ user: { id: users.get("Ana")!.userId } });
+
+    const res = await postStakes(context({ id: event.id }, { teamOne: ["Ana"], teamTwo: ["Bia"] }));
+    expect((await res.json()).active).toBe(false);
+  });
+
+  it("hides the preview from players when competitive data is off, but not from the owner", async () => {
+    const { event, season } = await seedSeason({ showCompetitiveData: false });
+    const users = await seedMembers(event.id, season.id, [{ name: "Ana" }]);
+    mockGetSession.mockResolvedValue({ user: { id: users.get("Ana")!.userId } });
+
+    const hidden = await postStakes(context({ id: event.id }, { teamOne: ["Ana"], teamTwo: ["Bia"] }));
+    expect((await hidden.json()).active).toBe(false);
+
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false });
+    const shown = await postStakes(context({ id: event.id }, { teamOne: ["Ana"], teamTwo: ["Bia"] }));
+    expect((await shown.json()).active).toBe(true);
   });
 
   it("400s on a malformed lineup body", async () => {

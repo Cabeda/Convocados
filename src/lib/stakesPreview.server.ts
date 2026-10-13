@@ -68,6 +68,7 @@ export async function getStakesPreview(
   eventId: string,
   gameDateTime: Date,
   lineup: StakesLineup,
+  viewerName: string,
 ): Promise<StakesPreviewData | null> {
   const season = await prisma.season.findFirst({
     where: activeSeasonWhere(eventId, gameDateTime),
@@ -96,6 +97,15 @@ export async function getStakesPreview(
     withdrawnAt: m.withdrawnAt,
   }));
 
+  // Withdrawal stops Crew contribution from the withdrawal instant onward
+  // (pilot: withdrawal stops contributing but not attending), so a withdrawn
+  // member still in the drawn lineup earns no Crew point.
+  const withdrawnNames = new Set(
+    season.memberships
+      .filter((m) => m.withdrawnAt !== null && m.withdrawnAt <= gameDateTime)
+      .map((m) => m.eventPlayer.name),
+  );
+
   const rank = await deriveSeasonRank(eventId, season.id);
   const standings = calculateLeaderboard(allGames, members, { startsAt, endsAt }).crews;
 
@@ -110,37 +120,49 @@ export async function getStakesPreview(
 
   const players: StakesPlayerInput[] = (rank?.players ?? []).map((p) => {
     const membership = season.memberships.find((m) => m.eventPlayer.name === p.name);
+    const crewId = membership && !withdrawnNames.has(p.name) ? membership.crewId : null;
     return {
       name: p.name,
       skill: skill.get(p.name)?.rating ?? 1000,
       hidden: p.hidden,
       display: p.display,
       gamesThisSeason: p.games,
-      seeded: p.seeded,
+      seeded: p.seeded ?? false,
       provisional: p.provisional,
-      crewId: membership?.crewId ?? null,
-      crewName: membership?.crew?.name ?? null,
+      crewId,
+      crewName: crewId ? membership?.crew?.name ?? null : null,
     };
   });
-
-  const crews: StakesCrewInput[] = [...crewNameById.entries()].map(([crewId, name]) => ({
-    crewId,
-    name,
-    scores: standings.find((c) => c.crewId === crewId)?.gameScores.map((s) => s.score) ?? [],
-  }));
 
   const membershipByName = new Map(season.memberships.map((m) => [m.eventPlayer.name, m]));
   const toLineupPlayer = (side: Side, names: string[]): StakesLineupPlayer[] =>
     names.map((name) => {
       const m = membershipByName.get(name);
+      const crewId = m && !withdrawnNames.has(name) ? m.crewId : null;
       return {
         name,
         side,
-        crewId: m?.crewId ?? null,
-        crewName: m?.crew?.name ?? null,
+        crewId,
+        crewName: crewId ? m?.crew?.name ?? null : null,
         participant: !!m,
       };
     });
+  const lineupPlayers = [
+    ...toLineupPlayer("teamOne", lineup.teamOne),
+    ...toLineupPlayer("teamTwo", lineup.teamTwo),
+  ];
+  const playingCrewIds = new Set(lineupPlayers.map((p) => p.crewId).filter((id): id is string => !!id));
+
+  // Include a Crew only if the real standings table would show it (has a
+  // represented round) or it is fielding someone now — so projected places
+  // never interleave with crews the Season table drops.
+  const crews: StakesCrewInput[] = [...crewNameById.entries()]
+    .filter(([crewId]) => playingCrewIds.has(crewId) || (standings.find((c) => c.crewId === crewId)?.gameScores.length ?? 0) > 0)
+    .map(([crewId, name]) => ({
+      crewId,
+      name,
+      scores: standings.find((c) => c.crewId === crewId)?.gameScores.map((s) => s.score) ?? [],
+    }));
 
   const scenarios = roundAvailable
     ? projectStakes({
@@ -153,16 +175,25 @@ export async function getStakesPreview(
       })
     : [];
 
+  // Per-player Rank movement is private: only the viewer's own scenario keeps
+  // it; every other lineup player's row keeps only the public Crew + points.
+  const privateScenarios = scenarios.map((s) => ({
+    ...s,
+    players: s.players.map((p) =>
+      p.name === viewerName
+        ? p
+        : { ...p, rpDelta: 0, passed: 0, tierAfter: p.tierBefore, positionAfter: p.positionBefore },
+    ),
+  }));
+
   return {
     seasonId: season.id,
     seasonName: season.name,
     rankEnabled: event?.rankEnabled ?? true,
     roundAvailable,
     roundsCounted,
-    lineup: [
-      ...toLineupPlayer("teamOne", lineup.teamOne),
-      ...toLineupPlayer("teamTwo", lineup.teamTwo),
-    ],
-    scenarios,
+    viewerName,
+    lineup: lineupPlayers,
+    scenarios: privateScenarios,
   };
 }

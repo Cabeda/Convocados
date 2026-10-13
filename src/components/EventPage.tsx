@@ -1419,6 +1419,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       stakeMap={stakeMap}
                       crewChipsByTeamIndex={crewChipsByTeamIndex}
                       rankEnabled={stakes.data?.rankEnabled ?? true}
+                      viewerName={stakes.data?.viewerName}
                       onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
                         if (teamIdx === 0) {
                           setTeamOneName(newName);
