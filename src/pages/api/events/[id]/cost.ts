@@ -6,6 +6,7 @@ import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { summarizePayments } from "../../../../lib/paymentSummary";
 import { setEventCost } from "../../../../lib/eventCost.server";
+import { effectivePaymentMethodsRaw } from "../../../../lib/paymentMethods";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -66,7 +67,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     ...eventCost,
     hasOverride,
     maxPlayers: event.maxPlayers,
-    effectivePaymentMethods: eventCost.tempPaymentMethods ?? eventCost.paymentMethods ?? null,
+    effectivePaymentMethods: effectivePaymentMethodsRaw(eventCost.tempPaymentMethods, eventCost.paymentMethods),
     effectivePaymentDetails: eventCost.tempPaymentDetails ?? eventCost.paymentDetails ?? null,
     createdAt: eventCost.createdAt.toISOString(),
     updatedAt: eventCost.updatedAt.toISOString(),

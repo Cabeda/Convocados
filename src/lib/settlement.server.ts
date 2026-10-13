@@ -22,7 +22,7 @@ import { shareFor, perPlayerShare } from "./gameCost";
 import { summarizePayments } from "./paymentSummary";
 import { systemUserId, ensureSystemUserId } from "./payerIdentity.server";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
-import { parsePaymentMethods } from "./paymentMethods";
+import { parsePaymentMethods, effectivePaymentMethodsRaw } from "./paymentMethods";
 import { isGameEnded } from "./gameStatus";
 import { fireWebhooks } from "./webhook.server";
 
@@ -365,14 +365,18 @@ async function fireGamePayerSet(
   if (!payerName) return;
 
   const effective = await effectiveGameCost(game.id, eventId);
+  // No cost → nothing to pay. Never send a "pay €0" instruction to the group.
+  if (effective.total <= 0) return;
+
   fireWebhooks(eventId, "game_payer_set", {
     gameId: game.id,
     dateTime: game.dateTime.toISOString(),
     payerName,
     payerEventPlayerId: payer.eventPlayerId ?? null,
     payerUserId,
-    // `||` not `??`: an empty-string override must fall back to the template.
-    paymentMethods: parsePaymentMethods(eventCost?.tempPaymentMethods || eventCost?.paymentMethods),
+    paymentMethods: parsePaymentMethods(
+      effectivePaymentMethodsRaw(eventCost?.tempPaymentMethods, eventCost?.paymentMethods),
+    ),
     amountPerPlayer: perPlayerShare(effective.total, effective.maxPlayers),
     currency: effective.currency,
   }).catch(() => {});
@@ -434,13 +438,17 @@ export async function setPaymentConfig(
 
   // #1359: only when a payer is newly set/changed (not on a no-op re-save), tell
   // any subscriber about it. fireGamePayerSet itself gates on the game having ended.
-  const previousPayer = game.payerEventPlayerId ?? game.payerExternalName ?? null;
-  const newPayer = config.payerEventPlayerId ?? payerExternalName ?? null;
-  if (newPayer && newPayer !== previousPayer) {
+  // Compare each payer space on its own so a roster id is never compared against
+  // a typed external name.
+  const nextEventPlayerId = config.payerEventPlayerId ?? null;
+  const payerChanged =
+    nextEventPlayerId !== (game.payerEventPlayerId ?? null) ||
+    payerExternalName !== (game.payerExternalName ?? null);
+  if ((nextEventPlayerId || payerExternalName) && payerChanged) {
     await fireGamePayerSet(
       eventId,
       { id: game.id, dateTime: game.dateTime, status: game.status },
-      { eventPlayerId: config.payerEventPlayerId ?? null, externalName: payerExternalName },
+      { eventPlayerId: nextEventPlayerId, externalName: payerExternalName },
     ).catch(() => {});
   }
 }

@@ -837,6 +837,53 @@ describe("game_payer_set webhook (#1359)", () => {
 
     expect(fireWebhooks).not.toHaveBeenCalledWith(event.id, "game_payer_set", expect.anything());
   });
+
+  it("fires again when the payer changes on an ended game", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    const bruno = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Bruno" } });
+
+    await setConfig(ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"));
+    vi.mocked(fireWebhooks).mockClear();
+    await setConfig(ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: bruno.id }, "PATCH"));
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ payerName: "Bruno", payerEventPlayerId: bruno.id }),
+    );
+  });
+
+  it("fires with an external payer and a null roster id", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerExternalName: "Venue" }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ payerName: "Venue", payerEventPlayerId: null, payerUserId: null }),
+    );
+  });
+
+  it("does not fire when the game has no cost", async () => {
+    const { event, game } = await seedEvent(); // no cost
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { status: "played", dateTime: new Date(Date.now() - 86400_000) },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    const res = await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fireWebhooks).not.toHaveBeenCalledWith(event.id, "game_payer_set", expect.anything());
+  });
 });
 
 describe("lineup-only charging", () => {
