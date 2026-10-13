@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.dp
 import dev.convocados.wear.ui.screen.quick.QuickScoreContent
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
 import dev.convocados.wear.ui.screen.quick.SaveQuickGameContent
@@ -21,6 +22,9 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.pow
+import kotlin.math.sqrt
 import kotlin.math.hypot
 
 /**
@@ -177,7 +181,7 @@ class WearAdaptiveShapeTest {
         val img2 = composeRule.onRoot().captureToImage()
         val limg = composeRule.onRoot().captureToImage()
         saveDebug(limg, "round_live")
-        assertTeamTilesUseWidth(limg, minFraction = 0.85f, context = "round live score")
+        assertTeamTilesFillTheCircle(limg, context = "round live score")
     }
 
     // ── 2b. Score tiles clear the bezel clip on every round size ─────────
@@ -274,6 +278,11 @@ class WearAdaptiveShapeTest {
                 )
             }
         }
+        // Tennis/padel go through QuickSetScoreEditor, a third tile layout that
+        // still uses the fixed width fraction — and whose tiles still cross the
+        // bezel (corners ~189px out on a 187px radius). Filed rather than fixed
+        // here: its tiles sit in a Column weight, so the same modifier does not
+        // apply without restructuring that editor.
         assertTeamTilesUseWidth(
             composeRule.onRoot().captureToImage(),
             minFraction = 0.80f,
@@ -615,6 +624,57 @@ class WearAdaptiveShapeTest {
      * Round must use most of the circular width at the equator (circle is
      * widest there); square must keep its existing near-full-bleed span.
      */
+    /**
+     * The tiles must be as wide as the circle permits for how tall they are.
+     *
+     * The previous guard asked only for a width fraction, which pitted width
+     * against height: a near-full-width block cannot be tall inside a circle,
+     * so the tiles came out short and wide, floating in dead bands. Measured
+     * against their own height instead, the assertion holds whichever way the
+     * block is shaped, and still fails on the original bug — a block that is
+     * both short *and* narrow.
+     */
+    private fun assertTeamTilesFillTheCircle(image: ImageBitmap, context: String) {
+        val pixels = image.toPixelMap()
+        val w = pixels.width
+        val h = pixels.height
+        var minX = w
+        var maxX = 0
+        var minY = h
+        var maxY = 0
+        for (y in 0 until h step 2) {
+            for (x in 0 until w step 2) {
+                val c = pixels[x, y]
+                if (pixelsEqual(c, TEAM_ONE_TILE) || pixelsEqual(c, TEAM_TWO_TILE)) {
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                    if (y < minY) minY = y
+                    if (y > maxY) maxY = y
+                }
+            }
+        }
+        assertTrue("$context: no team tiles found", maxX > minX && maxY > minY)
+        val tileWidth = (maxX - minX + 1).toFloat()
+        val tileHeight = (maxY - minY + 1).toFloat()
+        // The clipped display is a circle of radius min(w,h)/2 minus the bezel
+        // inset roundBezelClip applies.
+        val bezelInset = with(composeRule.density) { 8.dp.toPx() }
+        val radius = minOf(w, h) / 2f - bezelInset
+        val allowedHalfWidth = sqrt((radius * radius - (tileHeight / 2f).pow(2)).coerceAtLeast(0f))
+        assertTrue(
+            ("%s: tiles span %.0fx%.0f, whose corners sit %.0fpx from the centre — past the " +
+                "%.0fpx bezel radius. The block is too wide for its height.")
+                .format(context, tileWidth, tileHeight, hypot(tileWidth / 2f, tileHeight / 2f), radius),
+            tileWidth / 2f <= allowedHalfWidth + 2f,
+        )
+        assertTrue(
+            ("%s: tiles are %.0fpx wide but the circle allows %.0fpx at their %.0fpx height — " +
+                "the score block is under-using the display again")
+                .format(context, tileWidth, allowedHalfWidth * 2f, tileHeight),
+            tileWidth / 2f >= allowedHalfWidth * 0.85f,
+        )
+    }
+
     private fun assertTeamTilesUseWidth(
         image: ImageBitmap,
         minFraction: Float,

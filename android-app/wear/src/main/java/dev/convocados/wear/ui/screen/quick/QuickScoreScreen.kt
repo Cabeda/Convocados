@@ -26,7 +26,7 @@ import dev.convocados.wear.data.api.displayTennisPoint
 import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.RememberKeepScreenOn
-import dev.convocados.wear.ui.roundEquatorSize
+import dev.convocados.wear.ui.roundScoreTilesSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
 import dev.convocados.wear.ui.roundListInset
@@ -39,6 +39,14 @@ import dev.convocados.wear.ui.screen.score.GameEdgeProgress
 import dev.convocados.wear.ui.screen.score.TeamScoreButton
 import kotlinx.coroutines.delay
 import java.time.Instant
+
+/**
+ * Same reserves the live score screen uses: the hint pill and the Finish
+ * button above, the clock and the offline status below. See ScoreScreen.kt.
+ */
+private val SCORE_TILES_TOP_RESERVE = 48.dp
+private val SCORE_TILES_BOTTOM_RESERVE = 56.dp
+
 
 @Composable
 fun QuickScoreScreen(
@@ -170,7 +178,10 @@ internal fun QuickScoreContent(
                         // corners stay clear too.
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .roundEquatorSize(inset = 8.dp),
+                            .roundScoreTilesSize(
+                                topReserve = SCORE_TILES_TOP_RESERVE,
+                                bottomReserve = SCORE_TILES_BOTTOM_RESERVE,
+                            ),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         TeamScoreButton(

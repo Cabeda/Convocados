@@ -29,7 +29,7 @@ import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
-import dev.convocados.wear.ui.roundEquatorSize
+import dev.convocados.wear.ui.roundScoreTilesSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
 import dev.convocados.wear.ui.roundListInset
@@ -46,6 +46,18 @@ import dev.convocados.wear.util.parseInstant
 import dev.convocados.wear.util.sportDurationMinutes
 import kotlinx.coroutines.delay
 import java.time.Instant
+
+/**
+ * How much of the display's height the score overlays own, top and bottom.
+ *
+ * The tiles take whatever rectangle the circle allows in the band between
+ * these, so moving an overlay means moving its reserve with it: the 12-o'clock
+ * hint pill sits at `top = 20.dp` and the Finish button that replaces it is a
+ * 32dp CompactButton at the same offset; the clock pill sits at `bottom = 4.dp`.
+ */
+private val SCORE_TILES_TOP_RESERVE = 48.dp
+private val SCORE_TILES_BOTTOM_RESERVE = 56.dp
+
 
 @Composable
 fun ScoreScreen(
@@ -561,10 +573,13 @@ internal fun ScoreEditor(
         Row(
             modifier = Modifier
                 .align(Alignment.Center)
-                // Bezel-safe inset so tiles sit inside the round display
-                // instead of touching the screen edge; the height is capped by
-                // the inscribed rectangle so the corners stay clear too.
-                .roundEquatorSize(inset = 8.dp),
+                // Whatever rectangle the circle allows in the band the overlays
+                // leave free — not a fixed width fraction, which geometrically
+                // caps the height and left the tiles floating in dead space.
+                .roundScoreTilesSize(
+                    topReserve = SCORE_TILES_TOP_RESERVE,
+                    bottomReserve = SCORE_TILES_BOTTOM_RESERVE,
+                ),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TeamScoreButton(
