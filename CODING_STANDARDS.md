@@ -25,6 +25,22 @@ harmless.
   compared against that anchor. The anchor guard is what stops the assertion from silently
   weakening — keep it when extracting helpers.
 
+## Wear UI: verify on round **and** square before shipping
+
+The round/square axis above is about *authoring*; this is about *proving* the result. The
+failure this replaces: a fix verified only on round — or trusted to a green
+`verifyRoborazziDebug` — that silently no-ops or clips on the other shape.
+
+- Check the change on **both** a round and a square display. `./gradlew
+  :wear:recordRoborazziDebug` regenerates the goldens; then **open and look at** the
+  `round_*` and `square_*` PNGs in `wear/src/test/screenshots/shapes/`. A green
+  `verifyRoborazziDebug` only proves the render did not change — not that it is right.
+- Include the small-round case: configuration `w227dp-h227dp-round` (goldens
+  `small_round_*`), where a flat inset costs the most width and controls clip first.
+- Where a watch is reachable, install the **release** APK (`:wear:assembleRelease`,
+  signed by `keystore.properties`) rather than debug — debug is too slow to judge motion
+  and interaction.
+
 ## Test fixtures and scaffolding live in the test source set
 
 `android-app/wear/src/test`, `src/test`. The failure this replaces: a composable that only

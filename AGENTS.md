@@ -33,6 +33,10 @@ Gradle multi-module project — `:app` (phone/tablet) and `:wear` (Wear OS).
 - **Build**: minSdk 35 (Wear OS 5.1+) — Credential Manager's Google provider is unavailable below API 35
 - **Package**: `com.cabeda.Convocados` / namespace `dev.convocados.wear`
 - **Distribution**: dedicated Wear OS track in Play Console (form-factor opt-in required)
+- **Verification**: a Wear UI change ships only after it is checked on **both** a round
+  and a square display (`RoundSafeLayout.kt` has a round branch and a square `else`, so a
+  fix written against one shape silently no-ops on the other). Procedure:
+  [`CODING_STANDARDS.md`](CODING_STANDARDS.md) → *Wear UI: verify on round and square*.
 
 ## Mission
 
@@ -447,6 +451,7 @@ Before submitting a PR:
 - [ ] Within 400 changed lines and 20 files, or the issue was split
 - [ ] i18n strings added to all 6 locales
 - [ ] Platform parity considered (web ↔ Android apps)
+- [ ] Wear UI change verified on **both** round and square goldens, if Wear UI changed (see `CODING_STANDARDS.md`)
 - [ ] Database migrations included (if schema changed)
 - [ ] Documentation updated (if API changed)
 - [ ] No console errors in browser
