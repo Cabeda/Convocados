@@ -191,6 +191,22 @@ private fun Modifier.equatorInscribedSize(
 }
 
 /**
+ * The score screen's own content padding: none on round, full on square.
+ *
+ * [scoreContentPadding] drops the horizontal padding but keeps the vertical,
+ * which shrinks the box the progress ring is inscribed in — a 76dp radius on a
+ * 212dp watch where the display offers 94.5dp — so the ring never reaches the
+ * device edge and the score tiles cannot grow past it either. The tiles carry
+ * their own reserves for the overlays, so the vertical padding buys nothing
+ * here and costs the whole silhouette.
+ */
+@Composable
+fun Modifier.scoreEdgePadding(
+    padding: androidx.compose.foundation.layout.PaddingValues,
+): Modifier =
+    if (LocalConfiguration.current.isScreenRound) this else padding(padding)
+
+/**
  * Horizontal inset for full-width rows on round displays. Applied to list
  * items (chips, buttons, switches) that would otherwise bleed past the
  * circular bezel. No-op on square displays.

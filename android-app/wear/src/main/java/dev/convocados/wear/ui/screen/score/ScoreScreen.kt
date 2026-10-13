@@ -32,6 +32,7 @@ import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.roundScoreTilesSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
+import dev.convocados.wear.ui.scoreEdgePadding
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.ongoing.OngoingLaunch
@@ -105,7 +106,7 @@ fun ScoreScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .scoreContentPadding(contentPadding),
+                    .scoreEdgePadding(contentPadding),
                 contentAlignment = Alignment.Center,
             ) {
                 when {
@@ -245,7 +246,7 @@ fun ScoreFixtureContent(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .scoreContentPadding(contentPadding),
+                    .scoreEdgePadding(contentPadding),
                 contentAlignment = Alignment.Center,
             ) {
                 if (isAmbient) {
@@ -570,6 +571,7 @@ internal fun ScoreEditor(
                 ) { _, dy -> dragY += dy }
             },
     ) {
+        val isRound = LocalConfiguration.current.isScreenRound
         Row(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -591,6 +593,7 @@ internal fun ScoreEditor(
                 onDecrement = decOne,
                 enabled = true,
                 modifier = Modifier.weight(1f),
+                shape = teamScoreTileShape(isRound = isRound, isLeft = true),
             )
             TeamScoreButton(
                 teamName = state.teamTwoName,
@@ -601,6 +604,7 @@ internal fun ScoreEditor(
                 onDecrement = decTwo,
                 enabled = true,
                 modifier = Modifier.weight(1f),
+                shape = teamScoreTileShape(isRound = isRound, isLeft = false),
             )
         }
 

@@ -15,10 +15,13 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Rect
@@ -57,6 +60,39 @@ private const val REPEAT_DECREMENT_DELAY_MS = 160L
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+/**
+ * The outline of one team's score tile.
+ *
+ * On a square display the tile is a square: the display's own shape, sharp
+ * corners and all. On a round one the pair reads as the circle split down the
+ * middle — the outer edge curves with the display, the edge on the midline
+ * stays straight, so the two tiles together trace the ring they sit inside.
+ *
+ * [isLeft] picks which half: the left tile rounds its left edge, the right tile
+ * its right. The radius is the tile's own height over two, clamped to its
+ * width, so the curve is a true semicircle wherever the tile is tall enough and
+ * a maximum-radius round otherwise.
+ */
+internal fun teamScoreTileShape(isRound: Boolean, isLeft: Boolean): Shape {
+    if (!isRound) return RectangleShape
+    return GenericShape { size, _ ->
+        val radius = minOf(size.height / 2f, size.width)
+        if (isLeft) {
+            moveTo(size.width, 0f)
+            lineTo(radius, 0f)
+            arcTo(Rect(0f, 0f, radius * 2f, size.height), -90f, -180f, false)
+            lineTo(size.width, size.height)
+        } else {
+            moveTo(0f, 0f)
+            lineTo(size.width - radius, 0f)
+            arcTo(Rect(size.width - radius * 2f, 0f, size.width, size.height), -90f, 180f, false)
+            lineTo(0f, size.height)
+        }
+        close()
+    }
+}
+
+@Composable
 internal fun TeamScoreButton(
     teamName: String,
     score: Int,
@@ -67,6 +103,7 @@ internal fun TeamScoreButton(
     onDecrement: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    shape: Shape = MaterialTheme.shapes.large,
 ) {
     val view = LocalView.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -116,7 +153,7 @@ internal fun TeamScoreButton(
             .fillMaxHeight()
             // M3 Expressive shape from the theme (round-optimized), not a
             // hard-coded corner radius.
-            .clip(MaterialTheme.shapes.large)
+            .clip(shape)
             .background(container)
             .combinedClickable(
                 interactionSource = interactionSource,

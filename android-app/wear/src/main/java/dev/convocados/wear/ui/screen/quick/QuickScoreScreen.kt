@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -29,6 +30,7 @@ import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.roundScoreTilesSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
+import dev.convocados.wear.ui.scoreEdgePadding
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.ongoing.OngoingLaunch
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
@@ -37,6 +39,7 @@ import dev.convocados.wear.ui.ongoing.shouldShowQuickGameOngoing
 import dev.convocados.wear.ui.screen.score.GameClock
 import dev.convocados.wear.ui.screen.score.GameEdgeProgress
 import dev.convocados.wear.ui.screen.score.TeamScoreButton
+import dev.convocados.wear.ui.screen.score.teamScoreTileShape
 import kotlinx.coroutines.delay
 import java.time.Instant
 
@@ -142,7 +145,7 @@ internal fun QuickScoreContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .scoreContentPadding(contentPadding)
+                    .scoreEdgePadding(contentPadding)
                     .pointerInput(Unit) {
                         // Swipe up ends the quick game; swipe down saves it to an event.
                         val threshold = 64.dp.toPx()
@@ -172,6 +175,7 @@ internal fun QuickScoreContent(
                         )
                     }
                 } else {
+                    val isRound = LocalConfiguration.current.isScreenRound
                     Row(
                         // Bezel-safe inset so tiles sit inside the round display;
                         // the height is capped by the inscribed rectangle so the
@@ -193,6 +197,7 @@ internal fun QuickScoreContent(
                             onDecrement = onDecrementOne,
                             enabled = true,
                             modifier = Modifier.weight(1f),
+                shape = teamScoreTileShape(isRound = isRound, isLeft = true),
                         )
                         TeamScoreButton(
                             teamName = stringResource(R.string.team_default_2),
@@ -203,6 +208,7 @@ internal fun QuickScoreContent(
                             onDecrement = onDecrementTwo,
                             enabled = true,
                             modifier = Modifier.weight(1f),
+                shape = teamScoreTileShape(isRound = isRound, isLeft = false),
                         )
                     }
                 }
