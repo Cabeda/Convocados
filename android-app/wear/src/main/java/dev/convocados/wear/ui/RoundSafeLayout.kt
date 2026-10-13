@@ -56,7 +56,7 @@ val ROUND_LIST_INSET: Dp = 20.dp
  * be sized to the ring rather than to the clip and stay inside what the player
  * sees as the edge.
  */
-internal val EDGE_PROGRESS_RING_INSET = 4.dp
+internal val EDGE_PROGRESS_RING_INSET = 3.5.dp
 
 /**
  * Inset that [roundBezelClip] applies before clipping to a circle, so content
@@ -117,12 +117,11 @@ fun Modifier.roundEquatorSize(
 fun Modifier.roundScoreTilesSize(topReserve: Dp, bottomReserve: Dp): Modifier {
     val configuration = LocalConfiguration.current
     if (!configuration.isScreenRound) return fillMaxSize()
-    // The circle the tiles live in is the *edge-progress ring*, not half the
-    // container and not the bare bezel clip: the block sits in a box wider than
-    // it is tall, so it may run out to the display edge at the equator, and
-    // sizing it to the clip alone left it poking past the ring that is the
-    // edge the player actually sees. The ring is inset by its stroke half plus
-    // a hair of margin — 4dp at the 5dp stroke it draws.
+    // Sized to the display's bezel circle, less the ring's stroke inset — the
+    // circle the edge-progress ring traces. The tiles are drawn in a container
+    // that is shorter than the clipped area (scoreContentPadding keeps the
+    // scaffold's vertical padding), so min(container)/2 is a *smaller* circle
+    // than the ring's and would leave the tiles floating inside it.
     val bezelRadius =
         minOf(configuration.screenWidthDp, configuration.screenHeightDp).dp / 2f -
             ROUND_BEZEL_INSET - EDGE_PROGRESS_RING_INSET
