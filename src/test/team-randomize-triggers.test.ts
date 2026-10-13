@@ -60,13 +60,14 @@ function ctx(eventId: string, body: any, session: { user: { id: string; name: st
 }
 
 /** Recurring event with a current Game — ADR 0016 game-scoped roster. */
-async function seedRecurringEvent(maxPlayers = 4) {
+async function seedRecurringEvent(maxPlayers = 4, balanced = false) {
   const event = await prisma.event.create({
     data: {
       title: "Ninjas da Areosa",
       location: "Pitch",
       dateTime: new Date(Date.now() + 86400_000),
       maxPlayers,
+      balanced,
       teamOneName: "Ninjas",
       teamTwoName: "Gunas",
       isRecurring: true,
@@ -296,5 +297,39 @@ describe("auto-randomize triggers", () => {
     expect(after.total).toBe(4);
     expect(after.names).toContain("Bench Guy");
     expect(after.names).not.toContain("Leaver");
+  });
+
+  it("leave before the roster is full must not materialise teams from empty shells (balanced)", async () => {
+    // Prod cmmkfrx8b0000o2ixrix1yp2m (2026-10-13 10:56): a balanced recurring
+    // event with empty TeamResult shells. A self-leave ran removePlayerFromTeams,
+    // whose balanced branch calls rebalanceTeams — which DRAWS the remaining
+    // players, materialising teams at 7/10. The leaver's immediate re-join then
+    // rebalanced the 7 back in, so "joining" appeared to generate teams.
+    const user = await seedUser("José Cabeda", "u-jose");
+    const event = await seedRecurringEvent(10, true);
+    await prisma.teamResult.createMany({
+      data: [
+        { eventId: event.id, name: "Ninjas" },
+        { eventId: event.id, name: "Gunas" },
+      ],
+    });
+
+    await join(event.id, "P1");
+    await join(event.id, "P2");
+    await join(event.id, "P3");
+    await join(event.id, "José Cabeda", { user: { id: user.id, name: user.name } });
+
+    const player = await prisma.player.findFirstOrThrow({
+      where: { eventId: event.id, name: "José Cabeda" },
+    });
+    await archiveAndLeave({
+      eventId: event.id,
+      playerId: player.id,
+      actor: { kind: "self", userId: user.id },
+    });
+
+    // Roster is 3/10 — no draw has been earned, so no teams may exist.
+    const after = await teamMembers(event.id);
+    expect(after.total).toBe(0);
   });
 });
