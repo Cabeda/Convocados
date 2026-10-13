@@ -4,6 +4,7 @@ import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
+import { fireWebhooks } from "../../../../lib/webhook.server";
 import { createLogger } from "../../../../lib/logger.server";
 
 const log = createLogger("datetime-api");
@@ -82,6 +83,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   // Notify subscribers only if dateTime actually changed
   const dateTimeActuallyChanged = updates.dateTime && updates.dateTime.getTime() !== event.dateTime.getTime();
   if (dateTimeActuallyChanged) {
+    // Fire game_rescheduled webhook (non-blocking) — lean fact, client re-fetches state
+    fireWebhooks(eventId, "game_rescheduled", {}).catch(() => {});
     const activePlayers = await prisma.player.count({ where: { eventId, archivedAt: null } });
     const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
     const url = `/events/${eventId}`;

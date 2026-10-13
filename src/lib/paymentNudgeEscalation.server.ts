@@ -16,6 +16,8 @@
 import { prisma } from "./db.server";
 import { sendPushToUser } from "./push.server";
 import { getNotificationPrefs, wantsPaymentReminderPush } from "./notificationPrefs.server";
+import { effectiveGameCost } from "./settlement.server";
+import { fireWebhooks } from "./webhook.server";
 import { createLogger } from "./logger.server";
 
 const log = createLogger("payment-nudge");
@@ -57,6 +59,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       durationMinutes: true,
       ownerId: true,
       currentGameId: true,
+      showDebtorNames: true,
     },
   });
   const candidateGameIds = candidateEvents
@@ -81,7 +84,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
           },
         },
       },
-    })).map((g) => [g.id, g.payments] as const),
+    })).map((g) => [g.id, g] as const),
   );
 
   const openEvents = candidateEvents.filter(
@@ -93,7 +96,9 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     const gameEnd = new Date(event.dateTime.getTime() + event.durationMinutes * 60_000);
     if (now < gameEnd) continue;
     const hoursSinceEnd = (now.getTime() - gameEnd.getTime()) / (60 * 60 * 1000);
-    const gamePayments = gamesById.get(event.currentGameId) ?? [];
+    const gamePayments = gamesById.get(event.currentGameId)?.payments ?? [];
+    // Per-Game override → EventCost template → EUR (settlement's rule).
+    const currency = (await effectiveGameCost(event.currentGameId, event.id)).currency;
     const totalPayments = gamePayments.length;
     const paidCount = gamePayments.filter((p) => p.status === "paid").length;
 
@@ -120,39 +125,54 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       // Already alerted organizer — done with this player
       if (tracker.organiserAlert) continue;
 
-      // Check prefs
+      // Prefs gate the push only — the escalation stage, the webhook fact and
+      // the organizer alert are domain facts and run regardless of the
+      // debtor's channel choices (ADR 0051).
       const prefs = await getNotificationPrefs(userId);
-      if (!wantsPaymentReminderPush(prefs)) continue;
+      const wantsPush = wantsPaymentReminderPush(prefs);
 
       const url = `/events/${event.id}?action=pay`;
+
+      // Lean webhook fact per nudge; names only when showDebtorNames (group
+      // privacy is domain policy, not a client concern).
+      const fireNudgeWebhook = (stage: 1 | 2 | 3) =>
+        fireWebhooks(event.id, "payment_nudge", {
+          stage,
+          amountCents: Math.round(payment.amount * 100),
+          currency,
+          ...(event.showDebtorNames ? { playerName: payment.playerName } : {}),
+        }).catch(() => {});
 
       // Stage progression based on time since game end
       if (tracker.stage === 0 && hoursSinceEnd >= STAGE_1_DELAY_H) {
         // Stage 1: soft nudge
-        await sendPushToUser(userId, event.title, `💸 You owe €${payment.amount.toFixed(2)} — tap to pay`, url);
+        if (wantsPush) await sendPushToUser(userId, event.title, `💸 You owe €${payment.amount.toFixed(2)} — tap to pay`, url);
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 1, lastSentAt: now },
         });
         result.stage1Sent.push(`${userId}:${event.id}`);
+        fireNudgeWebhook(1);
       } else if (tracker.stage === 1 && hoursSinceEnd >= STAGE_2_DELAY_H) {
         // Stage 2: follow-up
-        await sendPushToUser(userId, event.title, `⏰ Still pending — €${payment.amount.toFixed(2)} for ${event.title}`, url);
+        if (wantsPush) await sendPushToUser(userId, event.title, `⏰ Still pending — €${payment.amount.toFixed(2)} for ${event.title}`, url);
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 2, lastSentAt: now },
         });
         result.stage2Sent.push(`${userId}:${event.id}`);
+        fireNudgeWebhook(2);
       } else if (tracker.stage === 2 && hoursSinceEnd >= STAGE_3_DELAY_H) {
         // Stage 3: social proof
         const unpaidCount = totalPayments - paidCount;
         const body = `${paidCount}/${totalPayments} players have paid. You're one of ${unpaidCount} who haven't.`;
-        await sendPushToUser(userId, event.title, body, url);
+        if (wantsPush) await sendPushToUser(userId, event.title, body, url);
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 3, lastSentAt: now },
         });
         result.stage3Sent.push(`${userId}:${event.id}`);
+        fireNudgeWebhook(3);
       } else if (tracker.stage === 3 && hoursSinceEnd >= ORGANIZER_ALERT_DELAY_H) {
         // Organizer alert — stop nudging, tell the owner
         await prisma.paymentNudgeStage.update({
@@ -174,6 +194,15 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         ? { eventId: event.id, userId: { notIn: [...activeUserIds] } }
         : { eventId: event.id },
     }).catch(() => {}); // ponytail: best-effort cleanup, not critical
+
+    // Fire payment_organizer_alert webhook (non-blocking) — the escalation
+    // fact exists regardless of who receives the push.
+    if (eventOrganizerAlerts.length > 0 && eventDebtorNames.length > 0) {
+      fireWebhooks(event.id, "payment_organizer_alert", {
+        unpaidCount: eventDebtorNames.length,
+        ...(event.showDebtorNames ? { unpaidNames: eventDebtorNames } : {}),
+      }).catch(() => {});
+    }
 
     // Send organizer alert as a batch (one notification for all stage-3-expired debtors per event)
     if (event.ownerId && eventOrganizerAlerts.length > 0 && eventDebtorNames.length > 0) {
