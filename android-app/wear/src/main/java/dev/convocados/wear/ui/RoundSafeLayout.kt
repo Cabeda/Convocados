@@ -6,14 +6,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -46,9 +54,10 @@ val ROUND_LIST_INSET: Dp = 20.dp
 /**
  * Inset that [roundBezelClip] applies before clipping to a circle, so content
  * laid out against the screen edge has to live inside a circle of
- * `min(side) / 2 - ROUND_BEZEL_INSET`.
+ * `min(side) / 2 - ROUND_BEZEL_INSET`. Internal rather than private because the
+ * bezel-containment tests have to measure the very same circle.
  */
-private val ROUND_BEZEL_INSET = 8.dp
+internal val ROUND_BEZEL_INSET = 8.dp
 
 /**
  * Constrains width to [fraction] on round displays so a wide control placed
@@ -112,10 +121,172 @@ private fun Modifier.equatorInscribedSize(
  * Horizontal inset for full-width rows on round displays. Applied to list
  * items (chips, buttons, switches) that would otherwise bleed past the
  * circular bezel. No-op on square displays.
+ *
+ * The inset is a function of **where the row sits on the circle**, not a flat
+ * constant. A row at the equator may run nearly to the bezel because the circle
+ * is widest there; the same row near the top of the display has to give up
+ * width because the circle has already closed in. A flat [ROUND_LIST_INSET]
+ * paid the pole price everywhere, so the equator row was left on the table and
+ * the pole row still crossed the bezel.
+ *
+ * [horizontal] is the inset used when the row's position is not known yet (the
+ * first layout pass) and when the row's corners are already entirely outside
+ * the circle, where no inset can keep it inside. It is no longer what a row
+ * actually gets at any stable scroll position.
+ *
+ * The row is assumed to be horizontally centred on the display — true of every
+ * list these screens build — so only its vertical extent enters the geometry.
  */
 @Composable
-fun Modifier.roundListInset(horizontal: Dp = ROUND_LIST_INSET): Modifier =
-    if (LocalConfiguration.current.isScreenRound) padding(horizontal = horizontal) else this
+fun Modifier.roundListInset(horizontal: Dp = ROUND_LIST_INSET): Modifier {
+    val configuration = LocalConfiguration.current
+    if (!configuration.isScreenRound) return this
+
+    // Written by onGloballyPositioned, read by the measure pass. A state read
+    // in layout invalidates that node's layout only, so a scroll frame costs a
+    // relayout of the row rather than a recomposition. Only the vertical bounds
+    // are tracked: horizontal padding is what this modifier applies, so reading
+    // the width back would make the measurement depend on its own result.
+    val rowTop = remember { mutableStateOf<Float?>(null) }
+    val rowBottom = remember { mutableStateOf<Float?>(null) }
+
+    return this
+        .onGloballyPositioned { coordinates ->
+            val bounds = coordinates.boundsInRoot()
+            val top = rowTop.value
+            // The row's bottom edge is its top plus its height, and its height
+            // is a function of the width this modifier computes — recording it
+            // unconditionally closes a loop (inset -> width -> wrap -> height ->
+            // inset) that a text row never settles out of, which is how
+            // `waitForIdle` ends up polling for 60s. Both edges are only taken
+            // while the row is genuinely moving; between moves the measured
+            // height cannot change, because the inset cannot change.
+            if (top == null || abs(top - bounds.top) > 0.5f) {
+                // The row moved, so this is its position rather than a
+                // consequence of the width we just chose: take both edges.
+                rowTop.value = bounds.top
+                rowBottom.value = bounds.bottom
+            } else if (rowBottom.value == null || bounds.bottom > rowBottom.value!! + 0.5f) {
+                // The row grew while staying put. Its height is a function of
+                // the width this modifier computes, so a shrink here is the
+                // feedback direction — accepting it re-opens the settle loop
+                // (inset -> width -> wrap -> height -> inset) that left
+                // `waitForIdle` polling for 60s. Growth is accepted because it
+                // only ever asks for a *narrower* row, and the touch-target
+                // floor bounds how far that can run, so the sequence settles.
+                rowBottom.value = bounds.bottom
+            }
+        }
+        .roundListInsetLayout(
+            fallback = horizontal,
+            screenWidthDp = configuration.screenWidthDp,
+            screenHeightDp = configuration.screenHeightDp,
+            rowTop = rowTop,
+            rowBottom = rowBottom,
+        )
+}
+
+/**
+ * The measure pass for [roundListInset]: size the row the way plain horizontal
+ * padding would, but with the horizontal padding derived from the row's
+ * vertical position in the circle.
+ */
+private fun Modifier.roundListInsetLayout(
+    fallback: Dp,
+    screenWidthDp: Int,
+    screenHeightDp: Int,
+    rowTop: State<Float?>,
+    rowBottom: State<Float?>,
+): Modifier = layout { measurable, constraints ->
+    val width = constraints.maxWidth
+    val fallbackPx = fallback.roundToPx()
+    val top = rowTop.value
+    val bottom = rowBottom.value
+    val inset = if (top == null || bottom == null || width == Constraints.Infinity) {
+        fallbackPx
+    } else {
+        positionAwareInsetPx(
+            width = width,
+            rowTop = top,
+            rowBottom = bottom,
+            displayWidthPx = screenWidthDp * density,
+            displayHeightPx = screenHeightDp * density,
+            bezelInsetPx = ROUND_BEZEL_INSET.roundToPx(),
+            fallbackPx = fallbackPx,
+            minContentWidthPx = MIN_TOUCH_TARGET.toPx(),
+        )
+    }
+    // Keep the caller's minimum width minus the inset, exactly as plain
+    // horizontal padding does. Dropping it to zero lets a `fillMaxWidth()`
+    // child — every row on these screens — size itself to its label and drift
+    // back to a content-sized pill, which is the width regression the flat
+    // inset never had.
+    val childMin = (constraints.minWidth - 2 * inset).coerceAtLeast(0)
+    val childMax = (width - 2 * inset).coerceAtLeast(0)
+    val placeable = measurable.measure(
+        constraints.copy(minWidth = childMin, maxWidth = childMax),
+    )
+    val nodeWidth = (placeable.width + 2 * inset).coerceIn(constraints.minWidth, width)
+    // A child that sized itself to its content would otherwise sit hard against
+    // the row's left edge, which is not where a round list puts anything and is
+    // not what the geometry above assumes — the formula measures the row about
+    // the display centre, so the child has to sit there too.
+    val childX = ((nodeWidth - placeable.width) / 2f).roundToInt()
+    layout(nodeWidth, placeable.height) { placeable.placeRelative(childX, 0) }
+}
+
+/**
+ * The horizontal padding a row of width [width] needs so that its corners stay
+ * inside a circle of `min(display) / 2 - bezelInset`.
+ *
+ * The row spans `[-width/2, width/2]` about the display centre and
+ * `[rowTop, rowBottom]` vertically, so its farthest corner sits at
+ * `sqrt(halfWidth² + yFar²)`. Solving for the half width the circle still
+ * allows at that height gives the inset.
+ *
+ * The result is capped so the row never falls below
+ * [MIN_TOUCH_TARGET][dev.convocados.wear.ui.MIN_TOUCH_TARGET] wide: the circle
+ * asks for more and more width the closer the row gets to a pole, and past a
+ * point it would ask for a row too narrow to press. The floor is what wins
+ * there, and the bezel clip does what it already did. Everywhere the circle can
+ * still accommodate a pressable row, the row follows it exactly — which is the
+ * whole point: the silhouette around the game is the device's shape, not a
+ * flat band floating inside it. Once the row's far edge passes the circle no
+ * inset fits at all, and [fallbackPx] applies for the same reason.
+ */
+internal fun positionAwareInsetPx(
+    width: Int,
+    rowTop: Float,
+    rowBottom: Float,
+    displayWidthPx: Float,
+    displayHeightPx: Float,
+    bezelInsetPx: Int,
+    fallbackPx: Int = 0,
+    minContentWidthPx: Float = 0f,
+): Int {
+    val centreY = displayHeightPx / 2f
+    val yFar = maxOf(abs(rowTop - centreY), abs(rowBottom - centreY))
+    val radius = minOf(displayWidthPx, displayHeightPx) / 2f - bezelInsetPx
+    // Two ceilings on how far the geometry may push a row in:
+    //
+    // * the touch-target floor — the narrowest row a finger can still hit;
+    // * the flat inset the screens used before this was position-aware, so a
+    //   pole row keeps exactly the width it has today. Left to the circle
+    //   alone a pole row collapses to the floor, which on a 227dp watch turns
+    //   a choice label into four stacked letters — geometrically right and
+    //   unusable. The poles therefore keep their old width and their old
+    //   relationship with the bezel clip, and only the band where the circle
+    //   has room to spare gains anything.
+    val floorInset = ((width - minContentWidthPx) / 2f).coerceAtLeast(0f)
+    val ceiling = minOf(floor(floorInset), fallbackPx.toFloat())
+    val underTheCircle = radius * radius - yFar * yFar
+    if (underTheCircle <= 0f) return ceiling.toInt()
+    val allowedHalfWidth = sqrt(underTheCircle)
+    val needed = (width / 2f - allowedHalfWidth).coerceAtLeast(0f)
+    // Round the geometric inset *up*, so the row never lands a fraction outside
+    // the circle, and the ceilings *down*, so neither is overshot by rounding.
+    return minOf(ceil(needed), ceiling).toInt()
+}
 
 /**
  * How many lines a row's text may take, and what happens past them.

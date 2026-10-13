@@ -15,10 +15,9 @@ import dev.convocados.wear.ui.RoundSafeReferenceRow
 import dev.convocados.wear.ui.assertEllipsised
 import dev.convocados.wear.ui.assertFillsDisplay
 import dev.convocados.wear.ui.assertNotLineLimited
-import dev.convocados.wear.ui.assertRowFillsBand
+import dev.convocados.wear.ui.assertRowInsideBezel
 import dev.convocados.wear.ui.boundsOf
 import dev.convocados.wear.ui.displayWidth
-import dev.convocados.wear.ui.roundSafeBand
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import org.junit.Rule
 import org.junit.Test
@@ -52,10 +51,9 @@ class SaveQuickGameScreenRoundSafeTest {
     @Config(qualifiers = "w390dp-h390dp-round")
     fun `round score and event rows fill the round-safe band`() {
         setContent()
-        val band = roundSafeBand(composeRule)
 
-        assertRowFillsBand("score summary", boundsOf(composeRule, "score summary", hasText(SCORE_SUMMARY)), band)
-        assertRowFillsBand("event button", boundsOf(composeRule, "event button", hasText(EVENT_TITLE)), band)
+        assertRowInsideBezel(composeRule, "score summary", boundsOf(composeRule, "score summary", hasText(SCORE_SUMMARY)))
+        assertRowInsideBezel(composeRule, "event button", boundsOf(composeRule, "event button", hasText(EVENT_TITLE)))
     }
 
     @Test
@@ -64,15 +62,14 @@ class SaveQuickGameScreenRoundSafeTest {
         setContent()
 
         state = SaveQuickGameUiState(saved = true)
-        assertRowFillsBand("saved", boundsOf(composeRule, "saved", hasText(SAVED)), roundSafeBand(composeRule))
+        assertRowInsideBezel(composeRule, "saved", boundsOf(composeRule, "saved", hasText(SAVED)))
 
         state = SaveQuickGameUiState(
             quick = QuickGameState(scoreOne = 1, scoreTwo = 0),
             error = ERROR_TEXT,
         )
-        val band = roundSafeBand(composeRule)
-        assertRowFillsBand("no events", boundsOf(composeRule, "no events", hasText(NO_EVENTS)), band)
-        assertRowFillsBand("error message", boundsOf(composeRule, "error message", hasText(ERROR_TEXT)), band)
+        assertRowInsideBezel(composeRule, "no events", boundsOf(composeRule, "no events", hasText(NO_EVENTS)))
+        assertRowInsideBezel(composeRule, "error message", boundsOf(composeRule, "error message", hasText(ERROR_TEXT)))
     }
 
     @Test
