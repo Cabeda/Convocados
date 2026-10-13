@@ -20,9 +20,11 @@ import { deriveSeasonRank } from "./seasonRank.server";
 import { provisionalGames } from "./seasonRank";
 import {
   projectStakes,
-  type StakesScenario,
+  type Side,
+  type StakesLineupPlayer,
   type StakesPlayerInput,
   type StakesCrewInput,
+  type StakesPreviewData,
 } from "./stakesPreview";
 
 /** Max eligible Games a Season counts as rounds (pilot format). */
@@ -31,17 +33,6 @@ export const SEASON_ROUNDS = 8;
 export interface StakesLineup {
   teamOne: string[];
   teamTwo: string[];
-}
-
-export interface StakesPreviewPayload {
-  eventId: string;
-  seasonId: string;
-  seasonName: string;
-  rankEnabled: boolean;
-  roundAvailable: boolean;
-  roundsCounted: number;
-  /** Empty when the Season has no available round left. */
-  scenarios: StakesScenario[];
 }
 
 /**
@@ -77,7 +68,7 @@ export async function getStakesPreview(
   eventId: string,
   gameDateTime: Date,
   lineup: StakesLineup,
-): Promise<StakesPreviewPayload | null> {
+): Promise<StakesPreviewData | null> {
   const season = await prisma.season.findFirst({
     where: activeSeasonWhere(eventId, gameDateTime),
     orderBy: { registrationOpensAt: "desc" },
@@ -138,6 +129,19 @@ export async function getStakesPreview(
     scores: standings.find((c) => c.crewId === crewId)?.gameScores.map((s) => s.score) ?? [],
   }));
 
+  const membershipByName = new Map(season.memberships.map((m) => [m.eventPlayer.name, m]));
+  const toLineupPlayer = (side: Side, names: string[]): StakesLineupPlayer[] =>
+    names.map((name) => {
+      const m = membershipByName.get(name);
+      return {
+        name,
+        side,
+        crewId: m?.crewId ?? null,
+        crewName: m?.crew?.name ?? null,
+        participant: !!m,
+      };
+    });
+
   const scenarios = roundAvailable
     ? projectStakes({
         teamOne: { players: lineup.teamOne },
@@ -150,12 +154,15 @@ export async function getStakesPreview(
     : [];
 
   return {
-    eventId,
     seasonId: season.id,
     seasonName: season.name,
     rankEnabled: event?.rankEnabled ?? true,
     roundAvailable,
     roundsCounted,
+    lineup: [
+      ...toLineupPlayer("teamOne", lineup.teamOne),
+      ...toLineupPlayer("teamTwo", lineup.teamTwo),
+    ],
     scenarios,
   };
 }

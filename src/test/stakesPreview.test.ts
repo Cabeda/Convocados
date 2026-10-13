@@ -3,6 +3,9 @@ import {
   OUTCOMES,
   bestSix,
   contributionFor,
+  crewMapFromLineup,
+  liveContribution,
+  liveCrewRoundScore,
   projectStakes,
   roundPoints,
   type StakesInput,
@@ -56,6 +59,28 @@ describe("stakesPreview — scoring helpers", () => {
     expect(bestSix([3, 3, 3, 3, 3, 3, 0, 0])).toBe(18);
     expect(bestSix([1, 2, 3])).toBe(6);
     expect(bestSix([])).toBe(0);
+  });
+
+  it("maps Crews per participant and omits non-participants and free agents", () => {
+    const map = crewMapFromLineup([
+      { name: "Ana", side: "teamOne", crewId: "c1", crewName: "Sharks", participant: true },
+      { name: "Bia", side: "teamTwo", crewId: null, crewName: null, participant: true },
+      { name: "Guest", side: "teamOne", crewId: null, crewName: null, participant: false },
+    ]);
+    expect(map.Ana).toEqual({ crewId: "c1", crewName: "Sharks" });
+    expect(map.Bia).toBeNull();
+    expect("Guest" in map).toBe(false);
+  });
+
+  it("derives live contributions and Crew round scores from the current sides", () => {
+    const points = liveContribution(["Ana"], ["Bia"], "teamOne");
+    expect(points).toEqual({ Ana: 3, Bia: 0 });
+    const roundScore = liveCrewRoundScore(
+      [{ name: "Ana", side: "teamOne" }, { name: "Bia", side: "teamTwo" }],
+      { Ana: { crewId: "c1", crewName: "Sharks" }, Bia: { crewId: "c1", crewName: "Sharks" } },
+      points,
+    );
+    expect(roundScore).toEqual({ c1: 1.5 });
   });
 });
 

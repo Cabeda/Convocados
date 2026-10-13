@@ -89,6 +89,77 @@ export interface StakesScenario {
   crews: CrewProjection[];
 }
 
+/** One lineup player's Crew association, present even with no scenarios left. */
+export interface StakesLineupPlayer {
+  name: string;
+  side: Side;
+  crewId: string | null;
+  crewName: string | null;
+  /** A Season participant (has Rank; may be a free agent with no Crew). */
+  participant: boolean;
+}
+
+/** Everything the client needs to render the Stakes Preview surfaces. */
+export interface StakesPreviewData {
+  seasonId: string;
+  seasonName: string;
+  rankEnabled: boolean;
+  roundAvailable: boolean;
+  roundsCounted: number;
+  lineup: StakesLineupPlayer[];
+  /** Empty when the Season has no available round left. */
+  scenarios: StakesScenario[];
+}
+
+/** Crew per lineup player name (null = free agent / not a Season participant). */
+export function crewMapFromLineup(
+  lineup: readonly StakesLineupPlayer[],
+): Record<string, { crewId: string; crewName: string } | null> {
+  const map: Record<string, { crewId: string; crewName: string } | null> = {};
+  for (const p of lineup) {
+    if (!p.participant) continue; // not a Season participant — no chip at all
+    map[p.name] = p.crewId && p.crewName ? { crewId: p.crewId, crewName: p.crewName } : null;
+  }
+  return map;
+}
+
+/**
+ * Season Contribution per player for the given lineups and outcome. Depends only
+ * on which side a player is on, so the client can derive it live while dragging
+ * without the hidden Skill Rating.
+ */
+export function liveContribution(
+  teamOne: readonly string[],
+  teamTwo: readonly string[],
+  outcome: MatchOutcome,
+): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const name of teamOne) map[name] = contributionFor("teamOne", outcome);
+  for (const name of teamTwo) map[name] = contributionFor("teamTwo", outcome);
+  return map;
+}
+
+/** A Crew's round score (mean of its lineup members) over the given roster. */
+export function liveCrewRoundScore(
+  roster: ReadonlyArray<{ name: string; side: Side }>,
+  crewByPlayer: Record<string, { crewId: string; crewName: string } | null>,
+  contributionByPlayer: Record<string, number>,
+): Record<string, number> {
+  const points = new Map<string, number[]>();
+  for (const { name } of roster) {
+    const crew = crewByPlayer[name];
+    if (!crew) continue;
+    const list = points.get(crew.crewId) ?? [];
+    list.push(contributionByPlayer[name] ?? 0);
+    points.set(crew.crewId, list);
+  }
+  const map: Record<string, number> = {};
+  for (const [crewId, list] of points) {
+    map[crewId] = list.reduce((sum, value) => sum + value, 0) / list.length;
+  }
+  return map;
+}
+
 /** Round tournament points to whole numbers, half-up. */
 export function roundPoints(value: number): number {
   return Math.round(value);

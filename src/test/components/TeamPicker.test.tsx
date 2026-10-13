@@ -104,3 +104,32 @@ describe("TeamPicker motion", () => {
     expect(onResultChange).not.toHaveBeenCalled();
   });
 });
+
+describe("TeamPicker stakes integration", () => {
+  it("shows Crew association and projected points per player and per side", () => {
+    renderWithTheme(
+      <TeamPicker
+        matches={initialMatches}
+        onResultChange={() => {}}
+        crewMap={{ Alice: { crewId: "c1", crewName: "Sharks" }, Bob: null }}
+        stakeMap={{ Alice: { contribution: 3, rpDelta: 12, passed: 1, provisional: false } }}
+        crewChipsByTeamIndex={[[{ crewId: "c1", name: "Sharks", roundScore: 3, positionAfter: 1, passed: 1 }], []]}
+      />,
+    );
+
+    expect(screen.getByTestId("team-player-crew-Alice")).toHaveTextContent("Sharks");
+    expect(screen.getByTestId("team-player-points-Alice")).toHaveTextContent("3 pts");
+    expect(screen.getByTestId("team-player-rank-Alice")).toHaveTextContent("+12 RP");
+    // A Season participant without a Crew reads as a free agent.
+    expect(screen.getByText("Free agent")).toBeInTheDocument();
+    // The side header carries that side's Crew projection.
+    expect(screen.getByTestId("team-crew-chip-c1")).toHaveTextContent("Sharks");
+    expect(screen.getByTestId("team-crew-chip-c1")).toHaveTextContent("#1");
+  });
+
+  it("renders no stake chips without the props", () => {
+    renderWithTheme(<TeamPicker matches={initialMatches} onResultChange={() => {}} />);
+    expect(screen.queryByTestId("team-player-crew-Alice")).not.toBeInTheDocument();
+    expect(screen.queryByText("Free agent")).not.toBeInTheDocument();
+  });
+});
