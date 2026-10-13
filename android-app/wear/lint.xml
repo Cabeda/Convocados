@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+      WearPasswordInput fires on anything that looks like a password field on a
+      wrist. This app's password entry is a RemoteInput handoff: the watch asks,
+      the phone's keyboard answers, so nothing is typed on the watch itself.
+
+      On-watch email/password is a deliberate product decision, recorded in
+      AGENTS.md under the :wear block — the watch must be able to sign in
+      standalone when the phone is not around, not only through the Credential
+      Manager sync path. Removing the field would trade a real offline
+      capability for a lint rule aimed at a different interaction.
+
+      Revisit only if the password entry stops being a RemoteInput handoff.
+    -->
+    <issue id="WearPasswordInput" severity="ignore" />
+</lint>

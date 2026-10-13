@@ -26,7 +26,7 @@ Gradle multi-module project — `:app` (phone/tablet) and `:wear` (Wear OS).
 - **Package**: `com.cabeda.convocados` / namespace `dev.convocados`
 
 **`:wear` (Wear OS)**
-- **UI**: Wear Compose (Material 3) + Horologist
+- **UI**: Wear Compose (Material 3)
 - **Type**: Standalone app (`android.hardware.type.watch`, `wearable.standalone=true`)
 - **Auth**: Sign in with Google via Credential Manager (standalone; needs Wear OS API 35+) + token sync from phone via Wearable Data Layer + on-watch email/password
 - **Offline**: Room DB + WorkManager sync queue
@@ -175,10 +175,13 @@ docs: update AGENTS.md
 3. Implement feature
 4. Ensure all tests pass (`pnpm test`)
 5. Run type checking (`pnpm typecheck`)
-6. When the PR resolves an issue, put a `Closes #<issue>` line in the body — GitHub closes
-   the linked issue the moment the PR merges. A PR that fixes an issue without that keyword
-   leaves the issue open, and the next agent reads a solved bug as live work. A PR that
-   closes nothing carries the `no-issue` label instead.
+6. Before `gh pr create`, run `pnpm check:pr-body <body.md>` against the body file. It is
+   the same script the `PR Links Issue` job runs, reached from the command line, and it is
+   the only place the rule is checkable in time: CI sees the body after the PR exists, so a
+   failure there always costs a second trip. It passes only on a closing keyword
+   (`Closes #<n>`, `Fixes #<n>`, `Resolves #<n>`), which is what makes GitHub close the
+   linked issue on merge and what stops the next agent reading a solved bug as live work. A
+   PR that closes nothing passes with `pnpm check:pr-body <body.md> --no-issue`.
 7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
 8. **Before merging**, always run the full test suite (`pnpm test`) and type checking (`pnpm typecheck`) to ensure the build will succeed in CI/CD
 
@@ -244,12 +247,17 @@ Together those mean the Reviewer does **not** reach every open Change: it misses
 ones, and any Change predating a workflow. The Sweeper exists for that ground — it runs on a
 schedule, where secrets are available, and reports what it finds as Issues rather than reviews.
 
-**Gates.** GATE 1 is local and equals the pre-push hook, plus what CI cannot cheaply
-repeat: `pnpm lint`, `pnpm typecheck`, `pnpm vitest run --coverage`, `pnpm
-test:route-coverage`, `pnpm sync:feature-parity-docs`, Gradle `assembleDebug` for `:app`
-and `:wear`, and `pnpm audit --audit-level high`. Playwright runs only when the diff
-touches `src/pages/**` or `e2e/**`. GATE 2 is GitHub CI. A Change over **400 changed lines
-or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate.
+**Gates.** GATE 1 is the pre-push hook, and it is web-only: `pnpm lint`, `npm run
+typecheck`, `npx vitest run --coverage`, gitleaks over the pushed commits, and semgrep
+(warn-only). Before handing a Change back, also run what the hook does not:
+`pnpm test:route-coverage`, `pnpm sync:feature-parity-docs`, `pnpm audit --audit-level
+high`, and Gradle `./gradlew :app:assembleDebug :wear:assembleDebug :wear:lintDebug
+:wear:verifyRoborazziDebug`. GATE 2 is GitHub CI, which repeats those and adds Playwright
+(only when the diff touches `src/pages/**` or `e2e/**`). A Change over **400 changed lines
+or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate. The
+one exception a Change may claim without being split: a change and the test harness that
+re-encodes its invariant are one unit, because neither half is correct alone. Claim it in
+the PR body rather than silently exceeding.
 The cap governs a **factory Change** (one ticket); a human-driven integration wave PR may
 exceed it only when every ticket merged into it individually stayed under the cap — and the
 wave PR description must **list the merged ticket PR numbers**, so the claim is checkable
@@ -431,9 +439,11 @@ android-app/               # Native Android app (Gradle multi-module: :app, :wea
 
 ## Reference guides
 
-Fresh worktree? Run `scripts/worktree-bootstrap.sh` once before any gate — it repairs the
-half-installed `node_modules`/`.bin` links, the gitignored Android env files, and the Prisma
-client, and is idempotent. Worked detail that only some tasks need lives in
+Run `scripts/worktree-bootstrap.sh` before any gate — it repairs the half-installed
+`node_modules`/`.bin` links, the gitignored Android env files, and the Prisma client, and
+is idempotent. Reach for it on two triggers: a worktree that has just been created, and a
+compile or typecheck error naming a symbol the schema or a generated client should already
+have (a stale Prisma client is the usual cause, and regenerating by hand is the slow path). Worked detail that only some tasks need lives in
 [`docs/development-guide.md`](docs/development-guide.md): dev-server/worktree management,
 Bruno API flows, event lifecycle & game phases, and common code patterns. To inspect
 production — read-only DB queries, the job queue, the scheduler — see
