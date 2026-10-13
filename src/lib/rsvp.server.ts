@@ -374,7 +374,7 @@ export async function getEventsNeedingRsvpPing(now: Date = new Date()) {
       rsvpCutoffSent: false,
       dateTime: { gte: windowStart, lte: windowEnd },
     },
-    select: { id: true, title: true, dateTime: true, location: true, ownerId: true },
+    select: { id: true, title: true, dateTime: true, location: true, ownerId: true, currentGameId: true },
   });
 }
 
