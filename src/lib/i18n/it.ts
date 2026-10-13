@@ -373,6 +373,7 @@ const it: TranslationKeys = {
   webhookEventType_game_reset: "Reimpostazione partita",
   webhookEventType_player_invited: "Giocatore invitato",
   webhookEventType_game_cancelled: "Partita annullata",
+  webhookEventType_game_payer_set: "Pagatore impostato",
   webhookTest: "Invia payload di test",
   webhookDelete: "Elimina",
   webhookDeleteConfirm: "Sei sicuro di voler eliminare questo webhook?",

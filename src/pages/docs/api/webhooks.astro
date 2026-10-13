@@ -17,6 +17,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
       <tr><td><code>game_full</code></td><td>The last active spot is filled (spotsLeft = 0)</td></tr>
       <tr><td><code>game_reset</code></td><td>A recurring event resets its player list</td></tr>
       <tr><td><code>game_cancelled</code></td><td>An organizer cancels the current game</td></tr>
+      <tr><td><code>game_payer_set</code></td><td>A payer is set (or changed) on a game that has already ended</td></tr>
     </tbody>
   </table>
 
@@ -115,6 +116,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
       <tr><td><code>game_full</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code>, <code>actor</code> (always 0)</td></tr>
       <tr><td><code>game_reset</code></td><td><code>newDateTime</code> (ISO 8601)</td></tr>
       <tr><td><code>game_cancelled</code></td><td><code>gameId</code> (the cancelled game — dedupe key for the concurrent-cancel race), <code>dateTime</code> (ISO 8601, the <strong>cancelled</strong> game's start, not the current game's), <code>isRecurring</code></td></tr>
+      <tr><td><code>game_payer_set</code></td><td><code>gameId</code>, <code>dateTime</code> (ISO 8601), <code>payerName</code> (who to pay), <code>payerEventPlayerId</code> (the payer's roster id, or <code>null</code> for an external payer), <code>payerUserId</code> (the payer's account id when linked, else <code>null</code>), <code>paymentMethods</code> (array of payment-method objects — <code>type</code>, <code>value</code>, optional <code>label</code> — how to pay them), <code>amountPerPlayer</code> (per-player share), <code>currency</code></td></tr>
     </tbody>
   </table>
 
