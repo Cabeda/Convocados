@@ -200,8 +200,15 @@ model Event {
   mvpEnabled Boolean @default(true)
   mvpEloEnabled Boolean @default(false)
 
-  // Notification defaults (admin-set, JSON: {mutePlayerActivity?, muteReminders?, mutePostGame?, muteEventDetails?})
+  // Notification defaults (admin-set, JSON: {mutePlayerActivity?, mutePostGame?, muteEventDetails?})
   notificationDefaults String? // null = all enabled
+
+  // Reminder Timings — which pre-game reminders exist for this event. Gates
+  // every channel (push, email, webhook): a disabled timing emits nothing.
+  // User-level reminder prefs AND with these for individual delivery.
+  reminder24h Boolean @default(true)
+  reminder2h  Boolean @default(true)
+  reminder1h  Boolean @default(false)
 
   // Recruitment threshold — how many spots remaining triggers recruitment/few-spots-left notifications (ADR 0017)
   recruitmentThreshold Int @default(3)

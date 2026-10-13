@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { getUpcomingReminders, getPostGameReminders, markReminderSent } from "~/lib/reminders.server";
+import { getUpcomingReminders, getPostGameReminders, markReminderSent, isReminderEnabled } from "~/lib/reminders.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { cleanupStalePushTokens, sendPushToUser } from "~/lib/push.server";
 import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
@@ -21,6 +21,7 @@ import {
   markRecruitment24hSent,
 } from "~/lib/rsvp.server";
 import { createLogger } from "~/lib/logger.server";
+import { fireWebhooks } from "~/lib/webhook.server";
 import { prisma } from "~/lib/db.server";
 import pLimit from "p-limit";
 import { requireCronSecret } from "~/lib/cronAuth.server";
@@ -51,6 +52,12 @@ export const POST: APIRoute = async ({ request }) => {
     const reminders = await getUpcomingReminders(type);
     for (const r of reminders) {
       try {
+        // Reminder Timings gate: a disabled timing is recorded as sent
+        // ("intentionally skipped") but emits nothing on any channel.
+        if (!isReminderEnabled(r, type)) {
+          remindersToMark.push({ eventId: r.eventId, type });
+          continue;
+        }
         // Enqueue push notification — drained at end of cron after emails are sent
         await enqueueNotification(r.eventId, "reminder", {
           title: r.eventTitle,
@@ -62,6 +69,13 @@ export const POST: APIRoute = async ({ request }) => {
         });
         sent.push(`${r.eventId}:${type}`);
         remindersToMark.push({ eventId: r.eventId, type });
+
+        // Fire reminder webhook (non-blocking) — lean domain facts, client renders
+        fireWebhooks(r.eventId, "reminder", {
+          reminderType: type,
+          gameId: r.currentGameId,
+          dateTime: r.dateTime.toISOString(),
+        }).catch(() => {});
 
         // Batch-load prefs for all players with accounts in one query
         const userIds = r.players.map((p) => p.userId).filter(Boolean) as string[];
@@ -253,6 +267,12 @@ export const POST: APIRoute = async ({ request }) => {
         }
       }
       await markRsvpCutoffSent(e.id);
+
+      // Fire rsvp_request webhook (non-blocking) — lean domain facts, client renders
+      fireWebhooks(e.id, "rsvp_request", {
+        gameId: e.currentGameId,
+        dateTime: e.dateTime.toISOString(),
+      }).catch(() => {});
     }
 
     const summaryEvents = await getEventsNeedingRsvpSummary();
@@ -260,8 +280,17 @@ export const POST: APIRoute = async ({ request }) => {
       // Mark FIRST: the T-24h window is 2h wide and the cron ticks every few
       // minutes, so without dedup the summary re-fires on every tick (spam).
       await markRsvpSummarySent(e.id);
-      if (!e.ownerId) continue;
       const summary = await getRsvpSummary(e.id);
+
+      // Fire rsvp_summary webhook (non-blocking) — the attendance fact is
+      // channel-independent; the push below is organizer-only.
+      fireWebhooks(e.id, "rsvp_summary", {
+        yes: summary.yes,
+        no: summary.no,
+        pending: summary.pending,
+      }).catch(() => {});
+
+      if (!e.ownerId) continue;
       // Skip if organizer is the only recipient (no point)
       const recipients = await getRsvpRecipients(e.id);
       if (recipients.length <= 1) continue;
@@ -327,6 +356,12 @@ export const POST: APIRoute = async ({ request }) => {
       });
       recruitmentPingsSent.push(`${event.id}:${nonPlayingFollowers.length}`);
 
+      // Fire recruitment webhook (non-blocking) — lean domain facts, client renders
+      fireWebhooks(event.id, "recruitment", {
+        spotsLeft,
+        urgent: false,
+      }).catch(() => {});
+
       // Mark sent BEFORE drain so a stuck/crashed cron doesn't re-fire.
       await markRecruitment48hSent(event.id);
     }
@@ -364,6 +399,12 @@ export const POST: APIRoute = async ({ request }) => {
         spotsLeft,
       });
       recruitmentPingsSent.push(`${event.id}:24h`);
+
+      // Fire recruitment webhook (non-blocking) — lean domain facts, client renders
+      fireWebhooks(event.id, "recruitment", {
+        spotsLeft,
+        urgent: true,
+      }).catch(() => {});
 
       // Mark sent BEFORE drain so a stuck/crashed cron doesn't re-fire.
       await markRecruitment24hSent(event.id);

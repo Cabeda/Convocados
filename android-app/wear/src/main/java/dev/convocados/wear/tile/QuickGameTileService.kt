@@ -129,7 +129,13 @@ class QuickGameTileService : TileService() {
                 LayoutElementBuilders.FontStyle.Builder()
                     .setColor(ColorBuilders.ColorProp.Builder(color).build())
                     .setSize(DimensionBuilders.sp(sizeSp))
-                    .setWeight(if (bold) 700 else 400)
+                    .setWeight(
+                        if (bold) {
+                            LayoutElementBuilders.FONT_WEIGHT_BOLD
+                        } else {
+                            LayoutElementBuilders.FONT_WEIGHT_NORMAL
+                        },
+                    )
                     .build(),
             )
             .build()

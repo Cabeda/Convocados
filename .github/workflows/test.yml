@@ -506,12 +506,29 @@ jobs:
         working-directory: android-app
         run: echo "GOOGLE_SERVER_CLIENT_ID=placeholder.apps.googleusercontent.com" > local.properties
 
+      # Wear lint had no guardrail at all: `assembleDebug` compiles, it does not
+      # lint, so a WrongConstant sat on main for months with nothing reading it.
+      # Lint runs here rather than in a new job, because the build this already
+      # pays for is the one lint needs. `:app:lintDebug` is deliberately absent —
+      # it reports 49 pre-existing errors (see the dex issue) and cannot gate
+      # until those are triaged.
+      - name: Lint Wear OS
+        working-directory: android-app
+        run: ./gradlew :wear:lintDebug --no-daemon
+
       - name: Build Wear OS debug APK
         working-directory: android-app
         run: ./gradlew :wear:assembleDebug --no-daemon
 
-      # Runs the Wear unit suite and fails if a round/square screenshot drifted,
-      # which is the regression gate for Play's "Watch shapes" requirement.
+      # Stands alone so the unit suite stays gated if the screenshot step is ever
+      # retouched. verifyRoborazziDebug also runs it, but only as a side effect,
+      # and a side effect is a dependency nobody can see.
+      - name: Run Wear unit tests
+        working-directory: android-app
+        run: ./gradlew :wear:testDebugUnitTest --no-daemon
+
+      # Fails if a round/square screenshot drifted — the regression gate for
+      # Play's "Watch shapes" requirement.
       - name: Verify Wear screenshots (round + square)
         working-directory: android-app
         run: ./gradlew :wear:verifyRoborazziDebug --no-daemon
@@ -527,14 +544,23 @@ jobs:
     if: always()
     needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear, dex-ledger, pr-links-issue]
     steps:
+      # A red "CI" that does not say *which* job went red sends whoever is
+      # reading it hunting through twenty green rows to find the one that is
+      # not — the gate's whole job is to name the blocker, so name it.
       - name: Check results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
-            echo "One or more required jobs failed"
+          failed="$(jq -r 'to_entries[] | select(.value.result == "failure") | .key' <<<"$NEEDS")"
+          if [ -n "$failed" ]; then
+            echo "Required job(s) failed:"
+            printf '  %s\n' $failed
             exit 1
           fi
-          if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "One or more required jobs were cancelled"
+          cancelled="$(jq -r 'to_entries[] | select(.value.result == "cancelled") | .key' <<<"$NEEDS")"
+          if [ -n "$cancelled" ]; then
+            echo "Required job(s) were cancelled:"
+            printf '  %s\n' $cancelled
             exit 1
           fi
           # On main the Android jobs are mandatory, so a skip is a silent hole

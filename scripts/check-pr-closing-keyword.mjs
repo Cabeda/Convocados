@@ -11,8 +11,14 @@
  *
  * The `no-issue` label exempts a PR that genuinely closes nothing.
  *
- * CLI: reads PR_BODY and PR_LABELS (comma-separated) from the environment.
+ * CLI: reads PR_BODY and PR_LABELS (comma-separated) from the environment, as
+ * the CI job does. It also accepts the body as a file argument, plus a
+ * `--no-issue` flag, so the same decision can be reached *before* the PR
+ * exists — `node scripts/check-pr-closing-keyword.mjs body.md`. Checking after
+ * `gh pr create` always costs a second trip.
  */
+
+import { readFileSync } from "node:fs";
 
 /** GitHub's closing keywords followed by an issue reference. */
 export const CLOSING_KEYWORD = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#\d+\b/i;
@@ -37,12 +43,27 @@ export function evaluate({ body, labels }) {
   return { ok: false, reason: "missing" };
 }
 
-function main() {
-  const body = process.env.PR_BODY ?? "";
-  const labels = (process.env.PR_LABELS ?? "")
+/**
+ * Where the body and labels come from. The CI job supplies both through the
+ * environment; the command line takes the body as a file argument and
+ * `--no-issue` as the exemption, so the two paths reach the same verdict.
+ */
+export function resolveInput({ argv, env }) {
+  const file = argv.find((arg) => !arg.startsWith("--"));
+  const body = file ? readFileSync(file, "utf8") : (env.PR_BODY ?? "");
+  const fromEnv = (env.PR_LABELS ?? "")
     .split(",")
-    .map((l) => l.trim())
+    .map((label) => label.trim())
     .filter(Boolean);
+  const labels = argv.includes("--no-issue") ? [...fromEnv, EXEMPT_LABEL] : fromEnv;
+  return { body, labels };
+}
+
+function main() {
+  const { body, labels } = resolveInput({
+    argv: process.argv.slice(2),
+    env: process.env,
+  });
 
   const result = evaluate({ body, labels });
   if (result.ok) {
