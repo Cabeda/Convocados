@@ -1,4 +1,5 @@
 import { prisma } from "./db.server";
+import { getRecentJobFailures } from "./scheduler.server";
 
 /**
  * Returns the configured admin emails from env as a Set.
@@ -94,6 +95,11 @@ export async function getAdminStats() {
     sportDistribution[s.sport] = s._count.sport;
   }
 
+  // Scheduler jobs that have recorded a failure reason — retrying and
+  // dead-lettered. Admin-only (the public /api/health shows the count only, and
+  // never echoes internal error text).
+  const jobFailures = await getRecentJobFailures();
+
   return {
     totalUsers,
     totalEvents,
@@ -110,6 +116,7 @@ export async function getAdminStats() {
     pickupsDetected,
     pickupsAdopted,
     pickupAdoptionRate: pickupsDetected > 0 ? pickupsAdopted / pickupsDetected : 0,
+    jobFailures,
   };
 }
 
