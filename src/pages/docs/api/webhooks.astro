@@ -5,7 +5,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
 
 <DocsLayout title="Webhooks API" description="Subscribe to event notifications via HTTP callbacks.">
   <h1>Webhooks API</h1>
-  <p class="subtitle">Receive HTTP POST callbacks when events happen — player joins, leaves, game full, game reset, game cancelled, or a player is invited.</p>
+  <p class="subtitle">Receive HTTP POST callbacks when things happen — roster changes, game lifecycle, scheduled reminders, RSVP and payment moments. Payloads are lean domain facts; your client renders them.</p>
 
   <h2>Event types</h2>
   <table>
@@ -17,6 +17,16 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
       <tr><td><code>game_full</code></td><td>The last active spot is filled (spotsLeft = 0)</td></tr>
       <tr><td><code>game_reset</code></td><td>A recurring event resets its player list</td></tr>
       <tr><td><code>game_cancelled</code></td><td>An organizer cancels the current game</td></tr>
+      <tr><td><code>game_payer_set</code></td><td>A payer is set (or changed) on a game that has already ended</td></tr>
+      <tr><td><code>game_scheduled</code></td><td>The event is created</td></tr>
+      <tr><td><code>game_rescheduled</code></td><td>The date/time, court/location or duration changes</td></tr>
+      <tr><td><code>reminder</code></td><td>A pre-game reminder fires (one of the event's enabled Reminder Timings)</td></tr>
+      <tr><td><code>rsvp_request</code></td><td>The T-48h attendance fanout asks players to confirm</td></tr>
+      <tr><td><code>rsvp_summary</code></td><td>The T-24h attendance summary is computed for the organizer</td></tr>
+      <tr><td><code>recruitment</code></td><td>A recruitment ping fires for a non-full game (T-48h, or urgent at T-24h)</td></tr>
+      <tr><td><code>payment_nudge</code></td><td>A debtor is nudged about an unpaid game (escalation stages 1–3)</td></tr>
+      <tr><td><code>payment_organizer_alert</code></td><td>Stage-3 nudges expired — the organizer is alerted about chronic non-payers</td></tr>
+      <tr><td><code>payer_check_in</code></td><td>The payer is asked whether everyone has paid (24h after the game)</td></tr>
     </tbody>
   </table>
 
@@ -115,6 +125,16 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
       <tr><td><code>game_full</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code>, <code>actor</code> (always 0)</td></tr>
       <tr><td><code>game_reset</code></td><td><code>newDateTime</code> (ISO 8601)</td></tr>
       <tr><td><code>game_cancelled</code></td><td><code>gameId</code> (the cancelled game — dedupe key for the concurrent-cancel race), <code>dateTime</code> (ISO 8601, the <strong>cancelled</strong> game's start, not the current game's), <code>isRecurring</code></td></tr>
+      <tr><td><code>game_payer_set</code></td><td><code>gameId</code>, <code>dateTime</code> (ISO 8601), <code>payerName</code> (who to pay), <code>payerEventPlayerId</code> (the payer's roster id, or <code>null</code> for an external payer), <code>payerUserId</code> (the payer's account id when linked, else <code>null</code>), <code>paymentMethods</code> (array of payment-method objects — <code>type</code>, <code>value</code>, optional <code>label</code> — how to pay them), <code>amountPerPlayer</code> (per-player share), <code>currency</code></td></tr>
+      <tr><td><code>game_scheduled</code></td><td>— (lean fact; fetch the event for details)</td></tr>
+      <tr><td><code>game_rescheduled</code></td><td>— (lean fact; fetch the event for current date/location/duration)</td></tr>
+      <tr><td><code>reminder</code></td><td><code>reminderType</code> (<code>"24h"</code> | <code>"2h"</code> | <code>"1h"</code>), <code>gameId</code>, <code>dateTime</code> (ISO 8601, the occurrence's start)</td></tr>
+      <tr><td><code>rsvp_request</code></td><td><code>gameId</code>, <code>dateTime</code> (ISO 8601)</td></tr>
+      <tr><td><code>rsvp_summary</code></td><td><code>yes</code>, <code>no</code>, <code>pending</code> (attendance counts)</td></tr>
+      <tr><td><code>recruitment</code></td><td><code>spotsLeft</code>, <code>urgent</code> (false at T-48h, true at T-24h)</td></tr>
+      <tr><td><code>payment_nudge</code></td><td><code>stage</code> (1 = soft nudge, 2 = follow-up, 3 = social proof), <code>amountCents</code>, <code>currency</code>, <code>playerName</code> (debtor — only present when the event has <code>showDebtorNames</code> enabled)</td></tr>
+      <tr><td><code>payment_organizer_alert</code></td><td><code>unpaidCount</code>, <code>unpaidNames</code> (only present when <code>showDebtorNames</code> is enabled)</td></tr>
+      <tr><td><code>payer_check_in</code></td><td><code>gameId</code>, <code>dateTime</code> (ISO 8601), <code>amountCents</code> (outstanding), <code>currency</code></td></tr>
     </tbody>
   </table>
 

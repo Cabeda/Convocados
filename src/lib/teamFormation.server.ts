@@ -322,7 +322,12 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
     include: { members: true },
     orderBy: { id: "asc" },
   });
-  if (teams.length === 0) return;
+  // No teams yet, or only empty shells from the recurrence reset — nothing was
+  // drawn, so nothing to remove and nothing to rebalance. Without this guard
+  // the balanced branch below calls rebalanceTeams, which DRAWS the remaining
+  // players: a self-leave before the roster was full materialised teams out of
+  // an undrawn game (prod: cmmkfrx8b0000o2ixrix1yp2m, leaving at 7/10).
+  if (teams.length === 0 || teams.every((t) => t.members.length === 0)) return;
 
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: TEAM_EVENT_SELECT });
   const gameId = currentGameId ?? event?.currentGameId;

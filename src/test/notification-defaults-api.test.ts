@@ -82,23 +82,68 @@ describe("PUT /api/events/[id]/notification-defaults", () => {
   it("rejects non-boolean field values", async () => {
     mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false } as any);
     const ev = await seedEvent();
-    const res = await putDefaults(putCtx({ id: ev.id }, { muteReminders: "yes" }));
+    const res = await putDefaults(putCtx({ id: ev.id }, { mutePostGame: "yes" }));
     expect(res.status).toBe(400);
   });
 
   it("merges new defaults with existing ones", async () => {
     mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false } as any);
     const ev = await seedEvent(JSON.stringify({ mutePostGame: true }));
-    const res = await putDefaults(putCtx({ id: ev.id }, { muteReminders: true }));
-    expect(await res.json()).toEqual({ mutePostGame: true, muteReminders: true });
+    const res = await putDefaults(putCtx({ id: ev.id }, { mutePlayerActivity: true }));
+    expect(await res.json()).toEqual({ mutePostGame: true, mutePlayerActivity: true });
   });
 
   it("removes a default when set to null", async () => {
     mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: true } as any);
-    const ev = await seedEvent(JSON.stringify({ muteReminders: true }));
-    const res = await putDefaults(putCtx({ id: ev.id }, { muteReminders: null }));
+    const ev = await seedEvent(JSON.stringify({ mutePostGame: true }));
+    const res = await putDefaults(putCtx({ id: ev.id }, { mutePostGame: null }));
     expect(await res.json()).toEqual({});
     const stored = await prisma.event.findUnique({ where: { id: ev.id }, select: { notificationDefaults: true } });
     expect(stored?.notificationDefaults).toBeNull();
+  });
+
+  it("ignores the retired muteReminders field (superseded by Reminder Timings)", async () => {
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false } as any);
+    const ev = await seedEvent();
+    const res = await putDefaults(putCtx({ id: ev.id }, { muteReminders: true, mutePostGame: true }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ mutePostGame: true });
+    const stored = await prisma.event.findUnique({ where: { id: ev.id }, select: { notificationDefaults: true } });
+    expect(stored?.notificationDefaults).toBe(JSON.stringify({ mutePostGame: true }));
+  });
+});
+
+describe("PUT /api/events/[id]/reminder-timings", () => {
+  it("updates the event's reminder gate", async () => {
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false } as any);
+    const ev = await seedEvent();
+    const { PUT } = await import("~/pages/api/events/[id]/reminder-timings");
+    const res = await PUT(putCtx({ id: ev.id }, { reminder2h: false }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ reminder24h: true, reminder2h: false, reminder1h: false });
+
+    const stored = await prisma.event.findUnique({
+      where: { id: ev.id },
+      select: { reminder24h: true, reminder2h: true, reminder1h: true },
+    });
+    expect(stored?.reminder24h).toBe(true);
+    expect(stored?.reminder2h).toBe(false);
+    expect(stored?.reminder1h).toBe(false);
+  });
+
+  it("rejects non-boolean values", async () => {
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false } as any);
+    const ev = await seedEvent();
+    const { PUT } = await import("~/pages/api/events/[id]/reminder-timings");
+    const res = await PUT(putCtx({ id: ev.id }, { reminder2h: "no" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("forbids non-owner non-admin", async () => {
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false } as any);
+    const ev = await seedEvent();
+    const { PUT } = await import("~/pages/api/events/[id]/reminder-timings");
+    const res = await PUT(putCtx({ id: ev.id }, { reminder2h: false }));
+    expect(res.status).toBe(403);
   });
 });

@@ -162,7 +162,7 @@ describe("processPaymentEscalation", () => {
     );
   });
 
-  it("skips players who opted out of payment reminder push", async () => {
+  it("escalates opted-out players without pushing them (push pref gates delivery only)", async () => {
     mockWantsReminder.mockReturnValue(false);
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
@@ -171,7 +171,10 @@ describe("processPaymentEscalation", () => {
 
     const result = await processPaymentEscalation();
 
-    expect(result.stage1Sent).toHaveLength(0);
+    // The stage transition is a domain fact (webhooks, organizer alert) — it
+    // must not stall behind the debtor's push preferences. Only the push is
+    // suppressed.
+    expect(result.stage1Sent).toHaveLength(1);
     expect(mockSendPush).not.toHaveBeenCalled();
   });
 
