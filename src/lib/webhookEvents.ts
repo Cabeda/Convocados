@@ -16,6 +16,7 @@ export const WEBHOOK_EVENT_TYPES = [
   "game_reset",
   "player_invited",
   "game_cancelled",
+  "game_payer_set",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
