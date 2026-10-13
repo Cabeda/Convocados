@@ -18,10 +18,13 @@ import { prisma, Prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { recordReceived } from "./payments.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
-import { shareFor } from "./gameCost";
+import { shareFor, perPlayerShare } from "./gameCost";
 import { summarizePayments } from "./paymentSummary";
 import { systemUserId, ensureSystemUserId } from "./payerIdentity.server";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
+import { parsePaymentMethods } from "./paymentMethods";
+import { isGameEnded } from "./gameStatus";
+import { fireWebhooks } from "./webhook.server";
 
 export { shareFor } from "./gameCost";
 
@@ -319,6 +322,62 @@ export interface PaymentConfig {
   payerExternalName?: string;
 }
 
+/**
+ * Fire `game_payer_set` after a payer is assigned to a game that has already
+ * ended (#1359). The payload answers "who do I pay, how, and how much": the
+ * payer's display name, the event's effective payment methods (temp override
+ * wins over the template), and the fixed per-player share. Best-effort — a
+ * missing event/cost/payer name or a pre-game assignment fires nothing, and
+ * errors never propagate into the caller's request.
+ */
+async function fireGamePayerSet(
+  eventId: string,
+  game: { id: string; dateTime: Date; status: string },
+  payer: { eventPlayerId: string | null; externalName: string | null },
+): Promise<void> {
+  const [event, eventCost] = await Promise.all([
+    prisma.event.findUnique({ where: { id: eventId }, select: { durationMinutes: true } }),
+    prisma.eventCost.findUnique({
+      where: { eventId },
+      select: { paymentMethods: true, tempPaymentMethods: true },
+    }),
+  ]);
+  if (!event) return;
+
+  // A cancelled game never happened — never ask anyone to pay for it. "Ended"
+  // means played, or past kickoff + duration (and not cancelled).
+  if (game.status === "cancelled") return;
+  const ended = game.status === "played" || isGameEnded(game.dateTime, event.durationMinutes);
+  if (!ended) return;
+
+  let payerName: string | null = null;
+  let payerUserId: string | null = null;
+  if (payer.eventPlayerId) {
+    const ep = await prisma.eventPlayer.findUnique({
+      where: { id: payer.eventPlayerId },
+      select: { name: true, userId: true },
+    });
+    payerName = ep?.name ?? null;
+    payerUserId = ep?.userId ?? null;
+  } else if (payer.externalName) {
+    payerName = payer.externalName;
+  }
+  if (!payerName) return;
+
+  const effective = await effectiveGameCost(game.id, eventId);
+  fireWebhooks(eventId, "game_payer_set", {
+    gameId: game.id,
+    dateTime: game.dateTime.toISOString(),
+    payerName,
+    payerEventPlayerId: payer.eventPlayerId ?? null,
+    payerUserId,
+    // `||` not `??`: an empty-string override must fall back to the template.
+    paymentMethods: parsePaymentMethods(eventCost?.tempPaymentMethods || eventCost?.paymentMethods),
+    amountPerPlayer: perPlayerShare(effective.total, effective.maxPlayers),
+    currency: effective.currency,
+  }).catch(() => {});
+}
+
 /** Set a game's payment mode + payer. Tracked requires exactly one payer ref. */
 export async function setPaymentConfig(
   eventId: string,
@@ -327,7 +386,14 @@ export async function setPaymentConfig(
 ): Promise<void> {
   const game = await prisma.game.findUnique({
     where: { id: gameId },
-    select: { id: true, eventId: true },
+    select: {
+      id: true,
+      eventId: true,
+      dateTime: true,
+      status: true,
+      payerEventPlayerId: true,
+      payerExternalName: true,
+    },
   });
   if (!game) throw new Error("Game not found.");
   if (game.eventId !== eventId) throw new Error("Game does not belong to this event.");
@@ -353,17 +419,30 @@ export async function setPaymentConfig(
     if (!payer || payer.eventId !== eventId) throw new Error("Payer is not a participant of this event.");
   }
 
+  const payerExternalName = config.payerExternalName?.trim() || null;
   await prisma.$transaction(async (tx) => {
     await tx.game.update({
       where: { id: gameId },
       data: {
         paymentMode: "tracked",
         payerEventPlayerId: config.payerEventPlayerId ?? null,
-        payerExternalName: config.payerExternalName?.trim() || null,
+        payerExternalName,
       },
     });
     await syncGamePaymentsTx(tx, gameId, eventId);
   });
+
+  // #1359: only when a payer is newly set/changed (not on a no-op re-save), tell
+  // any subscriber about it. fireGamePayerSet itself gates on the game having ended.
+  const previousPayer = game.payerEventPlayerId ?? game.payerExternalName ?? null;
+  const newPayer = config.payerEventPlayerId ?? payerExternalName ?? null;
+  if (newPayer && newPayer !== previousPayer) {
+    await fireGamePayerSet(
+      eventId,
+      { id: game.id, dateTime: game.dateTime, status: game.status },
+      { eventPlayerId: config.payerEventPlayerId ?? null, externalName: payerExternalName },
+    ).catch(() => {});
+  }
 }
 // ─── Settle actions ─────────────────────────────────────────────────────────
 
