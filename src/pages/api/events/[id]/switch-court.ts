@@ -3,6 +3,7 @@ import { prisma } from "~/lib/db.server";
 import { checkOwnership } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
+import { fireWebhooks } from "~/lib/webhook.server";
 import { createLogger } from "~/lib/logger.server";
 import { getActiveRosterState } from "~/lib/roster.server";
 
@@ -45,6 +46,9 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   await prisma.event.update({ where: { id: params.id }, data: updateData });
+
+  // Fire game_rescheduled webhook (non-blocking) — lean fact, client re-fetches state
+  fireWebhooks(event.id, "game_rescheduled", {}).catch(() => {});
 
   // Notify all followers about the location change
   // ADR 0016: spotsLeft from the game-scoped roster (legacy Player rows

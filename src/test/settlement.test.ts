@@ -16,6 +16,12 @@ vi.mock("~/lib/auth.helpers.server", () => ({
 
 import { checkOwnership } from "~/lib/auth.helpers.server";
 
+vi.mock("~/lib/webhook.server", () => ({
+  fireWebhooks: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { fireWebhooks } from "~/lib/webhook.server";
+
 import {
   syncGamePayments,
   setPaymentConfig,
@@ -96,6 +102,7 @@ async function linkUser(name: string, userId: string) {
 beforeEach(async () => {
   mockGetSession.mockResolvedValue(null);
   vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+  vi.mocked(fireWebhooks).mockClear();
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.gamePayment.deleteMany();
@@ -681,6 +688,201 @@ describe("settlement API routes", () => {
     expect(json.hasCost).toBe(false);
     expect(json.rows.map((r: { name: string }) => r.name)).toEqual(["Ana", "Bruno"]);
     expect(json.rows.every((r: { status: string }) => r.status === "pending")).toBe(true);
+  });
+});
+
+describe("game_payer_set webhook (#1359)", () => {
+  /** A game that has already ended, with an event-level payment method. */
+  async function seedEndedGameWithMethods() {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { status: "played", dateTime: new Date(Date.now() - 86400_000) },
+    });
+    await prisma.eventCost.update({
+      where: { eventId: event.id },
+      data: { paymentMethods: JSON.stringify([{ type: "mbway", value: "912345678" }]) },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+    return { event, game };
+  }
+
+  it("fires with who to pay, how to pay them, and the share", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    const res = await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({
+        gameId: game.id,
+        payerName: "Ana",
+        payerEventPlayerId: ana.id,
+        payerUserId: null,
+        paymentMethods: [{ type: "mbway", value: "912345678" }],
+        amountPerPlayer: 6, // 60 / maxPlayers(10)
+        currency: "EUR",
+      }),
+    );
+  });
+
+  it("carries the payer's account id when the payer is linked", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana");
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ payerEventPlayerId: ana.id, payerUserId: "user-ana" }),
+    );
+  });
+
+  it("does not fire for a cancelled game", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await prisma.game.update({ where: { id: game.id }, data: { status: "cancelled" } });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    const res = await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fireWebhooks).not.toHaveBeenCalledWith(event.id, "game_payer_set", expect.anything());
+  });
+
+  it("does not fire before the game has ended", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { status: "upcoming", dateTime: new Date(Date.now() + 86400_000) },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    const res = await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fireWebhooks).not.toHaveBeenCalledWith(event.id, "game_payer_set", expect.anything());
+  });
+
+  it("does not fire when the game has no payer (untracked)", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+
+    const res = await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "untracked" }, "PATCH"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fireWebhooks).not.toHaveBeenCalledWith(event.id, "game_payer_set", expect.anything());
+  });
+
+  it("prefers the temporary payment-method override over the event methods", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await prisma.eventCost.update({
+      where: { eventId: event.id },
+      data: { tempPaymentMethods: JSON.stringify([{ type: "revolut_tag", value: "ana" }]) },
+    });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ paymentMethods: [{ type: "revolut_tag", value: "ana" }] }),
+    );
+  });
+
+  it("falls back to the event methods when the override is an empty string", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await prisma.eventCost.update({
+      where: { eventId: event.id },
+      data: { tempPaymentMethods: "" },
+    });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ paymentMethods: [{ type: "mbway", value: "912345678" }] }),
+    );
+  });
+
+  it("does not re-fire when the same payer is saved again", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    const body = { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id };
+
+    await setConfig(ctx({ id: event.id }, body, "PATCH"));
+    vi.mocked(fireWebhooks).mockClear();
+    await setConfig(ctx({ id: event.id }, body, "PATCH"));
+
+    expect(fireWebhooks).not.toHaveBeenCalledWith(event.id, "game_payer_set", expect.anything());
+  });
+
+  it("fires again when the payer changes on an ended game", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    const bruno = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Bruno" } });
+
+    await setConfig(ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"));
+    vi.mocked(fireWebhooks).mockClear();
+    await setConfig(ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: bruno.id }, "PATCH"));
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ payerName: "Bruno", payerEventPlayerId: bruno.id }),
+    );
+  });
+
+  it("fires with an external payer and a null roster id", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerExternalName: "Venue" }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ payerName: "Venue", payerEventPlayerId: null, payerUserId: null }),
+    );
+  });
+
+  it("does not fire when the game has no cost", async () => {
+    const { event, game } = await seedEvent(); // no cost
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { status: "played", dateTime: new Date(Date.now() - 86400_000) },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    const res = await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fireWebhooks).not.toHaveBeenCalledWith(event.id, "game_payer_set", expect.anything());
   });
 });
 

@@ -2,7 +2,9 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 
-const VALID_FIELDS = ["mutePlayerActivity", "muteReminders", "mutePostGame", "muteEventDetails"] as const;
+// muteReminders is retired — superseded by Reminder Timings (Event.reminder24h/2h/1h),
+// which gate all channels at emission. Kept out of VALID_FIELDS so PUT ignores it.
+const VALID_FIELDS = ["mutePlayerActivity", "mutePostGame", "muteEventDetails"] as const;
 
 /**
  * GET /api/events/[id]/notification-defaults — get event notification defaults.

@@ -14,6 +14,8 @@
 import { prisma } from "./db.server";
 import { sendPushToUser } from "./push.server";
 import { getNotificationPrefs, wantsPaymentReminderPush } from "./notificationPrefs.server";
+import { effectiveGameCost } from "./settlement.server";
+import { fireWebhooks } from "./webhook.server";
 import { createLogger } from "./logger.server";
 import { createT, type Locale } from "./i18n";
 
@@ -67,6 +69,10 @@ export async function processPayerCheckIns(): Promise<PayerCheckInResult> {
       payerCheckInSnoozedUntil: true,
       event: { select: { title: true, durationMinutes: true } },
       payerEventPlayer: { select: { userId: true } },
+      payments: {
+        where: { status: { in: ["pending", "sent"] }, archivedAt: null },
+        select: { amount: true },
+      },
     },
   });
 
@@ -115,6 +121,17 @@ export async function processPayerCheckIns(): Promise<PayerCheckInResult> {
         data: { payerCheckInSentAt: now, payerCheckInSnoozedUntil: null },
       });
       result.asked.push(`${game.eventId}:${game.id}`);
+
+      // Fire payer_check_in webhook (non-blocking) — rides the same
+      // idempotence as the ask (fired + marked together, exactly once per game).
+      const outstanding = game.payments.reduce((sum, p) => sum + p.amount, 0);
+      const currency = (await effectiveGameCost(game.id, game.eventId)).currency;
+      fireWebhooks(game.eventId, "payer_check_in", {
+        gameId: game.id,
+        dateTime: game.dateTime.toISOString(),
+        amountCents: Math.round(outstanding * 100),
+        currency,
+      }).catch(() => {});
     } catch (err) {
       log.error({ err, gameId: game.id, eventId: game.eventId }, "Failed to send payer check-in");
     }

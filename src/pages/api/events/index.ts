@@ -8,6 +8,9 @@ import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
 import { getDefaultDurationMinutes } from "../../../lib/sports";
 import { fromDateTimeLocalValue } from "../../../lib/timezones";
 import { scheduleEventReminders } from "../../../lib/scheduler.server";
+import { fireWebhooks } from "../../../lib/webhook.server";
+import { validateWebhookUrl } from "../../../lib/webhookUrl";
+import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
 
 export const POST: APIRoute = async ({ request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -53,6 +56,27 @@ export const POST: APIRoute = async ({ request }) => {
 
   if (!title) return Response.json({ error: "Title is required." }, { status: 400 });
   if (!dateTimeRaw) return Response.json({ error: "Date and time are required." }, { status: 400 });
+
+  // Optional creation-time webhook wiring (validated up-front so a bad config
+  // never creates an unwired event).
+  const webhookUrlRaw = typeof body.webhookUrl === "string" ? body.webhookUrl.trim() : "";
+  const webhookSecret = typeof body.webhookSecret === "string" ? body.webhookSecret : null;
+  const webhookEventsRequested: unknown[] = Array.isArray(body.webhookEvents) ? body.webhookEvents : [];
+  if (webhookEventsRequested.length > 0) {
+    const invalid = webhookEventsRequested.filter((e: unknown) => !(WEBHOOK_EVENT_TYPES as readonly string[]).includes(e as string));
+    if (invalid.length > 0) {
+      return Response.json(
+        { error: `Unknown event type(s): ${invalid.join(", ")}. Valid: ${WEBHOOK_EVENT_TYPES.join(", ")}` },
+        { status: 400 },
+      );
+    }
+  }
+  let webhookUrl: string | null = null;
+  if (webhookUrlRaw) {
+    const urlError = validateWebhookUrl(webhookUrlRaw);
+    if (urlError) return Response.json({ error: urlError }, { status: 400 });
+    webhookUrl = webhookUrlRaw;
+  }
 
   // Validate timezone first — needed for dateTime conversion below
   let timezone = "UTC";
@@ -101,23 +125,40 @@ export const POST: APIRoute = async ({ request }) => {
   // Maps links resolve to a friendly place name — display it instead of the raw URL
   const storedLocation = geo?.name ?? location;
 
-  const event = await prisma.event.create({
-    data: {
-      title, location: storedLocation, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
-      durationMinutes,
-      latitude: geo?.latitude ?? null,
-      longitude: geo?.longitude ?? null,
-      ownerId: session?.user?.id ?? null,
-    },
-  });
+  // Event + first Game + optional webhook subscription land atomically — a
+  // half-created event that no subscription knows about would silently miss
+  // every later fact.
+  const event = await prisma.$transaction(async (tx) => {
+    const event = await tx.event.create({
+      data: {
+        title, location: storedLocation, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
+        durationMinutes,
+        latitude: geo?.latitude ?? null,
+        longitude: geo?.longitude ?? null,
+        ownerId: session?.user?.id ?? null,
+      },
+    });
 
-  // ADR 0016: create the first Game for this Event
-  const game = await prisma.game.create({
-    data: { eventId: event.id, dateTime },
-  });
-  await prisma.event.update({
-    where: { id: event.id },
-    data: { currentGameId: game.id },
+    // ADR 0016: create the first Game for this Event
+    const game = await tx.game.create({
+      data: { eventId: event.id, dateTime },
+    });
+    await tx.event.update({
+      where: { id: event.id },
+      data: { currentGameId: game.id },
+    });
+
+    if (webhookUrl) {
+      await tx.webhookSubscription.create({
+        data: {
+          eventId: event.id,
+          url: webhookUrl,
+          secret: webhookSecret,
+          events: JSON.stringify(webhookEventsRequested as string[]),
+        },
+      });
+    }
+    return event;
   });
 
   // Schedule reminder jobs — wrapped in try/catch so event creation never fails because of scheduling
@@ -126,6 +167,9 @@ export const POST: APIRoute = async ({ request }) => {
   } catch {
     // ignore scheduling failures
   }
+
+  // Fire game_scheduled (non-blocking) — lean fact, client renders
+  fireWebhooks(event.id, "game_scheduled", {}).catch(() => {});
 
   return Response.json({ id: event.id });
 };

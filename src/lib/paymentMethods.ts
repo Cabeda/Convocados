@@ -92,6 +92,19 @@ export function parsePaymentMethods(raw: string | null | undefined): PaymentMeth
 }
 
 /**
+ * The temporary override wins when it carries a value; an empty string (or
+ * null/undefined) falls back to the base template. One precedence for every
+ * caller that resolves "effective" payment methods (the cost read model and the
+ * game_payer_set webhook payload).
+ */
+export function effectivePaymentMethodsRaw(
+  override: string | null | undefined,
+  base: string | null | undefined,
+): string | null {
+  return override || base || null;
+}
+
+/**
  * Generate a deep link URL for a payment method.
  * @param method - The payment method
  * @param amount - Optional amount to pre-fill
