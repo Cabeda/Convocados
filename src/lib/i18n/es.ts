@@ -247,6 +247,18 @@ const es: TranslationKeys = {
   crewTieBreakTotal: "Total de todos los partidos: {total}",
   crewScoreCounted: "Cuenta para los seis mejores",
   crewScoreDropped: "Descartado de los seis mejores",
+  stakesPreviewTitle: "Lo que está en juego",
+  stakesPreviewTeamOne: "Equipo 1",
+  stakesPreviewTeamTwo: "Equipo 2",
+  stakesPreviewOutcomeOne: "{team} gana",
+  stakesPreviewOutcomeDraw: "Empate",
+  stakesPreviewOutcomeTwo: "{team} gana",
+  stakesPreviewPts: "{n} pts",
+  stakesPreviewRankDelta: "{delta} RP",
+  stakesPreviewFreeAgent: "Agente libre",
+  stakesPreviewNoRound: "Las {n} rondas están jugadas — la tabla no puede cambiar.",
+  stakesPreviewCrewsTitle: "Crews",
+  stakesPreviewCrewPlace: "#{place} en la tabla",
 
   // Historical Game Backfill
   addHistoricalGame: "Añadir juego manual",

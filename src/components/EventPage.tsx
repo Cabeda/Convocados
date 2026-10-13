@@ -10,6 +10,7 @@ import StadiumIcon from "@mui/icons-material/Stadium";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
+import StakesPreview from "./StakesPreview";
 import { TeamField } from "./TeamField";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
@@ -470,6 +471,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
         : m.team === event.teamTwoName ? teamTwoName : m.team,
     }));
   }, [localMatches, event, teamOneName, teamTwoName]);
+
+  // Stakes Preview inputs: the two drawn lineups, or null until both have players.
+  const stakeLineups = useMemo(() => {
+    if (!displayMatches || displayMatches.length < 2) return null;
+    const teamOne = displayMatches[0].players.map((p) => p.name);
+    const teamTwo = displayMatches[1].players.map((p) => p.name);
+    if (teamOne.length === 0 || teamTwo.length === 0) return null;
+    return { teamOne, teamTwo };
+  }, [displayMatches]);
 
   useEffect(() => {
     if (event) document.title = `${event.title} — Convocados`;
@@ -1345,6 +1355,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
                       sport={event.sport}
                       canEdit={canEditTeams}
+                    />
+                  )}
+                  {stakeLineups && (
+                    <StakesPreview
+                      eventId={event.id}
+                      teamOne={stakeLineups.teamOne}
+                      teamTwo={stakeLineups.teamTwo}
+                      teamOneName={teamOneName}
+                      teamTwoName={teamTwoName}
                     />
                   )}
                 </Stack>

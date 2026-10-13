@@ -247,6 +247,18 @@ const de: TranslationKeys = {
   crewTieBreakTotal: "Gesamt aller Spiele: {total}",
   crewScoreCounted: "Zählt zu den besten sechs",
   crewScoreDropped: "Aus den besten sechs gestrichen",
+  stakesPreviewTitle: "Was auf dem Spiel steht",
+  stakesPreviewTeamOne: "Team 1",
+  stakesPreviewTeamTwo: "Team 2",
+  stakesPreviewOutcomeOne: "{team} gewinnt",
+  stakesPreviewOutcomeDraw: "Unentschieden",
+  stakesPreviewOutcomeTwo: "{team} gewinnt",
+  stakesPreviewPts: "{n} Pkt",
+  stakesPreviewRankDelta: "{delta} RP",
+  stakesPreviewFreeAgent: "Freier Spieler",
+  stakesPreviewNoRound: "Alle {n} Runden sind gespielt — die Tabelle kann sich nicht ändern.",
+  stakesPreviewCrewsTitle: "Crews",
+  stakesPreviewCrewPlace: "#{place} in der Tabelle",
 
   // Historical Game Backfill
   addHistoricalGame: "Manuelles Spiel hinzufügen",

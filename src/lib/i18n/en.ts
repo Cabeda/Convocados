@@ -260,6 +260,18 @@ const en = {
   crewTieBreakTotal: "All-games total: {total}",
   crewScoreCounted: "Counts toward the best six",
   crewScoreDropped: "Dropped from the best six",
+  stakesPreviewTitle: "What's at stake",
+  stakesPreviewTeamOne: "Team one",
+  stakesPreviewTeamTwo: "Team two",
+  stakesPreviewOutcomeOne: "{team} win",
+  stakesPreviewOutcomeDraw: "Draw",
+  stakesPreviewOutcomeTwo: "{team} win",
+  stakesPreviewPts: "{n} pts",
+  stakesPreviewRankDelta: "{delta} RP",
+  stakesPreviewFreeAgent: "Free agent",
+  stakesPreviewNoRound: "All {n} rounds are played — the table can't change.",
+  stakesPreviewCrewsTitle: "Crews",
+  stakesPreviewCrewPlace: "#{place} of the table",
 
   // Historical Game Backfill
   addHistoricalGame: "Add manual game",
