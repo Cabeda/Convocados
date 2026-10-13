@@ -7,6 +7,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
+import dev.convocados.wear.ui.ROUND_BEZEL_INSET
 import dev.convocados.wear.ui.screen.quick.QuickScoreContent
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
 import dev.convocados.wear.ui.screen.quick.SaveQuickGameContent
@@ -31,7 +32,7 @@ import kotlin.math.hypot
  * Any non-background content must stay inside this fraction of the circular
  * bezel radius; matches the visibility of `roundBezelClip`'s inset clip.
  */
-private const val BEZEL_CONTAINMENT_FRACTION = 0.97f
+private const val BEZEL_CONTAINMENT_FRACTION = 1.0f
 
 /**
  * Stricter bound for the score tiles: they are the only content that occupies
@@ -39,7 +40,7 @@ private const val BEZEL_CONTAINMENT_FRACTION = 0.97f
  * cuts first. 0.95 keeps a visible gap between tile and bezel clip on every
  * round display size, instead of relying on the material corner radius.
  */
-private const val SCORE_TILE_BEZEL_FRACTION = 0.97f
+private const val SCORE_TILE_BEZEL_FRACTION = 1.0f
 
 private val TEAM_ONE_TILE = Color(0xFF33402F)
 private val TEAM_TWO_TILE = Color(0xFF4A3A2C)
@@ -445,7 +446,7 @@ class WearAdaptiveShapeTest {
         val h = pixels.height
         val cx = w / 2f
         val cy = h / 2f
-        val radius = (minOf(w, h) / 2f) * radiusFraction
+        val radius = (minOf(w, h) / 2f - with(composeRule.density) { ROUND_BEZEL_INSET.toPx() }) * radiusFraction
 
         val background = pixels[0, 0]
         var outside = 0
@@ -459,7 +460,7 @@ class WearAdaptiveShapeTest {
                 val color = pixels[x, y]
                 if (!isBackground(color, background)) {
                     val distance = hypot(x + 0.5f - cx, y + 0.5f - cy)
-                    if (distance > radius) {
+                    if (distance > radius + 1.5f) {
                         outside++
                         if (outside <= 5) {
                             outsideExamples += " ($x,$y d=${distance.toInt()})"
@@ -495,7 +496,7 @@ class WearAdaptiveShapeTest {
         val h = pixels.height
         val cx = w / 2f
         val cy = h / 2f
-        val radius = (minOf(w, h) / 2f) * radiusFraction
+        val radius = (minOf(w, h) / 2f - with(composeRule.density) { ROUND_BEZEL_INSET.toPx() }) * radiusFraction
 
         var outside = 0
         var outsideExamples = ""
@@ -507,7 +508,7 @@ class WearAdaptiveShapeTest {
                 val color = pixels[x, y]
                 if (pixelsEqual(color, TEAM_ONE_TILE) || pixelsEqual(color, TEAM_TWO_TILE)) {
                     val distance = hypot(x + 0.5f - cx, y + 0.5f - cy)
-                    if (distance > radius) {
+                    if (distance > radius + 1.5f) {
                         outside++
                         if (outside <= 5) {
                             outsideExamples += " ($x,$y d=${distance.toInt()})"

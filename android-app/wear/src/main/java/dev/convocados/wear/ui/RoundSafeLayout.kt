@@ -56,8 +56,15 @@ val ROUND_LIST_INSET: Dp = 20.dp
  * laid out against the screen edge has to live inside a circle of
  * `min(side) / 2 - ROUND_BEZEL_INSET`. Internal rather than private because the
  * bezel-containment tests have to measure the very same circle.
+ *
+ * 2dp rather than the 8dp it started at: the inset exists so the anti-aliased
+ * clip edge is not cut by the hardware at the display boundary, which needs
+ * about a pixel, and the clip already guarantees a circular silhouette for
+ * Play's watch-shapes gate regardless of the inset's size. At 8dp the buffer
+ * was costing 15% of a small round display's diameter — the difference between
+ * the control reaching the edge and floating inside it.
  */
-internal val ROUND_BEZEL_INSET = 8.dp
+internal val ROUND_BEZEL_INSET = 2.dp
 
 /**
  * Constrains width to [fraction] on round displays so a wide control placed
