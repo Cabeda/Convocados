@@ -1,6 +1,6 @@
 {
   "name": "convocados",
-  "version": "3.239.0",
+  "version": "3.240.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "typecheck": "tsc6",
     "test": "vitest run",
     "check:play-listing": "node scripts/check-play-listing.mjs",
-  "check:pr-body": "node scripts/check-pr-closing-keyword.mjs",
+    "check:pr-body": "node scripts/check-pr-closing-keyword.mjs",
     "test:mutation": "node scripts/run-mutation.mjs",
     "test:route-coverage": "bash scripts/route-coverage.sh",
     "test:e2e": "npx playwright test",
