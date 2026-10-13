@@ -17,6 +17,17 @@ export const WEBHOOK_EVENT_TYPES = [
   "player_invited",
   "game_cancelled",
   "game_payer_set",
+  // Timed / scheduling facts — fired from the reminder pipelines and payment
+  // escalation (ADR 0051: lean domain events, clients render).
+  "game_scheduled",
+  "game_rescheduled",
+  "reminder",
+  "rsvp_request",
+  "rsvp_summary",
+  "recruitment",
+  "payment_nudge",
+  "payment_organizer_alert",
+  "payer_check_in",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];

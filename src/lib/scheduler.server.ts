@@ -3,6 +3,8 @@ import { createLogger } from "./logger.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { sendReminder } from "./email.server";
 import { getNotificationPrefs, wantsEmailReminder } from "./notificationPrefs.server";
+import { isReminderEnabled } from "./reminders.server";
+import { fireWebhooks } from "./webhook.server";
 import { findSplitIdentities, collapseSplitIdentities, reconcilePaymentNames } from "./backfillMergedIdentity.server";
 import { recalculateAllRatings } from "./elo.server";
 
@@ -251,6 +253,21 @@ async function _processReminderJob(job: { id: string; eventId: string | null; ty
   // archive. Mark processed (the caller does) without sending anything.
   if (event.archivedAt) return;
 
+  // Reminder Timings gate: a disabled timing emits nothing on any channel,
+  // but is still recorded as sent ("intentionally skipped") so the job is
+  // closed out and nothing re-sweeps the window.
+  if (!isReminderEnabled(event, reminderType)) {
+    const logType = JOB_TO_LOG_TYPE[job.type];
+    if (logType) {
+      await prisma.reminderLog.upsert({
+        where: { eventId_type: { eventId: event.id, type: logType } },
+        create: { eventId: event.id, type: logType },
+        update: {},
+      });
+    }
+    return;
+  }
+
   const activePlayers = event.players.filter((p) => !p.archivedAt);
   const spotsLeft = Math.max(0, event.maxPlayers - activePlayers.length);
 
@@ -294,6 +311,13 @@ async function _processReminderJob(job: { id: string; eventId: string | null; ty
       }
     }
   }
+
+  // Fire reminder webhook (non-blocking) — lean domain facts, client renders
+  fireWebhooks(event.id, "reminder", {
+    reminderType,
+    gameId: event.currentGameId ?? null,
+    dateTime: event.dateTime.toISOString(),
+  }).catch(() => {});
 
   // Mark reminder as sent (idempotent — handles retries / duplicates gracefully)
   const logType = JOB_TO_LOG_TYPE[job.type];

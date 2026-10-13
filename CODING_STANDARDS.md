@@ -41,6 +41,21 @@ failure this replaces: a fix verified only on round — or trusted to a green
   signed by `keystore.properties`) rather than debug — debug is too slow to judge motion
   and interaction.
 
+## A layout modifier may not read back what it wrote
+
+A Wear modifier that derives its layout from `onGloballyPositioned` is reviewed for a
+**settle loop**: the state it writes must not be a function of the layout that state
+produces. The failure this replaces is silent and expensive — `inset -> width -> text wrap
+-> height -> bottom edge -> inset` never converged, and `waitForIdle` polled for sixty
+seconds before timing out, with no assertion pointing at the cause.
+
+- Vertical bounds are the hazard. Horizontal padding does not change a row's height, so a
+  width-only inset is safe; anything that reads the bottom edge feeds back through wrapping.
+- Accept an update only in a direction that does not feed back. Growth is monotone and
+  bounded by the touch-target floor, so it settles; a shrink re-opens the cycle.
+- Measure it: the suite time is the tell. A round-safe suite that jumps from seconds to a
+  timeout is a loop, not a slow machine.
+
 ## Test fixtures and scaffolding live in the test source set
 
 `android-app/wear/src/test`, `src/test`. The failure this replaces: a composable that only

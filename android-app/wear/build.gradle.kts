@@ -37,6 +37,11 @@ android {
     namespace = "dev.convocados.wear"
     compileSdk = 37
 
+    lint {
+        lintConfig = rootProject.file("wear/lint.xml")
+        abortOnError = true
+    }
+
     signingConfigs {
         create("release") {
             val storePath = keystoreProperties.getProperty("storeFile", "")

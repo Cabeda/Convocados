@@ -12,6 +12,10 @@ export interface UpcomingReminder {
   dateTime: Date;
   location: string;
   players: { name: string; userId: string | null; email: string | null }[];
+  currentGameId: string | null;
+  reminder24h: boolean;
+  reminder2h: boolean;
+  reminder1h: boolean;
 }
 
 /** Find events that need a reminder of the given type and haven't been sent yet. */
@@ -42,6 +46,10 @@ export async function getUpcomingReminders(type: "24h" | "2h" | "1h"): Promise<U
       userId: p.userId,
       email: p.user?.email ?? null,
     })),
+    currentGameId: e.currentGameId,
+    reminder24h: e.reminder24h,
+    reminder2h: e.reminder2h,
+    reminder1h: e.reminder1h,
   }));
 }
 
@@ -83,10 +91,27 @@ export async function getPostGameReminders(): Promise<UpcomingReminder[]> {
         userId: p.userId,
         email: p.user?.email ?? null,
       })),
+      currentGameId: e.currentGameId,
+      reminder24h: e.reminder24h,
+      reminder2h: e.reminder2h,
+      reminder1h: e.reminder1h,
     }));
 }
 
 /** Mark a reminder as sent so it won't fire again. */
 export async function markReminderSent(eventId: string, type: string) {
   await prisma.reminderLog.create({ data: { eventId, type } });
+}
+
+/**
+ * Whether a pre-game reminder timing exists for this event at all (Reminder
+ * Timings — the organizer's per-event selection). Gates every channel: a
+ * disabled timing emits no push, email or webhook. User-level reminder prefs
+ * AND with this for individual delivery; subscriptions see this gate only.
+ */
+export function isReminderEnabled(
+  event: { reminder24h: boolean; reminder2h: boolean; reminder1h: boolean },
+  type: "24h" | "2h" | "1h",
+): boolean {
+  return type === "24h" ? event.reminder24h : type === "2h" ? event.reminder2h : event.reminder1h;
 }
