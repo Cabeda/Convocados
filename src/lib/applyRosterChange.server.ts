@@ -110,6 +110,69 @@ export function resetInviteRateLimitStores(): void {
 }
 
 /**
+ * Enqueue the push notifications for a completed join: the player_joined(/_bench)
+ * job, plus game_full / few_spots_left when the roster crosses those marks.
+ *
+ * Single source of truth for the fresh-join path and for every re-join path
+ * (via notifyPlayerJoined). The fan-out used to be duplicated, and the copy on
+ * the re-join side was missing entirely (#1372) — so it lives here once.
+ */
+async function enqueueJoinNotifications(input: {
+  event: PrismaEvent;
+  playerName: string;
+  isOnBench: boolean;
+  spotsLeft: number;
+  rosterCount: number;
+  url: string;
+  senderClientId?: string;
+}): Promise<void> {
+  const { event, playerName, isOnBench, spotsLeft, rosterCount, url, senderClientId } = input;
+  const eventId = event.id;
+
+  if (isOnBench) {
+    // ADR 0018: Include bench position in notification body
+    const benchPosition = rosterCount - event.maxPlayers + 1;
+    await enqueueNotification(eventId, "player_joined_bench", {
+      title: event.title,
+      key: "notifyPlayerJoinedBench",
+      params: { name: playerName, position: String(benchPosition) },
+      url,
+      spotsLeft,
+    }, senderClientId);
+  } else {
+    await enqueueNotification(eventId, "player_joined", {
+      title: event.title,
+      key: "notifyPlayerJoined",
+      params: { name: playerName },
+      url,
+      spotsLeft,
+    }, senderClientId);
+  }
+
+  if (spotsLeft === 0) {
+    await enqueueNotification(eventId, "game_full", {
+      title: event.title,
+      key: "notifyGameFullAlert",
+      params: { name: playerName },
+      url,
+      spotsLeft: 0,
+    }, senderClientId);
+  } else if (spotsLeft > 0 && spotsLeft <= (event.recruitmentThreshold ?? 3) && !isOnBench) {
+    // ADR 0017: "Few spots left" — Tier 1, deduped per fill-cycle (reset when player leaves)
+    if (!event.fewSpotsLeftNotified) {
+      await enqueueNotification(eventId, "few_spots_left", {
+        title: event.title,
+        key: "notifyFewSpotsLeft",
+        params: { title: event.title, n: String(spotsLeft) },
+        url: `${url}?action=join`,
+        spotsLeft,
+      }, senderClientId);
+      await prisma.event.update({ where: { id: eventId }, data: { fewSpotsLeftNotified: true } });
+    }
+  }
+}
+
+/**
  * Fire player_joined (+ game_full when the roster fills) webhooks, log the
  * player_added activity, and enqueue the matching push notification for ANY
  * join path. The re-join paths (after a leave or a recurring reset) used to
@@ -121,7 +184,7 @@ export function resetInviteRateLimitStores(): void {
  * behaves exactly like the fresh-join path below.
  */
 async function notifyPlayerJoined(input: {
-  event: { id: string; title: string; maxPlayers: number };
+  event: PrismaEvent;
   playerName: string;
   /** Active roster count BEFORE this join (game-scoped under ADR 0016). */
   activeBefore: number;
@@ -138,33 +201,15 @@ async function notifyPlayerJoined(input: {
   // recurring occurrences and would wrongly fire game_full on a 4/10 roster.
   const isOnBench = activeBefore >= event.maxPlayers;
   const spotsLeft = isOnBench ? 0 : Math.max(0, event.maxPlayers - activeBefore - 1);
+  const url = `${origin}/events/${event.id}`;
   const data = { playerName, isActive: !isOnBench, spotsLeft, actor };
   fireWebhooks(event.id, "player_joined", data).catch(() => {});
   if (spotsLeft === 0) fireWebhooks(event.id, "game_full", data).catch(() => {});
   logEvent(event.id, "player_added", null, null, { playerName }).catch(() => {});
 
-  // Push parity with the fresh-join path: every join — fresh or returning —
-  // enqueues exactly one player_joined(/_bench) job.
-  const url = `${origin}/events/${event.id}`;
-  if (isOnBench) {
-    // ADR 0018: Include bench position in notification body
-    const benchPosition = rosterCount - event.maxPlayers + 1;
-    await enqueueNotification(event.id, "player_joined_bench", {
-      title: event.title,
-      key: "notifyPlayerJoinedBench",
-      params: { name: playerName, position: String(benchPosition) },
-      url,
-      spotsLeft,
-    }, senderClientId);
-  } else {
-    await enqueueNotification(event.id, "player_joined", {
-      title: event.title,
-      key: "notifyPlayerJoined",
-      params: { name: playerName },
-      url,
-      spotsLeft,
-    }, senderClientId);
-  }
+  // Same notification fan-out as the fresh-join path — single source of truth
+  // for player_joined, game_full and few_spots_left.
+  await enqueueJoinNotifications({ event, playerName, isOnBench, spotsLeft, rosterCount, url, senderClientId });
 
   if (!process.env.VITEST) {
     await drainNotificationQueue().catch((err) => {
@@ -428,7 +473,13 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           enqueuePushSetupHintSafe(linkedUserId!, eventId);
           // finishRosterAdd self-guards for bench players.
           await finishRosterAdd(eventId, trimmed, event.maxPlayers, event.currentGameId);
-          await notifyPlayerJoined({ event, playerName: trimmed, activeBefore, rosterCount, actor: joinActor, origin, senderClientId });
+          // Only announce a genuine (re)join. When the participant was already
+          // active in the current game, accepting a lingering invite is an
+          // account link, not a join — announcing it would push "X joined" to
+          // every follower for a no-op.
+          if (alreadyInGame.archivedAt) {
+            await notifyPlayerJoined({ event, playerName: trimmed, activeBefore, rosterCount, actor: joinActor, origin, senderClientId });
+          }
           return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: false } };
         }
         if (alreadyInGame && alreadyInGame.archivedAt) {
@@ -534,13 +585,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   // first fills. All steps self-guard (bench / no teams / already drawn).
   await finishRosterAdd(eventId, rosterName, event.maxPlayers, event.currentGameId);
 
-  if (isOnBench) {
-    // ADR 0018: Include bench position in notification body
-    const benchPosition = rosterCount - event.maxPlayers + 1;
-    await enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed, position: String(benchPosition) }, url, spotsLeft }, senderClientId);
-  } else {
-    await enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
-  }
+  await enqueueJoinNotifications({ event, playerName: trimmed, isOnBench, spotsLeft, rosterCount, url, senderClientId });
 
   if (!process.env.VITEST) {
     await drainNotificationQueue().catch((err) => {
@@ -601,24 +646,13 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
     }
   }
 
-  // Fire webhooks
+  // Fire webhooks (the matching push notifications for player_joined/_bench,
+  // game_full and few_spots_left are all enqueued above via
+  // enqueueJoinNotifications — one shared source of truth).
   const webhookData = { playerName: trimmed, isActive: !isOnBench, spotsLeft, actor: joinActor };
   fireWebhooks(eventId, "player_joined", webhookData).catch(() => {});
   if (spotsLeft === 0) {
     fireWebhooks(eventId, "game_full", webhookData).catch(() => {});
-    await enqueueNotification(eventId, "game_full", { title: event.title, key: "notifyGameFullAlert", params: { name: trimmed }, url, spotsLeft: 0 }, senderClientId);
-  } else if (spotsLeft > 0 && spotsLeft <= (event.recruitmentThreshold ?? 3) && !isOnBench) {
-    // ADR 0017: "Few spots left" — Tier 1, deduped per fill-cycle (reset when player leaves)
-    if (!event.fewSpotsLeftNotified) {
-      await enqueueNotification(eventId, "few_spots_left", {
-        title: event.title,
-        key: "notifyFewSpotsLeft",
-        params: { title: event.title, n: String(spotsLeft) },
-        url: `${url}?action=join`,
-        spotsLeft,
-      }, senderClientId);
-      await prisma.event.update({ where: { id: eventId }, data: { fewSpotsLeftNotified: true } });
-    }
   }
 
   await syncPaymentsForEvent(eventId);

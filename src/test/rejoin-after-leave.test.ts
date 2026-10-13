@@ -55,7 +55,17 @@ async function seedUser(name: string, id: string) {
   });
 }
 
+/**
+ * Count the player_joined push jobs enqueued for an event. The queue drain is
+ * skipped under VITEST (applyRosterChange guards on process.env.VITEST), so the
+ * NotificationJob rows are the observable push intent for every join branch.
+ */
+function countPlayerJoinedJobs(eventId: string): Promise<number> {
+  return prisma.notificationJob.count({ where: { eventId, type: "player_joined" } });
+}
+
 beforeEach(async () => {
+  await prisma.playerInvite.deleteMany();
   await prisma.rsvp.deleteMany();
   await prisma.gameParticipant.deleteMany();
   await prisma.eventPlayer.deleteMany();
@@ -107,6 +117,8 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
       where: { gameId_eventPlayerId: { gameId: event.currentGameId!, eventPlayerId: ep.id } },
     });
     expect(gp!.archivedAt).toBeNull();
+    // Branch: archived GameParticipant re-join — must enqueue the push too.
+    expect(await countPlayerJoinedJobs(event.id)).toBe(1);
   });
 
   it("full leave → rejoin cycle restores the GameParticipant", async () => {
@@ -200,8 +212,8 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
     // left (player_left + spot_available jobs, webhook fired) and rejoined two
     // seconds later — the player_joined webhook fired, but NO player_joined
     // NotificationJob was ever created, so no push reached Android or iOS.
-    // Fresh joins enqueue one (applyRosterChange.server.ts:494); the re-join
-    // branches return after webhook-only notifyPlayerJoined (line 118-128).
+    // Fresh joins enqueue one via enqueueJoinNotifications; the re-join branches
+    // used to return after a webhook-only notifyPlayerJoined, skipping the push.
     const user = await seedUser("Rodrigo Stange", "u-rodrigo");
     const event = await seedRecurringEvent();
 
@@ -226,12 +238,10 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
     );
 
     expect(res.status).toBe(200);
-    // The leave side enqueues player_left/spot_available; the rejoin side must
-    // enqueue exactly one player_joined job — same as a fresh join.
-    const joinedJobs = await prisma.notificationJob.findMany({
-      where: { eventId: event.id, type: "player_joined" },
-    });
-    expect(joinedJobs).toHaveLength(1);
+    // Branch: archived Player re-add. The leave side enqueues
+    // player_left/spot_available; the rejoin side must enqueue exactly one
+    // player_joined job — same as a fresh join.
+    expect(await countPlayerJoinedJobs(event.id)).toBe(1);
   });
 
   it("fires the player_joined webhook when a returning player joins the current game", async () => {
@@ -261,6 +271,9 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
       // Session user is "Prucha" → actor is the signed-in user who performed the join
       expect.objectContaining({ playerName: "Prucha", actor: "Prucha" }),
     );
+    // Branch: recurring-reset re-join (Player/EventPlayer exist, no
+    // GameParticipant for the current game) — must enqueue the push too.
+    expect(await countPlayerJoinedJobs(event.id)).toBe(1);
   });
 
   it("does NOT fire game_full when legacy Player rows exceed maxPlayers but the game roster has room", async () => {
@@ -299,5 +312,120 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
     );
     const gameFullCalls = vi.mocked(fireWebhooks).mock.calls.filter(([id, type]) => id === event.id && type === "game_full");
     expect(gameFullCalls).toHaveLength(0);
+  });
+
+  it("does NOT announce a join for a pending self-invite when the player is already active", async () => {
+    // Branch: pending self-invite, participant already active in the game.
+    // Accepting a lingering invite here is an account link, not a join — it
+    // must not push "X joined" (nor fire the webhook) for a no-op.
+    const user = await seedUser("Rodrigo Stange", "u-rodrigo");
+    const event = await seedRecurringEvent();
+
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Rodrigo Stange", userId: user.id },
+    });
+    await prisma.player.create({
+      data: { eventId: event.id, name: "Rodrigo Stange", userId: user.id, order: 0 },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, order: 0 },
+    });
+    await prisma.playerInvite.create({
+      data: {
+        gameId: event.currentGameId!,
+        eventPlayerId: ep.id,
+        invitedByUserId: user.id,
+        status: "pending",
+        token: "tok-active",
+      },
+    });
+
+    const res = await POST(
+      ctx(event.id, { name: "Rodrigo Stange", linkToAccount: true }, { user: { id: user.id, name: user.name } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await countPlayerJoinedJobs(event.id)).toBe(0);
+    const joinedCalls = vi.mocked(fireWebhooks).mock.calls.filter(
+      ([id, type]) => id === event.id && type === "player_joined",
+    );
+    expect(joinedCalls).toHaveLength(0);
+  });
+
+  it("announces a join for a pending self-invite that re-activates an archived GameParticipant", async () => {
+    // Branch: pending self-invite whose GameParticipant was archived by a leave
+    // — a genuine re-join, so it must enqueue the push like every other branch.
+    const user = await seedUser("Rodrigo Stange", "u-rodrigo");
+    const event = await seedRecurringEvent();
+
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Rodrigo Stange", userId: user.id },
+    });
+    await prisma.player.create({
+      data: { eventId: event.id, name: "Rodrigo Stange", userId: user.id, order: 0 },
+    });
+    await prisma.gameParticipant.create({
+      data: {
+        gameId: event.currentGameId!,
+        eventPlayerId: ep.id,
+        order: 0,
+        archivedAt: new Date(Date.now() - 3600_000),
+      },
+    });
+    await prisma.playerInvite.create({
+      data: {
+        gameId: event.currentGameId!,
+        eventPlayerId: ep.id,
+        invitedByUserId: user.id,
+        status: "pending",
+        token: "tok-archived",
+      },
+    });
+
+    const res = await POST(
+      ctx(event.id, { name: "Rodrigo Stange", linkToAccount: true }, { user: { id: user.id, name: user.name } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await countPlayerJoinedJobs(event.id)).toBe(1);
+  });
+
+  it("enqueues a game_full push when a returning player takes the last spot", async () => {
+    // Finding 1: the re-join paths fired the game_full webhook but never the
+    // push. A returning player filling the final spot must enqueue game_full,
+    // exactly like the fresh-join path.
+    const user = await seedUser("Rodrigo Stange", "u-rodrigo");
+    const event = await seedRecurringEvent();
+
+    // 9 active participants — one short of the 10-player roster.
+    for (let i = 0; i < 9; i++) {
+      const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: `P${i}` } });
+      await prisma.gameParticipant.create({
+        data: { gameId: event.currentGameId!, eventPlayerId: ep.id, order: i },
+      });
+    }
+    // Returning player: Player + EventPlayer exist, GP archived by a prior leave.
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Rodrigo Stange", userId: user.id },
+    });
+    await prisma.player.create({
+      data: { eventId: event.id, name: "Rodrigo Stange", userId: user.id, order: 9 },
+    });
+    await prisma.gameParticipant.create({
+      data: {
+        gameId: event.currentGameId!,
+        eventPlayerId: ep.id,
+        order: 9,
+        archivedAt: new Date(Date.now() - 3600_000),
+      },
+    });
+
+    const res = await POST(
+      ctx(event.id, { name: "Rodrigo Stange", linkToAccount: true }, { user: { id: user.id, name: user.name } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await countPlayerJoinedJobs(event.id)).toBe(1);
+    expect(await prisma.notificationJob.count({ where: { eventId: event.id, type: "game_full" } })).toBe(1);
   });
 });
