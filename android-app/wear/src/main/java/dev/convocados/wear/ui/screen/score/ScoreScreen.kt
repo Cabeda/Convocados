@@ -29,10 +29,10 @@ import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
-import dev.convocados.wear.ui.roundScoreTilesSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
 import dev.convocados.wear.ui.scoreEdgePadding
+import androidx.compose.ui.graphics.RectangleShape
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.ongoing.OngoingLaunch
@@ -47,21 +47,6 @@ import dev.convocados.wear.util.parseInstant
 import dev.convocados.wear.util.sportDurationMinutes
 import kotlinx.coroutines.delay
 import java.time.Instant
-
-/**
- * Nothing is reserved for the overlays, because they are drawn *over* the
- * tiles rather than beside them — ScoreTimeOverlay is a sibling that paints on
- * top, so the ring, the hint and the clock sit on the tiles and the tiles are
- * free to take the largest rectangle the circle holds.
- *
- * The reserves existed to keep the tiles clear of those overlays, which cost
- * most of the display on a 212dp watch: a band 92dp tall in a 196dp box. The
- * price is legibility where text lands on a tile, which the overlays already
- * pay for — the hint and the clock carry their own pill backgrounds, and the
- * offline status is drawn in a warning colour.
- */
-private val SCORE_TILES_TOP_RESERVE = 0.dp
-private val SCORE_TILES_BOTTOM_RESERVE = 0.dp
 
 
 @Composable
@@ -575,17 +560,12 @@ internal fun ScoreEditor(
                 ) { _, dy -> dragY += dy }
             },
     ) {
-        val isRound = LocalConfiguration.current.isScreenRound
+        // The whole display is the control: left half scores team one, right
+        // half team two. The progress ring, the hint pill and the clock draw
+        // over it, so nothing is reserved for them and every pixel is tappable.
+        // On a round display roundBezelClip cuts the pair into the circle.
         Row(
-            modifier = Modifier
-                .align(Alignment.Center)
-                // Whatever rectangle the circle allows in the band the overlays
-                // leave free — not a fixed width fraction, which geometrically
-                // caps the height and left the tiles floating in dead space.
-                .roundScoreTilesSize(
-                    topReserve = SCORE_TILES_TOP_RESERVE,
-                    bottomReserve = SCORE_TILES_BOTTOM_RESERVE,
-                ),
+            modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TeamScoreButton(
@@ -597,7 +577,7 @@ internal fun ScoreEditor(
                 onDecrement = decOne,
                 enabled = true,
                 modifier = Modifier.weight(1f),
-                shape = teamScoreTileShape(isRound = isRound, isLeft = true),
+                shape = RectangleShape,
             )
             TeamScoreButton(
                 teamName = state.teamTwoName,
@@ -608,7 +588,6 @@ internal fun ScoreEditor(
                 onDecrement = decTwo,
                 enabled = true,
                 modifier = Modifier.weight(1f),
-                shape = teamScoreTileShape(isRound = isRound, isLeft = false),
             )
         }
 

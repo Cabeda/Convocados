@@ -52,13 +52,6 @@ const val ROUND_EQUATOR_FRACTION = 0.95f
 val ROUND_LIST_INSET: Dp = 20.dp
 
 /**
- * How far inside the bezel clip the edge-progress ring is drawn, so tiles can
- * be sized to the ring rather than to the clip and stay inside what the player
- * sees as the edge.
- */
-internal val EDGE_PROGRESS_RING_INSET = 3.5.dp
-
-/**
  * Inset that [roundBezelClip] applies before clipping to a circle, so content
  * laid out against the screen edge has to live inside a circle of
  * `min(side) / 2 - ROUND_BEZEL_INSET`. Internal rather than private because the
@@ -95,72 +88,6 @@ fun Modifier.roundEquatorSize(
     val bezelRadius =
         minOf(configuration.screenWidthDp, configuration.screenHeightDp).dp / 2f - ROUND_BEZEL_INSET
     return equatorInscribedSize(bezelRadius, widthFraction, heightFraction, inset)
-}
-
-/**
- * Sizes a centred block to the **largest rectangle the circle still allows** in
- * the vertical band the caller's overlays leave free.
- *
- * The block it replaces capped width at [ROUND_EQUATOR_FRACTION] and then asked
- * the circle for whatever height that width permitted. Those two decisions pull
- * against each other: a near-full-width block *cannot* be tall inside a circle,
- * so the score tiles came out short and wide, floating in dead bands above and
- * below while the display's own shape went unused. Sizing it the other way
- * round — take the band, then the widest the circle allows at that band's far
- * edge — gives the block the area the display actually has to give.
- *
- * [topReserve] and [bottomReserve] are the bands the overlays own: the 12-o'clock
- * hint (or the Finish button) above, the clock pill below. No-op on square
- * displays, where the caller's Row already fills the screen.
- */
-@Composable
-fun Modifier.roundScoreTilesSize(topReserve: Dp, bottomReserve: Dp): Modifier {
-    val configuration = LocalConfiguration.current
-    if (!configuration.isScreenRound) return fillMaxSize()
-    // Sized to the display's bezel circle, less the ring's stroke inset — the
-    // circle the edge-progress ring traces. The tiles are drawn in a container
-    // that is shorter than the clipped area (scoreContentPadding keeps the
-    // scaffold's vertical padding), so min(container)/2 is a *smaller* circle
-    // than the ring's and would leave the tiles floating inside it.
-    val bezelRadius =
-        minOf(configuration.screenWidthDp, configuration.screenHeightDp).dp / 2f -
-            ROUND_BEZEL_INSET - EDGE_PROGRESS_RING_INSET
-    return scoreTilesBandSize(bezelRadius, topReserve, bottomReserve)
-}
-
-private fun Modifier.scoreTilesBandSize(
-    bezelRadius: Dp,
-    topReserve: Dp,
-    bottomReserve: Dp,
-): Modifier = layout { measurable, constraints ->
-    val width = constraints.maxWidth
-    val height = constraints.maxHeight
-    val radius = bezelRadius.toPx()
-    val top = topReserve.roundToPx()
-    val bottom = height - bottomReserve.roundToPx()
-    val bandHeight = (bottom - top).coerceAtLeast(0)
-
-    // The largest rectangle inside a circle is the square of side r*sqrt(2),
-    // and it is also the one with the most area. Take it whenever the overlay
-    // band is tall enough, centred.
-    val squareSide = (radius * sqrt(2f)).roundToInt()
-    if (bandHeight >= squareSide && squareSide <= minOf(width, height)) {
-        val blockTop = (height - squareSide) / 2
-        val placeable = measurable.measure(Constraints.fixed(squareSide, squareSide))
-        return@layout layout(width, height) {
-            placeable.placeRelative((width - squareSide) / 2, blockTop)
-        }
-    }
-
-    // Otherwise the band binds: the widest rectangle the circle allows at the
-    // band's far edge, which is what keeps the corners on the circle.
-    val centreY = height / 2f
-    val yFar = maxOf(abs(top - centreY), abs(bottom - centreY))
-    val under = radius * radius - yFar * yFar
-    val halfWidth = if (under <= 0f) 0f else sqrt(under)
-    val blockWidth = (halfWidth * 2f).roundToInt().coerceIn(0, width)
-    val placeable = measurable.measure(Constraints.fixed(blockWidth, bandHeight))
-    layout(width, height) { placeable.placeRelative((width - blockWidth) / 2, top) }
 }
 
 /**

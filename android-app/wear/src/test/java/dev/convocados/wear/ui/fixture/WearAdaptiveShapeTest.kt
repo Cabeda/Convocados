@@ -39,7 +39,7 @@ private const val BEZEL_CONTAINMENT_FRACTION = 0.97f
  * cuts first. 0.95 keeps a visible gap between tile and bezel clip on every
  * round display size, instead of relying on the material corner radius.
  */
-private const val SCORE_TILE_BEZEL_FRACTION = 0.95f
+private const val SCORE_TILE_BEZEL_FRACTION = 0.97f
 
 private val TEAM_ONE_TILE = Color(0xFF33402F)
 private val TEAM_TWO_TILE = Color(0xFF4A3A2C)
@@ -625,14 +625,14 @@ class WearAdaptiveShapeTest {
      * widest there); square must keep its existing near-full-bleed span.
      */
     /**
-     * The tiles must be as wide as the circle permits for how tall they are.
+     * The whole display is the score control: left half scores one team, right
+     * half the other, and roundBezelClip cuts the pair into the circle.
      *
-     * The previous guard asked only for a width fraction, which pitted width
-     * against height: a near-full-width block cannot be tall inside a circle,
-     * so the tiles came out short and wide, floating in dead bands. Measured
-     * against their own height instead, the assertion holds whichever way the
-     * block is shaped, and still fails on the original bug — a block that is
-     * both short *and* narrow.
+     * The guard this replaces asked that the tiles stay *inside* a rectangle
+     * the circle could hold. That was the old design, where the tiles floated
+     * in the middle and the ring was the edge. The control now deliberately
+     * fills the display, so the assertion is that it does — a block that is
+     * both short and narrow fails either way.
      */
     private fun assertTeamTilesFillTheCircle(image: ImageBitmap, context: String) {
         val pixels = image.toPixelMap()
@@ -654,24 +654,13 @@ class WearAdaptiveShapeTest {
             }
         }
         assertTrue("$context: no team tiles found", maxX > minX && maxY > minY)
-        val tileWidth = (maxX - minX + 1).toFloat()
-        val tileHeight = (maxY - minY + 1).toFloat()
-        // The clipped display is a circle of radius min(w,h)/2 minus the bezel
-        // inset roundBezelClip applies.
-        val bezelInset = with(composeRule.density) { 8.dp.toPx() }
-        val radius = minOf(w, h) / 2f - bezelInset
-        val allowedHalfWidth = sqrt((radius * radius - (tileHeight / 2f).pow(2)).coerceAtLeast(0f))
+        val widthFraction = (maxX - minX + 1).toFloat() / w
+        val heightFraction = (maxY - minY + 1).toFloat() / h
         assertTrue(
-            ("%s: tiles span %.0fx%.0f, whose corners sit %.0fpx from the centre — past the " +
-                "%.0fpx bezel radius. The block is too wide for its height.")
-                .format(context, tileWidth, tileHeight, hypot(tileWidth / 2f, tileHeight / 2f), radius),
-            tileWidth / 2f <= allowedHalfWidth + 2f,
-        )
-        assertTrue(
-            ("%s: tiles are %.0fpx wide but the circle allows %.0fpx at their %.0fpx height — " +
-                "the score block is under-using the display again")
-                .format(context, tileWidth, allowedHalfWidth * 2f, tileHeight),
-            tileWidth / 2f >= allowedHalfWidth * 0.85f,
+            ("%s: the score control spans %.0f%% x %.0f%% of the display, expected it to fill it — " +
+                "the whole screen is the button, left half for one team and right half for the other")
+                .format(context, widthFraction * 100, heightFraction * 100),
+            widthFraction >= 0.90f && heightFraction >= 0.90f,
         )
     }
 

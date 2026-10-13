@@ -10,8 +10,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,7 +27,6 @@ import dev.convocados.wear.data.api.displayTennisPoint
 import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.RememberKeepScreenOn
-import dev.convocados.wear.ui.roundScoreTilesSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
 import dev.convocados.wear.ui.scoreEdgePadding
@@ -39,16 +38,8 @@ import dev.convocados.wear.ui.ongoing.shouldShowQuickGameOngoing
 import dev.convocados.wear.ui.screen.score.GameClock
 import dev.convocados.wear.ui.screen.score.GameEdgeProgress
 import dev.convocados.wear.ui.screen.score.TeamScoreButton
-import dev.convocados.wear.ui.screen.score.teamScoreTileShape
 import kotlinx.coroutines.delay
 import java.time.Instant
-
-/**
- * Same as the live score screen: no reserve, because the overlays paint on top
- * of the tiles rather than beside them. See ScoreScreen.kt.
- */
-private val SCORE_TILES_TOP_RESERVE = 0.dp
-private val SCORE_TILES_BOTTOM_RESERVE = 0.dp
 
 
 @Composable
@@ -175,17 +166,11 @@ internal fun QuickScoreContent(
                         )
                     }
                 } else {
-                    val isRound = LocalConfiguration.current.isScreenRound
+                    // The whole display is the control: left half scores team
+                    // one, right half team two. The ring and the clock draw
+                    // over it, so nothing is reserved for them.
                     Row(
-                        // Bezel-safe inset so tiles sit inside the round display;
-                        // the height is capped by the inscribed rectangle so the
-                        // corners stay clear too.
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .roundScoreTilesSize(
-                                topReserve = SCORE_TILES_TOP_RESERVE,
-                                bottomReserve = SCORE_TILES_BOTTOM_RESERVE,
-                            ),
+                        modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         TeamScoreButton(
@@ -197,7 +182,7 @@ internal fun QuickScoreContent(
                             onDecrement = onDecrementOne,
                             enabled = true,
                             modifier = Modifier.weight(1f),
-                shape = teamScoreTileShape(isRound = isRound, isLeft = true),
+                shape = RectangleShape,
                         )
                         TeamScoreButton(
                             teamName = stringResource(R.string.team_default_2),
@@ -208,7 +193,7 @@ internal fun QuickScoreContent(
                             onDecrement = onDecrementTwo,
                             enabled = true,
                             modifier = Modifier.weight(1f),
-                shape = teamScoreTileShape(isRound = isRound, isLeft = false),
+                shape = RectangleShape,
                         )
                     }
                 }
