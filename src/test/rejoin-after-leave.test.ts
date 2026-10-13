@@ -195,6 +195,45 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
     expect(res.status).toBe(409);
   });
 
+  it("enqueues a player_joined push notification when a returning player rejoins", async () => {
+    // Prod repro (event cmmkfrx8b0000o2ixrix1yp2m, 2026-10-11 10:32): the owner
+    // left (player_left + spot_available jobs, webhook fired) and rejoined two
+    // seconds later — the player_joined webhook fired, but NO player_joined
+    // NotificationJob was ever created, so no push reached Android or iOS.
+    // Fresh joins enqueue one (applyRosterChange.server.ts:494); the re-join
+    // branches return after webhook-only notifyPlayerJoined (line 118-128).
+    const user = await seedUser("Rodrigo Stange", "u-rodrigo");
+    const event = await seedRecurringEvent();
+
+    const player = await prisma.player.create({
+      data: { eventId: event.id, name: "Rodrigo Stange", userId: user.id, order: 0 },
+    });
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Rodrigo Stange", userId: user.id },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, order: 0 },
+    });
+
+    await archiveAndLeave({
+      eventId: event.id,
+      playerId: player.id,
+      actor: { kind: "self", userId: user.id },
+    });
+
+    const res = await POST(
+      ctx(event.id, { name: "Rodrigo Stange", linkToAccount: true }, { user: { id: user.id, name: user.name } }),
+    );
+
+    expect(res.status).toBe(200);
+    // The leave side enqueues player_left/spot_available; the rejoin side must
+    // enqueue exactly one player_joined job — same as a fresh join.
+    const joinedJobs = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "player_joined" },
+    });
+    expect(joinedJobs).toHaveLength(1);
+  });
+
   it("fires the player_joined webhook when a returning player joins the current game", async () => {
     // Prod repro (event cmmkfrx8b0000o2ixrix1yp2m): players who re-joined after
     // the recurring reset were added to the game list but no player_joined
