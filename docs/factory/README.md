@@ -153,3 +153,34 @@ Steps 2 and 3 are where the risk is, and they are deliberately cheap.
   ADR 0045.
 - No machine-written dex tasks. dex is a local CLI, absent from the runner. ADR 0043.
 - No metric work before a committed Baseline. ADR 0047.
+
+## Roles, reach, budgets, and the automerge exception
+
+
+| Role | Trigger | Does | Never |
+|---|---|---|---|
+| **Factory** | Issue labelled `ready-for-agent` | Implements, gates, opens the Change, iterates on red | Merge, release, self-label |
+| **Reviewer** | Any open PR a human branch can trigger it on | Independent review; pushes fixes to `factory/*` | Approve, touch a human branch |
+| **Sweeper** | Schedule (30 min) | Files one evidenced Issue per stuck open Change; comments once | Edit code, push, adopt work, queue anything |
+| **Explorer** | Schedule / dependency event | Files well-evidenced Issues (Design, Bugs, Security, Performance) | Write code, self-label |
+| **Sentinel** | Unhealthy production signals | Files the incident, drafts the postmortem, pages the human | Remediate anything |
+
+**Reach, and the two gaps in it.** Two limits are structural rather than matters of policy, so
+they are recorded here rather than discovered later:
+
+- A `pull_request` workflow runs the workflow files **on the Change's own branch**, so a Change
+  opened before a workflow existed never triggers it.
+- A run started by **Dependabot** receives no repository secrets and a read-only `GITHUB_TOKEN`, so
+  no role that mints an App token can run on a machine-authored Change.
+
+Together those mean the Reviewer does **not** reach every open Change: it misses machine-authored
+ones, and any Change predating a workflow. The Sweeper exists for that ground — it runs on a
+schedule, where secrets are available, and reports what it finds as Issues rather than reviews.
+
+**Budgets.** 3 Attempts per gate, 6 per Issue, 500k tokens per Issue, 5M per day. Exceeding
+any budget ends the run as **Blocked**, with the evidence attached.
+
+**Handoff.** The Factory's terminal state is **awaiting-human**, never "done". It labels
+the Change `factory:review` and comments a summary: what changed, linked Issue, gates
+passed, coverage delta, and the full transcript. Blocking state is `factory:blocked`; a
+Blocked Issue stays out of the queue until a human clears it.

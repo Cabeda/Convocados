@@ -182,3 +182,72 @@ export function MyComponent() {
 1. Add key to `src/lib/i18n/en.ts` (source of truth)
 2. Add translations to all locale files: `pt.ts`, `es.ts`, `fr.ts`, `de.ts`, `it.ts`
 3. Use `t("newKey")` in components
+
+## The two dex ledgers, and the machine exception
+
+
+| Ledger | Owner | Holds |
+|---|---|---|
+| **dex** (`.dex/tasks.jsonl`) | Humans | Plans, follow-ups, postmortem actions |
+| **GitHub labels + comments** | The factory | Runtime state: queue, Claim, Handoff, Blocked |
+
+`dex` is a local CLI and is **not installed on the GitHub runner**, so machine-written
+issues cannot be dex tasks. The one exception to "use dex for ALL task tracking":
+
+> **Explorers and the Sentinel file GitHub issues directly**, labelled `factory:explored`,
+> and commit their reasoning to `docs/explorations/`. Humans keep dex.
+
+Agents running an implementation wave: exploration notes go in `docs/explorations/` (one
+file per wave), so the next session's implementers and reviewers can read them — `/tmp`
+notes die with the machine.
+
+An Explorer never applies `ready-for-agent` to its own issue. Promotion from
+`factory:explored` to `ready-for-agent` is the human's decision, always.
+
+## Project structure
+
+
+```
+src/                        # Web app source
+├── components/             # React components (.tsx)
+├── pages/
+│   └── api/               # Astro API routes (.ts)
+├── lib/
+│   ├── i18n/              # Translations per locale
+│   ├── *.server.ts        # Server-side utilities
+│   └── *.ts               # Shared utilities
+├── test/                  # Test files
+└── prisma/
+    └── schema.prisma
+
+android-app/               # Native Android app (Gradle multi-module: :app, :wear)
+├── app/src/main/java/dev/convocados/        # :app — phone/tablet
+│   ├── data/
+│   │   ├── api/           # ApiClient, ConvocadosApi, Models
+│   │   ├── auth/          # AuthManager, TokenStore (OAuth 2.1)
+│   │   ├── push/          # PushTokenManager, ConvocadosFcmService
+│   │   └── datastore/     # SettingsStore (preferences)
+│   ├── ui/
+│   │   ├── navigation/    # AppNavigation, Route definitions
+│   │   ├── screen/        # Feature screens (games, event, profile, etc.)
+│   │   └── theme/         # Material 3 theme & colors
+│   ├── ConvocadosApp.kt   # Hilt application class
+│   ├── MainActivity.kt    # Single activity entry point
+│   └── ConvocadosRoot.kt  # Root composable + RootViewModel
+├── wear/src/main/java/dev/convocados/wear/  # :wear — Wear OS (standalone)
+│   ├── data/
+│   │   ├── api/           # ApiClient + remote models
+│   │   ├── auth/          # Google Sign-In + Data Layer token sync
+│   │   ├── local/         # Room DB (offline cache)
+│   │   ├── repository/    # Repositories
+│   │   ├── alarm/         # Game alarm scheduling + boot receiver
+│   │   └── sync/          # WorkManager sync queue
+│   ├── ui/                # Wear Compose screens, navigation, theme
+│   ├── di/                # Hilt modules
+│   ├── util/              # DateTimeUtil, TickFlow
+│   └── WearApp.kt         # Hilt application class
+├── app/build.gradle.kts   # :app dependencies
+├── wear/build.gradle.kts  # :wear dependencies
+├── settings.gradle.kts    # Module includes (:app, :wear)
+└── build.gradle.kts       # Project-level plugins
+```
