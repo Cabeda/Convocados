@@ -8,9 +8,10 @@
  * the real gate decayed.
  *
  * The passing case points at the committed screenshots, so it exercises the real
- * artifacts. The failing cases synthesize PNGs, because the defect the gate
- * exists for — a screenshot rendered on a foreign background — is exactly what
- * the committed artifacts must never be again.
+ * artifacts. The failing cases synthesize PNGs, because the defects the gate
+ * exists for — a capture rendered on a foreign background, a circular mask with
+ * transparent corners, a missing display shape — are exactly what the committed
+ * artifacts must never be again.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { deflateSync } from "node:zlib";
@@ -60,7 +61,7 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([length, typeAndData, crc]);
 }
 
-/** @param {number} width @param {number} height @param {(x:number,y:number)=>[number,number,number,number]} pixel */
+/** @param {number} width @param {number} height @param {(x:number,y:number)=>number[]} pixel */
 function png(width: number, height: number, pixel: (x: number, y: number) => number[]): Buffer {
   const raw = Buffer.alloc(height * (width * 4 + 1));
   for (let y = 0; y < height; y++) {
@@ -102,6 +103,17 @@ function writeShot(name: string, buffer: Buffer) {
   writeFileSync(join(dir, name), buffer);
 }
 
+/** An opaque capture of the given colour, on one shape. */
+function writeShape(name: string, rgb: number[], size = 8) {
+  writeShot(name, png(size, size, () => [rgb[0], rgb[1], rgb[2], 255]));
+}
+
+/** Both shapes present, so only the rule under test can fail. */
+function writeShapes(pixel: (x: number, y: number, size: number) => number[], size = 8) {
+  writeShot("games_round.png", png(size, size, (x, y) => pixel(x, y, size)));
+  writeShot("games_square.png", png(size, size, (x, y) => pixel(x, y, size)));
+}
+
 function check() {
   return checkScreenshots({ screenshotDir: dir, colorFile });
 }
@@ -127,43 +139,76 @@ describe("committed Wear store screenshots", () => {
 describe("the rejection this gate prevents", () => {
   it("rejects a screenshot rendered on the default window background", () => {
     // Robolectric's #FAFAFA window colour is the exact framing Google flagged.
-    writeShot("games.png", png(8, 8, () => [250, 250, 250, 255]));
+    writeShapes(() => [250, 250, 250, 255]);
     const errors = check();
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain("games.png");
-    expect(errors[0]).toContain("only the app interface");
+    expect(errors).toHaveLength(2);
+    for (const error of errors) expect(error).toContain("only the app interface");
   });
 
-  it("rejects a transparent border", () => {
+  it("rejects a circular mask — a round capture with transparent corners", () => {
     const [r, g, b] = appBg();
-    writeShot("games.png", png(8, 8, (x, y) => (x === 0 || y === 0 || x === 7 || y === 7 ? [r, g, b, 0] : [r, g, b, 255])));
+    writeShot(
+      "games_round.png",
+      png(8, 8, (x, y) => (x === 0 && y === 0 ? [r, g, b, 0] : [r, g, b, 255])),
+    );
+    writeShape("games_square.png", appBg());
+    const errors = check();
+    // A transparent corner trips both rules: the transparency rule and the
+    // corner-must-be-the-background rule.
+    expect(errors).toHaveLength(2);
+    const joined = errors.join("\n");
+    expect(joined).toContain("WO-G5");
+    expect(joined).toContain("transparent");
+  });
+
+  it("rejects any transparent pixel, not just the corners", () => {
+    const [r, g, b] = appBg();
+    writeShot(
+      "games_round.png",
+      png(8, 8, (x, y) => (x === 4 && y === 4 ? [r, g, b, 128] : [r, g, b, 255])),
+    );
+    writeShape("games_square.png", appBg());
     const errors = check();
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain("a=0");
+    expect(errors[0]).toContain("(4,4)");
   });
 
   it("accepts a full-bleed capture on the app background", () => {
-    const [r, g, b] = appBg();
-    writeShot("games.png", png(8, 8, () => [r, g, b, 255]));
+    writeShapes(() => [...appBg(), 255]);
     expect(check()).toEqual([]);
   });
 
   it("tolerates anti-aliased edge pixels a few levels off the background", () => {
     const [r, g, b] = appBg();
-    writeShot(
-      "games.png",
-      png(8, 8, (x, y) =>
-        x === 0 || y === 0 || x === 7 || y === 7 ? [r + 3, g + 1, b + 2, 255] : [r, g, b, 255],
-      ),
+    writeShapes((x, y, size) =>
+      x === 0 || y === 0 || x === size - 1 || y === size - 1
+        ? [r + 3, g + 1, b + 2, 255]
+        : [r, g, b, 255],
     );
     expect(check()).toEqual([]);
+  });
+});
+
+describe("both display shapes are represented", () => {
+  it("rejects a set with no round screenshot", () => {
+    writeShape("games_square.png", appBg());
+    expect(check()[0]).toContain("round");
+  });
+
+  it("rejects a set with no square screenshot", () => {
+    writeShape("games_round.png", appBg());
+    const errors = check();
+    expect(errors).toEqual(
+      expect.arrayContaining([expect.stringContaining("square")]),
+    );
   });
 });
 
 describe("Play's square requirement", () => {
   it("rejects a non-square screenshot", () => {
     const [r, g, b] = appBg();
-    writeShot("games.png", png(4, 6, () => [r, g, b, 255]));
+    writeShot("games_square.png", png(4, 6, () => [r, g, b, 255]));
+    writeShape("games_round.png", appBg());
     const errors = check();
     expect(errors).toEqual(
       expect.arrayContaining([expect.stringContaining("Play requires square (1:1)")]),
@@ -183,8 +228,9 @@ describe("degenerate inputs", () => {
   });
 
   it("fails when a file is not a readable RGBA PNG", () => {
-    writeFileSync(join(dir, "games.png"), Buffer.from("not a png"));
-    expect(check()[0]).toContain("not a PNG");
+    writeFileSync(join(dir, "games_round.png"), Buffer.from("not a png"));
+    writeFileSync(join(dir, "games_square.png"), Buffer.from("not a png"));
+    expect(check().some((error) => error.includes("not a PNG"))).toBe(true);
   });
 });
 
@@ -200,8 +246,7 @@ describe("the CLI fails closed", () => {
   });
 
   it("accepts --dir pointing at a compliant directory", () => {
-    const [r, g, b] = appBg();
-    writeShot("games.png", png(4, 4, () => [r, g, b, 255]));
+    writeShapes(() => [...appBg(), 255], 4);
     const result = spawnSync(
       process.execPath,
       [join(root, "scripts/check-play-screenshots.mjs"), "--dir", dir, "--color", colorFile],

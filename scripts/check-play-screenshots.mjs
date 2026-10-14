@@ -11,12 +11,19 @@
  *
  * `:wear:verifyRoborazziDebug` cannot catch this: it compares a capture against
  * the golden that capture produced, so a wrong-but-stable background passes
- * forever. This gate encodes the invariant the golden cannot: every corner of a
- * Wear store screenshot must be the app's declared background colour (`val Bg`
- * in the Wear `Color.kt`). A fixture that forgets to paint it leaves the default
- * window colour in the corners and fails here, before the upload — which is the
- * framing Google flagged. (Corners, not the whole border: real content reaches
- * the edge on some screens, so a full-border rule would false-positive.)
+ * forever. This gate encodes the invariant the golden cannot, matching Wear app
+ * quality WO-G5 (opaque 1:1 screenshots of only the app interface):
+ *
+ *   - round and square are both represented (`…_round.png` and `…_square.png`),
+ *     because the app draws differently on each shape and the listing should show
+ *     a device its own interface;
+ *   - every image is 1:1 and fully opaque — WO-G5 forbids transparent backgrounds
+ *     or masking, so a circular-masked round capture fails here;
+ *   - every corner is the app's declared background (`val Bg` in the Wear
+ *     `Color.kt`), so a fixture that leaves the default window colour in the
+ *     frame — the rejected framing — fails here. (Corners, not the whole border:
+ *     real content reaches the edge on some screens, so a full-border rule would
+ *     false-positive.)
  *
  * One implementation, on purpose. `src/test/play-screenshots.test.ts` drives the
  * failing paths through this module; a second copy of the rules would stay green
@@ -154,6 +161,24 @@ export function readImage(buffer) {
 }
 
 /**
+ * First pixel with alpha < 255, or null if the whole image is opaque.
+ *
+ * @param {Buffer} data RGBA bytes
+ * @param {number} width
+ * @param {number} height
+ * @returns {{x: number, y: number, a: number} | null}
+ */
+function firstTransparentPixel(data, width, height) {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const a = data[(y * width + x) * 4 + 3];
+      if (a !== 255) return { x, y, a };
+    }
+  }
+  return null;
+}
+
+/**
  * @param {{screenshotDir: string, colorFile: string}} options
  * @returns {string[]} one message per problem; empty means the screenshots may ship
  */
@@ -173,6 +198,22 @@ export function checkScreenshots({ screenshotDir, colorFile }) {
   const bg = appBackgroundColor(colorFile);
   const errors = [];
 
+  const round = files.filter((name) => name.endsWith("_round.png"));
+  const square = files.filter((name) => name.endsWith("_square.png"));
+  if (round.length === 0) {
+    errors.push(
+      `No round Wear screenshot (\`…_round.png\`) under ${screenshotDir}. The app ` +
+        `draws differently on round and square (RoundSafeLayout), so the listing ` +
+        `must show a round device its own interface (Wear app quality WO-G5).`,
+    );
+  }
+  if (square.length === 0) {
+    errors.push(
+      `No square Wear screenshot (\`…_square.png\`) under ${screenshotDir}. The ` +
+        `listing must also show a square device its own interface (WO-G5).`,
+    );
+  }
+
   for (const name of files) {
     const path = join(screenshotDir, name);
     let image;
@@ -187,6 +228,19 @@ export function checkScreenshots({ screenshotDir, colorFile }) {
     if (width !== height) {
       errors.push(
         `${name} is ${width}x${height}; Play requires square (1:1) Wear screenshots`,
+      );
+    }
+
+    // WO-G5: "Not include transparent backgrounds or masking." Any pixel with
+    // alpha < 255 is a transparency or a circular mask, so scan the whole image,
+    // not just the corners.
+    const transparentAt = firstTransparentPixel(data, width, height);
+    if (transparentAt) {
+      errors.push(
+        `${name} has a transparent pixel (a=${transparentAt.a}) at ` +
+          `(${transparentAt.x},${transparentAt.y}); Wear app quality WO-G5 forbids ` +
+          `transparent backgrounds or masking. Round captures must be opaque with ` +
+          `the app background in the corners, not circular-masked.`,
       );
     }
 
