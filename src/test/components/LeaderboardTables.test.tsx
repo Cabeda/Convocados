@@ -38,10 +38,9 @@ describe("LeaderboardTables", () => {
     expect(screen.getByText("Crew league")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Player" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Crew" })).toBeInTheDocument();
-    // Player league keeps football points; Crew league shows its best-six total to 2 decimals.
-    expect(screen.getByText("10")).toBeInTheDocument();
+    // Player league keeps football points; Crew league shows its best-six total as whole points.
+    expect(screen.getAllByText("10").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("+8")).toBeInTheDocument();
-    expect(screen.getByText("10.00")).toBeInTheDocument();
     expect(screen.getByText("4/4")).toBeInTheDocument();
     // Player league shows each player's Crew next to the name; "Red" also
     // appears as the Crew league row, so expect at least two occurrences.
@@ -50,7 +49,7 @@ describe("LeaderboardTables", () => {
 
   it("links crew game-score chips to the single game page when eventId is provided", () => {
     renderWithTheme(<LeaderboardTables data={data} loading={false} selectedScopeId="season-1" seasonOptions={[]} onScopeChange={vi.fn()} eventId="evt-1" />);
-    const chip = screen.getByLabelText(/Game scores 1: 3\.00/);
+    const chip = screen.getByLabelText(/Game scores 1: 3/);
     expect(chip).toHaveAttribute("href", "/events/evt-1/games/g1");
   });
 
@@ -108,9 +107,9 @@ describe("LeaderboardTables — mobile crew standings", () => {
     // The player league keeps the scrollable table.
     expect(screen.getByRole("table", { name: "Player" })).toBeInTheDocument();
     expect(screen.getAllByText("Red").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("10.00")).toBeInTheDocument();
+    expect(screen.getAllByText("10").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/4\/4/)).toBeInTheDocument();
     // Game score chips still render.
-    expect(screen.getByLabelText(/Game scores 1: 3\.00/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Game scores 1: 3/)).toBeInTheDocument();
   });
 });

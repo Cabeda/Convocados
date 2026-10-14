@@ -105,6 +105,10 @@ _Avoid_: current rank, leaderboard position, MMR
 The before → after change in **Season Rank** caused by one counted Game: the RP delta pill, the tier-bar movement, and the count-up on the post-game card. Rendered as "Rank Updated" only once the Game has a score. Absent while the Game is unscored — then only **Rank Standing** shows.
 _Avoid_: rank change, Elo swing, MMR delta
 
+## Stakes Preview
+The projected Season outcome of the current, unplayed **Game**, shown to **Season** participants on the team view during team formation: each lineup player's **Crew** association, their **Season Contribution** under each side result, each **Crew**'s resulting **Crew Round Score**, and the per-scenario **Season Rank** movement and Crew standings position. Shown only while the Season still has an available **Season Round**; tournament points display as whole numbers.
+_Avoid_: prediction, forecast (implies certainty), odds
+
 ## Open Pickup
 An un-adopted one-off Event+Game sourced from a Playtomic booking (`source=playtomic`), created automatically by the sweep when a court slot is detected as booked. Public (`isPublic=true`), no Owner (`ownerId=null`), no players yet. A notice that people play here at this court and time — a lead for organizing, not a real game. Rendered distinctly in the public listing (badge + no roster/join UI). Joining is blocked until someone Adopts.
 _Avoid_: synthetic game, beacon, phantom game

@@ -9,7 +9,16 @@ import ViewListIcon from "@mui/icons-material/ViewList";
 import StadiumIcon from "@mui/icons-material/Stadium";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
-import { TeamPicker } from "./TeamPicker";
+import { TeamPicker, type CrewHeaderChip, type PlayerStake } from "./TeamPicker";
+import StakesPreview from "./StakesPreview";
+import { useStakes } from "~/lib/useStakes";
+import {
+  crewMapFromLineup,
+  liveContribution,
+  liveCrewRoundScore,
+  OUTCOMES,
+  type MatchOutcome,
+} from "~/lib/stakesPreview";
 import { TeamField } from "./TeamField";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
@@ -470,6 +479,69 @@ export default function EventPage({ eventId }: { eventId: string }) {
         : m.team === event.teamTwoName ? teamTwoName : m.team,
     }));
   }, [localMatches, event, teamOneName, teamTwoName]);
+
+  // Stakes Preview inputs: the two drawn lineups, or null until both have players.
+  const stakeLineups = useMemo(() => {
+    if (!displayMatches || displayMatches.length < 2) return null;
+    const teamOne = displayMatches[0].players.map((p) => p.name);
+    const teamTwo = displayMatches[1].players.map((p) => p.name);
+    if (teamOne.length === 0 || teamTwo.length === 0) return null;
+    return { teamOne, teamTwo };
+  }, [displayMatches]);
+
+  // Stakes Preview data + live client-side derivation (ADR 0050). Contributions
+  // and Crew round scores depend only on side assignment, so they update on drag;
+  // Rank deltas and standings positions refresh from the debounced request.
+  const stakes = useStakes(event?.id ?? "", stakeLineups?.teamOne ?? [], stakeLineups?.teamTwo ?? []);
+  const crewMap = useMemo(() => crewMapFromLineup(stakes.data?.lineup ?? []), [stakes.data]);
+  const stakeScenario = stakes.scenario;
+  const livePoints = useMemo(
+    () => (stakeLineups && stakeScenario
+      ? liveContribution(stakeLineups.teamOne, stakeLineups.teamTwo, stakeScenario.outcome)
+      : null),
+    [stakeLineups, stakeScenario],
+  );
+  const liveCrewScore = useMemo(() => {
+    if (!stakeLineups || !livePoints) return {};
+    const roster = [
+      ...stakeLineups.teamOne.map((name) => ({ name, side: "teamOne" as const })),
+      ...stakeLineups.teamTwo.map((name) => ({ name, side: "teamTwo" as const })),
+    ];
+    return liveCrewRoundScore(roster, crewMap, livePoints);
+  }, [stakeLineups, livePoints, crewMap]);
+  const stakeMap = useMemo(() => {
+    if (!stakeScenario) return undefined;
+    const map: Record<string, PlayerStake> = {};
+    for (const p of stakeScenario.players) {
+      map[p.name] = {
+        contribution: livePoints?.[p.name] ?? p.contribution,
+        rpDelta: p.rpDelta,
+        passed: p.passed,
+        provisional: p.provisional,
+      };
+    }
+    return map;
+  }, [stakeScenario, livePoints]);
+  const crewChipsByTeamIndex = useMemo<CrewHeaderChip[][] | undefined>(() => {
+    if (!stakeScenario) return undefined;
+    return (["teamOne", "teamTwo"] as const).map((side) => {
+      const crewIds = [
+        ...new Set(stakeScenario.players.filter((p) => p.side === side && p.crewId).map((p) => p.crewId as string)),
+      ];
+      return crewIds.flatMap((crewId) => {
+        const c = stakeScenario.crews.find((x) => x.crewId === crewId);
+        return c
+          ? [{ crewId, name: c.name, roundScore: liveCrewScore[crewId] ?? c.roundScore, positionAfter: c.positionAfter, passed: c.passed }]
+          : [];
+      });
+    });
+  }, [stakeScenario, liveCrewScore]);
+  const stakesOutcomeLabel = (outcome: MatchOutcome) =>
+    outcome === "teamOne"
+      ? t("stakesPreviewOutcomeOne", { team: teamOneName || t("stakesPreviewTeamOne") })
+      : outcome === "teamTwo"
+        ? t("stakesPreviewOutcomeTwo", { team: teamTwoName || t("stakesPreviewTeamTwo") })
+        : t("stakesPreviewOutcomeDraw");
 
   useEffect(() => {
     if (event) document.title = `${event.title} — Convocados`;
@@ -1300,7 +1372,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {/* Teams — shown below players after randomization */}
             {localMatches && localMatches.length > 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
-                <Stack spacing={3}>
+                <Stack spacing={2}>
                   <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                     <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
                     <ToggleButtonGroup
@@ -1320,6 +1392,22 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       </ToggleButton>
                     </ToggleButtonGroup>
                   </Stack>
+                  {stakes.data?.roundAvailable && stakeScenario && (
+                    <ToggleButtonGroup
+                      size="small"
+                      exclusive
+                      fullWidth
+                      value={stakes.scenarioIndex}
+                      onChange={(_e, next) => { if (next !== null) stakes.setScenarioIndex(next); }}
+                      aria-label={t("stakesPreviewTitle")}
+                    >
+                      {OUTCOMES.map((outcome, index) => (
+                        <ToggleButton key={outcome} value={index} sx={{ textTransform: "none", fontWeight: 700 }}>
+                          {stakesOutcomeLabel(outcome)}
+                        </ToggleButton>
+                      ))}
+                    </ToggleButtonGroup>
+                  )}
                   {teamView === "list" ? (
                     <TeamPicker
                       matches={displayMatches ?? []}
@@ -1327,6 +1415,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       shuffleKey={shuffleVersion}
                       ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
                       canEdit={canEditTeams}
+                      crewMap={stakeLineups ? crewMap : undefined}
+                      stakeMap={stakeMap}
+                      crewChipsByTeamIndex={crewChipsByTeamIndex}
+                      rankEnabled={stakes.data?.rankEnabled ?? true}
+                      viewerName={stakes.data?.viewerName}
                       onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
                         if (teamIdx === 0) {
                           setTeamOneName(newName);
@@ -1345,6 +1438,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
                       sport={event.sport}
                       canEdit={canEditTeams}
+                      crewMap={stakeLineups ? crewMap : undefined}
+                      crewChipsByTeamIndex={crewChipsByTeamIndex}
+                    />
+                  )}
+                  {stakes.data && (
+                    <StakesPreview
+                      seasonName={stakes.data.seasonName}
+                      roundAvailable={stakes.data.roundAvailable}
+                      roundsCounted={stakes.data.roundsCounted}
+                      scenario={stakeScenario}
+                      liveRoundScore={liveCrewScore}
                     />
                   )}
                 </Stack>
