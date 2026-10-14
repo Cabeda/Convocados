@@ -108,7 +108,7 @@ function CrewScoreChips({ row, eventId }: { row: CrewStanding; eventId?: string 
             key={entry.gameId}
             {...(href ? { component: "a" as const, href } : {})}
             title={entry.counted ? t("crewScoreCounted") : t("crewScoreDropped")}
-            aria-label={`${t("crewGameScores")} ${index + 1}: ${entry.score.toFixed(2)}`}
+            aria-label={`${t("crewGameScores")} ${index + 1}: ${Math.round(entry.score)}`}
             sx={{
               width: 44,
               textAlign: "center",
@@ -124,7 +124,7 @@ function CrewScoreChips({ row, eventId }: { row: CrewStanding; eventId?: string 
               ...(href ? { textDecoration: "none", "&:hover": { opacity: 0.85 } } : {}),
             }}
           >
-            {entry.score.toFixed(2)}
+            {Math.round(entry.score)}
           </Box>
         );
       })}
@@ -160,7 +160,7 @@ function CrewStandingsList({ rows, label, eventId }: { rows: CrewStanding[]; lab
               title={t("crewBestSixTitle")}
               sx={{ fontVariantNumeric: "tabular-nums" }}
             >
-              {row.points.toFixed(2)}
+              {Math.round(row.points)}
             </Typography>
           </Stack>
           <Typography variant="caption" color="text.secondary" title={t("crewRoundsTitle")}>
@@ -197,8 +197,8 @@ function CrewStandingsTable({ rows, label, eventId }: { rows: CrewStanding[]; la
             <TableRow key={row.crewId}>
               <TableCell sx={{ color: "text.secondary", fontWeight: 700 }}>{row.rank}</TableCell>
               <TableCell sx={{ fontWeight: row.rank === 1 ? 700 : 500, whiteSpace: "nowrap" }}>{row.name}</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }} title={t("crewTieBreakTotal", { total: row.tieBreakTotal.toFixed(2) })}>
-                {row.points.toFixed(2)}
+              <TableCell align="right" sx={{ fontWeight: 700 }} title={t("crewTieBreakTotal", { total: Math.round(row.tieBreakTotal) })}>
+                {Math.round(row.points)}
               </TableCell>
               <TableCell align="right">{row.roundsCounted}/{row.roundsRepresented}</TableCell>
               <TableCell sx={{ minWidth: 160 }}>
