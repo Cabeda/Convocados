@@ -27,6 +27,7 @@ import androidx.wear.compose.material3.ScreenScaffold
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import kotlin.math.abs
+import kotlin.math.hypot
 
 /**
  * Test tag for the [RoundSafeReferenceRow] anchor itself, and for the list that
@@ -67,6 +68,7 @@ internal fun RoundSafeReferenceRow() {
                         Modifier
                             .fillMaxWidth()
                             .roundListInset()
+                            .fillMaxWidth()
                             .height(2.dp)
                             .testTag(ROUND_SAFE_ANCHOR_TAG),
                     )
@@ -93,22 +95,55 @@ fun displayWidth(rule: ComposeContentTestRule): Float =
     rule.onRoot().fetchSemanticsNode().size.width.toFloat()
 
 /**
- * The band a round-safe row occupies, measured from the reference control.
- * Guarded on the reference really being inset from the list by the documented
- * [ROUND_LIST_INSET], otherwise comparing against it proves nothing.
+ * The width a row gets when the circle has no room to spare, measured from the
+ * reference row rendered at the top of its own list — where the position-aware
+ * inset is clamped by the flat [ROUND_LIST_INSET] ceiling. A screen's rows are
+ * compared against this rather than against each other: rows no longer share
+ * one band, but they must never come out *narrower* than the flat inset made
+ * them, and any row wider than it is one the circle actually had room for.
  */
-fun roundSafeBand(rule: ComposeContentTestRule): Rect {
-    val band = rule.onNodeWithTag(ROUND_SAFE_ANCHOR_TAG).fetchSemanticsNode().boundsInRoot
-    val list = rule.onNode(screenList()).fetchSemanticsNode().boundsInRoot
-    val inset = with(rule.density) { ROUND_LIST_INSET.toPx() }
-    val tolerance = 0.5f
-    assertTrue(
-        ("reference row is inset %.1fpx/%.1fpx from the list, expected at least %.1fpx on each side " +
-            "— the reference is no longer round-safe")
-            .format(band.left - list.left, list.right - band.right, inset - tolerance),
-        band.left - list.left >= inset - tolerance && list.right - band.right >= inset - tolerance,
-    )
-    return band
+fun roundCeilingWidth(rule: ComposeContentTestRule): Float =
+    rule.onNodeWithTag(ROUND_SAFE_ANCHOR_TAG).fetchSemanticsNode().boundsInRoot.width
+
+/**
+ * The invariant that replaced "every round-safe row shares one band".
+ *
+ * `roundListInset` used to be the flat [ROUND_LIST_INSET] at every scroll
+ * position, so a screen could be checked by measuring its one round-safe row
+ * and requiring every other row to span that same horizontal band. The inset is
+ * now derived from where the row sits on the circle — wide at the equator,
+ * capped at the old flat value near a pole — so there is no single band left
+ * to share.
+ *
+ * What the band was a proxy for is asserted directly: **a row that is wider
+ * than the flat inset would have made it only exists because the circle had
+ * room, so its corners must be inside the bezel.** A row at the flat width is
+ * carrying today's layout, bezel clip included, and has nothing to prove — the
+ * defect GH #1276 and GH #992 were about was a row laid out *wider* than the
+ * inset allowed, and that is what this catches.
+ */
+fun assertRowInsideBezel(rule: ComposeContentTestRule, label: String, bounds: Rect) {
+    val ceiling = roundCeilingWidth(rule)
+    val tolerance = 1f
+    if (bounds.width <= ceiling + tolerance) return
+
+    val display = rule.onRoot().fetchSemanticsNode().boundsInRoot
+    val radius = (minOf(display.width, display.height) / 2f) - with(rule.density) { ROUND_BEZEL_INSET.toPx() }
+    listOf(
+        bounds.left to bounds.top,
+        bounds.right to bounds.top,
+        bounds.left to bounds.bottom,
+        bounds.right to bounds.bottom,
+    ).forEach { (x, y) ->
+        val distance = hypot(x - display.center.x, y - display.center.y)
+        assertTrue(
+            ("%s spans %.1fpx, wider than the %.1fpx the flat inset allows, and its corner at " +
+                "(%.1f, %.1f) sits %.1fpx from the centre — outside the %.1fpx bezel radius, so the " +
+                "position-aware inset widened a row the circle had no room for")
+                .format(label, bounds.width, ceiling, x, y, distance, radius),
+            distance <= radius + 1.5f,
+        )
+    }
 }
 
 /** Scrolls [matcher] into view on the screen's list and measures its bounds. */
@@ -116,26 +151,6 @@ fun boundsOf(rule: ComposeContentTestRule, label: String, matcher: SemanticsMatc
     rule.onNode(screenList()).performScrollToNode(matcher)
     rule.waitForIdle()
     return rule.onNode(matcher).fetchSemanticsNode(label).boundsInRoot
-}
-
-fun assertRowFillsBand(label: String, bounds: Rect, band: Rect) {
-    val tolerance = 0.5f
-    assertTrue(
-        ("%s spans [%.1f, %.1f], expected the round-safe band [%.1f, %.1f] — the row is laid out " +
-            "at the bezel-crossing width on a round display")
-            .format(label, bounds.left, bounds.right, band.left, band.right),
-        abs(bounds.left - band.left) <= tolerance && abs(bounds.right - band.right) <= tolerance,
-    )
-}
-
-fun assertRowInsideBand(label: String, bounds: Rect, band: Rect) {
-    val tolerance = 0.5f
-    assertTrue(
-        ("%s spans [%.1f, %.1f], expected inside the round-safe band [%.1f, %.1f] — the row " +
-            "crosses the circular bezel")
-            .format(label, bounds.left, bounds.right, band.left, band.right),
-        bounds.left >= band.left - tolerance && bounds.right <= band.right + tolerance,
-    )
 }
 
 /**

@@ -15,12 +15,10 @@ import dev.convocados.wear.ui.RoundSafeReferenceRow
 import dev.convocados.wear.ui.assertEllipsised
 import dev.convocados.wear.ui.assertFillsDisplay
 import dev.convocados.wear.ui.assertNotLineLimited
-import dev.convocados.wear.ui.assertRowFillsBand
-import dev.convocados.wear.ui.assertRowInsideBand
+import dev.convocados.wear.ui.assertRowInsideBezel
 import dev.convocados.wear.ui.assertWraps
 import dev.convocados.wear.ui.boundsOf
 import dev.convocados.wear.ui.displayWidth
-import dev.convocados.wear.ui.roundSafeBand
 import dev.convocados.wear.ui.screenList
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import io.mockk.every
@@ -64,9 +62,8 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(votingOpen())
 
-        val band = roundSafeBand(composeRule)
-        assertRowFillsBand("vote button", boundsOf(composeRule, "vote button", hasText(longNameOne, substring = true)), band)
-        assertRowInsideBand("vote prompt", boundsOf(composeRule, "vote prompt", hasText(VOTE_PROMPT)), band)
+        assertRowInsideBezel(composeRule, "vote button", boundsOf(composeRule, "vote button", hasText(longNameOne, substring = true)))
+        assertRowInsideBezel(composeRule, "vote prompt", boundsOf(composeRule, "vote prompt", hasText(VOTE_PROMPT)))
     }
 
     @Test
@@ -75,9 +72,8 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(votingClosed())
 
-        val band = roundSafeBand(composeRule)
-        assertRowFillsBand("voting closed", boundsOf(composeRule, "voting closed", hasText(VOTING_CLOSED)), band)
-        assertRowFillsBand("no votes", boundsOf(composeRule, "no votes", hasText(NO_VOTES)), band)
+        assertRowInsideBezel(composeRule, "voting closed", boundsOf(composeRule, "voting closed", hasText(VOTING_CLOSED)))
+        assertRowInsideBezel(composeRule, "no votes", boundsOf(composeRule, "no votes", hasText(NO_VOTES)))
     }
 
     @Test
@@ -86,10 +82,10 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
 
         render(MvpVotingUiState(isLoading = true))
-        assertRowFillsBand("loading row", loadingRowBounds(), roundSafeBand(composeRule))
+        assertRowInsideBezel(composeRule, "loading row", loadingRowBounds())
 
         render(MvpVotingUiState(isLoading = false, error = errorText))
-        assertRowFillsBand("error message", boundsOf(composeRule, "error message", hasText(errorText)), roundSafeBand(composeRule))
+        assertRowInsideBezel(composeRule, "error message", boundsOf(composeRule, "error message", hasText(errorText)))
     }
 
     @Test
@@ -98,7 +94,7 @@ class MvpVotingScreenRoundSafeTest {
         setContent()
         render(notEligible())
 
-        assertRowFillsBand("not eligible", boundsOf(composeRule, "not eligible", hasText(NOT_ELIGIBLE)), roundSafeBand(composeRule))
+        assertRowInsideBezel(composeRule, "not eligible", boundsOf(composeRule, "not eligible", hasText(NOT_ELIGIBLE)))
     }
 
     @Test

@@ -1,5 +1,9 @@
 package dev.convocados.wear.ui.screen.teams
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasScrollAction
@@ -8,7 +12,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToNode
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
-import dev.convocados.wear.ui.ROUND_LIST_INSET
+import dev.convocados.wear.ui.RoundSafeReferenceRow
+import dev.convocados.wear.ui.assertRowInsideBezel
+import dev.convocados.wear.ui.screenList
 import dev.convocados.wear.ui.screen.settings.GameSettingsUiState
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
@@ -22,7 +28,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.abs
 
 /**
  * GH #992 — team-name Texts and roster rows use `fillMaxWidth()` without
@@ -55,20 +60,18 @@ class TeamsScreenRoundSafeTest {
 
     @Test
     @Config(qualifiers = "w390dp-h390dp-round")
-    fun `round roster rows are inset like the screen's other round-safe rows`() {
+    fun `round roster rows keep their corners inside the round bezel`() {
         render(liveRosterState())
 
-        val roundSafeReference = scrollToAndGetBounds("reference row", hasText(KICK_OFF_BUTTON))
-        assertRoundSafeReferenceIsInset(roundSafeReference)
 
         rosterRows().forEach { (label, matcher) ->
-            assertRowMatchesReference(label, scrollToAndGetBounds(label, matcher), roundSafeReference)
+            assertRowInsideBezel(composeRule, label, scrollToAndGetBounds(label, matcher))
         }
     }
 
     @Test
     @Config(qualifiers = "w390dp-h390dp-round")
-    fun `round read-only, error and saving rows are inset like the round-safe rows`() {
+    fun `round read-only, error and saving rows keep their corners inside the round bezel`() {
         render(
             liveRosterState().copy(
                 isReadOnly = true,
@@ -77,12 +80,10 @@ class TeamsScreenRoundSafeTest {
             ),
         )
 
-        val roundSafeReference = scrollToAndGetBounds("reference row", hasText(KICK_OFF_BUTTON))
-        assertRoundSafeReferenceIsInset(roundSafeReference)
 
-        assertRowMatchesReference("team one name", scrollToAndGetBounds("team one name", hasText(longTeamOneName)), roundSafeReference)
-        assertRowMatchesReference("read-only player chip", scrollToAndGetBounds("read-only player chip", hasText(longNameOne)), roundSafeReference)
-        assertRowMatchesReference("error message", scrollToAndGetBounds("error message", hasText(errorText)), roundSafeReference)
+        assertRowInsideBezel(composeRule, "team one name", scrollToAndGetBounds("team one name", hasText(longTeamOneName)))
+        assertRowInsideBezel(composeRule, "read-only player chip", scrollToAndGetBounds("read-only player chip", hasText(longNameOne)))
+        assertRowInsideBezel(composeRule, "error message", scrollToAndGetBounds("error message", hasText(errorText)))
     }
 
     /**
@@ -133,11 +134,18 @@ class TeamsScreenRoundSafeTest {
 
         composeRule.setContent {
             ConvocadosWearTheme {
-                TeamsScreen(
-                    eventId = "event-1",
-                    viewModel = teamsViewModel,
-                    settingsViewModel = settingsViewModel,
-                )
+                Box(Modifier.fillMaxSize()) {
+                    TeamsScreen(
+                        eventId = "event-1",
+                        viewModel = teamsViewModel,
+                        settingsViewModel = settingsViewModel,
+                    )
+                    // Overlaid rather than stacked: splitting the display in
+                    // half would leave the roster unable to scroll to its own
+                    // rows, and `matchParentSize` keeps the screen's layout
+                    // untouched while still giving the ceiling a measurement.
+                    Box(Modifier.matchParentSize()) { RoundSafeReferenceRow() }
+                }
             }
         }
         composeRule.waitForIdle()
@@ -155,38 +163,9 @@ class TeamsScreenRoundSafeTest {
     )
 
     private fun scrollToAndGetBounds(label: String, matcher: SemanticsMatcher): Rect {
-        composeRule.onNode(hasScrollAction()).performScrollToNode(matcher)
+        composeRule.onNode(screenList()).performScrollToNode(matcher)
         composeRule.waitForIdle()
         return composeRule.onNode(matcher).fetchSemanticsNode().boundsInRoot
-    }
-
-    /**
-     * Guards the reference itself: the "Kick off now" control must really be
-     * inset from the raw list by at least the documented round list inset,
-     * otherwise comparing against it proves nothing.
-     */
-    private fun assertRoundSafeReferenceIsInset(reference: Rect) {
-        val list = composeRule.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
-        val inset = with(composeRule.density) { ROUND_LIST_INSET.toPx() }
-        val tolerance = 0.5f
-        assertTrue(
-            ("reference row is inset %.1fpx/%.1fpx from the list, expected at least %.1fpx on each " +
-                "side — the reference is no longer round-safe")
-                .format(reference.left - list.left, list.right - reference.right, inset - tolerance),
-            reference.left - list.left >= inset - tolerance &&
-                list.right - reference.right >= inset - tolerance,
-        )
-    }
-
-    private fun assertRowMatchesReference(label: String, bounds: Rect, reference: Rect) {
-        val tolerance = 0.5f
-        assertTrue(
-            ("%s spans [%.1f, %.1f], expected the round-safe band [%.1f, %.1f] — the row is laid " +
-                "out at the bezel-crossing width on a round display")
-                .format(label, bounds.left, bounds.right, reference.left, reference.right),
-            abs(bounds.left - reference.left) <= tolerance &&
-                abs(bounds.right - reference.right) <= tolerance,
-        )
     }
 
     private companion object {

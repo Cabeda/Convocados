@@ -10,10 +10,9 @@ import dev.convocados.wear.ui.RoundSafeReferenceRow
 import dev.convocados.wear.ui.assertEllipsised
 import dev.convocados.wear.ui.assertFillsDisplay
 import dev.convocados.wear.ui.assertNotLineLimited
-import dev.convocados.wear.ui.assertRowFillsBand
+import dev.convocados.wear.ui.assertRowInsideBezel
 import dev.convocados.wear.ui.boundsOf
 import dev.convocados.wear.ui.displayWidth
-import dev.convocados.wear.ui.roundSafeBand
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import io.mockk.every
 import io.mockk.mockk
@@ -58,13 +57,12 @@ class GameSettingsScreenRoundSafeTest {
     @Config(qualifiers = "w390dp-h390dp-round")
     fun `round kickoff, switch and vibration rows fill the round-safe band`() {
         setContent()
-        val band = roundSafeBand(composeRule)
 
-        assertRowFillsBand("kickoff label", boundsOf(composeRule, "kickoff label", hasText(KICKOFF_LABEL, substring = true)), band)
-        assertRowFillsBand("kick off now", boundsOf(composeRule, "kick off now", hasText(KICK_OFF_NOW)), band)
-        assertRowFillsBand("keep screen on", boundsOf(composeRule, "keep screen on", hasText(KEEP_SCREEN_ON)), band)
-        assertRowFillsBand("vibration alerts", boundsOf(composeRule, "vibration alerts", hasText(VIBRATION_ALERTS)), band)
-        assertRowFillsBand("interval label", boundsOf(composeRule, "interval label", hasText(EVERY_LABEL)), band)
+        assertRowInsideBezel(composeRule, "kickoff label", boundsOf(composeRule, "kickoff label", hasText(KICKOFF_LABEL, substring = true)))
+        assertRowInsideBezel(composeRule, "kick off now", boundsOf(composeRule, "kick off now", hasText(KICK_OFF_NOW)))
+        assertRowInsideBezel(composeRule, "keep screen on", boundsOf(composeRule, "keep screen on", hasText(KEEP_SCREEN_ON)))
+        assertRowInsideBezel(composeRule, "vibration alerts", boundsOf(composeRule, "vibration alerts", hasText(VIBRATION_ALERTS)))
+        assertRowInsideBezel(composeRule, "interval label", boundsOf(composeRule, "interval label", hasText(EVERY_LABEL)))
     }
 
     @Test

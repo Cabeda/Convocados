@@ -179,6 +179,38 @@ internal fun TeamScoreButton(
     }
 }
 
+/**
+ * The outline the game-progress ring traces: the device's own display shape.
+ *
+ * On a round watch that is a **perfect circle**, inscribed in [bounds] and
+ * centred on it — a rounded rectangle whose corner radius happens to equal
+ * half the short side only collapses into a circle when the canvas is square,
+ * so a non-square canvas used to yield a stadium instead. On a square watch it
+ * is the display's rectangle itself, **sharp-cornered**: the old hard-coded
+ * 28dp radius described no watch that exists.
+ *
+ * [bounds] is the canvas the ring is drawn into, which is the full display.
+ */
+internal fun edgeProgressPath(bounds: Rect, isRound: Boolean): Path = Path().apply {
+    if (isRound) {
+        val radius = minOf(bounds.width, bounds.height) / 2f
+        addOval(
+            Rect(
+                bounds.center.x - radius,
+                bounds.center.y - radius,
+                bounds.center.x + radius,
+                bounds.center.y + radius,
+            ),
+        )
+    } else {
+        moveTo(bounds.left, bounds.top)
+        lineTo(bounds.right, bounds.top)
+        lineTo(bounds.right, bounds.bottom)
+        lineTo(bounds.left, bounds.bottom)
+        close()
+    }
+}
+
 /** Game-progress indicator that hugs the screen edge, starting at 12 o'clock. */
 @Composable
 internal fun GameEdgeProgress(
@@ -211,22 +243,9 @@ internal fun GameEdgeProgress(
         val bottom = size.height - top
         val w = right - left
         val h = bottom - top
-        val r = if (isRound) minOf(w, h) / 2f else 28.dp.toPx()
         val cx = left + w / 2f
         val cy = top + h / 2f
-
-        val path = Path().apply {
-            moveTo(cx, top)
-            lineTo(right - r, top)
-            arcTo(Rect(right - 2 * r, top, right, top + 2 * r), -90f, 90f, false)
-            lineTo(right, bottom - r)
-            arcTo(Rect(right - 2 * r, bottom - 2 * r, right, bottom), 0f, 90f, false)
-            lineTo(left + r, bottom)
-            arcTo(Rect(left, bottom - 2 * r, left + 2 * r, bottom), 90f, 90f, false)
-            lineTo(left, top + r)
-            arcTo(Rect(left, top, left + 2 * r, top + 2 * r), 180f, 90f, false)
-            close()
-        }
+        val path = edgeProgressPath(Rect(left, top, right, bottom), isRound)
 
         drawPath(path, trackColor, style = Stroke(width = stroke))
 
