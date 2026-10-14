@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,9 +27,9 @@ import dev.convocados.wear.data.api.displayTennisPoint
 import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.RememberKeepScreenOn
-import dev.convocados.wear.ui.roundEquatorSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
+import dev.convocados.wear.ui.scoreEdgePadding
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.ongoing.OngoingLaunch
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
@@ -39,6 +40,7 @@ import dev.convocados.wear.ui.screen.score.GameEdgeProgress
 import dev.convocados.wear.ui.screen.score.TeamScoreButton
 import kotlinx.coroutines.delay
 import java.time.Instant
+
 
 @Composable
 fun QuickScoreScreen(
@@ -134,7 +136,7 @@ internal fun QuickScoreContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .scoreContentPadding(contentPadding)
+                    .scoreEdgePadding(contentPadding)
                     .pointerInput(Unit) {
                         // Swipe up ends the quick game; swipe down saves it to an event.
                         val threshold = 64.dp.toPx()
@@ -164,13 +166,11 @@ internal fun QuickScoreContent(
                         )
                     }
                 } else {
+                    // The whole display is the control: left half scores team
+                    // one, right half team two. The ring and the clock draw
+                    // over it, so nothing is reserved for them.
                     Row(
-                        // Bezel-safe inset so tiles sit inside the round display;
-                        // the height is capped by the inscribed rectangle so the
-                        // corners stay clear too.
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .roundEquatorSize(inset = 8.dp),
+                        modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         TeamScoreButton(
@@ -182,6 +182,7 @@ internal fun QuickScoreContent(
                             onDecrement = onDecrementOne,
                             enabled = true,
                             modifier = Modifier.weight(1f),
+                shape = RectangleShape,
                         )
                         TeamScoreButton(
                             teamName = stringResource(R.string.team_default_2),
@@ -192,6 +193,7 @@ internal fun QuickScoreContent(
                             onDecrement = onDecrementTwo,
                             enabled = true,
                             modifier = Modifier.weight(1f),
+                shape = RectangleShape,
                         )
                     }
                 }

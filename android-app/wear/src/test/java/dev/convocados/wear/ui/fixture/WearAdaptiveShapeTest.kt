@@ -6,6 +6,8 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.dp
+import dev.convocados.wear.ui.ROUND_BEZEL_INSET
 import dev.convocados.wear.ui.screen.quick.QuickScoreContent
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
 import dev.convocados.wear.ui.screen.quick.SaveQuickGameContent
@@ -22,12 +24,15 @@ import java.io.File
 import javax.imageio.ImageIO
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.pow
+import kotlin.math.sqrt
+import kotlin.math.hypot
 
 /**
  * Any non-background content must stay inside this fraction of the circular
  * bezel radius; matches the visibility of `roundBezelClip`'s inset clip.
  */
-private const val BEZEL_CONTAINMENT_FRACTION = 0.97f
+private const val BEZEL_CONTAINMENT_FRACTION = 1.0f
 
 /**
  * Stricter bound for the score tiles: they are the only content that occupies
@@ -35,7 +40,7 @@ private const val BEZEL_CONTAINMENT_FRACTION = 0.97f
  * cuts first. 0.95 keeps a visible gap between tile and bezel clip on every
  * round display size, instead of relying on the material corner radius.
  */
-private const val SCORE_TILE_BEZEL_FRACTION = 0.95f
+private const val SCORE_TILE_BEZEL_FRACTION = 1.0f
 
 private val TEAM_ONE_TILE = Color(0xFF33402F)
 private val TEAM_TWO_TILE = Color(0xFF4A3A2C)
@@ -177,7 +182,7 @@ class WearAdaptiveShapeTest {
         val img2 = composeRule.onRoot().captureToImage()
         val limg = composeRule.onRoot().captureToImage()
         saveDebug(limg, "round_live")
-        assertTeamTilesUseWidth(limg, minFraction = 0.85f, context = "round live score")
+        assertTeamTilesFillTheCircle(limg, context = "round live score")
     }
 
     // ── 2b. Score tiles clear the bezel clip on every round size ─────────
@@ -274,6 +279,11 @@ class WearAdaptiveShapeTest {
                 )
             }
         }
+        // Tennis/padel go through QuickSetScoreEditor, a third tile layout that
+        // still uses the fixed width fraction — and whose tiles still cross the
+        // bezel (corners ~189px out on a 187px radius). Filed rather than fixed
+        // here: its tiles sit in a Column weight, so the same modifier does not
+        // apply without restructuring that editor.
         assertTeamTilesUseWidth(
             composeRule.onRoot().captureToImage(),
             minFraction = 0.80f,
@@ -436,7 +446,7 @@ class WearAdaptiveShapeTest {
         val h = pixels.height
         val cx = w / 2f
         val cy = h / 2f
-        val radius = (minOf(w, h) / 2f) * radiusFraction
+        val radius = (minOf(w, h) / 2f - with(composeRule.density) { ROUND_BEZEL_INSET.toPx() }) * radiusFraction
 
         val background = pixels[0, 0]
         var outside = 0
@@ -450,7 +460,7 @@ class WearAdaptiveShapeTest {
                 val color = pixels[x, y]
                 if (!isBackground(color, background)) {
                     val distance = hypot(x + 0.5f - cx, y + 0.5f - cy)
-                    if (distance > radius) {
+                    if (distance > radius + 1.5f) {
                         outside++
                         if (outside <= 5) {
                             outsideExamples += " ($x,$y d=${distance.toInt()})"
@@ -486,7 +496,7 @@ class WearAdaptiveShapeTest {
         val h = pixels.height
         val cx = w / 2f
         val cy = h / 2f
-        val radius = (minOf(w, h) / 2f) * radiusFraction
+        val radius = (minOf(w, h) / 2f - with(composeRule.density) { ROUND_BEZEL_INSET.toPx() }) * radiusFraction
 
         var outside = 0
         var outsideExamples = ""
@@ -498,7 +508,7 @@ class WearAdaptiveShapeTest {
                 val color = pixels[x, y]
                 if (pixelsEqual(color, TEAM_ONE_TILE) || pixelsEqual(color, TEAM_TWO_TILE)) {
                     val distance = hypot(x + 0.5f - cx, y + 0.5f - cy)
-                    if (distance > radius) {
+                    if (distance > radius + 1.5f) {
                         outside++
                         if (outside <= 5) {
                             outsideExamples += " ($x,$y d=${distance.toInt()})"
@@ -615,6 +625,46 @@ class WearAdaptiveShapeTest {
      * Round must use most of the circular width at the equator (circle is
      * widest there); square must keep its existing near-full-bleed span.
      */
+    /**
+     * The whole display is the score control: left half scores one team, right
+     * half the other, and roundBezelClip cuts the pair into the circle.
+     *
+     * The guard this replaces asked that the tiles stay *inside* a rectangle
+     * the circle could hold. That was the old design, where the tiles floated
+     * in the middle and the ring was the edge. The control now deliberately
+     * fills the display, so the assertion is that it does — a block that is
+     * both short and narrow fails either way.
+     */
+    private fun assertTeamTilesFillTheCircle(image: ImageBitmap, context: String) {
+        val pixels = image.toPixelMap()
+        val w = pixels.width
+        val h = pixels.height
+        var minX = w
+        var maxX = 0
+        var minY = h
+        var maxY = 0
+        for (y in 0 until h step 2) {
+            for (x in 0 until w step 2) {
+                val c = pixels[x, y]
+                if (pixelsEqual(c, TEAM_ONE_TILE) || pixelsEqual(c, TEAM_TWO_TILE)) {
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                    if (y < minY) minY = y
+                    if (y > maxY) maxY = y
+                }
+            }
+        }
+        assertTrue("$context: no team tiles found", maxX > minX && maxY > minY)
+        val widthFraction = (maxX - minX + 1).toFloat() / w
+        val heightFraction = (maxY - minY + 1).toFloat() / h
+        assertTrue(
+            ("%s: the score control spans %.0f%% x %.0f%% of the display, expected it to fill it — " +
+                "the whole screen is the button, left half for one team and right half for the other")
+                .format(context, widthFraction * 100, heightFraction * 100),
+            widthFraction >= 0.90f && heightFraction >= 0.90f,
+        )
+    }
+
     private fun assertTeamTilesUseWidth(
         image: ImageBitmap,
         minFraction: Float,

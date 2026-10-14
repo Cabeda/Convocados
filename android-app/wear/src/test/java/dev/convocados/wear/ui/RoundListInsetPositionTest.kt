@@ -116,7 +116,7 @@ class RoundListInsetPositionTest {
     fun equatorRowBeatsTheOldFlatInset() {
         setUp()
         val display = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
-        val bezelInset = with(composeRule.density) { 8.dp.toPx() }
+        val bezelInset = with(composeRule.density) { ROUND_BEZEL_INSET.toPx() }
         val flatInset = with(composeRule.density) { ROUND_LIST_INSET.toPx() }
         val legacyRowWidth = display.width - 2 * bezelInset - 2 * flatInset
         val equator = boundsOf(EQUATOR_ROW)
@@ -191,7 +191,7 @@ class RoundListInsetPositionTest {
     private fun assertRowInsideBezel(tag: String, bounds: Rect) {
         val display = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
         val radius = (minOf(display.width, display.height) / 2f) -
-            with(composeRule.density) { 8.dp.toPx() }
+            with(composeRule.density) { ROUND_BEZEL_INSET.toPx() }
         val tolerance = 1.5f
         listOf(
             bounds.left to bounds.top,
@@ -217,7 +217,7 @@ class RoundListInsetPositionTest {
     private fun assertPoleRowKeepsAtLeastTheFlatWidth() {
         val pole = boundsOf(POLE_ROW)
         val display = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
-        val bezelInset = with(composeRule.density) { 8.dp.toPx() }
+        val bezelInset = with(composeRule.density) { ROUND_BEZEL_INSET.toPx() }
         val flatInset = with(composeRule.density) { ROUND_LIST_INSET.toPx() }
         val legacyWidth = display.width - 2 * bezelInset - 2 * flatInset
         assertTrue(

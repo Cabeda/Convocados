@@ -29,9 +29,10 @@ import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
-import dev.convocados.wear.ui.roundEquatorSize
 import dev.convocados.wear.ui.roundBezelClip
 import dev.convocados.wear.ui.scoreContentPadding
+import dev.convocados.wear.ui.scoreEdgePadding
+import androidx.compose.ui.graphics.RectangleShape
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.ongoing.OngoingLaunch
@@ -46,6 +47,7 @@ import dev.convocados.wear.util.parseInstant
 import dev.convocados.wear.util.sportDurationMinutes
 import kotlinx.coroutines.delay
 import java.time.Instant
+
 
 @Composable
 fun ScoreScreen(
@@ -93,7 +95,7 @@ fun ScoreScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .scoreContentPadding(contentPadding),
+                    .scoreEdgePadding(contentPadding),
                 contentAlignment = Alignment.Center,
             ) {
                 when {
@@ -233,7 +235,7 @@ fun ScoreFixtureContent(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .scoreContentPadding(contentPadding),
+                    .scoreEdgePadding(contentPadding),
                 contentAlignment = Alignment.Center,
             ) {
                 if (isAmbient) {
@@ -558,13 +560,12 @@ internal fun ScoreEditor(
                 ) { _, dy -> dragY += dy }
             },
     ) {
+        // The whole display is the control: left half scores team one, right
+        // half team two. The progress ring, the hint pill and the clock draw
+        // over it, so nothing is reserved for them and every pixel is tappable.
+        // On a round display roundBezelClip cuts the pair into the circle.
         Row(
-            modifier = Modifier
-                .align(Alignment.Center)
-                // Bezel-safe inset so tiles sit inside the round display
-                // instead of touching the screen edge; the height is capped by
-                // the inscribed rectangle so the corners stay clear too.
-                .roundEquatorSize(inset = 8.dp),
+            modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TeamScoreButton(
@@ -576,6 +577,7 @@ internal fun ScoreEditor(
                 onDecrement = decOne,
                 enabled = true,
                 modifier = Modifier.weight(1f),
+                shape = RectangleShape,
             )
             TeamScoreButton(
                 teamName = state.teamTwoName,
