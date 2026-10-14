@@ -130,6 +130,22 @@ Note: adaptive layout probes (`adaptive_light/dark`) are regression goldens
 under `src/test/screenshots/goldens/`, not store assets — Play caps each slot
 at 8 images.
 
+The gate is `pnpm check:play-screenshots` (`scripts/check-play-screenshots.mjs`).
+Play rejected the Wear listing because its screenshots were not "only the app
+interface": the fixtures painted the app surface on Robolectric's default light
+window background (`#FAFAFA`) instead of the app's own, so every capture framed
+the app as an inset card on a light canvas. `:wear:verifyRoborazziDebug` cannot
+catch that — it compares a capture against the golden that capture produced, so a
+wrong-but-stable background passes forever — so the gate asserts the invariant
+the golden cannot: every Wear store screenshot is square, opaque, and has all
+four corners equal to the app background (`val Bg` in
+`wear/src/main/java/dev/convocados/wear/ui/theme/Color.kt`). Corners, not the
+whole border, because real content legitimately reaches the edge on some screens.
+It runs in GATE 1 (`pnpm check:play-screenshots`) over the committed source, and
+in the publish job over both the source and the staged
+`src/main/play/listings/en-US/graphics/wear-screenshots/` copy. `src/test/play-screenshots.test.ts`
+drives the failing paths through the same module.
+
 Local preview:
 
 ```bash

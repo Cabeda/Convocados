@@ -1,7 +1,12 @@
 package dev.convocados.wear.ui.fixture
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.wear.compose.material3.MaterialTheme
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.convocados.wear.ui.screen.score.ScoreFixtureContent
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
@@ -62,7 +67,15 @@ class WearFixtureScreenshotTest {
 
     private fun snapshot(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {
         composeRule.setContent {
-            ConvocadosWearTheme(content = content)
+            ConvocadosWearTheme {
+                // Paint the app's own background across the whole capture. Without
+                // it the surface floats on Robolectric's default window colour and
+                // the screenshot is not "only the app interface" — the exact
+                // framing Google Play rejected the Wear listing for.
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    content()
+                }
+            }
         }
         composeRule.onRoot().captureRoboImage("src/test/screenshots/store-listing/$name.png")
     }
