@@ -38,6 +38,8 @@ export interface SeasonRankPlayer {
   tierName: string | null;
   games: number;
   provisional: boolean;
+  /** Whether the player carried a Rank from a prior Season (fast-K off). */
+  seeded?: boolean;
   /** Rank Point change for each counted game, oldest first. */
   deltas: number[];
 }
@@ -168,7 +170,7 @@ export async function deriveSeasonRank(eventId: string, seasonId: string): Promi
 
   const players: SeasonRankPlayer[] = season.memberships.map((m) => {
     const r = result.get(m.eventPlayer.name);
-    return toPlayer(m.eventPlayer.name, r);
+    return toPlayer(m.eventPlayer.name, r, seeded[m.eventPlayer.name] ?? false);
   });
 
   return {
@@ -181,7 +183,7 @@ export async function deriveSeasonRank(eventId: string, seasonId: string): Promi
   };
 }
 
-function toPlayer(name: string, r: PlayerRank | undefined): SeasonRankPlayer {
+function toPlayer(name: string, r: PlayerRank | undefined, seeded: boolean): SeasonRankPlayer {
   const games = r?.gamesThisSeason ?? 0;
   const provisional = games < PROVISIONAL_MIN;
   const tier = r?.tier ?? 0;
@@ -193,6 +195,7 @@ function toPlayer(name: string, r: PlayerRank | undefined): SeasonRankPlayer {
     tierName: provisional ? null : (TIER_NAMES[tier] ?? null),
     games,
     provisional,
+    seeded,
     deltas: r?.deltas ?? [],
   };
 }

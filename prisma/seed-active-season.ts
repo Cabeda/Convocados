@@ -218,6 +218,18 @@ export async function seedActiveSeason(
     data: { name: teamTwoName, eventId: event.id, members: { create: teamTwoNames.map((name, order) => ({ name, order })) } },
   });
 
+  // The live occurrence, mirroring advanceOccurrence: the current Game carries
+  // the status/score the Stakes Preview gates on, and is linked as currentGameId.
+  const game = await prisma.game.create({
+    data: { eventId: event.id, dateTime: event.dateTime, status: "in_progress", teamOneName, teamTwoName },
+  });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  for (const [order, name] of names.entries()) {
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: eventPlayerByName.get(name)!, order, status: "active" },
+    });
+  }
+
   // The running Season. Wide window on purpose: any new Season overlaps it, so
   // the create endpoint rejects until this one is completed.
   const season = await prisma.season.create({

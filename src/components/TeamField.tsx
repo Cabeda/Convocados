@@ -3,8 +3,11 @@ import {
   Box, Chip, Typography, alpha, useTheme, Stack, Avatar,
   Select, MenuItem, FormControl,
 } from "@mui/material";
+import GroupsIcon from "@mui/icons-material/Groups";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
+import { crewColor } from "~/lib/crewColors";
+import type { CrewHeaderChip, CrewRef } from "./TeamPicker";
 import { applyFormationLayout, firstFreeSlot, placePlayer, setFormation } from "~/lib/teams";
 import { getDefaultFormation, getFormation, getFormationsForSport } from "~/lib/formations";
 import {
@@ -23,6 +26,10 @@ interface Props {
   sport?: string | null;
   /** When false, the field is read-only (no drag, no formation change). */
   canEdit?: boolean;
+  /** Crew per lineup player (omitted = not a Season participant). */
+  crewMap?: Record<string, CrewRef | null>;
+  /** Per team half, the Crew(s) represented on that side with their projection. */
+  crewChipsByTeamIndex?: CrewHeaderChip[][];
 }
 
 const TOKEN_TEXT = "#16241b";
@@ -40,6 +47,8 @@ export function TeamField({
   shuffleKey = 0,
   sport = null,
   canEdit = true,
+  crewMap,
+  crewChipsByTeamIndex,
 }: Props) {
   const theme = useTheme();
   const t = useT();
@@ -182,11 +191,13 @@ export function TeamField({
             const isBeingDragged = drag?.name === player.name && drag?.team === team.team;
             const isArriving = playerMotion?.name === player.name
               && playerMotion.destinationTeam === team.team;
+            const crew = crewMap?.[player.name];
             return (
               <Box
                 key={player.name}
                 data-testid={`field-player-${player.name}`}
                 data-motion={isArriving ? "arriving" : undefined}
+                title={crew?.crewName ?? undefined}
                 ref={slotIdx !== null
                   ? (el: HTMLElement | null) => { slotRefs.current[`${team.team}:${slotIdx}`] = el; }
                   : undefined}
@@ -204,6 +215,7 @@ export function TeamField({
                   borderRadius: 5,
                   bgcolor: "#f7fbf8",
                   color: TOKEN_TEXT,
+                  borderLeft: crew ? `3px solid ${crewColor(crew.crewId)}` : "3px solid transparent",
                   boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.5)" : 2,
                   cursor: canEdit ? (drag ? "grabbing" : "grab") : "default",
                   touchAction: "none",
@@ -223,8 +235,8 @@ export function TeamField({
                     height: 20,
                     fontSize: "0.65rem",
                     fontWeight: 700,
-                    bgcolor: alpha(accentColor, isDark ? 0.35 : 0.18),
-                    color: isDark ? "#ffffff" : TOKEN_TEXT,
+                    bgcolor: crew ? crewColor(crew.crewId) : alpha(accentColor, isDark ? 0.35 : 0.18),
+                    color: crew ? "#ffffff" : (isDark ? "#ffffff" : TOKEN_TEXT),
                   }}
                 >
                   {index + 1}
@@ -281,7 +293,31 @@ export function TeamField({
                 >
                   {team.team}
                 </Typography>
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flexShrink: 0 }}>
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end", rowGap: 0.5 }}>
+                  {(crewChipsByTeamIndex?.[teamIdx] ?? []).map((c) => {
+                    const col = crewColor(c.crewId);
+                    const up = c.passed > 0;
+                    const down = c.passed < 0;
+                    return (
+                      <Chip
+                        key={c.crewId}
+                        data-testid={`field-crew-chip-${c.crewId}`}
+                        icon={<GroupsIcon />}
+                        label={`${c.name} ${t("stakesPreviewPts", { n: Math.round(c.roundScore) })}${
+                          up ? ` ▲${c.passed}` : down ? ` ▼${Math.abs(c.passed)}` : ""
+                        } · #${c.positionAfter}`}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(col, 0.4),
+                          color: "#ffffff",
+                          fontWeight: 700,
+                          fontSize: "0.68rem",
+                          height: 22,
+                          "& .MuiChip-icon": { color: "inherit", fontSize: 13 },
+                        }}
+                      />
+                    );
+                  })}
                   <Chip
                     label={n === 1 ? t("playerCount", { n }) : t("playerCountPlural", { n })}
                     size="small"

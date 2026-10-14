@@ -1125,6 +1125,10 @@ fun EventDetailScreen(
     var retractTarget by remember { mutableStateOf<RosterPlayer?>(null) }
     var declinedOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    // Same rule as the snackbars below: a resource read has to happen at
+    // composition time or it stops tracking a Configuration change. It lands in
+    // an onClick, which is not a composable, so it is hoisted here.
+    val inviteShareVia = stringResource(R.string.invite_share_chose)
 
     // Hoisted string resources for LaunchedEffect snackbars — avoids
     // LocalContextGetResourceValueCall (must use stringResource, not context.getString inside effects).
@@ -1597,7 +1601,7 @@ fun EventDetailScreen(
                                     type = "text/plain"
                                     putExtra(Intent.EXTRA_TEXT, url)
                                 }
-                                context.startActivity(Intent.createChooser(send, context.getString(R.string.invite_share_chose)))
+                                context.startActivity(Intent.createChooser(send, inviteShareVia))
                                 resendTarget = null
                             },
                             modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -1791,6 +1795,7 @@ private fun PlayerGroup(players: List<Player>, user: UserProfile?, isOwner: Bool
 
 @Composable
 private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: EventDetailViewModel, eventId: String, onBack: () -> Unit, onSettings: () -> Unit, onRankings: () -> Unit, onPayments: () -> Unit, onLog: () -> Unit, onAttendance: () -> Unit, onNotificationPrefs: () -> Unit, onAllHistory: () -> Unit, onCourtAlternatives: () -> Unit, onSeasons: () -> Unit = {}) {
+    val shareLabel = stringResource(R.string.share)
     var open by remember { mutableStateOf(false) }
     val context = LocalContext.current
     Box {
@@ -1801,7 +1806,7 @@ private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: Ev
                 val url = viewModel.getShareUrl(eventId)
                 val spots = ev.maxPlayers - ev.players.size
                 val text = "${sportEmoji(ev.sport)} ${ev.title}\n${formatEventDateInTz(ev.dateTime, ev.timezone)}" + (if (ev.location.isNotBlank()) "\n📍 ${ev.location}" else "") + "\n👥 ${if (spots > 0) "$spots spot(s) left" else "Full"}\n\n$url"
-                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, context.getString(R.string.share)))
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, shareLabel))
             })
             DropdownMenuItem(text = { Text(stringResource(R.string.rankings)) }, onClick = { open = false; onRankings() })
             DropdownMenuItem(text = { Text(stringResource(R.string.seasons)) }, onClick = { open = false; onSeasons() })

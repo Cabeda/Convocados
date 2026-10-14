@@ -7,9 +7,34 @@ import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import GroupsIcon from "@mui/icons-material/Groups";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
+import { crewColor } from "~/lib/crewColors";
 import { TeamDragGhost, teamMotionKeyframes, useTeamDrag } from "./team/useTeamDrag";
+
+/** A player's Crew, or null for a Season participant without one (free agent). */
+export interface CrewRef {
+  crewId: string;
+  crewName: string;
+}
+
+/** The selected scenario's projection for one lineup player. */
+export interface PlayerStake {
+  contribution: number;
+  rpDelta: number;
+  passed: number;
+  provisional: boolean;
+}
+
+/** A Crew's projected bottom line for a team panel header chip. */
+export interface CrewHeaderChip {
+  crewId: string;
+  name: string;
+  roundScore: number;
+  positionAfter: number;
+  passed: number;
+}
 
 interface Props {
   matches: Imatch[];
@@ -20,6 +45,15 @@ interface Props {
   shuffleKey?: number;
   /** When false, players cannot be dragged between teams. */
   canEdit?: boolean;
+  /** Crew per lineup player (omitted = not a Season participant). */
+  crewMap?: Record<string, CrewRef | null>;
+  /** Selected-scenario contribution + Rank movement per lineup player. */
+  stakeMap?: Record<string, PlayerStake>;
+  /** Per team panel, the Crew(s) represented on that side with their projection. */
+  crewChipsByTeamIndex?: CrewHeaderChip[][];
+  rankEnabled?: boolean;
+  /** The signed-in viewer — only their own Rank movement is shown. */
+  viewerName?: string;
 }
 
 export function TeamPicker({
@@ -29,6 +63,11 @@ export function TeamPicker({
   ratingsMap,
   shuffleKey = 0,
   canEdit = true,
+  crewMap,
+  stakeMap,
+  crewChipsByTeamIndex,
+  rankEnabled = true,
+  viewerName,
 }: Props) {
   const theme = useTheme();
   const t = useT();
@@ -165,7 +204,7 @@ export function TeamPicker({
                     </Typography>
                   </Box>
                 )}
-                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end", rowGap: 0.5 }}>
                   <Chip
                     label={n === 1 ? t("playerCount", { n }) : t("playerCountPlural", { n })}
                     size="small"
@@ -188,6 +227,29 @@ export function TeamPicker({
                       }}
                     />
                   )}
+                  {(crewChipsByTeamIndex?.[teamIdx] ?? []).map((crew) => {
+                    const crewTint = crewColor(crew.crewId);
+                    const up = crew.passed > 0;
+                    const down = crew.passed < 0;
+                    return (
+                      <Chip
+                        key={crew.crewId}
+                        data-testid={`team-crew-chip-${crew.crewId}`}
+                        icon={<GroupsIcon />}
+                        label={`${crew.name} ${t("stakesPreviewPts", { n: Math.round(crew.roundScore) })}${
+                          up ? ` ▲${crew.passed}` : down ? ` ▼${Math.abs(crew.passed)}` : ""
+                        } · #${crew.positionAfter}`}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(crewTint, isDark ? 0.24 : 0.14),
+                          color: crewTint,
+                          fontWeight: 700,
+                          fontSize: "0.72rem",
+                          "& .MuiChip-icon": { color: "inherit", fontSize: 14 },
+                        }}
+                      />
+                    );
+                  })}
                 </Stack>
               </Box>
               {/* Player list */}
@@ -204,6 +266,9 @@ export function TeamPicker({
                   {team.players.map((player, i) => {
                     const isBeingDragged = drag?.name === player.name && drag?.team === team.team;
                     const isArriving = playerMotion?.name === player.name && playerMotion.destinationTeam === team.team;
+                    const crew = crewMap?.[player.name];
+                    const stake = stakeMap?.[player.name];
+                    const hasStake = crew !== undefined || !!stake;
                     return (
                       <ListItem
                         key={player.name}
@@ -249,6 +314,60 @@ export function TeamPicker({
                               sx: { fontSize: "0.75rem", fontWeight: 600, color: "text.secondary" },
                             }
                           }} />
+                        {hasStake && (
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flexShrink: 0, pr: 0.5 }}>
+                            {crew !== undefined && (crew ? (
+                              <Chip
+                                data-testid={`team-player-crew-${player.name}`}
+                                size="small"
+                                icon={<GroupsIcon />}
+                                label={crew.crewName}
+                                sx={{
+                                  height: 20, fontWeight: 700,
+                                  color: crewColor(crew.crewId),
+                                  bgcolor: alpha(crewColor(crew.crewId), isDark ? 0.24 : 0.14),
+                                  "& .MuiChip-icon": { color: "inherit", fontSize: 13 },
+                                }}
+                              />
+                            ) : (
+                              <Chip size="small" label={t("stakesPreviewFreeAgent")} sx={{ height: 20, color: "text.secondary" }} />
+                            ))}
+                            {stake && (
+                              <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5, justifyContent: "flex-end" }}>
+                                {(() => {
+                                  const pts = stake.contribution;
+                                  const color = pts === 3 ? theme.palette.success.main : pts === 1 ? theme.palette.warning.main : theme.palette.text.disabled;
+                                  return (
+                                    <Chip
+                                      data-testid={`team-player-points-${player.name}`}
+                                      size="small"
+                                      label={t("stakesPreviewPts", { n: pts })}
+                                      title={t("stakesPreviewPtsTitle")}
+                                      sx={{ height: 20, fontWeight: 800, color, bgcolor: alpha(color, 0.14), border: `1px solid ${alpha(color, 0.4)}` }}
+                                    />
+                                  );
+                                })()}
+                                {/* Rank movement is the viewer's own; only they see it. */}
+                                {rankEnabled && player.name === viewerName && (stake.provisional ? (
+                                  <Chip size="small" label={t("seasonRankProvisional")} sx={{ height: 20, color: "text.secondary" }} />
+                                ) : (
+                                  <Chip
+                                    data-testid={`team-player-rank-${player.name}`}
+                                    size="small"
+                                    label={`${t("stakesPreviewRankDelta", { delta: `${stake.rpDelta > 0 ? "+" : ""}${stake.rpDelta}` })}${
+                                      stake.passed > 0 ? ` ▲${stake.passed}` : stake.passed < 0 ? ` ▼${Math.abs(stake.passed)}` : ""
+                                    }`}
+                                    sx={{
+                                      height: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+                                      color: stake.passed > 0 ? theme.palette.success.main : stake.passed < 0 ? theme.palette.error.main : "text.secondary",
+                                      bgcolor: alpha(stake.passed > 0 ? theme.palette.success.main : stake.passed < 0 ? theme.palette.error.main : theme.palette.text.secondary, 0.12),
+                                    }}
+                                  />
+                                ))}
+                              </Box>
+                            )}
+                          </Stack>
+                        )}
                         <Box
                           data-testid={`team-player-handle-${player.name}`}
                           onPointerDown={canEdit ? (e) => handlePointerDown(e, player.name, team.team) : undefined}
