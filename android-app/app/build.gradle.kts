@@ -30,6 +30,11 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "dev.convocados"
+
+    lint {
+        lintConfig = rootProject.file("app/lint.xml")
+        abortOnError = true
+    }
     compileSdk = 37
 
     signingConfigs {

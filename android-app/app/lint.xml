@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+      WindowInfoTracker.getOrCreate(Context) is annotated @RestrictTo(LIBRARY_GROUP)
+      because androidx treats the *implementation* as internal — but it is the only
+      way an app obtains a tracker, and FoldingFeature posture is what
+      AdaptiveGamesRoute's tabletop layout depends on. No public replacement exists
+      in the window 1.x line this module compiles against.
+
+      The rule exists to stop apps reaching into layout internals; this call is the
+      supported entry point, so the annotation is a false positive here.
+    -->
+    <issue id="RestrictedApi" severity="ignore" />
+</lint>
