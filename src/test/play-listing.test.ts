@@ -159,6 +159,82 @@ describe("Play's per-field requirements", () => {
   });
 });
 
+describe("the store-listing app icon", () => {
+  /**
+   * Play fills the listing's icon once, from the first bundle it sees, and never
+   * derives it again — so an icon nobody uploads stays whatever it was on day one.
+   * That is the bug: the launcher icon became a whistle and the store page kept
+   * the old "C" glyph, because no committed copy of the icon existed at all.
+   */
+  const writeIcon = (bytes: Buffer, where = "icon.png") =>
+    writeFileSync(join(listingDir, "en-US", where), bytes);
+
+  /** A valid 512x512 opaque PNG with one pixel of the given colour type. */
+  function png(width: number, height: number, colourType: number) {
+    const bytes = Buffer.alloc(33);
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes, 0);
+    bytes.writeUInt32BE(13, 8); // IHDR length
+    bytes.write("IHDR", 12, "ascii");
+    bytes.writeUInt32BE(width, 16);
+    bytes.writeUInt32BE(height, 20);
+    bytes[24] = 8; // bit depth
+    bytes[25] = colourType; // 2 = truecolor (opaque), 6 = truecolor + alpha
+    return bytes;
+  }
+
+  it("accepts the committed icon", () => {
+    expect(() => readFileSync(join(committedListing, "en-US/icon.png"))).not.toThrow();
+    expect(check()).toEqual([]);
+  });
+
+  it("fails when the icon is missing, rather than leaving Play's stale copy in place", () => {
+    rmSync(join(listingDir, "en-US/icon.png"));
+
+    expect(check().join("\n")).toMatch(/Missing en-US\/icon\.png/);
+  });
+
+  it("accepts the staged layout, where Gradle Play Publisher reads the icon", () => {
+    // GPP 4.x reads images from `listings/<lang>/graphics/<slot>/`. An icon left
+    // only in the language root would be uploaded as nothing, and the gate runs
+    // over the staged copy too — so both locations must satisfy it.
+    mkdirSync(join(listingDir, "en-US/graphics/icon"), { recursive: true });
+    rmSync(join(listingDir, "en-US/icon.png"));
+    writeIcon(png(512, 512, 2), join("graphics", "icon", "icon.png"));
+
+    expect(check()).toEqual([]);
+  });
+
+  it.each([
+    [256, 256, /icon\.png is 256x256; Play's app icon must be 512x512/],
+    [512, 1024, /icon\.png is 512x1024/],
+  ])("fails when the icon is %ix%i", (width, height, expected) => {
+    writeIcon(png(width, height, 2));
+
+    expect(check().join("\n")).toMatch(expected);
+  });
+
+  it("fails when the icon is not a PNG at all", () => {
+    writeIcon(Buffer.from("#1B6B4A", "utf8"));
+
+    expect(check().join("\n")).toMatch(/icon\.png is not a PNG/);
+  });
+
+  it("fails when the icon carries transparency", () => {
+    writeIcon(png(512, 512, 6));
+
+    expect(check().join("\n")).toMatch(/icon\.png carries an alpha channel/);
+  });
+
+  it("requires the icon of every language, not just en-US", () => {
+    mkdirSync(join(listingDir, "pt-BR"));
+    for (const field of ["title.txt", "short-description.txt", "full-description.txt"]) {
+      writeFileSync(join(listingDir, `pt-BR/${field}`), "Convocados", "utf8");
+    }
+
+    expect(check().join("\n")).toMatch(/Missing pt-BR\/icon\.png/);
+  });
+});
+
 describe("degenerate inputs", () => {
   it("fails when the listing directory is missing entirely", () => {
     rmSync(listingDir, { recursive: true, force: true });

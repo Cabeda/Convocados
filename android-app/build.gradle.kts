@@ -29,6 +29,12 @@ tasks.register("syncPlayListings") {
 // instead of hand-edited in Play Console. `publishListing` uploads it alongside
 // the screenshots.
 //
+// The store-listing *icon* (store-listing/<lang>/icon.png) is committed and staged
+// the same way. Play fills the listing's icon once, from the first bundle it sees,
+// and never derives it again — so an icon that exists only in Play Console is stale
+// for good. That is what left the pre-whistle "C" glyph on the store page after the
+// launcher icon changed: the bundle moved, the listing's copy of it did not.
+//
 // Staging only. The rules about what the text must contain live in
 // `scripts/check-play-listing.mjs` (`pnpm check:play-listing`): one
 // implementation, tested, run by both gates. Duplicating them here would give two
@@ -84,6 +90,19 @@ tasks.register("syncPlayListingText") {
                 }
             }
             println("store-listing/$language -> ${modules.joinToString()} (${files.size} text files)")
+
+            // GPP 4.x reads images from listings/<lang>/graphics/<slot>/ (ConstantsKt
+            // GRAPHICS_PATH), so an icon dropped straight into listings/<lang>/ would
+            // be uploaded as nothing — the silent no-op this staging exists to avoid.
+            val icon = sourceDir.resolve("icon.png")
+            if (!icon.isFile) {
+                throw GradleException("Missing store-listing icon: $icon")
+            }
+            modules.forEach { module ->
+                val iconDir = project.file("$module/src/main/play/listings/$language/graphics/icon")
+                iconDir.mkdirs()
+                icon.copyTo(iconDir.resolve("icon.png"), overwrite = true)
+            }
         }
 
         // A language dropped from the source is never visited above. Clear its
@@ -100,6 +119,11 @@ tasks.register("syncPlayListingText") {
                             stale.delete()
                             println("removed stale listing text $module/${staleLanguage.name}/${stale.name}")
                         }
+                    // The icon this task staged for that locale would keep the
+                    // directory alive and keep uploading for a language that no
+                    // longer exists. Only graphics/icon/ — never the whole graphics
+                    // tree, which a sibling task owns.
+                    staleLanguage.resolve("graphics/icon").deleteRecursively()
                     // Remove the directory only if it is now empty. A directory
                     // that still holds graphics/ is not empty, so this can never
                     // take a sibling task's screenshots with it.
