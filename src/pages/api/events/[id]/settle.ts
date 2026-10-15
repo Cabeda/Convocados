@@ -87,33 +87,24 @@ export const GET: APIRoute = async ({ params, request }) => {
         note: t.note,
         createdAt: t.createdAt.toISOString(),
       }));
-      const detail = computeAvailableUnitsDetailed(
-        txs.map((t) => ({
-          direction: t.direction as "debit" | "credit",
-          reason: t.reason as WalletTxReason,
-          gameUnits: t.gameUnits,
-          amountCents: t.amountCents,
-          createdAt: t.createdAt,
-          eventInstanceId: t.eventInstanceId,
-          idempotencyKey: t.idempotencyKey,
-        })),
-      );
+      // One projection of the caller's ledger rows, shared by both wallet
+      // computations below — they read the same rows through two functions.
+      const walletTxs = txs.map((t) => ({
+        direction: t.direction as "debit" | "credit",
+        reason: t.reason as WalletTxReason,
+        gameUnits: t.gameUnits,
+        amountCents: t.amountCents,
+        createdAt: t.createdAt,
+        eventInstanceId: t.eventInstanceId,
+        idempotencyKey: t.idempotencyKey,
+      }));
+      const detail = computeAvailableUnitsDetailed(walletTxs);
       response.you = {
         playerName: myPlayer.name,
         balanceCents: Math.round(balance.amount * 100),
         gamesOwed: balance.gamesOwed,
         streak: balance.streak,
-        availableGameUnits: computeAvailableUnits(
-          txs.map((t) => ({
-            direction: t.direction as "debit" | "credit",
-            reason: t.reason as WalletTxReason,
-            gameUnits: t.gameUnits,
-            amountCents: t.amountCents,
-            createdAt: t.createdAt,
-            eventInstanceId: t.eventInstanceId,
-            idempotencyKey: t.idempotencyKey,
-          })),
-        ),
+        availableGameUnits: computeAvailableUnits(walletTxs),
         transactions: txRows,
         walletRunningTotal: detail.total,
       };

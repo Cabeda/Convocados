@@ -77,16 +77,15 @@ async function findEventCost(eventId: string) {
   return prisma.eventCost.findUnique({ where: { eventId } });
 }
 
-/** ADR 0019: Resolve per-game share info — maxPlayers, gameId, shareCents. */
+/** ADR 0019: Resolve per-game share info — gameId, shareCents. */
 async function resolveShareInfo(eventId: string, totalAmount: number) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { maxPlayers: true, currentGameId: true },
   });
-  const maxPlayers = event?.maxPlayers ?? 1;
   const gameId = event?.currentGameId ?? eventId;
-  const shareCents = perPlayerShareCents(totalAmount, maxPlayers);
-  return { maxPlayers, gameId, shareCents };
+  const shareCents = perPlayerShareCents(totalAmount, event?.maxPlayers ?? 1);
+  return { gameId, shareCents };
 }
 
 async function readLedgerForUser(eventId: string, userId: string): Promise<WalletTx[]> {
@@ -129,9 +128,8 @@ export async function recordPerGameShare(
     throw new Error(`No EventCost for event ${eventId}`);
   }
 
-  // Per-game share in cents (rounded to whole cents).
-  const { maxPlayers, gameId } = await resolveShareInfo(eventId, eventCost.totalAmount);
-  const baseShareCents = perPlayerShareCents(eventCost.totalAmount, maxPlayers);
+  // Per-game share in cents (rounded to whole cents), and the Game it belongs to.
+  const { gameId, shareCents: baseShareCents } = await resolveShareInfo(eventId, eventCost.totalAmount);
 
   // 1. Is there an active subscription that covers this date?
   const subscription = userId
@@ -172,12 +170,9 @@ export async function recordPerGameShare(
     };
   }
 
-  // 2. Plain per-game. Apply drop-in surcharge if not monthly.
-  const isMonthlySubscriberThisMonth = false; // we already checked above
-  const surchargeCents = isMonthlySubscriberThisMonth
-    ? 0
-    : eventCost.dropInSurchargeCents;
-  const amountCents = baseShareCents + surchargeCents;
+  // 2. Plain per-game. Monthly-covered players returned above, so the
+  // drop-in surcharge always applies from here.
+  const amountCents = baseShareCents + eventCost.dropInSurchargeCents;
 
   // 3. Is there wallet credit available?
   const ledger = userId ? await readLedgerForUser(eventId, userId) : [];

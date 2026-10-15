@@ -240,8 +240,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     if (!updatedEvent) return Response.json({ error: "Not found." }, { status: 404 });
 
     const updatedPlayers = await getActivePlayers(event.id, event.currentGameId);
-    const activeUpdated = updatedPlayers.slice(0, updatedEvent.maxPlayers);
-    const benchUpdated = updatedPlayers.slice(updatedEvent.maxPlayers);
+    const { active: activeUpdated, bench: benchUpdated } = splitRoster(updatedPlayers, updatedEvent.maxPlayers);
 
     const updatedMemberLookup = new Map<string, string>();
     for (const team of updatedEvent.teamResults) {

@@ -18,11 +18,6 @@ async function getResend() {
   return _resend;
 }
 
-/** Visible for testing — resets the cached Resend client */
-export function _resetResendClient() {
-  _resend = null;
-}
-
 /** True when a transactional email provider (Resend API key) is configured. */
 export function isEmailConfigured(): boolean {
   return !!(import.meta.env.RESEND_API_KEY ?? process.env.RESEND_API_KEY);
@@ -144,29 +139,60 @@ function emailTemplate({ heading, body, buttonText, buttonUrl, footnote, footerL
 </html>`;
 }
 
-export async function sendVerificationEmail(to: string, url: string) {
-  log.info({ to }, "Sending verification email");
+/** Everything one email needs. The send itself is the module's job, not the caller's. */
+interface TemplatedEmail {
+  subject: string;
+  heading: string;
+  body: string;
+  buttonText: string;
+  buttonUrl: string;
+  footnote: string;
+  /** Preference toggle backing the RFC 8058 one-click link; null for a transactional email. */
+  unsubscribeType?: UnsubscribeType | null;
+  unsubscribeLabel?: string;
+  /** Prefix of the error thrown when Resend rejects the send. */
+  errorPrefix: string;
+}
+
+/**
+ * The one send path: footer links, template, Resend, error. Every `send*` below
+ * is one call to this — they choose the copy, nothing else.
+ */
+async function sendTemplatedEmail(to: string, email: TemplatedEmail): Promise<void> {
   const resend = await getResend();
-  const links = await buildFooterLinks(to, null);
+  const links = await buildFooterLinks(to, email.unsubscribeType ?? null, email.unsubscribeLabel);
+  log.info({ to, subject: email.subject }, "Sending email");
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
-    subject: "Verify your email — Convocados",
+    subject: email.subject,
     html: emailTemplate({
-      heading: "Verify your email",
-      body: "Thanks for signing up for Convocados! Click the button below to verify your email address and get started.",
-      buttonText: "Verify email",
-      buttonUrl: url,
-      footnote: "If you didn't create an account, you can safely ignore this email. This link will expire in 24 hours.",
+      heading: email.heading,
+      body: email.body,
+      buttonText: email.buttonText,
+      buttonUrl: email.buttonUrl,
+      footnote: email.footnote,
       footerLinks: links.html,
     }),
     headers: links.headers,
   });
   if (result.error) {
-    log.error({ err: result.error }, "Failed to send verification email");
-    throw new Error(`Failed to send verification email: ${result.error.message}`);
+    log.error({ err: result.error }, "Failed to send email");
+    throw new Error(`${email.errorPrefix}: ${result.error.message}`);
   }
-  log.info({ to, id: result.data?.id }, "Verification email sent");
+  log.info({ to, id: result.data?.id }, "Email sent");
+}
+
+export async function sendVerificationEmail(to: string, url: string) {
+  await sendTemplatedEmail(to, {
+    subject: "Verify your email — Convocados",
+    heading: "Verify your email",
+    body: "Thanks for signing up for Convocados! Click the button below to verify your email address and get started.",
+    buttonText: "Verify email",
+    buttonUrl: url,
+    footnote: "If you didn't create an account, you can safely ignore this email. This link will expire in 24 hours.",
+    errorPrefix: "Failed to send verification email",
+  });
 }
 
 // ── Notification emails ───────────────────────────────────────────────────────
@@ -186,44 +212,32 @@ export interface PlayerJoinedOwnerData {
 }
 
 export async function sendPlayerJoinedOwnerNotification(to: string, data: PlayerJoinedOwnerData) {
-  const resend = await getResend();
   const spotsText = data.spotsLeft === 0 ? "Game is now full" : `${data.spotsLeft} spot${data.spotsLeft === 1 ? "" : "s"} left`;
-  const links = await buildFooterLinks(to, "all", "Turn off these emails");
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: `${data.playerName} joined ${data.eventTitle} — Convocados`,
-    html: emailTemplate({
-      heading: `${data.playerName} joined your game`,
-      body: `<strong>${data.playerName}</strong> just joined <strong>${data.eventTitle}</strong>.<br/><br/>👥 ${spotsText}`,
-      buttonText: "View game",
-      buttonUrl: data.eventUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
-    headers: links.headers,
+    heading: `${data.playerName} joined your game`,
+    body: `<strong>${data.playerName}</strong> just joined <strong>${data.eventTitle}</strong>.<br/><br/>👥 ${spotsText}`,
+    buttonText: "View game",
+    buttonUrl: data.eventUrl,
+    footnote: "",
+    unsubscribeType: "all",
+    unsubscribeLabel: "Turn off these emails",
+    errorPrefix: "Failed to send player joined notification",
   });
-  if (result.error) throw new Error(`Failed to send player joined notification: ${result.error.message}`);
 }
 
 export async function sendGameInvite(to: string, data: GameInviteData) {
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, "gameInvite", "Unsubscribe from invites");
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: `You're invited: ${data.eventTitle} — Convocados`,
-    html: emailTemplate({
-      heading: `You're invited to ${data.eventTitle}`,
-      body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`,
-      buttonText: "View game",
-      buttonUrl: data.eventUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
-    headers: links.headers,
+    heading: `You're invited to ${data.eventTitle}`,
+    body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`,
+    buttonText: "View game",
+    buttonUrl: data.eventUrl,
+    footnote: "",
+    unsubscribeType: "gameInvite",
+    unsubscribeLabel: "Unsubscribe from invites",
+    errorPrefix: "Failed to send game invite",
   });
-  if (result.error) throw new Error(`Failed to send game invite: ${result.error.message}`);
 }
 
 export interface PlayerInviteData {
@@ -240,26 +254,19 @@ export interface PlayerInviteData {
  * registered Convocados account — invites them to register and claim their spot.
  */
 export async function sendPlayerInviteToRegister(to: string, data: PlayerInviteData) {
-  const resend = await getResend();
   const when = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const inviter = data.inviterName ? `${data.inviterName} added you to` : "You've been added to";
   const signupUrl = `${getAppUrl()}/auth/signup?email=${encodeURIComponent(to)}`;
   const inviterLabel = data.inviterName ?? "Someone";
-  const links = await buildFooterLinks(to, null);
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: `You're in: ${data.eventTitle} — join Convocados`,
-    html: emailTemplate({
-      heading: `${inviter} ${data.eventTitle}`,
-      body: `📍 ${data.location}<br/>🕐 ${when}<br/><br/>Create a free Convocados account to confirm your spot, see the team and get reminders.`,
-      buttonText: "Join Convocados",
-      buttonUrl: signupUrl,
-      footnote: `Or just view the game: <a href="${data.eventUrl}" style="color:#1b6b4a;">${data.eventTitle}</a><br/><br/>Didn't expect this? This is a one-time invite from ${inviterLabel}. You won't receive further emails unless you create an account. <a href="mailto:abuse@convocados.cabeda.dev" style="color:#1b6b4a;">Report abuse</a>`,
-      footerLinks: links.html,
-    }),
+    heading: `${inviter} ${data.eventTitle}`,
+    body: `📍 ${data.location}<br/>🕐 ${when}<br/><br/>Create a free Convocados account to confirm your spot, see the team and get reminders.`,
+    buttonText: "Join Convocados",
+    buttonUrl: signupUrl,
+    footnote: `Or just view the game: <a href="${data.eventUrl}" style="color:#1b6b4a;">${data.eventTitle}</a><br/><br/>Didn't expect this? This is a one-time invite from ${inviterLabel}. You won't receive further emails unless you create an account. <a href="mailto:abuse@convocados.cabeda.dev" style="color:#1b6b4a;">Report abuse</a>`,
+    errorPrefix: "Failed to send player invite",
   });
-  if (result.error) throw new Error(`Failed to send player invite: ${result.error.message}`);
 }
 
 export interface ReminderData {
@@ -273,23 +280,17 @@ export interface ReminderData {
 
 export async function sendReminder(to: string, data: ReminderData) {
   const spotsText = data.spotsLeft > 0 ? `${data.spotsLeft} spots left` : "Game is full";
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, "gameReminder", "Unsubscribe from reminders");
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: `Reminder: ${data.eventTitle} — Convocados`,
-    html: emailTemplate({
-      heading: `${data.eventTitle} is coming up`,
-      body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}<br/>👥 ${spotsText}`,
-      buttonText: "View game",
-      buttonUrl: data.eventUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
-    headers: links.headers,
+    heading: `${data.eventTitle} is coming up`,
+    body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}<br/>👥 ${spotsText}`,
+    buttonText: "View game",
+    buttonUrl: data.eventUrl,
+    footnote: "",
+    unsubscribeType: "gameReminder",
+    unsubscribeLabel: "Unsubscribe from reminders",
+    errorPrefix: "Failed to send reminder",
   });
-  if (result.error) throw new Error(`Failed to send reminder: ${result.error.message}`);
 }
 
 export interface WeeklySummaryData {
@@ -306,72 +307,41 @@ export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
   const resultsHtml = data.results.length
     ? data.results.map((g) => `• ${g.title}: ${g.scoreOne} – ${g.scoreTwo}`).join("<br/>")
     : "";
-  const body = `Hey ${data.userName}!<br/><br/><strong>Upcoming</strong><br/>${upcomingHtml}${resultsHtml ? `<br/><br/><strong>Recent results</strong><br/>${resultsHtml}` : ""}`;
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, "weeklySummary", "Unsubscribe from summaries");
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: "Your Weekly Summary — Convocados",
-    html: emailTemplate({
-      heading: "Weekly Summary",
-      body,
-      buttonText: "Go to dashboard",
-      buttonUrl: data.dashboardUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
-    headers: links.headers,
+    heading: "Weekly Summary",
+    body: `Hey ${data.userName}!<br/><br/><strong>Upcoming</strong><br/>${upcomingHtml}${resultsHtml ? `<br/><br/><strong>Recent results</strong><br/>${resultsHtml}` : ""}`,
+    buttonText: "Go to dashboard",
+    buttonUrl: data.dashboardUrl,
+    footnote: "",
+    unsubscribeType: "weeklySummary",
+    unsubscribeLabel: "Unsubscribe from summaries",
+    errorPrefix: "Failed to send weekly summary",
   });
-  if (result.error) throw new Error(`Failed to send weekly summary: ${result.error.message}`);
 }
 
 export async function sendMagicLinkEmail(to: string, url: string) {
-  log.info({ to }, "Sending magic link email");
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, null);
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: "Sign in to Convocados",
-    html: emailTemplate({
-      heading: "Sign in to Convocados",
-      body: "Click the button below to sign in. This link will expire in 5 minutes.",
-      buttonText: "Sign in",
-      buttonUrl: url,
-      footnote: "If you didn't request this link, you can safely ignore this email.",
-      footerLinks: links.html,
-    }),
+    heading: "Sign in to Convocados",
+    body: "Click the button below to sign in. This link will expire in 5 minutes.",
+    buttonText: "Sign in",
+    buttonUrl: url,
+    footnote: "If you didn't request this link, you can safely ignore this email.",
+    errorPrefix: "Failed to send magic link email",
   });
-  if (result.error) {
-    log.error({ err: result.error }, "Failed to send magic link email");
-    throw new Error(`Failed to send magic link email: ${result.error.message}`);
-  }
-  log.info({ to, id: result.data?.id }, "Magic link email sent");
 }
 
 export async function sendChangeEmailVerification(to: string, url: string) {
-  log.info({ to }, "Sending change-email verification");
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, null);
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: "Confirm your new email — Convocados",
-    html: emailTemplate({
-      heading: "Confirm your new email",
-      body: "You requested to change your email address on Convocados. Click the button below to confirm this new address.",
-      buttonText: "Confirm new email",
-      buttonUrl: url,
-      footnote: "If you didn't request this change, you can safely ignore this email. Your current email will remain unchanged.",
-      footerLinks: links.html,
-    }),
+    heading: "Confirm your new email",
+    body: "You requested to change your email address on Convocados. Click the button below to confirm this new address.",
+    buttonText: "Confirm new email",
+    buttonUrl: url,
+    footnote: "If you didn't request this change, you can safely ignore this email. Your current email will remain unchanged.",
+    errorPrefix: "Failed to send change-email verification",
   });
-  if (result.error) {
-    log.error({ err: result.error }, "Failed to send change-email verification");
-    throw new Error(`Failed to send change-email verification: ${result.error.message}`);
-  }
-  log.info({ to, id: result.data?.id }, "Change-email verification sent");
 }
 
 // ── Payment reminder emails ───────────────────────────────────────────────────
@@ -384,23 +354,17 @@ export interface PaymentReminderData {
 }
 
 export async function sendPaymentReminder(to: string, data: PaymentReminderData) {
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, "paymentReminder", "Unsubscribe from payment reminders");
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: `Payment pending: ${data.eventTitle} — Convocados`,
-    html: emailTemplate({
-      heading: `Payment pending for ${data.eventTitle}`,
-      body: `You have an outstanding payment of <strong>${data.amount} ${data.currency}</strong> for this game.<br/><br/>Please settle your payment or contact the event organizer.`,
-      buttonText: "View game",
-      buttonUrl: data.eventUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
-    headers: links.headers,
+    heading: `Payment pending for ${data.eventTitle}`,
+    body: `You have an outstanding payment of <strong>${data.amount} ${data.currency}</strong> for this game.<br/><br/>Please settle your payment or contact the event organizer.`,
+    buttonText: "View game",
+    buttonUrl: data.eventUrl,
+    footnote: "",
+    unsubscribeType: "paymentReminder",
+    unsubscribeLabel: "Unsubscribe from payment reminders",
+    errorPrefix: "Failed to send payment reminder",
   });
-  if (result.error) throw new Error(`Failed to send payment reminder: ${result.error.message}`);
 }
 
 // ── Priority enrollment emails ────────────────────────────────────────────────
@@ -417,42 +381,28 @@ export interface PriorityEnrollmentData {
 export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmentData) {
   const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const dateStr = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, null);
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: `You're in for ${data.eventTitle}! — Convocados`,
-    html: emailTemplate({
-      heading: `You're in for ${data.eventTitle}!`,
-      body: `Your spot is reserved based on your attendance record.<br/><br/>📍 ${data.location}<br/>🕐 ${dateStr}<br/><br/>Confirm by <strong>${deadlineStr}</strong> or your spot opens up for others.<br/><br/><a href="${data.declineUrl}" style="color:#1b6b4a;">Can't make it? Decline here</a>`,
-      buttonText: "Confirm my spot",
-      buttonUrl: data.confirmUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
+    heading: `You're in for ${data.eventTitle}!`,
+    body: `Your spot is reserved based on your attendance record.<br/><br/>📍 ${data.location}<br/>🕐 ${dateStr}<br/><br/>Confirm by <strong>${deadlineStr}</strong> or your spot opens up for others.<br/><br/><a href="${data.declineUrl}" style="color:#1b6b4a;">Can't make it? Decline here</a>`,
+    buttonText: "Confirm my spot",
+    buttonUrl: data.confirmUrl,
+    footnote: "",
+    errorPrefix: "Failed to send priority enrollment email",
   });
-  if (result.error) throw new Error(`Failed to send priority enrollment email: ${result.error.message}`);
 }
 
 export async function sendPriorityDeadlineReminder(to: string, data: PriorityEnrollmentData) {
   const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, null);
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: `Confirm your spot for ${data.eventTitle} — deadline soon`,
-    html: emailTemplate({
-      heading: `Confirm your spot — deadline soon`,
-      body: `You haven't confirmed yet for <strong>${data.eventTitle}</strong>.<br/><br/>Your spot will be released on <strong>${deadlineStr}</strong>.<br/><br/><a href="${data.declineUrl}" style="color:#1b6b4a;">Can't make it? Decline here</a>`,
-      buttonText: "Confirm my spot",
-      buttonUrl: data.confirmUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
+    heading: `Confirm your spot — deadline soon`,
+    body: `You haven't confirmed yet for <strong>${data.eventTitle}</strong>.<br/><br/>Your spot will be released on <strong>${deadlineStr}</strong>.<br/><br/><a href="${data.declineUrl}" style="color:#1b6b4a;">Can't make it? Decline here</a>`,
+    buttonText: "Confirm my spot",
+    buttonUrl: data.confirmUrl,
+    footnote: "",
+    errorPrefix: "Failed to send priority deadline reminder",
   });
-  if (result.error) throw new Error(`Failed to send priority deadline reminder: ${result.error.message}`);
 }
 
 // ── Admin role notification emails ────────────────────────────────────────────
@@ -464,52 +414,32 @@ export interface AdminRoleNotificationData {
 }
 
 export async function sendAdminRoleNotification(to: string, data: AdminRoleNotificationData) {
-  const resend = await getResend();
   const isAdded = data.action === "added";
-  const subject = isAdded
-    ? `You're now an admin for ${data.eventTitle} — Convocados`
-    : `You've been removed as admin from ${data.eventTitle} — Convocados`;
-  const heading = isAdded
-    ? `You're now an admin`
-    : `Admin access removed`;
-  const body = isAdded
-    ? `You've been added as an admin for <strong>${data.eventTitle}</strong>. You can now manage players, settings, and costs for this event.`
-    : `You've been removed as an admin from <strong>${data.eventTitle}</strong>. You no longer have management access to this event.`;
-  const buttonText = isAdded ? "View event" : "Go to dashboard";
-  const buttonUrl = isAdded ? data.eventUrl : getAppUrl();
-  const links = await buildFooterLinks(to, "all", "Turn off these emails");
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
-    subject,
-    html: emailTemplate({
-      heading,
-      body,
-      buttonText,
-      buttonUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
-    headers: links.headers,
+  await sendTemplatedEmail(to, {
+    subject: isAdded
+      ? `You're now an admin for ${data.eventTitle} — Convocados`
+      : `You've been removed as admin from ${data.eventTitle} — Convocados`,
+    heading: isAdded ? "You're now an admin" : "Admin access removed",
+    body: isAdded
+      ? `You've been added as an admin for <strong>${data.eventTitle}</strong>. You can now manage players, settings, and costs for this event.`
+      : `You've been removed as an admin from <strong>${data.eventTitle}</strong>. You no longer have management access to this event.`,
+    buttonText: isAdded ? "View event" : "Go to dashboard",
+    buttonUrl: isAdded ? data.eventUrl : getAppUrl(),
+    footnote: "",
+    unsubscribeType: "all",
+    unsubscribeLabel: "Turn off these emails",
+    errorPrefix: "Failed to send admin role notification",
   });
-  if (result.error) throw new Error(`Failed to send admin role notification: ${result.error.message}`);
 }
 
 export async function sendPrioritySpotReleased(to: string, data: { eventTitle: string; eventUrl: string }) {
-  const resend = await getResend();
-  const links = await buildFooterLinks(to, null);
-  const result = await resend.emails.send({
-    from: EMAIL_FROM,
-    to,
+  await sendTemplatedEmail(to, {
     subject: `Your spot for ${data.eventTitle} was released`,
-    html: emailTemplate({
-      heading: "Your spot was released",
-      body: `The confirmation deadline passed for <strong>${data.eventTitle}</strong>.<br/><br/>You can still join manually if spots are available.`,
-      buttonText: "View game",
-      buttonUrl: data.eventUrl,
-      footnote: "",
-      footerLinks: links.html,
-    }),
+    heading: "Your spot was released",
+    body: `The confirmation deadline passed for <strong>${data.eventTitle}</strong>.<br/><br/>You can still join manually if spots are available.`,
+    buttonText: "View game",
+    buttonUrl: data.eventUrl,
+    footnote: "",
+    errorPrefix: "Failed to send priority spot released email",
   });
-  if (result.error) throw new Error(`Failed to send priority spot released email: ${result.error.message}`);
 }

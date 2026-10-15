@@ -3,7 +3,7 @@ import { prisma } from "~/lib/db.server";
 import { getSession, checkEventAdmin } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { isGameEnded } from "~/lib/gameStatus";
-import { getActiveRosterState } from "~/lib/roster.server";
+import { getRosterCapacity } from "~/lib/roster.server";
 import { createPlayerInvite, createGuestPlayerInvite } from "~/lib/invite.server";
 import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.server";
 import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "~/lib/rosterCore.server";
@@ -175,7 +175,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
 
-  const rosterState = await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId);
+  const rosterState = await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
   if (rosterState.totalCount >= event.maxPlayers * 2) {
     return Response.json({ error: `The bench is full (maximum ${event.maxPlayers} bench players).` }, { status: 400 });
   }

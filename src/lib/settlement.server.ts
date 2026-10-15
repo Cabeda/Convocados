@@ -15,7 +15,7 @@
  * the join-gate / outstanding-balance stays consistent.
  */
 import { prisma, Prisma } from "./db.server";
-import { getActiveRosterState } from "./roster.server";
+import { getRosterCapacity } from "./roster.server";
 import { recordReceived } from "./payments.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
 import { shareFor, perPlayerShare } from "./gameCost";
@@ -778,7 +778,7 @@ export async function getSettlementSummary(
 
   // Active participant count of the current game — drives the per-share display.
   const activePlayerCount = event.currentGameId
-    ? (await getActiveRosterState(event.id, event.maxPlayers, event.currentGameId)).totalCount
+    ? (await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId)).totalCount
     : 0;
 
   return {
