@@ -656,6 +656,11 @@ jobs:
         working-directory: android-app
         run: ./gradlew syncPlayListings --no-daemon
 
+      # Stage the committed feature graphic on every release. The copy replaces
+      # any stale generated listing asset before publishListing uploads it.
+      - name: Sync Play feature graphic
+        run: node scripts/sync-play-feature-graphic.mjs
+
       # Check the *staged* copy, after syncPlayListings has produced it and
       # before publishListing uploads it. The earlier steps check the sources;
       # these check the artifacts, which are different directories.

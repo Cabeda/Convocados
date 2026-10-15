@@ -95,7 +95,8 @@ ephemeral checkout and never commits the change.
 ## Store listing screenshots
 
 Every release refreshes the Play Store screenshots from the committed Roborazzi
-sources — no manual uploads. Source of truth:
+sources and stages the committed feature graphic — no manual uploads. Sources of
+truth:
 
 ```
 app/src/test/screenshots/store-listing/{phone,foldable,tablet}/  (8 PNGs each)
@@ -115,6 +116,12 @@ Mapping:
 | `foldable/` | `tablet-screenshots` (7") |
 | `tablet/` | `large-tablet-screenshots` (10") |
 | Wear `store-listing/` | `wear-screenshots` |
+
+`docs/feature-graphic.png` is copied on each release to
+`app/src/main/play/listings/en-US/graphics/feature-graphic/1.png` immediately
+before the staged listing checks. `publishReleaseListing` uploads that staged
+copy, so changing the committed image updates the Play listing on the next
+deploy.
 
 The generated `src/main/play/listings/` output is gitignored — like release
 notes, it exists only in the CI checkout and is never committed. Roborazzi
