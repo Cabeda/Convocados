@@ -2,12 +2,14 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
+import { syncGamePayments } from "~/lib/settlement.server";
+
 import { POST as randomize } from "~/pages/api/events/[id]/randomize";
 import { POST as undoRemove } from "~/pages/api/events/[id]/undo-remove";
 import { POST as testWebhook } from "~/pages/api/events/[id]/webhooks/[webhookId]/test";
 import { GET as webhookDeliveries } from "~/pages/api/events/[id]/webhooks/[webhookId]/deliveries";
 import { POST as calendarToken } from "~/pages/api/me/calendar-token";
-import { PUT as settleShare } from "~/pages/api/events/[id]/payments/settlement";
+import { GET as settlementSummary, PUT as settleShare } from "~/pages/api/events/[id]/payments/settlement";
 import { PUT as updateTitle } from "~/pages/api/events/[id]/title";
 import { PUT as archivePlayer } from "~/pages/api/events/[id]/archive-player";
 import { GET as searchCourtAlternatives, PUT as saveCourtWatch } from "~/pages/api/events/[id]/court-alternatives";
@@ -86,16 +88,42 @@ beforeEach(async () => {
   await prisma.oauthClient.deleteMany();
   await prisma.teamMember.deleteMany();
   await prisma.teamResult.deleteMany();
+  await prisma.walletTransaction.deleteMany();
+  await prisma.gamePayment.deleteMany();
   await prisma.gameParticipant.deleteMany();
   await prisma.game.deleteMany();
   await prisma.player.deleteMany();
   await prisma.eventPlayer.deleteMany();
+  await prisma.eventCost.deleteMany();
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
 
   ({ userId: ownerId, token: ownerToken } = await seedUserWithToken("owner"));
   ({ userId: otherUserId, token: otherToken } = await seedUserWithToken("other"));
 });
+
+/** An Event with one played Game, one Roster player and a cost, so settlement rows exist. */
+async function seedSettableEvent(opts: { ownerId?: string | null; isPublic?: boolean }) {
+  const event = await prisma.event.create({
+    data: {
+      title: "Settlement Event",
+      location: "Pitch",
+      dateTime: new Date(Date.now() - 3_600_000),
+      maxPlayers: 10,
+      ownerId: opts.ownerId ?? null,
+      isPublic: opts.isPublic ?? false,
+    },
+  });
+  const game = await prisma.game.create({
+    data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" },
+  });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  const eventPlayer = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+  await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: eventPlayer.id, order: 0 } });
+  await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 60, currency: "EUR" } });
+  await syncGamePayments(game.id, event.id);
+  return { event, game, eventPlayerId: eventPlayer.id };
+}
 
 describe("randomize authorization", () => {
   it("rejects an anonymous caller on an owned event", async () => {
@@ -284,4 +312,42 @@ describe("root Event mutation routes ask one authorization question", () => {
       expect((await call(event.id, ownerToken)).status).toBe(afterGate);
     });
   }
+});
+
+describe("settlement entry points", () => {
+  it("does NOT extend ownerless-open to the anonymous read (settlement is money, not a mutation)", async () => {
+    // ADR 0035 governs Event MUTATIONS. Reading the settlement summary is financial
+    // data, so an unauthenticated link holder still gets 401 on GET even though the
+    // same caller may settle (see below). Widening this needs the product owner.
+    const { event } = await seedSettableEvent({ ownerId: null, isPublic: false });
+    expect((await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"))).status).toBe(401);
+    expect((await settlementSummary(ctx({ id: event.id }, undefined, otherToken, "GET"))).status).toBe(403);
+  });
+
+  it("lets an ownerless UNLISTED Event settle a share", async () => {
+    const { event, game, eventPlayerId } = await seedSettableEvent({ ownerId: null, isPublic: false });
+    const res = await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId }, undefined, "PUT"));
+    expect(res.status).toBe(200);
+    const row = await prisma.gamePayment.findUniqueOrThrow({
+      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId } },
+    });
+    expect(row.status).toBe("paid");
+  });
+
+  it("still rejects a stranger on an owned Event", async () => {
+    const { event, game, eventPlayerId } = await seedSettableEvent({ ownerId });
+    expect((await settlementSummary(ctx({ id: event.id }, undefined, otherToken, "GET"))).status).toBe(403);
+    expect((await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId }, otherToken, "PUT"))).status).toBe(403);
+  });
+
+  it("still rejects a non-owner on an owned Event without a token", async () => {
+    const { event, game, eventPlayerId } = await seedSettableEvent({ ownerId });
+    expect((await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"))).status).toBe(401);
+    expect((await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId }, undefined, "PUT"))).status).toBe(403);
+  });
+
+  it("still rejects a stranger on an ownerless PUBLIC Event until adopted", async () => {
+    const { event } = await seedSettableEvent({ ownerId: null, isPublic: true });
+    expect((await settlementSummary(ctx({ id: event.id }, undefined, otherToken, "GET"))).status).toBe(403);
+  });
 });
