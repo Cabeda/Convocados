@@ -175,13 +175,32 @@ export function resolveMuteTier(
 }
 
 /**
- * Resolve whether a notification should be sent over push, considering
- * per-event overrides, the user's role (Player vs non-Player Follower)
- * per ADR 0017, and the user's transport preferences.
+ * Resolve whether a notification should be sent over push, on top of a verdict
+ * {@link resolveMuteTier} already reached: the global push preference on top of
+ * the mute + role-tier layers. A "forced" verdict short-circuits the per-type
+ * preference, so un-muting a category on an Event beats turning that category
+ * off globally.
  *
- * That is {@link resolveMuteTier} (shared with the in-app feed) plus the
- * global push preference. A "forced" decision short-circuits the preference,
- * so un-muting a category on an Event beats turning that channel off globally.
+ * This is the push-only half of the audience rule — the in-app feed stops at the
+ * verdict, which is why the two channels cannot disagree about it.
+ */
+export function wantsPushWithDecision(
+  prefs: NotificationPrefs,
+  type: NotificationJobType,
+  decision: MuteTierDecision,
+): boolean {
+  if (!prefs.pushEnabled) return false;
+  if (decision !== "open") return decision === "forced";
+
+  // Fall back to global preference
+  return wantsPushForJobType(prefs, type);
+}
+
+/**
+ * {@link wantsPushWithDecision} for callers that hold the override layers rather
+ * than a resolved verdict. A job that has already resolved its audience once
+ * should call `resolveMuteTier` itself and use the verdict form, so the rule is
+ * applied once per job rather than once per recipient per channel.
  */
 export function wantsPushWithOverrides(
   prefs: NotificationPrefs,
@@ -191,13 +210,7 @@ export function wantsPushWithOverrides(
   /** Whether this user is an active Player in the current Game (ADR 0017) */
   isPlayerInCurrentGame?: boolean,
 ): boolean {
-  if (!prefs.pushEnabled) return false;
-
-  const decision = resolveMuteTier(type, overrides, eventDefaults, isPlayerInCurrentGame);
-  if (decision !== "open") return decision === "forced";
-
-  // Fall back to global preference
-  return wantsPushForJobType(prefs, type);
+  return wantsPushWithDecision(prefs, type, resolveMuteTier(type, overrides, eventDefaults, isPlayerInCurrentGame));
 }
 
 /** Check if a user wants email reminders for a given reminder type */

@@ -1,8 +1,8 @@
 import { prisma } from "./db.server";
 import { createT, type Locale, type TranslationKey } from "./i18n";
 import { createLogger } from "./logger.server";
-import { DEFAULTS, wantsPushReminder, wantsPushWithOverrides } from "./notificationPrefs.server";
-import { isPingSuppressedType, resolveEventAudience, type EventNotificationDefaults } from "./eventAudience.server";
+import { DEFAULTS, wantsPushReminder, wantsPushWithDecision, type MuteTierDecision, type NotificationPrefs } from "./notificationPrefs.server";
+import { resolveJobAudience, type JobAudience } from "./eventAudience.server";
 import type { NotificationJobType } from "./notificationQueue.server";
 import type webpush from "web-push";
 import pLimit from "p-limit";
@@ -209,23 +209,22 @@ async function sendAppPushToUser(
 }
 
 /**
- * Send FCM push to all mobile devices of users who FOLLOW this event.
- * Owner is always included (implicit permanent follow).
- * Messages are localized per-token using the locale stored on AppPushToken.
+ * Send FCM push to all mobile devices of users who receive this job.
+ * `audience` is the job's resolved recipient list, shared with web push and the
+ * in-app feed so all three channels reach the same people.
  */
 async function sendAppPushToEventUsers(
-  eventId: string,
+  userIds: string[],
+  decisions: Map<string, MuteTierDecision>,
+  prefsMap: Map<string, NotificationPrefs>,
   title: string,
   key: TranslationKey,
   params: Record<string, string>,
   url: string,
   spotsLeft: number,
-  excludeUserIds: Set<string>,
   jobType?: NotificationJobType,
   reminderType?: "24h" | "2h" | "1h",
-  opts?: { prefsMap?: Map<string, typeof DEFAULTS>; overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }>; eventDefaults?: EventNotificationDefaults | null; playerUserIds?: Set<string> },
 ): Promise<void> {
-  const { userIds } = await resolveEventAudience(eventId, { excludeUserIds });
   if (userIds.length === 0) return;
 
   const tokens = await prisma.appPushToken.findMany({
@@ -236,11 +235,9 @@ async function sendAppPushToEventUsers(
   const fcmMessages: { token: string; title: string; body: string; data?: Record<string, string> }[] = [];
 
   for (const token of tokens) {
-    if (opts?.prefsMap && jobType) {
-      const prefs = opts.prefsMap.get(token.userId) ?? DEFAULTS;
-      const overrides = opts.overridesMap?.get(token.userId) ?? null;
-      const isPlayer = opts.playerUserIds?.has(token.userId) ?? undefined;
-      if (!wantsPushWithOverrides(prefs, jobType, overrides, opts.eventDefaults ?? null, isPlayer)) continue;
+    if (jobType) {
+      const prefs = prefsMap.get(token.userId) ?? DEFAULTS;
+      if (!wantsPushWithDecision(prefs, jobType, decisions.get(token.userId) ?? "open")) continue;
       if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) continue;
     }
     const t = createT((token.locale as Locale) ?? "en");
@@ -262,6 +259,8 @@ export async function sendPushToEvent(
   senderClientId?: string,
   jobType?: NotificationJobType,
   reminderType?: "24h" | "2h" | "1h",
+  /** The job's already-resolved audience. Omitted only by direct (non-drain) callers. */
+  audience?: JobAudience,
 ) {
   const hasVapid = !!(
     (import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) &&
@@ -272,39 +271,23 @@ export async function sendPushToEvent(
   const senderUserIds = new Set<string>();
   if (senderClientId) senderUserIds.add(senderClientId);
 
-  const { userIds, follows, notificationDefaults: eventDefaults } = await resolveEventAudience(eventId, {
-    excludeUserIds: senderUserIds,
-    suppressPingDeclines: jobType ? isPingSuppressedType(jobType) : false,
-  });
-
-  const overridesMap = new Map(follows.map((f) => [f.userId, {
-    mutePlayerActivity: f.mutePlayerActivity,
-    muteReminders: f.muteReminders,
-    mutePostGame: f.mutePostGame,
-    muteEventDetails: f.muteEventDetails,
-  }]));
-
-  const recipientList = userIds;
+  // The drain resolves the audience once per job and hands the same list to
+  // every channel; a direct call resolves it here instead.
+  const { userIds: recipientList, decisions } =
+    audience ?? await resolveJobAudience(eventId, jobType, { excludeUserIds: senderUserIds });
   if (recipientList.length === 0) return;
 
-  // Batch-load prefs
+  // Batch-load prefs — one query for the whole job, whatever the channel count.
   const prefsRows = await prisma.notificationPreferences.findMany({
     where: { userId: { in: recipientList } },
   });
   const prefsMap = new Map(prefsRows.map((p) => [p.userId, { ...DEFAULTS, ...p }]));
 
-  // ADR 0017: Resolve active player membership for role-aware tier filtering
-  const activePlayers = await prisma.player.findMany({
-    where: { eventId, archivedAt: null, userId: { not: null } },
-    select: { userId: true },
-  });
-  const playerUserIds = new Set(activePlayers.map((p) => p.userId as string));
-
   const promises: Promise<unknown>[] = [];
 
   // App push (FCM)
   promises.push(
-    sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, { prefsMap, overridesMap, eventDefaults, playerUserIds }),
+    sendAppPushToEventUsers(recipientList, decisions, prefsMap, title, key, params, url, spotsLeft, jobType, reminderType),
   );
 
   // Web push
@@ -323,9 +306,7 @@ export async function sendPushToEvent(
           limit(async () => {
             if (jobType) {
               const prefs = prefsMap.get(sub.userId) ?? DEFAULTS;
-              const overrides = overridesMap.get(sub.userId) ?? null;
-              const isPlayer = playerUserIds.has(sub.userId);
-              if (!wantsPushWithOverrides(prefs, jobType, overrides, eventDefaults, isPlayer)) return;
+              if (!wantsPushWithDecision(prefs, jobType, decisions.get(sub.userId) ?? "open")) return;
               if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) return;
             }
 
