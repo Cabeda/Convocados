@@ -5,7 +5,7 @@ import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { fireWebhooks } from "~/lib/webhook.server";
 import { createLogger } from "~/lib/logger.server";
-import { getActiveRosterState } from "~/lib/roster.server";
+import { getRosterCapacity } from "~/lib/roster.server";
 
 const log = createLogger("switch-court");
 
@@ -53,7 +53,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   // Notify all followers about the location change
   // ADR 0016: spotsLeft from the game-scoped roster (legacy Player rows
   // accumulate across recurring occurrences and would wrongly read 0).
-  const spotsLeft = Math.max(0, event.maxPlayers - (await getActiveRosterState(event.id, event.maxPlayers, event.currentGameId)).activeCount);
+  const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
 
   await enqueueNotification(event.id, "event_details", {
     title: event.title,

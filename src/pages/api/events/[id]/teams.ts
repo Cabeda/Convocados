@@ -4,6 +4,7 @@ import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { applyFormationLayout } from "../../../../lib/teams";
+import { splitRoster } from "../../../../lib/rosterCapacity";
 import { assignTeams, getActivePlayers, dualWriteCurrentGameTeams } from "../../../../lib/teamAssignment.server";
 
 
@@ -34,9 +35,8 @@ export const GET: APIRoute = async ({ params, request }) => {
 	const allPlayers = await getActivePlayers(params.id, event.currentGameId);
 	const maxPlayers = event.maxPlayers;
 
-	// Active players are the first N by position
-	const activePlayers = allPlayers.slice(0, maxPlayers);
-	const benchPlayers = allPlayers.slice(maxPlayers);
+	// Active players are the first N by position — the Roster capacity module owns that split
+	const { active: activePlayers, bench: benchPlayers } = splitRoster(allPlayers, maxPlayers);
 
 	// Build team member lookup: playerId -> teamResult id
 	const memberLookup = new Map<string, string>(); // playerName -> teamResultId
@@ -142,8 +142,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 	}
 
 	// Validate that all player names in matches are active players (first N by position)
-	const activePlayers = allPlayers.slice(0, event.maxPlayers);
-	const activeNames = new Set(activePlayers.map((p) => p.name));
+	const activeNames = new Set(splitRoster(allPlayers, event.maxPlayers).active.map((p) => p.name));
 
 	for (const match of body.matches) {
 		for (const player of match.players) {

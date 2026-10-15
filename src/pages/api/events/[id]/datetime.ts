@@ -6,7 +6,7 @@ import { enqueueNotification, drainNotificationQueue } from "../../../../lib/not
 import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { createLogger } from "../../../../lib/logger.server";
-import { getActiveRosterState } from "../../../../lib/roster.server";
+import { getRosterCapacity } from "../../../../lib/roster.server";
 
 const log = createLogger("datetime-api");
 
@@ -88,7 +88,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     fireWebhooks(eventId, "game_rescheduled", {}).catch(() => {});
     // ADR 0016: spotsLeft from the game-scoped roster (legacy Player rows
     // accumulate across recurring occurrences and would wrongly read 0).
-    const spotsLeft = Math.max(0, event.maxPlayers - (await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId)).activeCount);
+    const { spotsLeft } = await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
     const url = `/events/${eventId}`;
     await enqueueNotification(eventId, "event_details", {
       title: event.title,
