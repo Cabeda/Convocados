@@ -35,8 +35,8 @@ import EventIcon from "@mui/icons-material/Event";
 import LoginIcon from "@mui/icons-material/Login";
 import HistoryIcon from "@mui/icons-material/History";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import { useT } from "~/lib/useT";
-import { detectLocale, type TFunction } from "~/lib/i18n";
+import { useLocale } from "~/lib/useT";
+import { type TFunction } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
 import { expectedScore } from "~/lib/elo";
 import { computeSkillUpdates, type SkillUpdate } from "~/lib/skill";
@@ -404,8 +404,7 @@ export function HistoryCardFull({
   onPaymentsConfigSaved?: () => void;
   gameHref?: string;
 }) {
-  const t = useT();
-  const locale = detectLocale();
+  const { locale, t } = useLocale();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"), { noSsr: true });
   const isPlayAdmin = isOwner || isAdmin;
@@ -831,8 +830,6 @@ export function HistoryCardFull({
     mvpState,
   ]);
 
-  const localeStr = locale === "pt" ? "pt-PT" : "en-GB";
-
   return (
     <Paper elevation={0}
       data-testid="history-card"
@@ -924,11 +921,11 @@ export function HistoryCardFull({
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
           <EventIcon fontSize="small" sx={{ color: "text.disabled" }} />
           <Typography variant="body2" color="text.secondary">
-            {formatDateInTz(date, localeStr, event.timezone, {
+            {formatDateInTz(date, locale, event.timezone, {
               weekday: "short", day: "numeric", month: "short", year: "numeric",
             })}
             {" · "}
-            {formatDateInTz(date, localeStr, event.timezone, { hour: "2-digit", minute: "2-digit" })}
+            {formatDateInTz(date, locale, event.timezone, { hour: "2-digit", minute: "2-digit" })}
           </Typography>
         </Stack>
 
