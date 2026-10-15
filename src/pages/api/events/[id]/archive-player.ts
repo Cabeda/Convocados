@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 
@@ -12,8 +12,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin, session } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner or admin can archive players." }, { status: 403 });
   }
 
@@ -40,8 +40,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   await logEvent(
     eventId,
     action,
-    session?.user?.name ?? null,
-    session?.user?.id ?? null,
+    authz.session?.user?.name ?? null,
+    authz.session?.user?.id ?? null,
     { playerName: player.name },
   );
 

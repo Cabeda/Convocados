@@ -24,9 +24,9 @@ function ctx(eventId: string, body: any, ownership: { isOwner: boolean; isAdmin:
   } as any;
 }
 
-async function seedEvent() {
+async function seedEvent(overrides: Record<string, unknown> = {}) {
   return prisma.event.create({
-    data: { title: "Test", location: "Pitch", dateTime: new Date(Date.now() + 86400_000), maxPlayers: 10 },
+    data: { title: "Test", location: "Pitch", dateTime: new Date(Date.now() + 86400_000), maxPlayers: 10, ...overrides },
   });
 }
 
@@ -46,7 +46,7 @@ beforeEach(async () => {
 
 describe("POST /api/events/[id]/merge-player", () => {
   it("rejects non-admin/owner", async () => {
-    const event = await seedEvent();
+    const event = await seedEvent({ isPublic: true });
     const res = await POST(ctx(event.id, { sourceName: "A", targetName: "B" }, { isOwner: false, isAdmin: false }));
     expect(res.status).toBe(403);
   });

@@ -25,13 +25,14 @@ function putCtx(params: Record<string, string>, body: unknown, raw = false) {
   return { request, params } as any;
 }
 
-async function seedEvent(notificationDefaults: string | null = null) {
+async function seedEvent(notificationDefaults: string | null = null, isPublic = false) {
   return prisma.event.create({
     data: {
       title: "Defaults Event",
       location: "Pitch A",
       dateTime: new Date(Date.now() + 86400_000),
       ownerId: null,
+      isPublic,
       notificationDefaults,
     },
   });
@@ -67,7 +68,7 @@ describe("GET /api/events/[id]/notification-defaults", () => {
 describe("PUT /api/events/[id]/notification-defaults", () => {
   it("forbids non-owner non-admin", async () => {
     mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false } as any);
-    const ev = await seedEvent();
+    const ev = await seedEvent(null, true);
     const res = await putDefaults(putCtx({ id: ev.id }, { muteReminders: true }));
     expect(res.status).toBe(403);
   });
@@ -141,7 +142,7 @@ describe("PUT /api/events/[id]/reminder-timings", () => {
 
   it("forbids non-owner non-admin", async () => {
     mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false } as any);
-    const ev = await seedEvent();
+    const ev = await seedEvent(null, true);
     const { PUT } = await import("~/pages/api/events/[id]/reminder-timings");
     const res = await PUT(putCtx({ id: ev.id }, { reminder2h: false }));
     expect(res.status).toBe(403);

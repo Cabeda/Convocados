@@ -9,6 +9,16 @@ import { GET as webhookDeliveries } from "~/pages/api/events/[id]/webhooks/[webh
 import { POST as calendarToken } from "~/pages/api/me/calendar-token";
 import { PUT as settleShare } from "~/pages/api/events/[id]/payments/settlement";
 import { PUT as updateTitle } from "~/pages/api/events/[id]/title";
+import { PUT as archivePlayer } from "~/pages/api/events/[id]/archive-player";
+import { GET as searchCourtAlternatives, PUT as saveCourtWatch } from "~/pages/api/events/[id]/court-alternatives";
+import { POST as mergePlayer } from "~/pages/api/events/[id]/merge-player";
+import { POST as markNoShow } from "~/pages/api/events/[id]/no-show";
+import { DELETE as purgePlayer } from "~/pages/api/events/[id]/purge-player";
+import { PUT as reorderPlayers } from "~/pages/api/events/[id]/reorder-players";
+import { POST as resetPlayerOrder } from "~/pages/api/events/[id]/reset-player-order";
+import { POST as switchCourt } from "~/pages/api/events/[id]/switch-court";
+import { PUT as setReminderTimings } from "~/pages/api/events/[id]/reminder-timings";
+import { PUT as setNotificationDefaults } from "~/pages/api/events/[id]/notification-defaults";
 
 /**
  * Authorization regressions.
@@ -177,4 +187,101 @@ describe("settlement cross-event guard", () => {
     const res = await settleShare(ctx({ id: eventA.id }, { gameId: gameB.id, eventPlayerId: "x" }, ownerToken, "PUT"));
     expect(res.status).toBe(400);
   });
+});
+
+/**
+ * Root Event mutation routes must answer the authorization question the shared
+ * module answers, rather than re-deriving it (GH-1405). Each call sends an empty
+ * body, so `afterGate` is the status the route reaches on its own once
+ * authorization is out of the way — a 403 there means the gate is still
+ * hand-rolled and the caller never got past it.
+ */
+const ROOT_EVENT_MUTATIONS = [
+  {
+    route: "PUT archive-player",
+    denied: "Only the event owner or admin can archive players.",
+    afterGate: 400,
+    call: (id: string, token?: string) => archivePlayer(ctx({ id }, {}, token, "PUT")),
+  },
+  {
+    route: "GET court-alternatives",
+    denied: "Only event owner or admins can search alternatives.",
+    afterGate: 400,
+    call: (id: string, token?: string) => searchCourtAlternatives(ctx({ id }, undefined, token, "GET")),
+  },
+  {
+    route: "PUT court-alternatives",
+    denied: "Only event owner or admins can manage court watch.",
+    afterGate: 400,
+    call: (id: string, token?: string) => saveCourtWatch(ctx({ id }, {}, token, "PUT")),
+  },
+  {
+    route: "POST merge-player",
+    denied: "Only the event owner or admin can merge players.",
+    afterGate: 400,
+    call: (id: string, token?: string) => mergePlayer(ctx({ id }, {}, token, "POST")),
+  },
+  {
+    route: "POST no-show",
+    denied: "Only owner/admin can mark no-shows.",
+    afterGate: 400,
+    call: (id: string, token?: string) => markNoShow(ctx({ id }, {}, token, "POST")),
+  },
+  {
+    route: "DELETE purge-player",
+    denied: "Only the event owner or admin can do this.",
+    afterGate: 400,
+    call: (id: string, token?: string) => purgePlayer(ctx({ id }, {}, token, "DELETE")),
+  },
+  {
+    route: "PUT reorder-players",
+    denied: "Only the event owner can reorder players.",
+    afterGate: 400,
+    call: (id: string, token?: string) => reorderPlayers(ctx({ id }, {}, token, "PUT")),
+  },
+  {
+    route: "POST reset-player-order",
+    denied: "Only the event owner can reset player order.",
+    afterGate: 200,
+    call: (id: string, token?: string) => resetPlayerOrder(ctx({ id }, {}, token, "POST")),
+  },
+  {
+    route: "POST switch-court",
+    denied: "Only event owner or admins can switch courts.",
+    afterGate: 400,
+    call: (id: string, token?: string) => switchCourt(ctx({ id }, {}, token, "POST")),
+  },
+  {
+    route: "PUT reminder-timings",
+    denied: "Forbidden",
+    afterGate: 400,
+    call: (id: string, token?: string) => setReminderTimings(ctx({ id }, {}, token, "PUT")),
+  },
+  {
+    route: "PUT notification-defaults",
+    denied: "Forbidden",
+    afterGate: 200,
+    call: (id: string, token?: string) => setNotificationDefaults(ctx({ id }, {}, token, "PUT")),
+  },
+];
+
+describe("root Event mutation routes ask one authorization question", () => {
+  for (const { route, denied, afterGate, call } of ROOT_EVENT_MUTATIONS) {
+    it(`${route} lets an ownerless UNLISTED event through the gate`, async () => {
+      const event = await seedEvent({ ownerId: null, isPublic: false });
+      expect((await call(event.id)).status).toBe(afterGate);
+    });
+
+    it(`${route} still rejects a stranger on an owned event`, async () => {
+      const event = await seedEvent({ ownerId });
+      const res = await call(event.id, otherToken);
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: denied });
+    });
+
+    it(`${route} still accepts the owner`, async () => {
+      const event = await seedEvent({ ownerId });
+      expect((await call(event.id, ownerToken)).status).toBe(afterGate);
+    });
+  }
 });

@@ -6,7 +6,7 @@
  */
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sendPushToUser } from "../../../../lib/push.server";
 import { getNotificationPrefs } from "../../../../lib/notificationPrefs.server";
@@ -18,12 +18,12 @@ export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { ownerId: true, title: true },
+    select: { id: true, ownerId: true, isPublic: true, title: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only owner/admin can mark no-shows." }, { status: 403 });
   }
 

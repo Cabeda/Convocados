@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { checkOwnership } from "~/lib/auth.helpers.server";
+import { authorizeEventMutation } from "~/lib/eventAuthz.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { fireWebhooks } from "~/lib/webhook.server";
@@ -18,8 +18,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin, session } = await checkOwnership(request, event.ownerId, undefined, params.id);
-  if (!isOwner && !isAdmin) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only event owner or admins can switch courts." }, { status: 403 });
   }
 
@@ -61,7 +61,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     params: { title: event.title },
     url: `/events/${event.id}`,
     spotsLeft,
-  }, session?.user?.id);
+  }, authz.session?.user?.id);
 
   if (!process.env.VITEST) {
     await drainNotificationQueue().catch((err) => {
