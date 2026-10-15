@@ -8,13 +8,14 @@
  * `android-app/store-listing/<lang>/`; this is the gate that keeps it honest
  * (ADR 0049, `android-app/PLAY_STORE_PUBLISHING.md`).
  *
- * It rejects two classes of failure: an incomplete listing (every language needs
+ * It rejects three classes of failure: an incomplete listing (every language needs
  * all three fields, non-empty, within Play's limit — the upload sends only what
- * the layout holds, so an absent field is not ours to explain), and a Wear surface the app
- * ships but the description does not mention. Each obligation is detected from
- * the wear module rather than asserted from a list of features, but the set of
- * detectable surfaces is fixed below and is not self-extending: a surface outside
- * it is caught in review, not here.
+ * the layout holds, so an absent field is not ours to explain), a missing or
+ * unusable app icon (Play never re-derives one, so an icon outside this repo is
+ * stale for good), and a Wear surface the app ships but the description does not
+ * mention. Each obligation is detected from the wear module rather than asserted from a
+ * list of features, but the set of detectable surfaces is fixed below and is not
+ * self-extending: a surface outside it is caught in review, not here.
  *
  * One implementation, on purpose. `src/test/play-listing.test.ts` drives the
  * failing paths through this module; a second copy of the rules would stay green
@@ -40,6 +41,47 @@ const FIELDS = [
   { file: "short-description.txt", limit: 80 },
   { file: "full-description.txt", limit: 4000 },
 ];
+
+/**
+ * The store-listing app icon.
+ *
+ * Play fills the listing's icon once, from the first bundle it sees, and never
+ * derives it again — so an icon held only in Play Console stays whatever it was on
+ * day one. That is not hypothetical: the launcher icon became a whistle in Aug 2026
+ * and the store page kept the old "C" glyph for months, because nothing in this repo
+ * ever uploaded an icon. The committed copy is `store-listing/<lang>/icon.png`;
+ * Gradle Play Publisher 4.x reads it from `listings/<lang>/graphics/icon/`, so both
+ * locations are accepted (source and staged layout).
+ */
+const ICON = {
+  file: "icon.png",
+  staged: join("graphics", "icon", "icon.png"),
+  size: 512,
+};
+
+/**
+ * What is wrong with `path` as a Play app icon, or undefined when it is fine.
+ *
+ * PNG header only: width/height sit at bytes 16..23 and the colour type at 25, so
+ * this needs no image library. Play wants a 512×512 icon and renders the store page
+ * on white, so a transparent one shows as a white square — the same reason
+ * `check-play-screenshots.mjs` refuses translucent store art.
+ */
+function iconProblem(path) {
+  const header = readFileSync(path);
+  if (header.length < 26 || !header.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    return "is not a PNG";
+  }
+  const width = header.readUInt32BE(16);
+  const height = header.readUInt32BE(20);
+  if (width !== ICON.size || height !== ICON.size) {
+    return `is ${width}x${height}; Play's app icon must be ${ICON.size}x${ICON.size}`;
+  }
+  if (header[25] !== 2) {
+    return `carries an alpha channel (PNG colour type ${header[25]}); Play renders the store page on white, so the icon must be opaque`;
+  }
+  return undefined;
+}
 
 /**
  * Wear surfaces Play expects the listing to describe. `detect` reads the module
@@ -125,6 +167,20 @@ export function checkListing({ listingDir, wearDir }) {
         errors.push(`${language}/${file} is ${value.length} characters; Play allows ${limit}`);
       }
       if (file === "full-description.txt") descriptions.set(language, value.toLowerCase());
+    }
+
+    const icon = [ICON.file, ICON.staged]
+      .map((candidate) => join(dir, candidate))
+      .find((candidate) => existsSync(candidate));
+    if (!icon) {
+      errors.push(
+        `Missing ${language}/${ICON.file}. Play derives the listing icon once and never ` +
+          `again, so without a committed copy the store page keeps whatever icon it had ` +
+          `on its first release.`,
+      );
+    } else {
+      const problem = iconProblem(icon);
+      if (problem) errors.push(`${language}/${ICON.file} ${problem}`);
     }
 
     // A file the uploader does not read is worse than a missing one: it looks

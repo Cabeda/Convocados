@@ -245,6 +245,26 @@ in the same PR as the feature. The gate will tell you which word is missing.
 `android-app/store-listing/` is edited like any other source file. Do not edit
 listing text in Play Console: the next release overwrites it.
 
+## Store listing app icon
+
+The app icon is a build input too: `android-app/store-listing/<lang>/icon.png`
+(512×512, opaque), staged into both modules' layouts by `syncPlayListingText` and
+uploaded by `publishListing` like the screenshots.
+
+Play fills the listing's icon **once**, from the first bundle it sees, and never
+derives it again — so an icon that exists only in Play Console is stale for good.
+That is not hypothetical: the launcher icon became a whistle in Aug 2026 and the
+store page kept the old "C" glyph for months, because nothing here uploaded an
+icon. The legacy launcher rasters
+(`app/src/main/res/mipmap-*/ic_launcher*.webp`) carried the same stale artwork,
+so regenerating them was part of the same fix.
+
+Regenerate `icon.png` **and** those rasters whenever
+`drawable/ic_launcher_foreground.xml` changes — the store icon matching the
+launcher icon is the entire point, and nothing else catches the drift. The gate
+(`pnpm check:play-listing`) fails on a missing icon, a size other than 512×512, or
+an alpha channel, in the committed source and in the staged layout alike.
+
 ## Promoting releases
 
 ### Automatic (happy path)
