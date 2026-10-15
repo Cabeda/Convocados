@@ -8,7 +8,7 @@
  *  supports undo); the existing hard-delete X flow is being replaced by this.
  */
 import { prisma } from "./db.server";
-import { getActiveRosterState } from "./roster.server";
+import { getRosterCapacity } from "./roster.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { fireWebhooks } from "./webhook.server";
 import { syncPaymentsForEvent } from "./payments.server";
@@ -128,13 +128,15 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   // ADR 0016: the current game's GameParticipant rows are the authoritative
   // roster. Legacy Player rows accumulate across recurring occurrences and would
   // inflate the active/bench/spotsLeft logic below, so we derive that state from
-  // the shared getActiveRosterState helper (same source as the join path — this
+  // the shared Roster capacity module (same source as the join path — this
   // duplication is how #722 slipped through before).
-  const roster = await getActiveRosterState(eventId, event.maxPlayers, currentGameId);
-  const activeCountBefore = roster.activeCount;
-  const hasBench = roster.hasBench;
-  const firstBenchName = roster.firstBenchName ?? undefined;
-  const wasActive = roster.activeNames.has(rosterName);
+  const capacity = await getRosterCapacity(eventId, event.maxPlayers, currentGameId);
+  const spotsLeftBefore = capacity.spotsLeft;
+  const hasBench = capacity.hasBench;
+  const firstBenchName = capacity.bench[0]?.name ?? undefined;
+  const wasActive = capacity.active.some((m) => m.name === rosterName);
+  // The whole ordered Roster, active + bench — splitRoster splits it in two.
+  const roster = [...capacity.active, ...capacity.bench];
 
   // Soft-archive the Player row when there is one. Preserves the row + any Rsvp
   // keyed on this playerId. EventPlayer-native identities have no Player row.
@@ -201,9 +203,9 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   }
   await validateTeams(eventId, event.maxPlayers, currentGameId);
 
-  // spotsLeft after removal
-  const activeAfter = wasActive ? (hasBench ? event.maxPlayers : activeCountBefore - 1) : activeCountBefore;
-  const spotsLeft = Math.max(0, event.maxPlayers - activeAfter);
+  // Remaining capacity after the removal: an active leaver frees one spot unless
+  // the bench promotes straight into it (the leave flow fills the slot itself).
+  const spotsLeft = wasActive && !hasBench ? spotsLeftBefore + 1 : spotsLeftBefore;
 
   // Bench-empty after the removal. A bench is currently empty iff the total players fit
   // within maxPlayers (i.e. there were no bench players to start with). If the bench already
@@ -264,7 +266,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // ADR 0017: Spot-available push — fire whenever a spot opens and game is in the future (Tier 2).
   // Previously gated on 48h; now always fires so interested players/followers learn immediately.
-  const wasFull = activeCountBefore >= event.maxPlayers;
+  const wasFull = spotsLeftBefore === 0;
   if (wasActive && wasFull && !hasBench && spotsLeft > 0 && event.dateTime > new Date()) {
     await enqueueNotification(
       eventId,
@@ -307,7 +309,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     warned: !!shouldWarn,
     undo: {
       name: rosterName,
-      order: player ? event.players.findIndex((p) => p.id === player.id) : roster.members.findIndex((m) => m.name === rosterName),
+      order: player ? event.players.findIndex((p) => p.id === player.id) : roster.findIndex((m) => m.name === rosterName),
       userId: identityUserId,
       removedAt: Date.now(),
     },

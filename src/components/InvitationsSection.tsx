@@ -4,6 +4,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { useT } from "~/lib/useT";
+import type { Locale } from "~/lib/i18n";
 import { formatDateInTz } from "~/lib/timezones";
 
 export interface HomeInvitation {
@@ -29,7 +30,7 @@ export interface HomeRosterAdd {
 interface Props {
   invitations: HomeInvitation[];
   rosterAdds: HomeRosterAdd[];
-  locale?: string;
+  locale?: Locale;
 }
 
 /**
@@ -87,7 +88,7 @@ export function InvitationsSection({ invitations, rosterAdds, locale = "en" }: P
   if (pending.length === 0 && visibleAdds.length === 0) return null;
 
   const dateFor = (iso: string) =>
-    formatDateInTz(new Date(iso), locale === "pt" ? "pt-PT" : "en-GB", "UTC", {
+    formatDateInTz(new Date(iso), locale, "UTC", {
       weekday: "short", month: "short", day: "numeric",
       hour: "2-digit", minute: "2-digit",
     });

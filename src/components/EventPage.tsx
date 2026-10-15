@@ -21,8 +21,7 @@ import {
 } from "~/lib/stakesPreview";
 import { TeamField } from "./TeamField";
 import type { Imatch } from "~/lib/random";
-import { useT } from "~/lib/useT";
-import { detectLocale } from "~/lib/i18n";
+import { useLocale } from "~/lib/useT";
 import { addKnownName, getQjName } from "~/lib/knownNames";
 import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { isGameEnded } from "~/lib/gameStatus";
@@ -68,8 +67,7 @@ function isHighIntentForPush(
 }
 
 export default function EventPage({ eventId }: { eventId: string }) {
-  const t = useT();
-  const locale = detectLocale();
+  const { locale, t } = useLocale();
   const { data: session, refetch: refetchSession } = useSession();
 
   // ADR 0018: Detect ?action= from notification deep links
@@ -1162,7 +1160,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {wasReset && (
               <Alert severity="info" icon={<EventRepeatIcon />}>
                 {t("recurringResetAlert", {
-                  date: formatDateInTz(gameDate, locale === "pt" ? "pt-PT" : "en-GB", event.timezone, {
+                  date: formatDateInTz(gameDate, locale, event.timezone, {
                     weekday: "long", month: "long", day: "numeric",
                   }),
                 })}

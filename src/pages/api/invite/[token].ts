@@ -6,6 +6,7 @@ import { expirePendingInvites, acceptPlayerInvite, declinePlayerInvite } from "~
 import { finishRosterAdd } from "~/lib/teamFormation.server";
 import { syncGamePayments } from "~/lib/settlement.server";
 import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
+import { splitRoster } from "~/lib/rosterCapacity";
 
 /**
  * ADR 0025 — invite-by-link.
@@ -50,8 +51,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   }
 
   // Social proof for the "X invited you" landing: who is already in, and how
-  // many spots remain. Pending invitees are roster ghosts (ADR 0025) so they
-  // are excluded from both the names and the count, same as the roster math.
+  // many spots remain. `active` is the Game's Roster already filtered (ADR 0025
+  // invite ghosts out), so remaining capacity is splitRoster's answer over it.
   const active = await prisma.gameParticipant.findMany({
     where: activeParticipantsWhere(invite.gameId),
     include: { eventPlayer: { select: { name: true } } },
@@ -59,7 +60,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   });
   const guests = active.map((p) => p.eventPlayer.name);
   const maxPlayers = invite.eventPlayer.event.maxPlayers;
-  const spotsLeft = Math.max(0, maxPlayers - guests.length);
+  const { spotsLeft } = splitRoster(guests, maxPlayers);
 
   return Response.json({
     valid: true,

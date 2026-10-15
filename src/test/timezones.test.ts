@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { formatDateInTz, toDateTimeLocalValue, fromDateTimeLocalValue, detectTimezone } from "~/lib/timezones";
+import { formatDateInTz, dateFormatTag, toDateTimeLocalValue, fromDateTimeLocalValue, detectTimezone } from "~/lib/timezones";
+
+describe("dateFormatTag", () => {
+  it("resolves every app locale to its BCP-47 formatting tag", () => {
+    // One table, six locales. A new locale must be added here, not at a call site.
+    expect(dateFormatTag("en")).toBe("en-GB");
+    expect(dateFormatTag("pt")).toBe("pt-PT");
+    expect(dateFormatTag("es")).toBe("es-ES");
+    expect(dateFormatTag("fr")).toBe("fr-FR");
+    expect(dateFormatTag("de")).toBe("de-DE");
+    expect(dateFormatTag("it")).toBe("it-IT");
+  });
+
+  it("renders a non-English locale differently from English", () => {
+    const options = { weekday: "short", month: "short", day: "numeric" } as const;
+    const gameDate = new Date("2024-07-15T19:00:00Z");
+    const en = formatDateInTz(gameDate, "en", "UTC", options);
+    const es = formatDateInTz(gameDate, "es", "UTC", options);
+    expect(en).not.toBe(es);
+  });
+});
 
 describe("formatDateInTz", () => {
   // 2024-07-15T19:00:00Z — summer, so Europe/Lisbon is UTC+1 (WEST)
@@ -10,14 +30,14 @@ describe("formatDateInTz", () => {
 
   it("formats time in the event timezone, not browser local", () => {
     // 19:00 UTC in Europe/Lisbon during summer (UTC+1) should show 20:00
-    const result = formatDateInTz(summerUtc, "en-GB", "Europe/Lisbon", {
+    const result = formatDateInTz(summerUtc, "en", "Europe/Lisbon", {
       hour: "2-digit", minute: "2-digit",
     });
     expect(result).toContain("20:00");
   });
 
   it("formats time in UTC when timezone is UTC", () => {
-    const result = formatDateInTz(summerUtc, "en-GB", "UTC", {
+    const result = formatDateInTz(summerUtc, "en", "UTC", {
       hour: "2-digit", minute: "2-digit",
     });
     expect(result).toContain("19:00");
@@ -25,7 +45,7 @@ describe("formatDateInTz", () => {
 
   it("formats winter time correctly for Europe/Lisbon (UTC+0)", () => {
     // 19:00 UTC in winter Lisbon (UTC+0) should show 19:00
-    const result = formatDateInTz(winterUtc, "en-GB", "Europe/Lisbon", {
+    const result = formatDateInTz(winterUtc, "en", "Europe/Lisbon", {
       hour: "2-digit", minute: "2-digit",
     });
     expect(result).toContain("19:00");
@@ -33,14 +53,14 @@ describe("formatDateInTz", () => {
 
   it("formats time in America/New_York (UTC-4 summer)", () => {
     // 19:00 UTC in summer New York (UTC-4) should show 15:00
-    const result = formatDateInTz(summerUtc, "en-GB", "America/New_York", {
+    const result = formatDateInTz(summerUtc, "en", "America/New_York", {
       hour: "2-digit", minute: "2-digit",
     });
     expect(result).toContain("15:00");
   });
 
   it("includes date parts when requested", () => {
-    const result = formatDateInTz(summerUtc, "en-GB", "UTC", {
+    const result = formatDateInTz(summerUtc, "en", "UTC", {
       weekday: "short", month: "short", day: "numeric",
     });
     expect(result).toContain("Mon");
@@ -49,7 +69,7 @@ describe("formatDateInTz", () => {
   });
 
   it("falls back to UTC for empty timezone string", () => {
-    const result = formatDateInTz(summerUtc, "en-GB", "", {
+    const result = formatDateInTz(summerUtc, "en", "", {
       hour: "2-digit", minute: "2-digit",
     });
     expect(result).toContain("19:00");

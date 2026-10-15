@@ -165,6 +165,14 @@ describe("rsvp_summary webhook", () => {
 });
 
 describe("recruitment webhook", () => {
+  // The player must hold a spot on the current Game's Roster (ADR 0016): a legacy
+  // `Player` row alone is accumulated history and claims none of the 10 active spots.
+  async function seedRosteredPlayer(eventId: string, gameId: string, name: string, userId: string) {
+    await prisma.player.create({ data: { eventId, name, userId, order: 0 } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId, name, userId } });
+    await prisma.gameParticipant.create({ data: { gameId, eventPlayerId: ep.id, order: 0 } });
+  }
+
   it("fires at the T-48h ping with spotsLeft and urgent=false", async () => {
     const owner = await seedUser("u-dr-6", "Owner");
     const player = await seedUser("u-dr-7", "P1");
@@ -172,9 +180,7 @@ describe("recruitment webhook", () => {
     const event = await seedEventWithGame("evt-dr-3", owner.id, eventDate, {
       rsvpCutoffSent: true,
     });
-    await prisma.player.create({
-      data: { eventId: event.id, name: player.name, userId: player.id, order: 0 },
-    });
+    await seedRosteredPlayer(event.id, event.currentGameId!, player.name, player.id);
 
     await runCron();
 
@@ -191,9 +197,7 @@ describe("recruitment webhook", () => {
     const event = await seedEventWithGame("evt-dr-4", owner.id, eventDate, {
       rsvpCutoffSent: true,
     });
-    await prisma.player.create({
-      data: { eventId: event.id, name: player.name, userId: player.id, order: 0 },
-    });
+    await seedRosteredPlayer(event.id, event.currentGameId!, player.name, player.id);
 
     await runCron();
 

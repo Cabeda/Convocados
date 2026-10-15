@@ -28,7 +28,7 @@ import { useSession } from "~/lib/auth.client";
 import { useCountdown } from "./event/useCountdown";
 import { getSportPreset } from "~/lib/sports";
 import { formatDateInTz } from "~/lib/timezones";
-import { detectLocale, type TFunction } from "~/lib/i18n";
+import { detectLocale, type Locale, type TFunction } from "~/lib/i18n";
 import { GameCard, type GameSummary } from "./GameCard";
 
 const POLL_INTERVAL = 30_000;
@@ -119,8 +119,8 @@ interface ManagedGameSuggestions {
 /** ADR 0025: panel surfaces at most the 3 nearest upcoming managed games. */
 const MANAGED_SUGGESTIONS_GAMES = 3;
 
-function formatKickoff(date: Date, locale: string, timezone: string) {
-  return formatDateInTz(date, locale === "pt" ? "pt-PT" : "en-GB", timezone || "UTC", {
+function formatKickoff(date: Date, locale: Locale, timezone: string) {
+  return formatDateInTz(date, locale, timezone || "UTC", {
     weekday: "short", month: "short", day: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -128,7 +128,7 @@ function formatKickoff(date: Date, locale: string, timezone: string) {
 
 /** Hero card for a game the user plays/organizes. Shows a live badge or a
  *  live-ticking countdown to kickoff. */
-function UpNextCard({ game, locale, t }: { game: UpNextGame; locale: string; t: TFunction }) {
+function UpNextCard({ game, locale, t }: { game: UpNextGame; locale: Locale; t: TFunction }) {
   const date = new Date(game.dateTime);
   const isLive = game.status === "in_progress";
   const countdown = useCountdown(date, t("gameTime"));
@@ -184,7 +184,7 @@ function UpNextCard({ game, locale, t }: { game: UpNextGame; locale: string; t: 
 }
 
 /** A single "Needs you" card — one actionable item, deep-linking to the event. */
-function ActionCard({ action, locale, t }: { action: HomeAction; locale: string; t: TFunction }) {
+function ActionCard({ action, locale, t }: { action: HomeAction; locale: Locale; t: TFunction }) {
   const meta: Record<HomeAction["type"], { icon: React.ReactElement; label: string; color: string; href: string }> = {
     fill_spots: { icon: <GroupAddIcon fontSize="small" />, label: t("actionFillSpots", { n: action.spotsLeft ?? 0 }), color: "primary", href: `/events/${action.eventId}` },
     settle_score: { icon: <ScoreboardIcon fontSize="small" />, label: t("actionSettleScore"), color: "warning", href: `/events/${action.eventId}` },
@@ -217,7 +217,7 @@ function ActionCard({ action, locale, t }: { action: HomeAction; locale: string;
   );
 }
 
-function DiscoverCard({ game, locale, t }: { game: DiscoverGame; locale: string; t: TFunction }) {  const date = new Date(game.dateTime);
+function DiscoverCard({ game, locale, t }: { game: DiscoverGame; locale: Locale; t: TFunction }) {  const date = new Date(game.dateTime);
   const isFull = game.spotsLeft === 0;
   const sportPreset = getSportPreset(game.sport);
   return (

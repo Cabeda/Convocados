@@ -11,6 +11,8 @@ export interface UpcomingReminder {
   eventTitle: string;
   dateTime: Date;
   location: string;
+  /** Active spots on the Event — the `maxPlayers` the Roster capacity is read against. */
+  maxPlayers: number;
   players: { name: string; userId: string | null; email: string | null }[];
   currentGameId: string | null;
   reminder24h: boolean;
@@ -41,6 +43,7 @@ export async function getUpcomingReminders(type: "24h" | "2h" | "1h"): Promise<U
     eventTitle: e.title,
     dateTime: e.dateTime,
     location: e.location,
+    maxPlayers: e.maxPlayers,
     players: e.players.map((p) => ({
       name: p.name,
       userId: p.userId,
@@ -86,6 +89,7 @@ export async function getPostGameReminders(): Promise<UpcomingReminder[]> {
       eventTitle: e.title,
       dateTime: e.dateTime,
       location: e.location,
+      maxPlayers: e.maxPlayers,
       players: e.players.map((p) => ({
         name: p.name,
         userId: p.userId,
