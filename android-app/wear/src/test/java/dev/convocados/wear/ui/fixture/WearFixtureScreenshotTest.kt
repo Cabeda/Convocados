@@ -19,7 +19,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Renders the four Wear store-listing screens on **both** display shapes.
+ * Renders the Wear store-listing screens on **both** display shapes.
  *
  * Play's Wear screenshots are opaque 1:1 images of the app interface (Wear app
  * quality WO-G5: no device frames, no extra text/graphics/backgrounds, no
@@ -29,6 +29,11 @@ import org.robolectric.annotation.GraphicsMode
  * square layout on a round watch. Round captures are opaque black squares with
  * the round UI: they are **not** circular-masked, because transparent corners
  * are exactly what WO-G5 forbids.
+ *
+ * Seven of the listing's eight slots come from here — quick game has no square
+ * capture, because the eighth slot is the Quick game tile
+ * (`QuickGameTileScreenshotTest`), which Play recommends once an app offers
+ * Tiles. Play caps a slot at eight images, so the two share the budget.
  */
 private const val ROUND_QUALIFIERS = "w390dp-h390dp-round"
 private const val SQUARE_QUALIFIERS = "w390dp-h390dp-notround"
@@ -59,10 +64,6 @@ class WearFixtureScreenshotTest {
     @Test
     @Config(qualifiers = ROUND_QUALIFIERS)
     fun quickGameRound() = snapshot("quick_game_round") { quickGame() }
-
-    @Test
-    @Config(qualifiers = SQUARE_QUALIFIERS)
-    fun quickGameSquare() = snapshot("quick_game_square") { quickGame() }
 
     @Test
     @Config(qualifiers = ROUND_QUALIFIERS)
