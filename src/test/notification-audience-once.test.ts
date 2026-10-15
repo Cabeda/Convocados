@@ -23,11 +23,20 @@ vi.mock("web-push", () => ({
   sendNotification: mockSendNotification,
 }));
 
+/** Exact host of a URL, so no assertion matches a substring of a host. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "";
+  }
+}
+
 const mockFetch = vi.fn().mockImplementation(async (url: string) => {
-  if (url.includes("oauth2.googleapis.com")) {
+  if (hostOf(url) === "oauth2.googleapis.com") {
     return { ok: true, json: async () => ({ access_token: "mock-fcm-token", expires_in: 3600 }) };
   }
-  if (url.includes("fcm.googleapis.com")) {
+  if (hostOf(url) === "fcm.googleapis.com") {
     return { ok: true, json: async () => ({ name: "projects/test/messages/1" }) };
   }
   return { ok: true, json: async () => ({}) };
@@ -106,7 +115,7 @@ function webPushUsers(): string[] {
 /** User ids the FCM channel actually delivered to (AppPushToken.token is `fcm-<id>`). */
 function fcmUsers(): string[] {
   return mockFetch.mock.calls
-    .filter((c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("fcm.googleapis.com"))
+    .filter((c: unknown[]) => typeof c[0] === "string" && hostOf(c[0] as string) === "fcm.googleapis.com")
     .map((c) => {
       const body = JSON.parse((c[1] as { body: string }).body) as { message?: { token?: string } };
       return (body.message?.token ?? "").replace(/^fcm-/, "");
