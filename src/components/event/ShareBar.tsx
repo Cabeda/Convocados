@@ -22,7 +22,7 @@ export function ShareBar({ title, dateTime, timezone, location, maxPlayers, play
   const spotsLeft = maxPlayers - playerCount;
   const url = typeof window !== "undefined" ? window.location.href : "";
 
-  const formattedDate = formatDateInTz(dateTime, locale === "pt" ? "pt-PT" : "en-GB", timezone, {
+  const formattedDate = formatDateInTz(dateTime, locale, timezone, {
     weekday: "long",
     hour: "2-digit",
     minute: "2-digit",

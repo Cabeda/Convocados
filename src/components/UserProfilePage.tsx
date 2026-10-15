@@ -24,6 +24,7 @@ import { LinkedCredentialsSection } from "./LinkedCredentialsSection";
 import ProfilePhotoDialog from "./ProfilePhotoDialog";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
+import { dateFormatTag } from "~/lib/timezones";
 import { GameCard, type GameSummary } from "./GameCard";
 import { authClient } from "~/lib/auth.client";
 
@@ -883,7 +884,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
                     )}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
-                    {t("playerSince", { date: memberSince.toLocaleDateString(locale === "pt" ? "pt-PT" : "en-GB", { month: "long", year: "numeric" }) })}
+                    {t("playerSince", { date: memberSince.toLocaleDateString(dateFormatTag(locale), { month: "long", year: "numeric" }) })}
                   </Typography>
                   {isOwnProfile && user.email && !editing && (
                     <Typography variant="body2" color="text.secondary">{user.email}</Typography>
