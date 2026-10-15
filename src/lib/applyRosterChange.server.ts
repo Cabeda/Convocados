@@ -27,7 +27,7 @@ import { createLogger } from "./logger.server";
 import { normalizeForMatch } from "./stringMatch";
 import { isSystemUserId } from "./payerIdentity.server";
 import { enqueuePushSetupHintSafe } from "./pushSetupHint";
-import { getActiveRosterState } from "./roster.server";
+import { getRosterCapacity } from "./roster.server";
 import { acceptPendingAccountInviteForDirectJoin } from "./invite.server";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
 import { movePlayerToEndOfList, rejoinPlayerToCurrentGame } from "./rosterChange.server";
@@ -186,8 +186,8 @@ async function enqueueJoinNotifications(input: {
 async function notifyPlayerJoined(input: {
   event: PrismaEvent;
   playerName: string;
-  /** Active roster count BEFORE this join (game-scoped under ADR 0016). */
-  activeBefore: number;
+  /** Active spots left BEFORE this join (game-scoped under ADR 0016). */
+  spotsLeftBefore: number;
   /** Total roster count (active + bench) BEFORE this join — bench position. */
   rosterCount: number;
   /** Who performed the join: a player/user name, or "anonymous". */
@@ -195,12 +195,13 @@ async function notifyPlayerJoined(input: {
   origin: string;
   senderClientId?: string;
 }) {
-  const { event, playerName, activeBefore, rosterCount, actor, origin, senderClientId } = input;
-  // activeBefore is the ACTIVE roster count BEFORE this join (game-scoped under
-  // ADR 0016). Legacy Player order must not be used here: it accumulates across
-  // recurring occurrences and would wrongly fire game_full on a 4/10 roster.
-  const isOnBench = activeBefore >= event.maxPlayers;
-  const spotsLeft = isOnBench ? 0 : Math.max(0, event.maxPlayers - activeBefore - 1);
+  const { event, playerName, rosterCount, spotsLeftBefore, actor, origin, senderClientId } = input;
+  // spotsLeftBefore is the Roster's remaining capacity BEFORE this join (ADR 0016).
+  // Legacy Player rows must not be used here: they accumulate across recurring
+  // occurrences and would wrongly fire game_full on a 4/10 roster. The join fills
+  // one more spot, or takes the bench when no spot is left.
+  const isOnBench = spotsLeftBefore === 0;
+  const spotsLeft = isOnBench ? 0 : spotsLeftBefore - 1;
   const url = `${origin}/events/${event.id}`;
   const data = { playerName, isActive: !isOnBench, spotsLeft, actor };
   fireWebhooks(event.id, "player_joined", data).catch(() => {});
@@ -233,9 +234,8 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   // occurrences — 19 active rows here while the game has 4 players). Snapshot
   // the ACTIVE count BEFORE this join so spotsLeft/bench logic sees the real
   // roster and game_full fires only when the current game actually fills.
-  const rosterState = await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId);
-  const activeBefore = rosterState.activeCount;
-  const rosterCount = rosterState.totalCount;
+  const { totalCount: rosterCount, spotsLeft: spotsLeftBefore } =
+    await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
 
   // Actor for the player_joined webhook payload: the session user who performed
   // the join, or "anonymous" when nobody is signed in.
@@ -437,7 +437,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
         // placement just because the payload name is not the active-set key.
         // finishRosterAdd self-guards for bench players.
         await finishRosterAdd(eventId, rosterName, event.maxPlayers, event.currentGameId);
-        await notifyPlayerJoined({ event, playerName: trimmed, activeBefore, rosterCount, actor: joinActor, origin, senderClientId });
+        await notifyPlayerJoined({ event, playerName: trimmed, spotsLeftBefore, rosterCount, actor: joinActor, origin, senderClientId });
         return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, reactivated: true, anonymous: linkedUserId === null } };
       }
       // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
@@ -478,7 +478,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           // account link, not a join — announcing it would push "X joined" to
           // every follower for a no-op.
           if (alreadyInGame.archivedAt) {
-            await notifyPlayerJoined({ event, playerName: trimmed, activeBefore, rosterCount, actor: joinActor, origin, senderClientId });
+            await notifyPlayerJoined({ event, playerName: trimmed, spotsLeftBefore, rosterCount, actor: joinActor, origin, senderClientId });
           }
           return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: false } };
         }
@@ -495,7 +495,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           // roster returns to full but the draw keeps the leaver's gap (prod:
           // final state 4v5 after leave → re-add on cmmkfrx8b0000o2ixrix1yp2m).
           await finishRosterAdd(eventId, eventPlayer.name, event.maxPlayers, event.currentGameId);
-          await notifyPlayerJoined({ event, playerName: trimmed, activeBefore, rosterCount, actor: joinActor, origin, senderClientId });
+          await notifyPlayerJoined({ event, playerName: trimmed, spotsLeftBefore, rosterCount, actor: joinActor, origin, senderClientId });
           return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
         }
         if (!alreadyInGame) {
@@ -507,7 +507,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           // Re-joining players sync teams under the canonical roster name, not
           // the payload name — finishRosterAdd self-guards for bench players.
           await finishRosterAdd(eventId, eventPlayer.name, event.maxPlayers, event.currentGameId);
-          await notifyPlayerJoined({ event, playerName: trimmed, activeBefore, rosterCount, actor: joinActor, origin, senderClientId });
+          await notifyPlayerJoined({ event, playerName: trimmed, spotsLeftBefore, rosterCount, actor: joinActor, origin, senderClientId });
           return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
         }
         // Already in the current game — fall through to duplicate error
@@ -576,9 +576,9 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
     await syncGamePayments(event.currentGameId, eventId);
   }
 
-  // spotsLeft after adding (activeBefore snapshot from the top of the handler)
-  const isOnBench = activeBefore >= event.maxPlayers;
-  const spotsLeft = isOnBench ? 0 : Math.max(0, event.maxPlayers - activeBefore - 1);
+  // spotsLeft after adding (spotsLeftBefore snapshot from the top of the handler)
+  const isOnBench = spotsLeftBefore === 0;
+  const spotsLeft = isOnBench ? 0 : spotsLeftBefore - 1;
   const url = `${origin}/events/${eventId}`;
 
   // Team sync: place when active, evict stale members, draw when the game

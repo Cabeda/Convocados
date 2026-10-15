@@ -4,6 +4,7 @@ import { enqueueNotification, drainNotificationQueue } from "./notificationQueue
 import { sendReminder } from "./email.server";
 import { getNotificationPrefs, wantsEmailReminder } from "./notificationPrefs.server";
 import { isReminderEnabled } from "./reminders.server";
+import { getRosterCapacity } from "./roster.server";
 import { fireWebhooks } from "./webhook.server";
 import { findSplitIdentities, collapseSplitIdentities, reconcilePaymentNames } from "./backfillMergedIdentity.server";
 import { recalculateAllRatings } from "./elo.server";
@@ -268,8 +269,11 @@ async function _processReminderJob(job: { id: string; eventId: string | null; ty
     return;
   }
 
+  // Recipients still come from the legacy Player rows, but remaining capacity is
+  // the Roster's answer (ADR 0016): those rows accumulate across an Event's Games
+  // and would report a full Game for a recurring Event past its first Game.
   const activePlayers = event.players.filter((p) => !p.archivedAt);
-  const spotsLeft = Math.max(0, event.maxPlayers - activePlayers.length);
+  const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
 
   // Enqueue push notification
   await enqueueNotification(event.id, "reminder", {
@@ -335,16 +339,12 @@ async function _processPostGameJob(job: { id: string; eventId: string | null }) 
 
   const event = await prisma.event.findUnique({
     where: { id: job.eventId },
-    include: {
-      players: { include: { user: { select: { email: true } } } },
-    },
   });
   if (!event) return;
   // Archived events never notify (see _processReminderJob).
   if (event.archivedAt) return;
 
-  const activePlayers = event.players.filter((p) => !p.archivedAt);
-  const spotsLeft = Math.max(0, event.maxPlayers - activePlayers.length);
+  const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
 
   await enqueueNotification(event.id, "post_game", {
     title: event.title,
