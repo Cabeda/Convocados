@@ -77,6 +77,9 @@ beforeEach(async () => {
   await prisma.eventFollow.deleteMany();
   await prisma.notificationPreferences.deleteMany();
   await prisma.player.deleteMany();
+  await prisma.gameParticipant.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
   await prisma.event.create({
@@ -117,6 +120,37 @@ describe("notification audience — push and in-app feed agree", () => {
 
     expect(pushedEndpoints()).toEqual(["https://f-player.endpoint"]);
     expect(await feedUserIds()).toEqual(["f-player"]);
+  });
+
+  it("takes the ADR 0017 role tier from the Roster, not the legacy Player rows (ADR 0016)", async () => {
+    // The exact bug this wave fixed at 13 other sites: legacy `Player` rows
+    // accumulate across an Event's occurrences. Reading them would classify
+    // everyone who ever joined as an active Player, so the non-Player Tier-2 mute
+    // would silently never fire for departures.
+    const game = await prisma.game.create({
+      data: { eventId: EVENT_ID, dateTime: new Date(), status: "upcoming" },
+    });
+    await prisma.event.update({
+      where: { id: EVENT_ID },
+      data: { maxPlayers: 8, currentGameId: game.id },
+    });
+
+    /** A follower who has played in a RECURRENCE — an accumulated legacy row. */
+    await seedFollower("f-departed");
+    await seedPlayer("f-departed");
+
+    /** A follower who has legacy rows AND a spot on the current Game's Roster. */
+    await seedFollower("f-active");
+    await seedPlayer("f-active");
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: EVENT_ID, name: "f-active", userId: "f-active" },
+    });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+
+    await drainJob("player_joined");
+
+    expect(pushedEndpoints()).toEqual(["https://f-active.endpoint"]);
+    expect(await feedUserIds()).toEqual(["f-active"]);
   });
 
   it("still delivers a Tier 1 type to a non-Player Follower on both channels", async () => {

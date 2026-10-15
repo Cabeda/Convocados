@@ -80,7 +80,7 @@ describe("getRosterCapacity — game-scoped (ADR 0016)", () => {
     expect(activeNames(state)).toEqual(new Set(["Active 1", "Active 2", "Active 3"]));
     expect(state.hasBench).toBe(false);
     expect(firstBenchName(state)).toBeNull();
-    expect([...state.active, ...state.bench].map((m) => m.name)).not.toContain("Invited Ghost");
+    expect([...state.active, ...state.bench].map((m) => m.name)).not.toContain("Invited Guest");
   });
 
   it("pending ghost must not push real players onto the bench", async () => {

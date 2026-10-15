@@ -354,6 +354,13 @@ describe("settlement entry points", () => {
       .toEqual(["payer", "payer"]);
     expect(body.games.every((g: { debtorNames: string[] }) => g.debtorNames.length === 0)).toBe(true);
     expect(body.games.every((g: { rows: unknown[] }) => g.rows.length === 0)).toBe(true);
+    // The aggregates too: a link holder has no identity, so no amount owed is
+    // theirs to read — not the per-game total, not the debtor count, not the
+    // running total. "Payers only" without these is a leak the body would hide.
+    expect(body.games.every((g: { total: number }) => g.total === 0)).toBe(true);
+    expect(body.games.every((g: { debtorCount: number }) => g.debtorCount === 0)).toBe(true);
+    expect(body.people.every((p: { owedAmount: number }) => p.owedAmount === 0)).toBe(true);
+    expect(body.totals.totalOwed).toBe(0);
   });
 
   it("still gives an owner the full manager view (debtor names and debtor lines)", async () => {

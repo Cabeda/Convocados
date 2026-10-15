@@ -15,6 +15,7 @@
 import { prisma } from "./db.server";
 import { getPingSuppressedUserIds } from "./inviteOptOut.server";
 import { resolveMuteTier, type MuteTierDecision } from "./notificationPrefs.server";
+import { getRosterCapacity } from "./roster.server";
 import type { NotificationJobType } from "./notificationQueue.server";
 
 export interface EventFollowOverrides {
@@ -39,6 +40,9 @@ export interface EventAudience {
   follows: EventFollowOverrides[];
   ownerId: string | null;
   notificationDefaults: EventNotificationDefaults | null;
+  /** Roster capacity limits, for callers that resolve the ADR 0017 role tier. */
+  maxPlayers: number | null;
+  currentGameId: string | null;
 }
 
 /**
@@ -75,7 +79,7 @@ export async function resolveEventAudience(
     }),
     prisma.event.findUnique({
       where: { id: eventId },
-      select: { ownerId: true, notificationDefaults: true },
+      select: { ownerId: true, notificationDefaults: true, maxPlayers: true, currentGameId: true },
     }),
   ]);
 
@@ -97,6 +101,8 @@ export async function resolveEventAudience(
     follows,
     ownerId: event?.ownerId ?? null,
     notificationDefaults,
+    maxPlayers: event?.maxPlayers ?? null,
+    currentGameId: event?.currentGameId ?? null,
   };
 }
 
@@ -130,18 +136,21 @@ export async function resolveJobAudience(
   type: NotificationJobType | undefined,
   opts: ResolveEventAudienceOptions = {},
 ): Promise<JobAudience> {
-  const [{ userIds, follows, notificationDefaults }, activePlayers] = await Promise.all([
-    resolveEventAudience(eventId, {
+  const { userIds, follows, notificationDefaults, maxPlayers, currentGameId } = await resolveEventAudience(
+    eventId,
+    {
       ...opts,
       suppressPingDeclines: type ? isPingSuppressedType(type) : false,
-    }),
-    prisma.player.findMany({
-      where: { eventId, archivedAt: null, userId: { not: null } },
-      select: { userId: true },
-    }),
-  ]);
+    },
+  );
 
-  const playerUserIds = new Set(activePlayers.map((p) => p.userId as string));
+  // ADR 0017: the role tier asks whether the recipient is on the CURRENT Game's
+  // Roster. Legacy `Player` rows accumulate across an Event's occurrences, so
+  // reading them would classify everyone who ever joined as an active Player and
+  // silently disable the non-Player Tier-2 mute for departures. Read the Roster.
+  const capacity =
+    maxPlayers === null ? null : await getRosterCapacity(eventId, maxPlayers, currentGameId);
+  const playerUserIds = new Set((capacity?.active ?? []).map((m) => m.userId).filter(Boolean) as string[]);
   const overridesByUser = new Map(follows.map((f) => [f.userId, f]));
   const decisions = new Map<string, MuteTierDecision>(
     userIds.map((userId) => [
