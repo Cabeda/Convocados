@@ -568,9 +568,6 @@ describe("error paths", () => {
 describe("settlement API routes", () => {
   it("GET requires authentication", async () => {
     const { event } = await seedEvent();
-    // Anonymous and not the owner — an owner needs no session, like every other route.
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
-    mockGetSession.mockResolvedValue(null);
     const res = await getSummary(ctx({ id: event.id }));
     expect(res.status).toBe(401);
   });

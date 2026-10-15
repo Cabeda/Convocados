@@ -20,23 +20,23 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const session = await getSession(request);
-  const authz = await authorizeEventMutation(request, event, session);
-  // Whoever holds an ownerless UNLISTED Event's link manages it (ADR 0035), so the
-  // ownerless-open role is a manager view. Everyone else is a player.
-  const role = authz.role === "ownerless-open" ? "owner" : authz.role === "forbidden" ? "player" : authz.role;
+  if (!session?.user) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
 
-  // Only event players (or managers) may view the event's payments.
-  if (role === "player") {
-    if (!session?.user) {
-      return Response.json({ error: "Authentication required." }, { status: 401 });
-    }
-    if (!(await isEventParticipant(eventId, session.user.id))) {
-      return Response.json({ error: "Only event players can view payments." }, { status: 403 });
-    }
+  // Owner/admin come from the shared Event authorization module; anyone else is a
+  // player. Reading the summary is not a mutation, so ADR 0035's ownerless-open role
+  // does NOT extend here — an anonymous caller stays 401, a non-participant 403.
+  const authz = await authorizeEventMutation(request, event, session);
+  const role = authz.role === "owner" || authz.role === "admin" ? authz.role : "player";
+
+  // Only event players (or owners/admins) may view the event's payments.
+  if (role === "player" && !(await isEventParticipant(eventId, session.user.id))) {
+    return Response.json({ error: "Only event players can view payments." }, { status: 403 });
   }
 
   try {
-    const summary = await getSettlementSummary(eventId, { role, userId: session?.user?.id });
+    const summary = await getSettlementSummary(eventId, { role, userId: session.user.id });
     return Response.json(summary);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to load settlement summary.";

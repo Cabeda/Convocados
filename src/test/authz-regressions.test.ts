@@ -207,12 +207,14 @@ describe("settlement cross-event guard", () => {
   });
 });
 
-describe("settlement entry points (ADR 0035 ownerless-open role)", () => {
-  it("lets an ownerless UNLISTED Event read its settlement summary (no-account flow)", async () => {
+describe("settlement entry points", () => {
+  it("does NOT extend ownerless-open to the anonymous read (settlement is money, not a mutation)", async () => {
+    // ADR 0035 governs Event MUTATIONS. Reading the settlement summary is financial
+    // data, so an unauthenticated link holder still gets 401 on GET even though the
+    // same caller may settle (see below). Widening this needs the product owner.
     const { event } = await seedSettableEvent({ ownerId: null, isPublic: false });
-    const res = await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"));
-    expect(res.status).toBe(200);
-    expect((await res.json()).people.length).toBeGreaterThan(0);
+    expect((await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"))).status).toBe(401);
+    expect((await settlementSummary(ctx({ id: event.id }, undefined, otherToken, "GET"))).status).toBe(403);
   });
 
   it("lets an ownerless UNLISTED Event settle a share", async () => {
