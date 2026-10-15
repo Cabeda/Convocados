@@ -89,49 +89,15 @@ that ships on one platform ships on the others in the **same PR** or an explicit
 follow-up ticket (Wear included where the affordance exists). No "web-only" or "app-only"
 UI drift.
 
-### 5. Coverage Thresholds Are a Ratchet (Never Cheat the Gate)
-The coverage thresholds in `vitest.config.ts` (`thresholds.lines`, `.statements`,
-`.functions`, `.branches`) are a **floor, never a ceiling**. They may only move **up**.
+### 5 & 6. Thresholds are a ratchet; metrics are never gamed
 
-**NEVER lower a coverage threshold to make a failing gate pass.** Nor may you achieve the
-same effect by proxy: deleting or `.skip`-ing failing tests, reaching for coverage
-`exclude` entries or `/* c8 ignore */`-style suppressions, or weakening assertions so a
-test passes without exercising the branch. That is cheating on the tests, and it is
-forbidden.
-
-- If coverage drops, write tests that cover the gap, then **raise** the thresholds to the
-  new measured values.
-- If a path is genuinely unreachable, document it in `docs/coverage.md`; do not silently
-  exclude it.
-- Lowering any threshold requires explicit written justification **and** the user's
-  approval, stated in the PR description. Absent that, a lowered threshold is a bug.
-
-### 6. Metric Integrity (Never Cheat a Benchmark)
-Any measured number — coverage, k6 latency, Lighthouse budget, mutation score, bundle
-size, PR diff size — is a **gate, not a suggestion**. The same rules that govern the
-coverage ratchet govern every other metric:
-
-- **NEVER** make a metric pass by changing the measurement instead of the code. Weakening
-  an assertion, lowering a threshold, reducing a load, shortening a scenario, relaxing a
-  budget, or deleting the measurement are all the same defect.
-- **NEVER** run benchmarks or measurements in parallel. They contend for resources and
-  the numbers are invalid. Run them sequentially, on an idle machine.
-- **NEVER** reach for an unfair comparison to claim a win: a smaller input, a warmer
-  cache, a different configuration, or a hand-rolled harness in place of the committed one.
-- When optimising against a target, the target must be **pass/fail and modest** ("at least
-  1.2x faster on the named scenario"), and the **baseline must be recorded first, with
-  zero changes** (`pnpm k6:load`, LHCI, or the committed config for that metric).
-- Correctness is not negotiable against a speed target: a Change that regresses tests,
-  coverage, mutation score, or any existing budget is a regression, not an optimisation.
-- **Stop** when an iteration buys a statistically insignificant gain (~<5%) while adding
-  disproportionate code. The trade is not worth it.
-- Speedups that arrive with a suspicious magnitude are a bug report, not an achievement.
-  Expect agents to "optimise" by disabling the thing being measured. If it looks too good,
-  read the diff line by line.
-
-`docs/factory/` holds the per-metric harnesses and the recorded baselines. If a number in
-there is stale, refreshing it is its own Change — do not update a baseline in the same
-Change that consumes it.
+Thresholds move **up** only, and no measured number — coverage, k6 latency, Lighthouse
+budget, bundle size, PR diff size — may pass by changing the measurement instead of the
+code. The full rule, with the proxy cheats enumerated (deleting tests, `exclude` entries,
+`/* c8 ignore */`, weaker assertions, warmer caches, smaller inputs), is in
+[`CODING_STANDARDS.md`](CODING_STANDARDS.md) under **Never cheat a gate**, which the
+reviewer applies at review time. If coverage drops, write the test that covers the gap
+and raise the threshold to the new measured value.
 
 ## Development Workflow
 
@@ -175,15 +141,23 @@ docs: update AGENTS.md
 3. Implement feature
 4. Ensure all tests pass (`pnpm test`)
 5. Run type checking (`pnpm typecheck`)
-6. Before `gh pr create`, run `pnpm check:pr-body <body.md>` against the body file. It is
+6. Write the PR body with the **`pr` skill when the session has it** (invoke the skill; it
+   supplies the Summary / Evidence / Merge Danger template). Read the diff first so the
+   Summary carries the smallest view that makes the change legible.
+7. **A UI change shows before and after.** Any diff that changes what a user sees — web
+   screens or the Android apps (`:app`, `:wear`) — embeds a **before/after screenshot pair**
+   in the PR body's Evidence. Host the images on a `pr-assets/<pr-number>-<slug>` branch so
+   they stay out of the Change's diff, and reference them by raw URL. An after-only
+   screenshot does not prove the change; the reviewer needs the pair.
+8. Before `gh pr create`, run `pnpm check:pr-body <body.md>` against the body file. It is
    the same script the `PR Links Issue` job runs, reached from the command line, and it is
    the only place the rule is checkable in time: CI sees the body after the PR exists, so a
    failure there always costs a second trip. It passes only on a closing keyword
    (`Closes #<n>`, `Fixes #<n>`, `Resolves #<n>`), which is what makes GitHub close the
    linked issue on merge and what stops the next agent reading a solved bug as live work. A
    PR that closes nothing passes with `pnpm check:pr-body <body.md> --no-issue`.
-7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
-8. **Before merging**, always run the full test suite (`pnpm test`) and type checking (`pnpm typecheck`) to ensure the build will succeed in CI/CD
+9. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
+10. **Before merging**, always run the full test suite (`pnpm test`) and type checking (`pnpm typecheck`) to ensure the build will succeed in CI/CD
 
 **CRITICAL: ALL changes MUST go through PRs.** Never push directly to `main`. This includes:
 - Bug fixes (even one-liners)
@@ -225,27 +199,13 @@ Android to the Play internal track, and deploys the scheduler. One click is prod
 The factory turns `ready-for-agent` Issues into ready-to-prod Changes without being asked,
 and proposes improvements nobody asked for. It never merges.
 
-**Roles** (each is an opencode agent; see `docs/factory/`):
-
-| Role | Trigger | Does | Never |
-|---|---|---|---|
-| **Factory** | Issue labelled `ready-for-agent` | Implements, gates, opens the Change, iterates on red | Merge, release, self-label |
-| **Reviewer** | Any open PR a human branch can trigger it on | Independent review; pushes fixes to `factory/*` | Approve, touch a human branch |
-| **Sweeper** | Schedule (30 min) | Files one evidenced Issue per stuck open Change; comments once | Edit code, push, adopt work, queue anything |
-| **Explorer** | Schedule / dependency event | Files well-evidenced Issues (Design, Bugs, Security, Performance) | Write code, self-label |
-| **Sentinel** | Unhealthy production signals | Files the incident, drafts the postmortem, pages the human | Remediate anything |
-
-**Reach, and the two gaps in it.** Two limits are structural rather than matters of policy, so
-they are recorded here rather than discovered later:
-
-- A `pull_request` workflow runs the workflow files **on the Change's own branch**, so a Change
-  opened before a workflow existed never triggers it.
-- A run started by **Dependabot** receives no repository secrets and a read-only `GITHUB_TOKEN`, so
-  no role that mints an App token can run on a machine-authored Change.
-
-Together those mean the Reviewer does **not** reach every open Change: it misses machine-authored
-ones, and any Change predating a workflow. The Sweeper exists for that ground — it runs on a
-schedule, where secrets are available, and reports what it finds as Issues rather than reviews.
+**Roles, reach, budgets, handoff and the automerge exception** are documented in
+[`docs/factory/README.md`](docs/factory/README.md): the five roles and what each one never
+does, the two structural gaps in the Reviewer's reach, the Attempt/token budgets, the
+`awaiting-human` handoff, and the four properties that keep `FACTORY_AUTOMERGE` narrow.
+Reach for it when writing or reviewing a factory Change, or when a label, a gate or a
+budget is in question. The rules below are what every session obeys without reaching for
+anything.
 
 **Gates.** GATE 1 is the pre-push hook, and it is web-only: `pnpm lint`, `npm run
 typecheck`, `npx vitest run --coverage`, gitleaks over the pushed commits, and semgrep
@@ -270,14 +230,6 @@ backstop.
 repairable by editing our code, so it must fail fast as Blocked instead of burning the CI
 loop.
 
-**Budgets.** 3 Attempts per gate, 6 per Issue, 500k tokens per Issue, 5M per day. Exceeding
-any budget ends the run as **Blocked**, with the evidence attached.
-
-**Handoff.** The Factory's terminal state is **awaiting-human**, never "done". It labels
-the Change `factory:review` and comments a summary: what changed, linked Issue, gates
-passed, coverage delta, and the full transcript. Blocking state is `factory:blocked`; a
-Blocked Issue stays out of the queue until a human clears it.
-
 **Rules for anything in this repository's factory, human or machine:**
 
 - **Only Cabeda applies or removes `ready-for-agent`.** Explorers may not label their own
@@ -286,28 +238,11 @@ Blocked Issue stays out of the queue until a human clears it.
 - **`FACTORY_AUTOMERGE=true` (a repo variable) is the single exception, and it is
   off by default.** It lets `scripts/factory/automerge-run.ts` arm GitHub auto-merge
   on **machine-authored Dependabot bumps only**, and nothing else. Four properties
-  keep that narrow:
-  1. **It is a script, not an agent.** The decision is
-     `decideAutomerge()` — named predicates with tests, reproducible and auditable.
-     An LLM asked "should this merge?" is neither.
-  2. **It arms, it does not merge.** The App is granted no `contents` scope, and
-     GitHub fires the merge once the required checks settle. Stated precisely,
-     because the tempting claim is false: `pull-requests: write` **can** call the
-     merge endpoint. What prevents a forced merge is `decideAutomerge()` plus
-     branch protection, not the token.
-  3. **A green run on a stale base is not eligible.** The PR must be level with
-     `main`, and every gate the `main` rulesets require — `CI`,
-     `Analyze (javascript-typescript)`, `Typecheck`, `Lint`,
-     `Dependency Audit`, `Build` — must be `success` **on that head**. A gate
-     that never ran is not a passing gate. This is the #1256 lesson: its lockfile
-     predated the sharp override, its own CI was green anyway, and merging
-     reverted the fix.
-  4. **Reversal is two steps, and the second is the one people forget.**
-     Unsetting `FACTORY_AUTOMERGE` stops future runs but does **not** cancel
-     auto-merge already armed on a PR — GitHub fires that independently of any
-     repository variable. To stop an armed Change: unset the variable **and**
-     cancel auto-merge on that PR. `factory:blocked` parks any single Change.
-
+  keep that narrow — the four properties, each with the failure it prevents
+  (a green run on a stale base, `pull-requests: write` calling the merge
+  endpoint, an armed merge that survives unsetting the variable), are in
+  [`docs/factory/README.md`](docs/factory/README.md). Reach for them when
+  touching the automerge workflow or deciding whether an arm is still valid.
   The workflow also honours `FACTORY_PAUSED` first, like every other factory
   entry point.
 
@@ -395,47 +330,18 @@ on Wear, test-scaffolding extraction, fixture placement) live in
 ```
 src/                        # Web app source
 ├── components/             # React components (.tsx)
-├── pages/
-│   └── api/               # Astro API routes (.ts)
-├── lib/
-│   ├── i18n/              # Translations per locale
-│   ├── *.server.ts        # Server-side utilities
-│   └── *.ts               # Shared utilities
-├── test/                  # Test files
-└── prisma/
-    └── schema.prisma
-
-android-app/               # Native Android app (Gradle multi-module: :app, :wear)
-├── app/src/main/java/dev/convocados/        # :app — phone/tablet
-│   ├── data/
-│   │   ├── api/           # ApiClient, ConvocadosApi, Models
-│   │   ├── auth/          # AuthManager, TokenStore (OAuth 2.1)
-│   │   ├── push/          # PushTokenManager, ConvocadosFcmService
-│   │   └── datastore/     # SettingsStore (preferences)
-│   ├── ui/
-│   │   ├── navigation/    # AppNavigation, Route definitions
-│   │   ├── screen/        # Feature screens (games, event, profile, etc.)
-│   │   └── theme/         # Material 3 theme & colors
-│   ├── ConvocadosApp.kt   # Hilt application class
-│   ├── MainActivity.kt    # Single activity entry point
-│   └── ConvocadosRoot.kt  # Root composable + RootViewModel
-├── wear/src/main/java/dev/convocados/wear/  # :wear — Wear OS (standalone)
-│   ├── data/
-│   │   ├── api/           # ApiClient + remote models
-│   │   ├── auth/          # Google Sign-In + Data Layer token sync
-│   │   ├── local/         # Room DB (offline cache)
-│   │   ├── repository/    # Repositories
-│   │   ├── alarm/         # Game alarm scheduling + boot receiver
-│   │   └── sync/          # WorkManager sync queue
-│   ├── ui/                # Wear Compose screens, navigation, theme
-│   ├── di/                # Hilt modules
-│   ├── util/              # DateTimeUtil, TickFlow
-│   └── WearApp.kt         # Hilt application class
-├── app/build.gradle.kts   # :app dependencies
-├── wear/build.gradle.kts  # :wear dependencies
-├── settings.gradle.kts    # Module includes (:app, :wear)
-└── build.gradle.kts       # Project-level plugins
+├── pages/api/              # Astro API routes (.ts)
+├── lib/                    # i18n per locale, *.server.ts, shared utils
+├── test/                   # Unit + integration tests
+└── prisma/schema.prisma
+android-app/               # Android (Gradle multi-module)
+├── app/                    # :app — phone/tablet
+├── wear/                   # :wear — Wear OS (standalone)
+└── settings.gradle.kts     # :app and :wear
 ```
+
+The full tree, per-screen layout, and where each module's tests and screenshots live:
+[`docs/development-guide.md`](docs/development-guide.md).
 
 ## Reference guides
 
@@ -456,11 +362,13 @@ Before submitting a PR:
 - [ ] Lint passes (`pnpm lint --max-warnings 259`)
 - [ ] All tests pass (`pnpm test`)
 - [ ] Type checking passes (`pnpm typecheck`)
-- [ ] Coverage thresholds only raised, never lowered (see Core Principle 5)
-- [ ] No metric gamed to pass — thresholds, loads, budgets and assertions unchanged (Core Principle 6)
+- [ ] Coverage thresholds only raised, never lowered (see Core Principle 5, detail in [`CODING_STANDARDS.md`](CODING_STANDARDS.md))
+- [ ] No metric gamed to pass — thresholds, loads, budgets and assertions unchanged (see [`CODING_STANDARDS.md`](CODING_STANDARDS.md))
 - [ ] Within 400 changed lines and 20 files, or the issue was split
 - [ ] i18n strings added to all 6 locales
 - [ ] Platform parity considered (web ↔ Android apps)
+- [ ] PR body written with the `pr` skill when the session has it
+- [ ] UI change → PR body embeds a **before/after screenshot pair** (hosted on a `pr-assets/<n>-<slug>` branch)
 - [ ] Wear UI change verified on **both** round and square goldens, if Wear UI changed (see `CODING_STANDARDS.md`)
 - [ ] Database migrations included (if schema changed)
 - [ ] Documentation updated (if API changed)
@@ -487,6 +395,11 @@ dex sync               # Push tasks to GitHub Issues
 - Use `dex` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
 - GitHub sync is enabled with `on_change = true` (auto-sync on every mutation)
 - Tasks are stored at `.dex/tasks.jsonl` (committed to repo) and synced to GitHub Issues
+- The local ledger and GitHub Issues are **two ledgers**, not one, and they disagree by
+  design — including for machine-filed tasks, which follow a different path back. The
+  ownership table and the machine exception live in
+  [`docs/development-guide.md`](docs/development-guide.md); reach for it when a task's
+  GitHub state does not match the ledger.
 - `dex` reads the **working tree**: never `git stash` or `git checkout --` the `.dex/`
   directory while working, or the task list silently disappears
 - `.gitattributes` unions `.dex/tasks.jsonl` on merge, so integration branches do not
@@ -500,26 +413,6 @@ dex sync               # Push tasks to GitHub Issues
   `.dex/sync-state.json` is derived state with no merge attribute (`merge=ours` would be
   inert without a config-registered driver): on conflict take either side wholesale and
   delete the markers — never splice.
-
-### Two ledgers, and the machine exception
-
-| Ledger | Owner | Holds |
-|---|---|---|
-| **dex** (`.dex/tasks.jsonl`) | Humans | Plans, follow-ups, postmortem actions |
-| **GitHub labels + comments** | The factory | Runtime state: queue, Claim, Handoff, Blocked |
-
-`dex` is a local CLI and is **not installed on the GitHub runner**, so machine-written
-issues cannot be dex tasks. The one exception to "use dex for ALL task tracking":
-
-> **Explorers and the Sentinel file GitHub issues directly**, labelled `factory:explored`,
-> and commit their reasoning to `docs/explorations/`. Humans keep dex.
-
-Agents running an implementation wave: exploration notes go in `docs/explorations/` (one
-file per wave), so the next session's implementers and reviewers can read them — `/tmp`
-notes die with the machine.
-
-An Explorer never applies `ready-for-agent` to its own issue. Promotion from
-`factory:explored` to `ready-for-agent` is the human's decision, always.
 
 ## Session Completion
 

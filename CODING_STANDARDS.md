@@ -83,3 +83,48 @@ test surface.
   by trusting a named-only list.
 - A feature that ships on web ships on Android in the same change
   (`pnpm sync:feature-parity-docs` is the check, not the exception).
+
+## Never cheat a gate
+
+The coverage thresholds in `vitest.config.ts` (`thresholds.lines`, `.statements`,
+`.functions`, `.branches`) are a **floor, never a ceiling**. They may only move **up**.
+
+**NEVER lower a coverage threshold to make a failing gate pass.** Nor may you achieve the
+same effect by proxy: deleting or `.skip`-ing failing tests, reaching for coverage
+`exclude` entries or `/* c8 ignore */`-style suppressions, or weakening assertions so a
+test passes without exercising the branch. That is cheating on the tests, and it is
+forbidden.
+
+- If coverage drops, write tests that cover the gap, then **raise** the thresholds to the
+  new measured values.
+- If a path is genuinely unreachable, document it in `docs/coverage.md`; do not silently
+  exclude it.
+- Lowering any threshold requires explicit written justification **and** the user's
+  approval, stated in the PR description. Absent that, a lowered threshold is a bug.
+
+### 6. Metric Integrity (Never Cheat a Benchmark)
+Any measured number — coverage, k6 latency, Lighthouse budget, mutation score, bundle
+size, PR diff size — is a **gate, not a suggestion**. The same rules that govern the
+coverage ratchet govern every other metric:
+
+- **NEVER** make a metric pass by changing the measurement instead of the code. Weakening
+  an assertion, lowering a threshold, reducing a load, shortening a scenario, relaxing a
+  budget, or deleting the measurement are all the same defect.
+- **NEVER** run benchmarks or measurements in parallel. They contend for resources and
+  the numbers are invalid. Run them sequentially, on an idle machine.
+- **NEVER** reach for an unfair comparison to claim a win: a smaller input, a warmer
+  cache, a different configuration, or a hand-rolled harness in place of the committed one.
+- When optimising against a target, the target must be **pass/fail and modest** ("at least
+  1.2x faster on the named scenario"), and the **baseline must be recorded first, with
+  zero changes** (`pnpm k6:load`, LHCI, or the committed config for that metric).
+- Correctness is not negotiable against a speed target: a Change that regresses tests,
+  coverage, mutation score, or any existing budget is a regression, not an optimisation.
+- **Stop** when an iteration buys a statistically insignificant gain (~<5%) while adding
+  disproportionate code. The trade is not worth it.
+- Speedups that arrive with a suspicious magnitude are a bug report, not an achievement.
+  Expect agents to "optimise" by disabling the thing being measured. If it looks too good,
+  read the diff line by line.
+
+`docs/factory/` holds the per-metric harnesses and the recorded baselines. If a number in
+there is stale, refreshing it is its own Change — do not update a baseline in the same
+Change that consumes it.
