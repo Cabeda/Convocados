@@ -7,9 +7,15 @@
  * Followers' per-event mute overrides and the Event's notification defaults are
  * returned alongside so callers can apply the ADR 0017 resolution order without
  * re-querying.
+ *
+ * {@link resolveJobAudience} is the job-scoped form: it applies that resolution
+ * order once, so every channel reads the same recipient list off the same
+ * verdict instead of re-deriving it.
  */
 import { prisma } from "./db.server";
 import { getPingSuppressedUserIds } from "./inviteOptOut.server";
+import { resolveMuteTier, type MuteTierDecision } from "./notificationPrefs.server";
+import type { NotificationJobType } from "./notificationQueue.server";
 
 export interface EventFollowOverrides {
   userId: string;
@@ -92,4 +98,59 @@ export async function resolveEventAudience(
     ownerId: event?.ownerId ?? null,
     notificationDefaults,
   };
+}
+
+/** One drained job's audience, resolved once and shared by every channel. */
+export interface JobAudience {
+  eventId: string;
+  /** Followers + Owner − exclusions − ping suppressions, in one list. */
+  userIds: string[];
+  /**
+   * The ADR 0004 mute / ADR 0017 role-tier verdict per recipient. The in-app feed
+   * stops at `"vetoed"`; push adds its own transport preference on top.
+   */
+  decisions: Map<string, MuteTierDecision>;
+}
+
+/**
+ * Resolve the audience for one notification job — the recipient list plus the
+ * mute + role-tier verdict for each of them, computed exactly once.
+ *
+ * Pass the result to every channel the job fans out to. A channel that needs
+ * fewer queries must not also be allowed to reach a different answer: the
+ * in-app feed reads `decisions`, push reads the same map plus its transport
+ * preference, and neither re-queries.
+ *
+ * `type` is optional because a direct `sendPushToEvent` without a jobType has
+ * always meant "deliver to the audience, filter by nothing" — so there is no
+ * verdict to reach and the map comes back empty.
+ */
+export async function resolveJobAudience(
+  eventId: string,
+  type: NotificationJobType | undefined,
+  opts: ResolveEventAudienceOptions = {},
+): Promise<JobAudience> {
+  const [{ userIds, follows, notificationDefaults }, activePlayers] = await Promise.all([
+    resolveEventAudience(eventId, {
+      ...opts,
+      suppressPingDeclines: type ? isPingSuppressedType(type) : false,
+    }),
+    prisma.player.findMany({
+      where: { eventId, archivedAt: null, userId: { not: null } },
+      select: { userId: true },
+    }),
+  ]);
+
+  const playerUserIds = new Set(activePlayers.map((p) => p.userId as string));
+  const overridesByUser = new Map(follows.map((f) => [f.userId, f]));
+  const decisions = new Map<string, MuteTierDecision>(
+    userIds.map((userId) => [
+      userId,
+      type
+        ? resolveMuteTier(type, overridesByUser.get(userId) ?? null, notificationDefaults, playerUserIds.has(userId))
+        : "open",
+    ]),
+  );
+
+  return { eventId, userIds, decisions };
 }
