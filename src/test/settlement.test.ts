@@ -567,6 +567,10 @@ describe("error paths", () => {
 
 describe("settlement API routes", () => {
   it("GET requires authentication", async () => {
+    // The route's decision flows through `checkOwnership` (via the shared
+    // authorization seam), so the scenario must state it — the file's beforeEach
+    // defaults to "is the owner", which is not this test's subject.
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
     const { event } = await seedEvent();
     const res = await getSummary(ctx({ id: event.id }));
     expect(res.status).toBe(401);

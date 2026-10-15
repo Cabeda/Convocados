@@ -360,7 +360,40 @@ describe("settlement entry points", () => {
     expect(body.games.every((g: { total: number }) => g.total === 0)).toBe(true);
     expect(body.games.every((g: { debtorCount: number }) => g.debtorCount === 0)).toBe(true);
     expect(body.people.every((p: { owedAmount: number }) => p.owedAmount === 0)).toBe(true);
+    // The other side of the ledger: `owedToAmount` and the payer lines' `amount`
+    // are how "these people still owe Ana" is spelled, and PaymentsPage renders
+    // exactly that string. Zeroing only what people owe leaves the leak intact.
+    expect(body.people.every((p: { owedToAmount: number }) => p.owedToAmount === 0)).toBe(true);
+    expect(body.people.flatMap((p: { lines: Array<{ amount: number }> }) => p.lines.map((l) => l.amount))
+      .every((a: number) => a === 0)).toBe(true);
     expect(body.totals.totalOwed).toBe(0);
+    expect(body.totals.totalOwedTo).toBe(0);
+  });
+
+  it("still gives a manager with no roster row every aggregate", async () => {
+    // An owner who never joined their own Event has no EventPlayer. Without the
+    // isManager term, `isUnidentified` treats them as a link holder and zeroes
+    // the aggregates they are supposed to see in full.
+    const { event } = await seedSettableEvent({ ownerId });
+    const res = await settlementSummary(ctx({ id: event.id }, undefined, ownerToken, "GET"));
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.viewerRole).toBe("owner");
+    expect(body.totals.totalOwed).toBeGreaterThan(0);
+    expect(body.totals.totalOwedTo).toBeGreaterThan(0);
+  });
+
+  it("still refuses a link holder when the Event is password-protected", async () => {
+    // `accessPassword` is bcrypt-hashed, so a non-null value is the fact under
+    // test, not the password itself. A password-protected Event has already said
+    // the link is not sufficient, so the share-link read must not bypass it.
+    const { event } = await seedSettableEvent({ ownerId: null, isPublic: false });
+    await prisma.event.update({ where: { id: event.id }, data: { accessPassword: "hashed" } });
+
+    const res = await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"));
+
+    expect(res.status).toBe(401);
   });
 
   it("still gives an owner the full manager view (debtor names and debtor lines)", async () => {

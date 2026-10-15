@@ -144,13 +144,13 @@ export async function resolveJobAudience(
     },
   );
 
-  // ADR 0017: the role tier asks whether the recipient is on the CURRENT Game's
-  // Roster. Legacy `Player` rows accumulate across an Event's occurrences, so
-  // reading them would classify everyone who ever joined as an active Player and
-  // silently disable the non-Player Tier-2 mute for departures. Read the Roster.
+  // ADR 0017: the role tier asks whether the recipient is a Player on the CURRENT
+  // Game's Roster — active *or bench*. A bench member is still a Player, so reading
+  // `active` alone would silently veto every bench member for Tier-2 types.
   const capacity =
     maxPlayers === null ? null : await getRosterCapacity(eventId, maxPlayers, currentGameId);
-  const playerUserIds = new Set((capacity?.active ?? []).map((m) => m.userId).filter(Boolean) as string[]);
+  const roster = capacity ? [...capacity.active, ...capacity.bench] : [];
+  const playerUserIds = new Set(roster.map((m) => m.userId).filter(Boolean) as string[]);
   const overridesByUser = new Map(follows.map((f) => [f.userId, f]));
   const decisions = new Map<string, MuteTierDecision>(
     userIds.map((userId) => [

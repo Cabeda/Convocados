@@ -682,8 +682,9 @@ export async function getSettlementSummary(
   const isManager = viewer.role === "owner" || viewer.role === "admin";
   // A link holder with no identified person (an ownerless-unlisted Event read
   // through the share link, GH-1413) sees the basic view: who played and paid,
-  // never how much anyone owes. Anyone holding an identity keeps the numbers.
-  const isUnidentified = viewerEventPlayerId === null;
+  // never how much anyone owes. A manager keeps everything, even with no roster
+  // row — an owner who never joined their own Event still owns its numbers.
+  const isUnidentified = !isManager && viewerEventPlayerId === null;
   const gameViews: SettlementGameView[] = [];
   const peopleMap = new Map<string, SettlementPersonView>();
 
@@ -776,9 +777,14 @@ export async function getSettlementSummary(
       if (p.isPayer && key !== personKey(p.name, p.isPlayer)) {
         p.lines = p.lines.filter((l) => l.role === "payer");
       }
-      // An unidentified reader reads nobody's debt, including a payer's own —
-      // they have no identity to scope it to.
-      if (isUnidentified) p.owedAmount = 0;
+      // An unidentified reader reads nobody's debt, on either side — not what
+      // anyone owes (`owedAmount`) and not what anyone is owed (`owedToAmount`,
+      // which is how the payer side spells "these people still owe Ana").
+      if (isUnidentified) {
+        p.owedAmount = 0;
+        p.owedToAmount = 0;
+        p.lines = p.lines.map((l) => ({ ...l, amount: 0 }));
+      }
       return p;
     });
   }
@@ -799,7 +805,7 @@ export async function getSettlementSummary(
     totals: {
       unsettledGames: gameViews.length,
       totalOwed: isUnidentified ? 0 : people.reduce((s, p) => s + p.owedAmount, 0),
-      totalOwedTo: people.reduce((s, p) => s + p.owedToAmount, 0),
+      totalOwedTo: isUnidentified ? 0 : people.reduce((s, p) => s + p.owedToAmount, 0),
     },
   };
 }
