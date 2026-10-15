@@ -158,6 +158,48 @@ describe("PUT /api/events/[id]/datetime", () => {
     expect(res.status).toBe(403);
   });
 
+  it("reports spots left from the current game's roster on a recurring Event past its first Game (ADR 0016)", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Futsal",
+        location: "Pitch A",
+        dateTime: new Date(Date.now() + 7 * 86400_000),
+        maxPlayers: 8,
+        isRecurring: true,
+      },
+    });
+    // The Event has already played one Game and rolled on to the next one.
+    await prisma.game.create({ data: { eventId: event.id, dateTime: new Date(Date.now() - 7 * 86400_000) } });
+    const currentGame = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: currentGame.id } });
+
+    // Legacy Player rows accumulate across the Event's past Games (ADR 0016):
+    // 10 rows for an Event whose current Game has only two players on it.
+    await prisma.player.createMany({
+      data: Array.from({ length: 10 }, (_, i) => ({ eventId: event.id, name: `Churn ${i}`, order: i })),
+    });
+    const ana = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+    const bruno = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bruno" } });
+    await prisma.gameParticipant.createMany({
+      data: [
+        { gameId: currentGame.id, eventPlayerId: ana.id, order: 0 },
+        { gameId: currentGame.id, eventPlayerId: bruno.id, order: 1 },
+      ],
+    });
+
+    const newDate = new Date(Date.now() + 8 * 86400_000).toISOString();
+    const res = await updateDateTime(putCtx({ id: event.id }, { dateTime: newDate }));
+    expect(res.status).toBe(200);
+
+    const jobs = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "event_details" },
+    });
+    expect(jobs).toHaveLength(1);
+    // 8 spots, 2 on the current Game's roster → 6 left. The accumulated legacy
+    // rows would report 0.
+    expect(JSON.parse(jobs[0].payload).spotsLeft).toBe(6);
+  });
+
   it("creates an event log entry when dateTime is updated", async () => {
     const event = await seedEvent();
     const newDate = new Date(Date.now() + 4 * 86400_000).toISOString();

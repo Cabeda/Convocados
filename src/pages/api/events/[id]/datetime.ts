@@ -6,6 +6,7 @@ import { enqueueNotification, drainNotificationQueue } from "../../../../lib/not
 import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { createLogger } from "../../../../lib/logger.server";
+import { getActiveRosterState } from "../../../../lib/roster.server";
 
 const log = createLogger("datetime-api");
 
@@ -85,8 +86,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
   if (dateTimeActuallyChanged) {
     // Fire game_rescheduled webhook (non-blocking) — lean fact, client re-fetches state
     fireWebhooks(eventId, "game_rescheduled", {}).catch(() => {});
-    const activePlayers = await prisma.player.count({ where: { eventId, archivedAt: null } });
-    const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
+    // ADR 0016: spotsLeft from the game-scoped roster (legacy Player rows
+    // accumulate across recurring occurrences and would wrongly read 0).
+    const spotsLeft = Math.max(0, event.maxPlayers - (await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId)).activeCount);
     const url = `/events/${eventId}`;
     await enqueueNotification(eventId, "event_details", {
       title: event.title,
