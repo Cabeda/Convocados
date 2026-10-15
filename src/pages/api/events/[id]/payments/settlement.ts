@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
-import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
+import { getSession } from "../../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { getSettlementSummary, settleShare, unsettleShare, isEventParticipant, isGameParticipant } from "../../../../../lib/settlement.server";
 
@@ -23,8 +24,11 @@ export const GET: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
-  const role = isOwner ? "owner" : isAdmin ? "admin" : "player";
+  // Owner/admin come from the shared Event authorization module; anyone else is a
+  // player. Reading the summary is not a mutation, so ADR 0035's ownerless-open role
+  // does NOT extend here — an anonymous caller stays 401, a non-participant 403.
+  const authz = await authorizeEventMutation(request, event, session);
+  const role = authz.role === "owner" || authz.role === "admin" ? authz.role : "player";
 
   // Only event players (or owners/admins) may view the event's payments.
   if (role === "player" && !(await isEventParticipant(eventId, session.user.id))) {
@@ -63,9 +67,10 @@ export const PUT: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "gameId does not belong to this event." }, { status: 400 });
   }
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  // Owner/admin manage any game; a participant may settle within their own game.
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event, session);
+  // Owner/admin (and the ownerless-open link) manage any game; a participant may
+  // settle within their own game.
+  if (!authz.allowed) {
     if (!session?.user || !(await isGameParticipant(eventId, gameId, session.user.id))) {
       return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
     }
@@ -104,9 +109,10 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   }
 
   const session = await getSession(request);
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  // Owner/admin manage any game; a participant may revert within their own game.
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  const authz = await authorizeEventMutation(request, event, session);
+  // Owner/admin (and the ownerless-open link) manage any game; a participant may
+  // revert within their own game.
+  if (!authz.allowed) {
     if (!session?.user || !(await isGameParticipant(eventId, gameId, session.user.id))) {
       return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
     }
