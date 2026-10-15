@@ -89,6 +89,13 @@ function png(width: number, height: number, pixel: (x: number, y: number) => num
   ]);
 }
 
+/**
+ * Synthetic captures are built at Play's minimum side, not a token 8px. The gate
+ * now enforces that floor, so a tiny fixture would trip the size rule and mask
+ * whatever rule a test actually targets.
+ */
+const MIN_SIDE = 384;
+
 let dir: string;
 
 beforeEach(() => {
@@ -104,12 +111,12 @@ function writeShot(name: string, buffer: Buffer) {
 }
 
 /** An opaque capture of the given colour, on one shape. */
-function writeShape(name: string, rgb: number[], size = 8) {
+function writeShape(name: string, rgb: number[], size = MIN_SIDE) {
   writeShot(name, png(size, size, () => [rgb[0], rgb[1], rgb[2], 255]));
 }
 
 /** Both shapes present, so only the rule under test can fail. */
-function writeShapes(pixel: (x: number, y: number, size: number) => number[], size = 8) {
+function writeShapes(pixel: (x: number, y: number, size: number) => number[], size = MIN_SIDE) {
   writeShot("games_round.png", png(size, size, (x, y) => pixel(x, y, size)));
   writeShot("games_square.png", png(size, size, (x, y) => pixel(x, y, size)));
 }
@@ -149,7 +156,9 @@ describe("the rejection this gate prevents", () => {
     const [r, g, b] = appBg();
     writeShot(
       "games_round.png",
-      png(8, 8, (x, y) => (x === 0 && y === 0 ? [r, g, b, 0] : [r, g, b, 255])),
+      png(MIN_SIDE, MIN_SIDE, (x, y) =>
+        x === 0 && y === 0 ? [r, g, b, 0] : [r, g, b, 255],
+      ),
     );
     writeShape("games_square.png", appBg());
     const errors = check();
@@ -165,7 +174,9 @@ describe("the rejection this gate prevents", () => {
     const [r, g, b] = appBg();
     writeShot(
       "games_round.png",
-      png(8, 8, (x, y) => (x === 4 && y === 4 ? [r, g, b, 128] : [r, g, b, 255])),
+      png(MIN_SIDE, MIN_SIDE, (x, y) =>
+        x === 4 && y === 4 ? [r, g, b, 128] : [r, g, b, 255],
+      ),
     );
     writeShape("games_square.png", appBg());
     const errors = check();
@@ -207,11 +218,21 @@ describe("both display shapes are represented", () => {
 describe("Play's square requirement", () => {
   it("rejects a non-square screenshot", () => {
     const [r, g, b] = appBg();
-    writeShot("games_square.png", png(4, 6, () => [r, g, b, 255]));
+    writeShot("games_square.png", png(MIN_SIDE, MIN_SIDE + 2, () => [r, g, b, 255]));
     writeShape("games_round.png", appBg());
     const errors = check();
     expect(errors).toEqual(
       expect.arrayContaining([expect.stringContaining("Play requires square (1:1)")]),
+    );
+  });
+});
+
+describe("Play's minimum size", () => {
+  it("rejects a Wear screenshot shorter than 384px on a side", () => {
+    writeShapes(() => [...appBg(), 255], 380);
+    const errors = check();
+    expect(errors).toEqual(
+      expect.arrayContaining([expect.stringContaining("384")]),
     );
   });
 });
@@ -246,7 +267,7 @@ describe("the CLI fails closed", () => {
   });
 
   it("accepts --dir pointing at a compliant directory", () => {
-    writeShapes(() => [...appBg(), 255], 4);
+    writeShapes(() => [...appBg(), 255]);
     const result = spawnSync(
       process.execPath,
       [join(root, "scripts/check-play-screenshots.mjs"), "--dir", dir, "--color", colorFile],

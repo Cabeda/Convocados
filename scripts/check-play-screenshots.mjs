@@ -17,6 +17,8 @@
  *   - round and square are both represented (`…_round.png` and `…_square.png`),
  *     because the app draws differently on each shape and the listing should show
  *     a device its own interface;
+ *   - every image is at least 384x384 — WO-G5's stated minimum, which a shrunken
+ *     capture (a resized fixture, a downsized export) would otherwise slip past;
  *   - every image is 1:1 and fully opaque — WO-G5 forbids transparent backgrounds
  *     or masking, so a circular-masked round capture fails here;
  *   - every corner is the app's declared background (`val Bg` in the Wear
@@ -66,6 +68,15 @@ export function appBackgroundColor(colorKtPath) {
  * not the app's background.
  */
 const CHANNEL_TOLERANCE = 12;
+
+/**
+ * Play's minimum side for a Wear screenshot, in pixels. WO-G5: "Include
+ * screenshots with a 1:1 aspect ratio and with a minimum size of 384 x 384
+ * pixels." The committed renders are 390px and the upload is upscaled past
+ * 1080, so the floor is a floor and not the working size; it exists to catch a
+ * capture that gets shrunk somewhere between the fixture and the listing.
+ */
+const MIN_DIMENSION = 384;
 
 function paeth(a, b, c) {
   const p = a + b - c;
@@ -228,6 +239,12 @@ export function checkScreenshots({ screenshotDir, colorFile }) {
     if (width !== height) {
       errors.push(
         `${name} is ${width}x${height}; Play requires square (1:1) Wear screenshots`,
+      );
+    }
+    if (width < MIN_DIMENSION || height < MIN_DIMENSION) {
+      errors.push(
+        `${name} is ${width}x${height}; Play requires Wear screenshots of at ` +
+          `least ${MIN_DIMENSION}x${MIN_DIMENSION} (Wear app quality WO-G5).`,
       );
     }
 

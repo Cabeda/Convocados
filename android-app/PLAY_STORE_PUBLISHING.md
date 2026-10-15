@@ -142,6 +142,9 @@ wrong-but-stable background passes forever — so the gate asserts the invariant
 the golden cannot, matching Wear app quality WO-G5:
 
 - both display shapes are present (`…_round.png` and `…_square.png`);
+- every image is at least **384×384**, WO-G5's stated minimum — the committed
+  renders are 390px, so this only catches a capture shrunk between fixture and
+  listing;
 - every image is 1:1 and **fully opaque** — WO-G5 forbids transparent backgrounds
   or masking, so a circular-masked round capture (transparent corners) fails;
 - every corner equals the app background (`val Bg` in
