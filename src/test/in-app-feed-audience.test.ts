@@ -131,4 +131,19 @@ describe("notification audience — push and in-app feed agree", () => {
     expect(pushedEndpoints()).toEqual(["https://f-watcher.endpoint"]);
     expect(await feedUserIds()).toEqual(["f-watcher"]);
   });
+
+  it("keeps the feed for a Follower who turned push off but muted nothing", async () => {
+    // pushEnabled is a transport preference, not a mute: the feed exists so a
+    // missed notification is still readable, so it must survive it.
+    await seedFollower("f-pushoff");
+    await prisma.notificationPreferences.create({ data: { userId: "f-pushoff", pushEnabled: false } });
+
+    await drainJob("event_details", {
+      key: "notifyEventDetailsChanged" as const,
+      params: { title: "Event" },
+    });
+
+    expect(pushedEndpoints()).toEqual([]);
+    expect(await feedUserIds()).toEqual(["f-pushoff"]);
+  });
 });

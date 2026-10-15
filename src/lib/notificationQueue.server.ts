@@ -1,7 +1,7 @@
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
 import { isPingSuppressedType, resolveEventAudience } from "./eventAudience.server";
-import { DEFAULTS, wantsPushWithOverrides } from "./notificationPrefs.server";
+import { resolveMuteTier } from "./notificationPrefs.server";
 import type { TranslationKey } from "./i18n";
 import pLimit from "p-limit";
 
@@ -294,9 +294,11 @@ async function _doDrain(): Promise<number> {
  * Create in-app notification records for the Event's audience.
  * These persist so users can see missed notifications in their feed.
  *
- * The feed reaches the same audience as push: the mute + role-tier resolution
- * push already applies (ADR 0017) is reused here rather than restated, so a
- * Follower who muted a channel does not see it here either.
+ * The feed reaches the same audience as push on the mute + role-tier layer
+ * (ADR 0017), applied through the same rule rather than a restatement. Push
+ * additionally consults each user's transport preferences; the feed does not
+ * — a row here is how a Follower reads back a notification they did not get
+ * pushed, so `pushEnabled` must not gate it.
  */
 async function createInAppNotifications(
   eventId: string,
@@ -313,24 +315,19 @@ async function createInAppNotifications(
     if (userIds.length === 0) return;
 
     const overridesByUser = new Map(follows.map((f) => [f.userId, f]));
-    const [prefsRows, activePlayers] = await Promise.all([
-      prisma.notificationPreferences.findMany({ where: { userId: { in: userIds } } }),
-      prisma.player.findMany({
-        where: { eventId, archivedAt: null, userId: { not: null } },
-        select: { userId: true },
-      }),
-    ]);
-    const prefsByUser = new Map(prefsRows.map((p) => [p.userId, { ...DEFAULTS, ...p }]));
+    const activePlayers = await prisma.player.findMany({
+      where: { eventId, archivedAt: null, userId: { not: null } },
+      select: { userId: true },
+    });
     const playerUserIds = new Set(activePlayers.map((p) => p.userId as string));
 
     const recipients = userIds.filter((userId) =>
-      wantsPushWithOverrides(
-        prefsByUser.get(userId) ?? DEFAULTS,
+      resolveMuteTier(
         type,
         overridesByUser.get(userId) ?? null,
         notificationDefaults,
         playerUserIds.has(userId),
-      ),
+      ) !== "vetoed",
     );
     if (recipients.length === 0) return;
 
