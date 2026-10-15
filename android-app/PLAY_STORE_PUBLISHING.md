@@ -99,7 +99,7 @@ sources — no manual uploads. Source of truth:
 
 ```
 app/src/test/screenshots/store-listing/{phone,foldable,tablet}/  (8 PNGs each)
-wear/src/test/screenshots/store-listing/                          (4 PNGs)
+wear/src/test/screenshots/store-listing/                          (8 PNGs: round + square × 4 screens)
 ```
 
 `release.yml` runs `./gradlew syncPlayListings` (which first runs the
@@ -128,7 +128,33 @@ draft, so a listing failure never blocks a release — it retries on the next on
 
 Note: adaptive layout probes (`adaptive_light/dark`) are regression goldens
 under `src/test/screenshots/goldens/`, not store assets — Play caps each slot
-at 8 images.
+at 8 images, which the Wear set now fills (round + square × four screens; the
+app draws differently on each shape, so a round watch gets a round capture, not
+a square layout).
+
+The gate is `pnpm check:play-screenshots` (`scripts/check-play-screenshots.mjs`).
+Play rejected the Wear listing because its screenshots were not "only the app
+interface": the fixtures painted the app surface on Robolectric's default light
+window background (`#FAFAFA`) instead of the app's own, so every capture framed
+the app as an inset card on a light canvas. `:wear:verifyRoborazziDebug` cannot
+catch that — it compares a capture against the golden that capture produced, so a
+wrong-but-stable background passes forever — so the gate asserts the invariants
+the golden cannot, matching Wear app quality WO-G5:
+
+- both display shapes are present (`…_round.png` and `…_square.png`);
+- every image is at least **384×384**, WO-G5's stated minimum — the committed
+  renders are 390px, so this only catches a capture shrunk between fixture and
+  listing;
+- every image is 1:1 and **fully opaque** — WO-G5 forbids transparent backgrounds
+  or masking, so a circular-masked round capture (transparent corners) fails;
+- every corner equals the app background (`val Bg` in
+  `wear/src/main/java/dev/convocados/wear/ui/theme/Color.kt`). Corners, not the
+  whole border, because real content legitimately reaches the edge on some screens.
+
+It runs in GATE 1 (`pnpm check:play-screenshots`) over the committed source, and
+in the publish job over both the source and the staged
+`src/main/play/listings/en-US/graphics/wear-screenshots/` copy. `src/test/play-screenshots.test.ts`
+drives the failing paths through the same module.
 
 Local preview:
 

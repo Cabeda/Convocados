@@ -173,7 +173,16 @@ tasks.matching { it.name.contains("Release") && it.name.startsWith("assemble") |
 
 val wearStoreListingSource = project.file("src/test/screenshots/store-listing")
 val wearStoreListingOutput = rootProject.file("artifacts/store-listing/wear")
-val wearStoreListingNames = listOf("games.png", "live_score.png", "quick_game.png", "history.png")
+// Round and square for each screen: Play's Wear screenshots are 1:1 and opaque,
+// and the app draws differently on the two shapes, so the listing carries both
+// (8 = Play's per-slot cap). Round captures are opaque black squares with the
+// round UI — never circular-masked (WO-G5 forbids transparent backgrounds).
+val wearStoreListingNames = listOf(
+    "games_round.png", "games_square.png",
+    "live_score_round.png", "live_score_square.png",
+    "quick_game_round.png", "quick_game_square.png",
+    "history_round.png", "history_square.png",
+)
 val wearStoreListingDimensions = 390 to 390
 
 tasks.register("generateWearStoreListing") {

@@ -643,6 +643,12 @@ jobs:
       - name: Check Play listing compliance
         run: node scripts/check-play-listing.mjs
 
+      # Play rejected the Wear listing because its screenshots were not "only
+      # the app interface" (the fixtures framed the app on the default window
+      # background). This checks the committed source, before the upload.
+      - name: Check Play Wear screenshots
+        run: node scripts/check-play-screenshots.mjs
+
       # Refresh Play Store screenshots from the committed Roborazzi sources and
       # upload them. Runs last so a listing failure never blocks the bundles,
       # promotions, or production draft above — listings retry on next release.
@@ -651,14 +657,16 @@ jobs:
         run: ./gradlew syncPlayListings --no-daemon
 
       # Check the *staged* copy, after syncPlayListings has produced it and
-      # before publishListing uploads it. The earlier step checks the source;
-      # this one checks the artifact, which is a different directory.
+      # before publishListing uploads it. The earlier steps check the sources;
+      # these check the artifacts, which are different directories.
       - name: Check staged Play listing
         run: |
           node scripts/check-play-listing.mjs \
             --listing android-app/app/src/main/play/listings --wear android-app/wear
           node scripts/check-play-listing.mjs \
             --listing android-app/wear/src/main/play/listings --wear android-app/wear
+          node scripts/check-play-screenshots.mjs \
+            --dir android-app/wear/src/main/play/listings/en-US/graphics/wear-screenshots
 
       # Explicit per-variant tasks: the :app:publishListing lifecycle fans out to
       # the baseline-profile build types too, triple-uploading the same images.
