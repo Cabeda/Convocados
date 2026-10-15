@@ -1,6 +1,7 @@
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
 import { isPingSuppressedType, resolveEventAudience } from "./eventAudience.server";
+import { DEFAULTS, wantsPushWithOverrides } from "./notificationPrefs.server";
 import type { TranslationKey } from "./i18n";
 import pLimit from "p-limit";
 
@@ -290,8 +291,12 @@ async function _doDrain(): Promise<number> {
 }
 
 /**
- * Create in-app notification records for all followers of an event.
+ * Create in-app notification records for the Event's audience.
  * These persist so users can see missed notifications in their feed.
+ *
+ * The feed reaches the same audience as push: the mute + role-tier resolution
+ * push already applies (ADR 0017) is reused here rather than restated, so a
+ * Follower who muted a channel does not see it here either.
  */
 async function createInAppNotifications(
   eventId: string,
@@ -300,15 +305,37 @@ async function createInAppNotifications(
   senderClientId: string | null,
 ) {
   try {
-    const { userIds } = await resolveEventAudience(eventId, {
+    const { userIds, follows, notificationDefaults } = await resolveEventAudience(eventId, {
       excludeUserIds: senderClientId ? [senderClientId] : [],
       suppressPingDeclines: isPingSuppressedType(type),
     });
 
     if (userIds.length === 0) return;
 
+    const overridesByUser = new Map(follows.map((f) => [f.userId, f]));
+    const [prefsRows, activePlayers] = await Promise.all([
+      prisma.notificationPreferences.findMany({ where: { userId: { in: userIds } } }),
+      prisma.player.findMany({
+        where: { eventId, archivedAt: null, userId: { not: null } },
+        select: { userId: true },
+      }),
+    ]);
+    const prefsByUser = new Map(prefsRows.map((p) => [p.userId, { ...DEFAULTS, ...p }]));
+    const playerUserIds = new Set(activePlayers.map((p) => p.userId as string));
+
+    const recipients = userIds.filter((userId) =>
+      wantsPushWithOverrides(
+        prefsByUser.get(userId) ?? DEFAULTS,
+        type,
+        overridesByUser.get(userId) ?? null,
+        notificationDefaults,
+        playerUserIds.has(userId),
+      ),
+    );
+    if (recipients.length === 0) return;
+
     await prisma.inAppNotification.createMany({
-      data: userIds.map((userId) => ({
+      data: recipients.map((userId) => ({
         userId,
         eventId,
         type,
