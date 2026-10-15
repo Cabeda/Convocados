@@ -8,7 +8,9 @@ import { getSettlementSummary, settleShare, unsettleShare, isEventParticipant, i
 /**
  * GET  /api/events/[id]/payments/settlement — people-first settlement summary.
  *      Receivers (payers) public to event players; debtor names owner/admin-only;
- *      a player sees only their own debt. Owner/admin or event player required.
+ *      a player sees only their own debt. Owner/admin, event player, or the holder
+ *      of an ownerless unlisted Event's link required — the link holder reads the
+ *      payers-only view, never the manager view.
  * PUT  /api/events/[id]/payments/settlement — settle one share (owner/admin).
  *      Body: { gameId, eventPlayerId }
  * DELETE /api/events/[id]/payments/settlement — revert a settled share (owner/admin).
@@ -20,23 +22,30 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const session = await getSession(request);
-  if (!session?.user) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
-  }
 
   // Owner/admin come from the shared Event authorization module; anyone else is a
-  // player. Reading the summary is not a mutation, so ADR 0035's ownerless-open role
-  // does NOT extend here — an anonymous caller stays 401, a non-participant 403.
+  // player. `ownerless-open` (ownerless + unlisted — the share link is the
+  // capability, ADR 0035) maps onto that player role, NOT onto owner/admin: the
+  // link holder gets the basic view (payers only, their own debt if signed in) and
+  // never the manager view. An ownerless PUBLIC event is still forbidden — there
+  // the Event is discoverable, so the openness is not a secret.
   const authz = await authorizeEventMutation(request, event, session);
   const role = authz.role === "owner" || authz.role === "admin" ? authz.role : "player";
+  const userId = session?.user?.id ?? null;
 
-  // Only event players (or owners/admins) may view the event's payments.
-  if (role === "player" && !(await isEventParticipant(eventId, session.user.id))) {
-    return Response.json({ error: "Only event players can view payments." }, { status: 403 });
+  // Only event players (or owners/admins) may view the event's payments; a holder
+  // of an ownerless unlisted event's link may too.
+  if (authz.role !== "ownerless-open") {
+    if (!userId) {
+      return Response.json({ error: "Authentication required." }, { status: 401 });
+    }
+    if (role === "player" && !(await isEventParticipant(eventId, userId))) {
+      return Response.json({ error: "Only event players can view payments." }, { status: 403 });
+    }
   }
 
   try {
-    const summary = await getSettlementSummary(eventId, { role, userId: session.user.id });
+    const summary = await getSettlementSummary(eventId, { role, userId });
     return Response.json(summary);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to load settlement summary.";

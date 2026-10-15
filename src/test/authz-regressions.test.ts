@@ -92,7 +92,12 @@ beforeEach(async () => {
   ({ userId: otherUserId, token: otherToken } = await seedUserWithToken("other"));
 });
 
-/** An Event with one played Game, one Roster player and a cost, so settlement rows exist. */
+/**
+ * An Event with two played Games, two Roster players and a cost, so the summary
+ * carries settlement rows on BOTH sides: in each Game one person paid and the
+ * other owes. "payers only" therefore cannot pass vacuously — every payer also
+ * has a debtor line in the other Game.
+ */
 async function seedSettableEvent(opts: { ownerId?: string | null; isPublic?: boolean }) {
   const event = await prisma.event.create({
     data: {
@@ -107,12 +112,27 @@ async function seedSettableEvent(opts: { ownerId?: string | null; isPublic?: boo
   const game = await prisma.game.create({
     data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" },
   });
+  const earlierGame = await prisma.game.create({
+    data: { eventId: event.id, dateTime: new Date(Date.now() - 7_200_000), status: "upcoming" },
+  });
   await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
-  const eventPlayer = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
-  await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: eventPlayer.id, order: 0 } });
+  const ana = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+  const bruno = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bruno" } });
+  for (const [index, g] of [earlierGame, game].entries()) {
+    for (const [order, ep] of [ana, bruno].entries()) {
+      await prisma.gameParticipant.create({ data: { gameId: g.id, eventPlayerId: ep.id, order } });
+    }
+    // Each Game flips who paid, so both people are a payer AND a debtor.
+    await prisma.game.update({
+      where: { id: g.id },
+      data: { paymentMode: "tracked", payerEventPlayerId: index === 0 ? bruno.id : ana.id },
+    });
+  }
   await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 60, currency: "EUR" } });
+  await syncGamePayments(earlierGame.id, event.id);
   await syncGamePayments(game.id, event.id);
-  return { event, game, eventPlayerId: eventPlayer.id };
+  // `game`'s debtor is Bruno (Ana paid it); `earlierGame`'s debtor is Ana.
+  return { event, game, earlierGame, anaId: ana.id, brunoId: bruno.id };
 }
 
 describe("randomize authorization", () => {
@@ -208,39 +228,65 @@ describe("settlement cross-event guard", () => {
 });
 
 describe("settlement entry points", () => {
-  it("does NOT extend ownerless-open to the anonymous read (settlement is money, not a mutation)", async () => {
-    // ADR 0035 governs Event MUTATIONS. Reading the settlement summary is financial
-    // data, so an unauthenticated link holder still gets 401 on GET even though the
-    // same caller may settle (see below). Widening this needs the product owner.
+  it("lets an unauthenticated link holder read an ownerless UNLISTED Event's summary — payers only", async () => {
+    // Product decision 2026-10-15: on a no-account Event the share link IS the
+    // capability, so a link holder may read the settlement summary — but only the
+    // basic view. Not the manager view, and nothing an admin would administer.
     const { event } = await seedSettableEvent({ ownerId: null, isPublic: false });
+    const res = await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"));
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.viewerRole).toBe("player");
+    // Receivers stay public; who owes whom is not.
+    expect(body.people.map((p: { name: string }) => p.name).sort()).toEqual(["Ana", "Bruno"]);
+    expect(body.people.every((p: { isPayer: boolean }) => p.isPayer)).toBe(true);
+    // THE assertion: every person's debtor lines are dropped, so a link holder
+    // learns who paid but never what the others still owe.
+    expect(body.people.flatMap((p: { lines: Array<{ role: string }> }) => p.lines).map((l: { role: string }) => l.role))
+      .toEqual(["payer", "payer"]);
+    expect(body.games.every((g: { debtorNames: string[] }) => g.debtorNames.length === 0)).toBe(true);
+    expect(body.games.every((g: { rows: unknown[] }) => g.rows.length === 0)).toBe(true);
+  });
+
+  it("still gives an owner the full manager view (debtor names and debtor lines)", async () => {
+    // Guards the link-holder grant from widening into the admin view.
+    const { event } = await seedSettableEvent({ ownerId });
+    const res = await settlementSummary(ctx({ id: event.id }, undefined, ownerToken, "GET"));
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.viewerRole).toBe("owner");
+    expect(body.games.flatMap((g: { debtorNames: string[] }) => g.debtorNames).sort()).toEqual(["Ana", "Bruno"]);
+    expect(body.people.flatMap((p: { lines: Array<{ role: string }> }) => p.lines).map((l: { role: string }) => l.role).sort())
+      .toEqual(["debtor", "debtor", "payer", "payer"]);
+  });
+
+  it("still rejects an ownerless PUBLIC Event (openness there is not a secret)", async () => {
+    const { event } = await seedSettableEvent({ ownerId: null, isPublic: true });
     expect((await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"))).status).toBe(401);
     expect((await settlementSummary(ctx({ id: event.id }, undefined, otherToken, "GET"))).status).toBe(403);
   });
 
   it("lets an ownerless UNLISTED Event settle a share", async () => {
-    const { event, game, eventPlayerId } = await seedSettableEvent({ ownerId: null, isPublic: false });
-    const res = await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId }, undefined, "PUT"));
+    const { event, game, brunoId } = await seedSettableEvent({ ownerId: null, isPublic: false });
+    const res = await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId: brunoId }, undefined, "PUT"));
     expect(res.status).toBe(200);
     const row = await prisma.gamePayment.findUniqueOrThrow({
-      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId } },
+      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: brunoId } },
     });
     expect(row.status).toBe("paid");
   });
 
   it("still rejects a stranger on an owned Event", async () => {
-    const { event, game, eventPlayerId } = await seedSettableEvent({ ownerId });
+    const { event, game, brunoId } = await seedSettableEvent({ ownerId });
     expect((await settlementSummary(ctx({ id: event.id }, undefined, otherToken, "GET"))).status).toBe(403);
-    expect((await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId }, otherToken, "PUT"))).status).toBe(403);
+    expect((await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId: brunoId }, otherToken, "PUT"))).status).toBe(403);
   });
 
   it("still rejects a non-owner on an owned Event without a token", async () => {
-    const { event, game, eventPlayerId } = await seedSettableEvent({ ownerId });
+    const { event, game, brunoId } = await seedSettableEvent({ ownerId });
     expect((await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"))).status).toBe(401);
-    expect((await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId }, undefined, "PUT"))).status).toBe(403);
-  });
-
-  it("still rejects a stranger on an ownerless PUBLIC Event until adopted", async () => {
-    const { event } = await seedSettableEvent({ ownerId: null, isPublic: true });
-    expect((await settlementSummary(ctx({ id: event.id }, undefined, otherToken, "GET"))).status).toBe(403);
+    expect((await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId: brunoId }, undefined, "PUT"))).status).toBe(403);
   });
 });
