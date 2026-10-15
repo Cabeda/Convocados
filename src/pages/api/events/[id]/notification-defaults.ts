@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 
 // muteReminders is retired — superseded by Reminder Timings (Event.reminder24h/2h/1h),
 // which gate all channels at emission. Kept out of VALID_FIELDS so PUT ignores it.
@@ -20,8 +20,13 @@ export const GET: APIRoute = async ({ params }) => {
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
-  const auth = await checkOwnership(request, eventId);
-  if (!auth.isOwner && !auth.isAdmin) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const authzEvent = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, ownerId: true, isPublic: true },
+  });
+  if (!authzEvent) return Response.json({ error: "Not found." }, { status: 404 });
+  const authz = await authorizeEventMutation(request, authzEvent);
+  if (!authz.allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
 
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }

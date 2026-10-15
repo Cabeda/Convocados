@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
-/** PUT — reorder players. Owner-only — claim ownership first on ownerless events. */
+/** PUT — reorder players. Authorization is the shared event-mutation seam (ADR 0035). */
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
@@ -15,9 +15,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Always require owner or admin
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin) {
+  // Owner, admin, or an ownerless unlisted event (ADR 0035)
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the event owner can reorder players." }, { status: 403 });
   }
 
