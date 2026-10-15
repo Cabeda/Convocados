@@ -3,7 +3,7 @@ import type { AuthContext } from "../authenticate.server";
 import type { ToolDef } from "./tools";
 import { McpError } from "./errors";
 import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../rosterCore.server";
-import { getActiveRosterState } from "../roster.server";
+import { getRosterCapacity } from "../roster.server";
 import { syncGamePayments } from "../settlement.server";
 import { syncGameFromTeamResults } from "../gameDualWrite.server";
 import { splitRoster } from "../rosterCapacity";
@@ -83,7 +83,7 @@ async function addPlayer(args: Record<string, unknown>, ctx: AuthContext) {
     throw new McpError(e instanceof Error ? e.message : "Player name is required.", -32602, 400);
   }
 
-  const roster = await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId);
+  const roster = await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
   if (roster.totalCount >= event.maxPlayers * 2) {
     throw new McpError(`The bench is full (maximum ${event.maxPlayers} bench players).`, -32001, 400);
   }

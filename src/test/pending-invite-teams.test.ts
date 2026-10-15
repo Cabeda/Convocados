@@ -1,7 +1,7 @@
 /**
  * Regression test: pending invite GameParticipants ("roster ghosts", ADR 0025)
  * must not pollute the join path's roster math. When a pending invite occupies
- * a queue slot, getActiveRosterState counted it toward maxPlayers — joins were
+ * a queue slot, the Roster capacity module counted it toward maxPlayers — joins were
  * misclassified as "bench" and team sync (addPlayerToTeams/autoRandomizeIfFull)
  * silently skipped, leaving stale teams when the game filled (#Ninjas da Areosa,
  * 2026-08-24: 10/10 players, teams frozen at a 7-player split).
