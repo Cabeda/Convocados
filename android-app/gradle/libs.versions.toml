@@ -108,6 +108,9 @@ androidx-wear = { group = "androidx.wear", name = "wear", version = "1.4.0" }
 androidx-wear-ongoing = { group = "androidx.wear", name = "wear-ongoing", version = "1.1.0" }
 androidx-wear-tiles = { group = "androidx.wear.tiles", name = "tiles", version.ref = "wearTiles" }
 androidx-wear-protolayout = { group = "androidx.wear.protolayout", name = "protolayout", version.ref = "protolayout" }
+androidx-wear-tiles-renderer = { group = "androidx.wear.tiles", name = "tiles-renderer", version.ref = "wearTiles" }
+androidx-wear-protolayout-proto = { group = "androidx.wear.protolayout", name = "protolayout-proto", version.ref = "protolayout" }
+androidx-wear-protolayout-renderer = { group = "androidx.wear.protolayout", name = "protolayout-renderer", version.ref = "protolayout" }
 androidx-concurrent-futures = { group = "androidx.concurrent", name = "concurrent-futures", version = "1.2.0" }
 
 # Testing

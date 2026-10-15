@@ -99,7 +99,7 @@ sources — no manual uploads. Source of truth:
 
 ```
 app/src/test/screenshots/store-listing/{phone,foldable,tablet}/  (8 PNGs each)
-wear/src/test/screenshots/store-listing/                          (8 PNGs: round + square × 4 screens)
+wear/src/test/screenshots/store-listing/                          (8 PNGs: round + square screens + the Quick game tile)
 ```
 
 `release.yml` runs `./gradlew syncPlayListings` (which first runs the
@@ -128,9 +128,24 @@ draft, so a listing failure never blocks a release — it retries on the next on
 
 Note: adaptive layout probes (`adaptive_light/dark`) are regression goldens
 under `src/test/screenshots/goldens/`, not store assets — Play caps each slot
-at 8 images, which the Wear set now fills (round + square × four screens; the
-app draws differently on each shape, so a round watch gets a round capture, not
-a square layout).
+at 8 images, which the Wear set fills. The app draws differently on each shape,
+so round watches get round captures (not a square layout); the eight are
+games/live score/quick game/history on both shapes plus the Quick game tile,
+which Play recommends showing when the app offers Tiles.
+
+The tile capture is the one asset not produced by Roborazzi:
+`QuickGameTileScreenshotTest` inflates the live ProtoLayout with
+`androidx.wear.tiles:tiles-renderer` (plain Roborazzi would capture the whole
+Activity window, chrome and all) and writes the 390×390 PNG directly, so it is
+not part of `:wear:verifyRoborazziDebug`. It is gated the same way as the rest —
+`pnpm check:play-screenshots` reads the committed file.
+
+**Alt text is not automated.** Play highly recommends alt text (≤140 chars) per
+screenshot, but the Play Developer API's `Image` resource
+(`edits.images`) carries only `{id, url, sha1, sha256}` — no alt-text field — so
+`syncPlayListings` cannot set it. Add alt text by hand in Play Console
+(**Store presence → Main store listing → Graphics**) after the first publish, and
+re-check it when the screenshot set changes.
 
 The gate is `pnpm check:play-screenshots` (`scripts/check-play-screenshots.mjs`).
 Play rejected the Wear listing because its screenshots were not "only the app

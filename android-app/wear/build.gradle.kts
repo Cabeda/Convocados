@@ -180,8 +180,8 @@ val wearStoreListingOutput = rootProject.file("artifacts/store-listing/wear")
 val wearStoreListingNames = listOf(
     "games_round.png", "games_square.png",
     "live_score_round.png", "live_score_square.png",
-    "quick_game_round.png", "quick_game_square.png",
-    "history_round.png", "history_square.png",
+    "quick_game_round.png", "history_round.png", "history_square.png",
+    "quick_game_tile.png",
 )
 val wearStoreListingDimensions = 390 to 390
 
@@ -347,6 +347,9 @@ dependencies {
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
+    debugImplementation(libs.androidx.wear.tiles.renderer)
+    debugImplementation(libs.androidx.wear.protolayout.proto)
+    debugImplementation(libs.androidx.wear.protolayout.renderer)
     testImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
