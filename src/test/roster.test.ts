@@ -1,38 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { getActiveRosterState } from "~/lib/roster.server";
+import { seedRecurringEvent, addGameParticipant, clearRosterTables } from "./helpers/rosterFixtures";
 
 beforeEach(async () => {
-  await prisma.gameParticipant.deleteMany();
-  await prisma.eventPlayer.deleteMany();
-  await prisma.game.deleteMany();
-  await prisma.player.deleteMany();
-  await prisma.event.deleteMany();
+  await clearRosterTables();
 });
-
-/** Recurring event with a current (upcoming) Game — ADR 0016 game-scoped roster. */
-async function seedRecurringEvent(maxPlayers: number) {
-  const event = await prisma.event.create({
-    data: {
-      title: "Ninjas da Areosa",
-      location: "Pitch",
-      dateTime: new Date(Date.now() + 86400_000),
-      maxPlayers,
-      isRecurring: true,
-      recurrenceRule: "FREQ=WEEKLY",
-    },
-  });
-  const game = await prisma.game.create({
-    data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" },
-  });
-  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
-  return { ...event, currentGameId: game.id };
-}
-
-async function addGameParticipant(gameId: string, eventId: string, name: string, order: number, archivedAt: Date | null = null, status: string = "active") {
-  const ep = await prisma.eventPlayer.create({ data: { eventId, name } });
-  await prisma.gameParticipant.create({ data: { gameId, eventPlayerId: ep.id, order, archivedAt, status } });
-}
 
 describe("getActiveRosterState — game-scoped (ADR 0016)", () => {
   it("caps activeCount at maxPlayers and exposes bench info for a full roster", async () => {
