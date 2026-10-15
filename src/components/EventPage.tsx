@@ -49,6 +49,7 @@ import { PushPromptBanner } from "./PushPromptBanner";
 import { ConfirmLeaveDialog, computeBenchEmptyAfter, computeWithin48h } from "./event/ConfirmLeaveDialog";
 import { deriveEventPermissions, canRemoveEventPlayer, findSelfRosterRow } from "~/lib/eventView";
 import { decidePaymentGate } from "~/lib/paymentGate";
+import { splitRoster } from "~/lib/rosterCapacity";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -1264,7 +1265,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                           open: true,
                           benchEmptyAfter: computeBenchEmptyAfter(
                             myPlayer.id, event.players,
-                            event.players.slice(0, event.maxPlayers), event.maxPlayers,
+                            splitRoster(event.players, event.maxPlayers).active, event.maxPlayers,
                           ),
                           within48h: computeWithin48h(event.dateTime),
                           busy: false,

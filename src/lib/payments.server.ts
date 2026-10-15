@@ -16,7 +16,7 @@
  */
 
 import { prisma } from "./db.server";
-import { getActiveRosterState } from "./roster.server";
+import { getRosterCapacity } from "./roster.server";
 import { computeAvailableUnits, type WalletTx } from "./wallet";
 import { perPlayerShare, perPlayerShareCents } from "./gameCost";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
@@ -335,12 +335,10 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
   });
   if (!event) return;
 
-  // ADR 0016: prefer GameParticipant for active player list (via the shared
-  // roster helper) — same source of truth as the join/leave paths.
-  const activePlayers = (await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId))
-    .members
-    .slice(0, event.maxPlayers)
-    .map((m) => ({ name: m.name, userId: m.userId }));
+  // ADR 0016: the current Game's Roster, already filtered and split into active
+  // spots and bench by the module that owns both — same source of truth as the
+  // join/leave paths.
+  const { active: activePlayers } = await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
   // Per-player share = total / required playing slots (maxPlayers), NOT the
   // current roster size — the per-player price is fixed for the event.
   const share = perPlayerShare(eventCost.totalAmount, event.maxPlayers);

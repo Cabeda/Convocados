@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
 import { checkAccess } from "../../../../lib/eventAccess";
-import { getActiveRosterState } from "../../../../lib/roster.server";
+import { getRosterCapacity } from "../../../../lib/roster.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
@@ -48,15 +48,14 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Player fallback otherwise. Raw legacy/archived Player rows must not leak
   // into the status payload on recurring events (they accumulate across
   // occurrences and would inflate active/bench/spotsLeft).
-  const roster = await getActiveRosterState(event.id, event.maxPlayers, event.currentGameId);
+  const roster = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
   const playerRows = await prisma.player.findMany({
-    where: { eventId: event.id, name: { in: roster.members.map((m) => m.name) } },
+    where: { eventId: event.id, name: { in: [...roster.active, ...roster.bench].map((m) => m.name) } },
     select: { id: true, name: true },
   });
   const idByName = new Map(playerRows.map((p) => [p.name, p.id]));
   const toView = (m: { name: string }) => ({ id: idByName.get(m.name) ?? "", name: m.name });
-  const active = roster.members.slice(0, event.maxPlayers);
-  const bench = roster.members.slice(event.maxPlayers);
+  const { active, bench } = roster;
 
   return Response.json({
     id: event.id,
@@ -72,7 +71,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       active: active.map(toView),
       bench: bench.map(toView),
       total: roster.totalCount,
-      spotsLeft: Math.max(0, event.maxPlayers - roster.activeCount),
+      spotsLeft: roster.spotsLeft,
     },
     teams: event.teamResults.map((tr) => ({
       name: tr.name,

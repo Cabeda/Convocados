@@ -1,5 +1,6 @@
 import { prisma } from "./db.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
+import { splitRoster } from "./rosterCapacity";
 import { getDefaultFormation } from "./formations";
 import { reconcileFormations } from "./teamFormation.server";
 import { syncGamePayments } from "./settlement.server";
@@ -73,9 +74,8 @@ export async function assignTeams(
     throw new Error("Duplicate player IDs");
   }
 
-  const activePlayerIds = new Set(
-    allPlayers.slice(0, maxPlayers).map((p) => p.id),
-  );
+  const { active: activeRoster } = splitRoster(allPlayers, maxPlayers);
+  const activePlayerIds = new Set(activeRoster.map((p) => p.id));
   for (const id of requestedIds) {
     if (!activePlayerIds.has(id)) {
       throw new Error(`Player ${id} is on the bench and cannot be assigned to a team`);
@@ -157,7 +157,7 @@ export async function assignTeams(
   if (!updatedEvent) throw new Error("Event not found");
 
   const updatedPlayers = await getActivePlayers(eventId, currentGameId);
-  const activeUpdated = updatedPlayers.slice(0, updatedEvent.maxPlayers);
+  const { active: activeUpdated } = splitRoster(updatedPlayers, updatedEvent.maxPlayers);
 
   const updatedMemberLookup = new Map<string, string>();
   for (const team of updatedEvent.teamResults) {
