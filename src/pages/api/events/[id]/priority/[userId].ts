@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
-import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
+import { authorizeEventMutation, eventMutationDenied } from "../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { addEnrollment, removeEnrollment } from "../../../../../lib/priority.server";
 
@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const authz = await authorizeEventMutation(request, event);
-  if (!authz.allowed) return Response.json({ error: "Only the event owner can manage priority players." }, { status: 403 });
+  if (!authz.allowed) return eventMutationDenied(authz, "Only the event owner can manage priority players.");
 
   if (!event.priorityEnabled) {
     return Response.json({ error: "Priority enrollment is not enabled." }, { status: 400 });
@@ -45,7 +45,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const authz = await authorizeEventMutation(request, event);
-  if (!authz.allowed) return Response.json({ error: "Only the event owner can manage priority players." }, { status: 403 });
+  if (!authz.allowed) return eventMutationDenied(authz, "Only the event owner can manage priority players.");
 
   const userId = params.userId;
   if (!userId) return Response.json({ error: "User ID is required." }, { status: 400 });

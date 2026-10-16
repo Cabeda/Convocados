@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { parsePaginationParams, buildPaginatedResponse } from "../../../../../lib/pagination";
 import { checkOwnership } from "../../../../../lib/auth.helpers.server";
-import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
+import { authorizeEventMutation, eventMutationDenied } from "../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { recalculateAllRatings } from "../../../../../lib/elo.server";
@@ -85,7 +85,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   const authz = await authorizeEventMutation(request, event);
   if (!authz.allowed) {
-    return Response.json({ error: "Only the event owner or admin can set ratings." }, { status: 403 });
+    return eventMutationDenied(authz, "Only the event owner or admin can set ratings.");
   }
   const session = authz.session;
 

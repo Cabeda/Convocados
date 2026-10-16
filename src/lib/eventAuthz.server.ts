@@ -1,7 +1,7 @@
 import { checkOwnership, checkEventAdmin } from "./auth.helpers.server";
 import type { SessionResult } from "./auth.helpers.server";
 import { prisma } from "./db.server";
-import { checkAccess } from "./eventAccess";
+import { checkAccess, type AccessResult } from "./eventAccess";
 
 /**
  * The role an event-mutation caller holds, resolved at the authorization seam.
@@ -17,6 +17,13 @@ export interface EventMutationAuthz {
   isOwner: boolean;
   isAdmin: boolean;
   session: SessionResult | null;
+  /**
+   * Why a denial happened, when the client can act on it. Only
+   * `password_required` today: the Event is open by link but password-locked,
+   * so a client should route the user to the password prompt instead of
+   * reporting an ownership problem.
+   */
+  reason?: "password_required";
 }
 
 /** The minimal event facts the authorization seam needs. */
@@ -62,25 +69,40 @@ export async function authorizeEventMutation(
   );
 
   let role: EventMutationRole = "forbidden";
+  let reason: "password_required" | undefined;
   if (isOwner) role = "owner";
   else if (isAdmin) role = "admin";
   else if (event.ownerId === null && !event.isPublic) {
-    role = (await isOpenByLink(request, event, session)) ? "ownerless-open" : "forbidden";
+    const access = await checkLinkAccess(request, event, session);
+    if (access.granted) role = "ownerless-open";
+    else reason = access.reason;
   }
 
-  return { allowed: role !== "forbidden", role, isOwner, isAdmin, session };
+  return { allowed: role !== "forbidden", role, isOwner, isAdmin, session, reason };
 }
 
 /**
- * Whether the share link alone authorizes this caller. True unless the Event set
- * a password, in which case the password (or an invitation) must also be held.
+ * A 403 for a denied mutation. A password-locked Event answers `locked: true`,
+ * the same signal `GET /status` gives a read, so a client can route the caller
+ * to the password prompt rather than report an ownership problem.
  */
-async function isOpenByLink(
+export function eventMutationDenied(authz: EventMutationAuthz, error: string): Response {
+  return Response.json(
+    authz.reason === "password_required" ? { error, locked: true } : { error },
+    { status: 403 },
+  );
+}
+
+/**
+ * Whether the share link alone authorizes this caller. Granted unless the Event
+ * set a password, in which case the password (or an invitation) must also be held.
+ */
+async function checkLinkAccess(
   request: Request,
   event: AuthorizableEvent,
   session: SessionResult | null,
-): Promise<boolean> {
-  if (!event.accessPassword) return true;
+): Promise<AccessResult> {
+  if (!event.accessPassword) return { granted: true };
 
   // Password-protected: an invite or event-admin role bypasses it, as in
   // `GET /status`. Only reached on a password-protected ownerless event.
@@ -97,5 +119,5 @@ async function isOpenByLink(
     cookieHeader: request.headers.get("cookie"),
     eventId: event.id,
     isInvited,
-  }).granted;
+  });
 }

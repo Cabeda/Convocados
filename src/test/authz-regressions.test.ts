@@ -466,6 +466,9 @@ describe("authorizeEventMutation — an ownerless unlisted Event is opened by th
     });
     expect(authz.allowed).toBe(false);
     expect(authz.role).toBe("forbidden");
+    // The client can tell a password lock from an ownership denial, so it can
+    // route the user to the password prompt instead of reporting "ask the owner".
+    expect(authz.reason).toBe("password_required");
   });
 
   it("admits a caller carrying the password's access cookie", async () => {

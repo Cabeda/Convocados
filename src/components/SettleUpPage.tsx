@@ -10,7 +10,7 @@ import ReceiptIcon from "@mui/icons-material/Receipt";
 import HistoryIcon from "@mui/icons-material/History";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import { useT } from "~/lib/useT";
-import { formatMoney } from "~/lib/money";
+import { formatMoney, toCents } from "~/lib/money";
 
 interface Props {
   eventId: string;
@@ -278,7 +278,7 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
                   {data.admin.balances.map((b) => (
                     <TableRow key={b.playerName}>
                       <TableCell>{b.playerName}</TableCell>
-                      <TableCell align="right">{formatMoney(Math.round(b.amount * 100), data.event.currency)}</TableCell>
+                      <TableCell align="right">{formatMoney(toCents(b.amount), data.event.currency)}</TableCell>
                       <TableCell align="right">{b.gamesOwed}</TableCell>
                       <TableCell align="right">{b.streak}</TableCell>
                     </TableRow>

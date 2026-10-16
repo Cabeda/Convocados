@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { authorizeEventMutation } from "~/lib/eventAuthz.server";
+import { authorizeEventMutation, eventMutationDenied } from "~/lib/eventAuthz.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { upsertGuestRsvp } from "~/lib/rsvp.server";
@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   // requirement of its own: a guest RSVP is attributed to an actor.
   const authz = await authorizeEventMutation(request, event, session);
   if (!authz.allowed) {
-    return Response.json({ error: "Only the owner or an admin can set guest attendance." }, { status: 403 });
+    return eventMutationDenied(authz, "Only the owner or an admin can set guest attendance.");
   }
 
   if (event.dateTime.getTime() <= Date.now()) {
