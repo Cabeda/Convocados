@@ -61,6 +61,9 @@ describe("POST /api/cron/court-watches", () => {
     const data1 = await res1.json();
     expect(data1.found).toBe(1);
     expect(mockSendPush).toHaveBeenCalledTimes(1);
+    // The push is a money surface: the price must render through the one
+    // formatter, not as a bare "24EUR" on someone's lock screen.
+    expect(mockSendPush.mock.calls[0][2]).toContain("24.00€");
     expect(await prisma.courtWatchHit.count({ where: { watchId: watch.id } })).toBe(1);
     expect(await prisma.inAppNotification.count()).toBe(1);
     const refreshed = await prisma.courtWatch.findUnique({ where: { id: watch.id } });
