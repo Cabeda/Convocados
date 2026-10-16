@@ -15,7 +15,7 @@ import {
   getDisplayValue,
 } from "~/lib/paymentMethods";
 import { useEventCost, type EventCostData } from "~/lib/useEventCost";
-import { formatMoney } from "~/lib/money";
+import { formatMoney, toCents } from "~/lib/money";
 import { perPlayerShare } from "~/lib/gameCost";
 import { PaymentMethodsList } from "./PaymentMethodsList";
 
@@ -51,8 +51,8 @@ export function CostSection({ eventId, isManager, maxPlayers }: { eventId: strin
       <Stack spacing={1} sx={{ mt: 1 }}>
         {cost.totalAmount > 0 ? (
           <Typography variant="body1" fontWeight={600}>
-            {formatMoney(cost.totalAmount, cost.currency)}
-            {share ? ` · ${t("perPlayer", { amount: formatMoney(share, cost.currency) })}` : ""}
+            {formatMoney(toCents(cost.totalAmount), cost.currency)}
+            {share ? ` · ${t("perPlayer", { amount: formatMoney(toCents(share), cost.currency) })}` : ""}
           </Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">{t("postGameNoCostSet")}</Typography>

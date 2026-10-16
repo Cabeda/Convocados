@@ -116,8 +116,7 @@ describe("sendPaymentReminder", () => {
 
     await sendPaymentReminder("player@example.com", {
       eventTitle: "Friday Futsal",
-      amount: "5.00",
-      currency: "EUR",
+      amount: "5.00€",
       eventUrl: "https://convocados.fly.dev/events/abc",
     });
 
@@ -126,7 +125,7 @@ describe("sendPaymentReminder", () => {
     expect(call.to).toBe("player@example.com");
     expect(call.subject).toContain("Friday Futsal");
     expect(call.html).toContain("5.00");
-    expect(call.html).toContain("EUR");
+    expect(call.html).toContain("5.00€");
     expect(call.html).toContain("/events/abc");
   });
 
@@ -136,9 +135,8 @@ describe("sendPaymentReminder", () => {
     await expect(
       sendPaymentReminder("p@example.com", {
         eventTitle: "Game",
-        amount: "5.00",
-        currency: "EUR",
-        eventUrl: "https://convocados.fly.dev/events/x",
+        amount: "5.00€",
+          eventUrl: "https://convocados.fly.dev/events/x",
       }),
     ).rejects.toThrow("Failed to send payment reminder");
   });
@@ -148,8 +146,7 @@ describe("sendPaymentReminder", () => {
 
     await sendPaymentReminder("p@example.com", {
       eventTitle: "Game",
-      amount: "5.00",
-      currency: "EUR",
+      amount: "5.00€",
       eventUrl: "https://convocados.fly.dev/events/x",
     });
 

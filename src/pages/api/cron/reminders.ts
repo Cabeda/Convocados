@@ -3,6 +3,7 @@ import { getUpcomingReminders, getPostGameReminders, markReminderSent, isReminde
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { cleanupStalePushTokens, sendPushToUser } from "~/lib/push.server";
 import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
+import { formatMoney, toCents } from "~/lib/money";
 import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
 import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentReminderSent } from "~/lib/paymentReminders.server";
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
@@ -161,8 +162,7 @@ export const POST: APIRoute = async ({ request }) => {
             const eventUrl = `${APP_URL}/events/${pp.eventId}?action=pay`;
             await sendPaymentReminder(pp.email, {
               eventTitle: pp.eventTitle,
-              amount: pp.amount.toFixed(2),
-              currency: pp.currency,
+              amount: formatMoney(toCents(pp.amount), pp.currency),
               eventUrl,
             });
             await markPaymentReminderSent(pp.eventId, pp.userId);

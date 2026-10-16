@@ -43,6 +43,7 @@ import { computeSkillUpdates, type SkillUpdate } from "~/lib/skill";
 import { formatDateInTz } from "~/lib/timezones";
 import { isNameInPaymentsSnapshot, isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
 import { formatSetScore, hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scoring";
+import { formatMoney, toCents } from "~/lib/money";
 import { PaymentConfigDialog, type PaymentConfigGame } from "./PaymentConfigDialog";
 import { playerInputPasswordManagerProps } from "./event/PlayerAutocomplete";
 
@@ -765,11 +766,7 @@ export function HistoryCardFull({
     const sum = cost.payments.reduce((acc, p) => acc + p.amount, 0);
     return sum / cost.payments.length;
   })();
-  const CURRENCY_SYMBOLS: Record<string, string> = { EUR: "€", USD: "$", GBP: "£", BRL: "R$" };
-  const formatAmount = (n: number) => {
-    const sym = CURRENCY_SYMBOLS[costCurrency] ?? `${costCurrency} `;
-    return `${sym}${n % 1 === 0 ? n : n.toFixed(2)}`;
-  };
+  const formatAmount = (n: number) => formatMoney(toCents(n), costCurrency);
 
   // Build per-player row data
   type PlayerRow = {
@@ -968,9 +965,9 @@ export function HistoryCardFull({
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <AttachMoneyIcon fontSize="small" sx={{ color: "success.main" }} />
                 <Typography variant="body2" color="text.secondary">
-                  {costTotal.toFixed(2)} {costCurrency}
+                  {formatMoney(toCents(costTotal), costCurrency)}
                   {costPerPlayer !== null && costPerPlayer > 0 && (
-                    <> · <strong>{costPerPlayer.toFixed(2)} {costCurrency}</strong>/player</>
+                    <> · <strong>{formatMoney(toCents(costPerPlayer), costCurrency)}</strong>/player</>
                   )}
                 </Typography>
               </Stack>
