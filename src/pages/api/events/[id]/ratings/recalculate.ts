@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { recalculateAllRatings } from "../../../../../lib/elo.server";
-import { checkOwnership } from "../../../../../lib/auth.helpers.server";
+import { authorizeEventMutation, eventMutationDenied } from "../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 
@@ -12,10 +12,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin, session } = await checkOwnership(request, event.ownerId, undefined, params.id);
-  if (!isOwner && !isAdmin) {
-    return Response.json({ error: "Only the event owner or admin can do this." }, { status: 403 });
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
+    return eventMutationDenied(authz, "Only the event owner or admin can do this.");
   }
+  const session = authz.session;
 
   const processed = await recalculateAllRatings(params.id ?? "");
 

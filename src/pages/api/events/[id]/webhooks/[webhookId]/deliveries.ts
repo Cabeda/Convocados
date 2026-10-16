@@ -10,7 +10,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, ownerId: true, isPublic: true },
+    select: { id: true, ownerId: true, isPublic: true, accessPassword: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 

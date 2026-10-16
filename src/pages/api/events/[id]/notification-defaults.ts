@@ -22,7 +22,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const authzEvent = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, ownerId: true, isPublic: true },
+    select: { id: true, ownerId: true, isPublic: true, accessPassword: true },
   });
   if (!authzEvent) return Response.json({ error: "Not found." }, { status: 404 });
   const authz = await authorizeEventMutation(request, authzEvent);

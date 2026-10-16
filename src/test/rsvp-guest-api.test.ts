@@ -14,11 +14,21 @@ import { POST as guestRsvpPost } from "~/pages/api/events/[id]/players/[playerId
 const mockGetSession = vi.fn();
 vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: (...args: any[]) => mockGetSession(...args),
-  checkOwnership: async (request: Request, ownerId: string | null, existingSession?: any, _eventId?: string) => {
+  // The seam resolves the role from `checkOwnership`, and the rsvp route no
+  // longer carries its own EventAdmin query, so this mock must model the real
+  // contract: isAdmin comes from the EventAdmin table.
+  checkOwnership: async (request: Request, ownerId: string | null, existingSession?: any, eventId?: string) => {
     const session = existingSession ?? await mockGetSession(request);
     const sessionUserId = session?.user?.id ?? null;
     const isOwner = !!(sessionUserId && ownerId && sessionUserId === ownerId);
-    return { isOwner, isAdmin: false, session };
+    const { prisma } = await import("~/lib/db.server");
+    const isAdmin = !!(sessionUserId && eventId &&
+      (await prisma.eventAdmin.count({ where: { eventId, userId: sessionUserId } })) > 0);
+    return { isOwner, isAdmin, session };
+  },
+  checkEventAdmin: async (eventId: string, userId: string) => {
+    const { prisma } = await import("~/lib/db.server");
+    return (await prisma.eventAdmin.count({ where: { eventId, userId } })) > 0;
   },
 }));
 

@@ -217,7 +217,7 @@ describe("email footer links", () => {
     const cases = [
       [() => sendGameInvite(user.email, { eventTitle: "Futsal", dateTime: new Date().toISOString(), location: "Gym", eventUrl: "http://x/e" }), "gameInvite"],
       [() => sendReminder(user.email, { eventTitle: "Futsal", dateTime: new Date().toISOString(), location: "Gym", spotsLeft: 2, eventUrl: "http://x/e", reminderType: "24h" }), "gameReminder"],
-      [() => sendPaymentReminder(user.email, { eventTitle: "Futsal", amount: "5", currency: "EUR", eventUrl: "http://x/e" }), "paymentReminder"],
+      [() => sendPaymentReminder(user.email, { eventTitle: "Futsal", amount: "5.00€", eventUrl: "http://x/e" }), "paymentReminder"],
       [() => sendWeeklySummary(user.email, { userName: "T", upcoming: [], results: [], dashboardUrl: "http://x/d" }), "weeklySummary"],
     ] as const;
 

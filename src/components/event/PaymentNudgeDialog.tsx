@@ -8,6 +8,7 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import { useT } from "~/lib/useT";
 import { parsePaymentMethods } from "~/lib/paymentMethods";
 import { perPlayerShare } from "~/lib/gameCost";
+import { formatMoney, toCents } from "~/lib/money";
 import { PaymentMethodsList } from "~/components/PaymentMethodsList";
 
 interface BalanceData {
@@ -85,8 +86,7 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
         <Stack spacing={2}>
           <Typography>
             {t("paymentNudgeBalance", {
-              amount: balance?.amount.toFixed(2) ?? "0",
-              currency: costCurrency,
+              amount: formatMoney(toCents(balance?.amount ?? 0), costCurrency),
               games: String(balance?.gamesOwed ?? 0),
             })}
           </Typography>
@@ -111,7 +111,7 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
           onClick={handlePayAndJoin}
           startIcon={<PaymentsIcon />}
         >
-          {t("paymentNudgePayAndJoin", { amount: balance?.amount.toFixed(2) ?? "0" })}
+          {t("paymentNudgePayAndJoin", { amount: formatMoney(toCents(balance?.amount ?? 0), costCurrency) })}
         </Button>
         <Button
           variant="text"

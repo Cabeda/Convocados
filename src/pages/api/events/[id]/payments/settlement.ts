@@ -33,14 +33,13 @@ export const GET: APIRoute = async ({ params, request }) => {
   const role = authz.role === "owner" || authz.role === "admin" ? authz.role : "player";
   const userId = session?.user?.id ?? null;
 
-  // A password-protected Event has already declared that the link is NOT
-  // sufficient. The share-link read convenience must not step around that, so the
-  // ownerless-open read stops at a password until the authorization seam itself
-  // learns to check `accessPassword` (filed as a follow-up — only status.ts does).
-  const linkHolderRead = authz.role === "ownerless-open" && event.accessPassword === null;
+  // A link holder reads the basic view. Everyone else must be a signed-in
+  // participant. A password-protected Event is not open by link — the seam
+  // (`authorizeEventMutation`) already refuses `ownerless-open` there, so this
+  // route does not repeat the check.
+  const linkHolderRead = authz.role === "ownerless-open";
 
-  // Managers always read. A link holder reads the basic view. Everyone else must
-  // be a signed-in participant of the Event.
+  // Managers always read.
   if (role !== "owner" && role !== "admin" && !linkHolderRead) {
     if (!userId) {
       return Response.json({ error: "Authentication required." }, { status: 401 });

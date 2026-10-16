@@ -566,6 +566,27 @@ describe("error paths", () => {
 });
 
 describe("settlement API routes", () => {
+  it("carries the Event's own currency, so a non-EUR Event never renders as EUR", async () => {
+    // Every amount in the summary is bare (no symbol), so the response MUST carry
+    // the currency — otherwise the surface falls back to EUR and a USD Event
+    // displays "25.00€".
+    const { event } = await seedEvent({ cost: 60 });
+    await prisma.eventCost.update({ where: { eventId: event.id }, data: { currency: "USD" } });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+
+    const res = await getSummary(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).currency).toBe("USD");
+  });
+
+  it("defaults to EUR when the Event has no cost row at all", async () => {
+    const { event } = await seedEvent();
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+
+    const res = await getSummary(ctx({ id: event.id }));
+    expect((await res.json()).currency).toBe("EUR");
+  });
+
   it("GET requires authentication", async () => {
     // The route's decision flows through `checkOwnership` (via the shared
     // authorization seam), so the scenario must state it — the file's beforeEach

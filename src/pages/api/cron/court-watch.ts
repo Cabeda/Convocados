@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
+import { formatMoney, toCents } from "../../../lib/money";
 import { searchCourtAlternatives, parseCourtWatchConfig } from "~/lib/courtAlternatives.server";
 import { sendPushToUser } from "~/lib/push.server";
 import { createLogger } from "~/lib/logger.server";
@@ -86,7 +87,7 @@ export const POST: APIRoute = async ({ request }) => {
         const recipientIds = [event.ownerId, ...event.admins.map((a) => a.userId)].filter(Boolean) as string[];
         const uniqueRecipients = [...new Set(recipientIds)];
         const title = event.title;
-        const priceLabel = alt.price !== null && alt.currency ? ` (${alt.price}${alt.currency})` : "";
+        const priceLabel = alt.price !== null && alt.currency ? ` (${formatMoney(toCents(alt.price), alt.currency)})` : "";
         const body = `🎾 ${alt.tenantName} — ${alt.resourceName} at ${alt.slotTime}${priceLabel}`;
         const url = `/events/${event.id}`;
 

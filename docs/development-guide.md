@@ -155,6 +155,40 @@ When `nextResetAt` passes (game end time), the lazy reset:
 
 ## Common Patterns
 
+### The shared seams — check here before you write the rule again
+
+A **seam** is the one module that answers a question the whole codebase asks. If you are
+about to write a check that reads a field and compares it to a user, an amount, a roster or
+a roster size, it almost certainly already exists below. Re-deriving it is how the same bug
+ships in fourteen places.
+
+| The question | Reach for | Where you find it |
+|---|---|---|
+| May this caller **mutate** this Event? | `authorizeEventMutation`, and `eventMutationDenied` for the 403 | `src/lib/eventAuthz.server.ts` |
+| May this caller read a **password-protected** Event? | `checkAccess` (owner / invite / cookie token) | `src/lib/eventAccess.ts` |
+| May this caller read an Event's **finances**? | `canReadEventFinances` | `src/lib/eventReadAccess.server.ts` |
+| How does **money** render? | `formatMoney(cents, currency)`; `toCents` is the one float boundary | `src/lib/money.ts` |
+| Who is **active**, who is on the bench, how many spots are left? | `getRosterCapacity` (query) over `splitRoster` (pure) | `src/lib/roster.server.ts`, `src/lib/rosterCapacity.ts` |
+| Which **notifications** does this user get? | `resolveJobAudience` per job, then `resolveMuteTier` per user | `src/lib/eventAudience.server.ts`, `src/lib/notificationPrefs.server.ts` |
+| How does a **date** render for a locale? | `formatDateInTz` with `dateFormatTag(locale)` | `src/lib/timezones.ts` |
+| What does a **payment summary** add up to? | `summarizePayments` | `src/lib/paymentSummary.ts` |
+
+Two traps worth more than the table:
+
+- **`AuthorizableEvent.accessPassword` is required on purpose.** Leave it out of a Prisma
+  `select` and it compiles as `undefined`, which reads as "no password" and silently opens a
+  locked Event. The type makes that a compile error; keep it that way.
+- **Legacy `Player` rows are the wrong source for "who is playing".** They accumulate across a
+  recurring Event's occurrences, so a departed member still reads as an active player and the
+  ADR 0017 tier-2 mute quietly stops working for them. Membership is the **current Game's
+  Roster** (`getRosterCapacity`). This exact mistake was live in the push, FCM and feed paths,
+  and was only found by review.
+
+`src/lib/money.ts` is enforced: `no-restricted-syntax` in `eslint.config.js` rejects
+`Intl.NumberFormat`, `toFixed(2)` and a literal `€`, and `src/test/money-guardrail.test.ts`
+fails if that rule is de-scoped. Money has one format — `50.00€`, two decimals, symbol after
+the amount (ADR 0007 keeps the ledger in integer cents).
+
 ### API Route Handler
 ```typescript
 export const POST: APIRoute = async ({ params, request }) => {

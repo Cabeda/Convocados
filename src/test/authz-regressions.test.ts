@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
+import { authorizeEventMutation } from "~/lib/eventAuthz.server";
+import { buildAccessCookie } from "~/lib/eventAccess";
 
 import { syncGamePayments } from "~/lib/settlement.server";
 
@@ -435,5 +437,57 @@ describe("settlement entry points", () => {
     const { event, game, brunoId } = await seedSettableEvent({ ownerId });
     expect((await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"))).status).toBe(401);
     expect((await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId: brunoId }, undefined, "PUT"))).status).toBe(403);
+  });
+});
+
+// The authorization seam's own rule (ADR 0035 + ADR 0052). Pinned here, at the
+// seam, because every route that adopts it inherits the answer — a hole in this
+// function was a hole in 55 route handlers at once.
+describe("authorizeEventMutation — an ownerless unlisted Event is opened by the link, unless it set a password", () => {
+  const anon = () => new Request("http://localhost/api/events/e1");
+
+  it("opens the Event to a bare link holder when no password is set", async () => {
+    const authz = await authorizeEventMutation(anon(), {
+      id: "e1",
+      ownerId: null,
+      isPublic: false,
+      accessPassword: null,
+    });
+    expect(authz.role).toBe("ownerless-open");
+    expect(authz.allowed).toBe(true);
+  });
+
+  it("refuses a bare link holder when the Event set a password", async () => {
+    const authz = await authorizeEventMutation(anon(), {
+      id: "e1",
+      ownerId: null,
+      isPublic: false,
+      accessPassword: "bcrypt-hash",
+    });
+    expect(authz.allowed).toBe(false);
+    expect(authz.role).toBe("forbidden");
+    // The client can tell a password lock from an ownership denial, so it can
+    // route the user to the password prompt instead of reporting "ask the owner".
+    expect(authz.reason).toBe("password_required");
+  });
+
+  it("admits a caller carrying the password's access cookie", async () => {
+    const authz = await authorizeEventMutation(
+      new Request("http://localhost/api/events/e1", {
+        headers: { cookie: buildAccessCookie(null, "e1", "bcrypt-hash") },
+      }),
+      { id: "e1", ownerId: null, isPublic: false, accessPassword: "bcrypt-hash" },
+    );
+    expect(authz.role).toBe("ownerless-open");
+  });
+
+  it("never opens an ownerless PUBLIC Event — it is discoverable, so openness is not a secret", async () => {
+    const authz = await authorizeEventMutation(anon(), {
+      id: "e1",
+      ownerId: null,
+      isPublic: true,
+      accessPassword: null,
+    });
+    expect(authz.allowed).toBe(false);
   });
 });

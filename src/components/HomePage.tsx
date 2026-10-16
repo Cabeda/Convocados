@@ -28,6 +28,7 @@ import { useSession } from "~/lib/auth.client";
 import { useCountdown } from "./event/useCountdown";
 import { getSportPreset } from "~/lib/sports";
 import { formatDateInTz } from "~/lib/timezones";
+import { formatMoney, toCents } from "~/lib/money";
 import { detectLocale, type Locale, type TFunction } from "~/lib/i18n";
 import { GameCard, type GameSummary } from "./GameCard";
 
@@ -188,7 +189,7 @@ function ActionCard({ action, locale, t }: { action: HomeAction; locale: Locale;
   const meta: Record<HomeAction["type"], { icon: React.ReactElement; label: string; color: string; href: string }> = {
     fill_spots: { icon: <GroupAddIcon fontSize="small" />, label: t("actionFillSpots", { n: action.spotsLeft ?? 0 }), color: "primary", href: `/events/${action.eventId}` },
     settle_score: { icon: <ScoreboardIcon fontSize="small" />, label: t("actionSettleScore"), color: "warning", href: `/events/${action.eventId}` },
-    pay_share: { icon: <PaymentsIcon fontSize="small" />, label: t("actionPayShare", { amount: `${(action.amount ?? 0).toFixed(2)} ${action.currency ?? "EUR"}` }), color: "error", href: `/events/${action.eventId}/payments` },
+    pay_share: { icon: <PaymentsIcon fontSize="small" />, label: t("actionPayShare", { amount: formatMoney(toCents(action.amount ?? 0), action.currency) }), color: "error", href: `/events/${action.eventId}/payments` },
     vote_mvp: { icon: <HowToVoteIcon fontSize="small" />, label: t("actionVoteMvp"), color: "success", href: `/events/${action.eventId}` },
   };
   const presentation = meta[action.type];

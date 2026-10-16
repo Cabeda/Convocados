@@ -83,10 +83,32 @@ describe("POST /api/events/[id]/priority/[userId]", () => {
   });
 
   it("returns 403 when not owner or admin", async () => {
+    // An OWNED event: this is the case where the seam denies. An ownerless
+    // unlisted event is deliberately open — see the test below.
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
-    const event = await seedEvent({ priorityEnabled: true });
+    const owner = await seedUser("Other Owner");
+    const event = await seedEvent({ priorityEnabled: true, ownerId: owner.id });
     const res = await priorityAddUser(postCtx({ id: event.id, userId: "u1" }));
     expect(res.status).toBe(403);
+  });
+
+  it("answers a password-locked Event with locked:true, not an ownership error", async () => {
+    // Same ownerless Event, but it set a password: the link is no longer the
+    // capability, and the 403 must say so in a way a client can act on.
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const event = await seedEvent({ priorityEnabled: true, accessPassword: "bcrypt-hash" });
+    const res = await priorityAddUser(postCtx({ id: event.id, userId: "u1" }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).locked).toBe(true);
+  });
+
+  it("permits a link holder on an ownerless UNLISTED event (ADR 0035)", async () => {
+    // The share link is the capability on a no-account Event, so the same caller
+    // that is denied above reaches the handler here.
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const event = await seedEvent({ priorityEnabled: true });
+    const res = await priorityRemoveUser(deleteCtx({ id: event.id, userId: "u1" }));
+    expect(res.status).toBe(200);
   });
 
   it("returns 400 when priority is not enabled", async () => {
@@ -125,7 +147,8 @@ describe("DELETE /api/events/[id]/priority/[userId]", () => {
 
   it("returns 403 when not owner", async () => {
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
-    const event = await seedEvent();
+    const owner = await seedUser("Other Owner");
+    const event = await seedEvent({ ownerId: owner.id });
     const res = await priorityRemoveUser(deleteCtx({ id: event.id, userId: "u1" }));
     expect(res.status).toBe(403);
   });

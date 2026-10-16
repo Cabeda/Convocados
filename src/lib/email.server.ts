@@ -348,8 +348,8 @@ export async function sendChangeEmailVerification(to: string, url: string) {
 
 export interface PaymentReminderData {
   eventTitle: string;
+  /** Already formatted by `formatMoney`, so the symbol travels with the amount. */
   amount: string;
-  currency: string;
   eventUrl: string;
 }
 
@@ -357,7 +357,7 @@ export async function sendPaymentReminder(to: string, data: PaymentReminderData)
   await sendTemplatedEmail(to, {
     subject: `Payment pending: ${data.eventTitle} — Convocados`,
     heading: `Payment pending for ${data.eventTitle}`,
-    body: `You have an outstanding payment of <strong>${data.amount} ${data.currency}</strong> for this game.<br/><br/>Please settle your payment or contact the event organizer.`,
+    body: `You have an outstanding payment of <strong>${data.amount}</strong> for this game.<br/><br/>Please settle your payment or contact the event organizer.`,
     buttonText: "View game",
     buttonUrl: data.eventUrl,
     footnote: "",
