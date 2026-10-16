@@ -221,7 +221,7 @@ describe("HomePage — Up next + Discover (ADR 0041)", () => {
       expect(screen.getByText("Needs you")).toBeInTheDocument();
     });
     expect(screen.getByText(/invite players/i)).toBeInTheDocument();
-    expect(screen.getByText(/You owe 12.50 EUR/)).toBeInTheDocument();
+    expect(screen.getByText(/You owe 12.50€/)).toBeInTheDocument();
   });
 
   it("links pay_share action to /events/{id}/payments", async () => {
@@ -230,7 +230,7 @@ describe("HomePage — Up next + Discover (ADR 0041)", () => {
     await waitFor(() => {
       expect(screen.getByText("Needs you")).toBeInTheDocument();
     });
-    const oweLink = screen.getByText(/You owe 12.50 EUR/).closest("a");
+    const oweLink = screen.getByText(/You owe 12.50€/).closest("a");
     expect(oweLink).toHaveAttribute("href", "/events/evt-play-2/payments");
   });
 

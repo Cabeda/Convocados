@@ -318,8 +318,8 @@ describe("HistoryCardFull — Players stream", () => {
   it("shows payment chip on each row with the amount (compact)", () => {
     renderCard();
     const joaoRow = screen.getByText("João Fernandes").closest("[data-player-row]") as HTMLElement;
-    // Compact format: "€5" (no trailing .00, symbol instead of code)
-    expect(within(joaoRow).getByText("€5")).toBeInTheDocument();
+    // The one money format: two decimals, then the symbol. No compact variant.
+    expect(within(joaoRow).getByText("5.00€")).toBeInTheDocument();
     // João is paid (success) — check for check icon
     expect(within(joaoRow).getByTestId("CheckCircleIcon")).toBeInTheDocument();
   });
@@ -719,7 +719,7 @@ describe("HistoryCardFull — game settlement payments", () => {
     renderCard({ paymentConfig: settlementConfig }, undefined, { onPaymentsConfigSaved: onSaved });
 
     const row = screen.getByText("Rodrigo Stange").closest("[data-player-row]") as HTMLElement;
-    await userEvent.click(within(row).getByText("€8"));
+    await userEvent.click(within(row).getByText("8.00€"));
 
     await waitFor(() => {
       expect(calls.some((c) => c.url.includes("/payments/settlement") && c.method === "PUT")).toBe(true);
@@ -734,7 +734,7 @@ describe("HistoryCardFull — game settlement payments", () => {
     renderCard({ paymentConfig: settlementConfig });
 
     const row = screen.getByText("João Fernandes").closest("[data-player-row]") as HTMLElement;
-    await userEvent.click(within(row).getByText("€8"));
+    await userEvent.click(within(row).getByText("8.00€"));
 
     await waitFor(() => {
       expect(calls.some((c) => c.url.includes("/payments/settlement") && c.method === "DELETE")).toBe(true);
@@ -748,7 +748,7 @@ describe("HistoryCardFull — game settlement payments", () => {
     renderCard({ paymentConfig: settlementConfig });
 
     const row = screen.getByText("Gonçalo").closest("[data-player-row]") as HTMLElement;
-    await userEvent.click(within(row).getByText("€8"));
+    await userEvent.click(within(row).getByText("8.00€"));
 
     expect(calls.some((c) => c.url.includes("/payments/settlement"))).toBe(false);
   });

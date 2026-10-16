@@ -2,8 +2,8 @@
  * ADR 0018 — Payment nudge escalation (3 stages + organizer alert).
  *
  * Stage 0: not started (payment just became pending after game ended)
- * Stage 1: soft nudge — "You owe €X — tap to pay" (fires at game end / first cron pass)
- * Stage 2: follow-up — "Still pending — €X for [Game]" (fires +48h after stage 1)
+ * Stage 1: soft nudge — "You owe 5.00€ — tap to pay" (fires at game end / first cron pass)
+ * Stage 2: follow-up — "Still pending — 5.00€ for [Game]" (fires +48h after stage 1)
  * Stage 3: social proof — "8/10 have paid. You're one of 2 who haven't." (fires +5 days after game)
  * After stage 3 + 7 days: organizer alert — stops nudging debtor, notifies owner.
  *
@@ -19,6 +19,7 @@ import { getNotificationPrefs, wantsPaymentReminderPush } from "./notificationPr
 import { effectiveGameCost } from "./settlement.server";
 import { fireWebhooks } from "./webhook.server";
 import { createLogger } from "./logger.server";
+import { formatMoney, toCents } from "./money";
 
 const log = createLogger("payment-nudge");
 
@@ -146,7 +147,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       // Stage progression based on time since game end
       if (tracker.stage === 0 && hoursSinceEnd >= STAGE_1_DELAY_H) {
         // Stage 1: soft nudge
-        if (wantsPush) await sendPushToUser(userId, event.title, `💸 You owe €${payment.amount.toFixed(2)} — tap to pay`, url);
+        if (wantsPush) await sendPushToUser(userId, event.title, `💸 You owe ${formatMoney(toCents(payment.amount), currency)} — tap to pay`, url);
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 1, lastSentAt: now },
@@ -155,7 +156,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         fireNudgeWebhook(1);
       } else if (tracker.stage === 1 && hoursSinceEnd >= STAGE_2_DELAY_H) {
         // Stage 2: follow-up
-        if (wantsPush) await sendPushToUser(userId, event.title, `⏰ Still pending — €${payment.amount.toFixed(2)} for ${event.title}`, url);
+        if (wantsPush) await sendPushToUser(userId, event.title, `⏰ Still pending — ${formatMoney(toCents(payment.amount), currency)} for ${event.title}`, url);
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 2, lastSentAt: now },

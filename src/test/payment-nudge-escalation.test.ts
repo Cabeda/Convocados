@@ -103,7 +103,7 @@ describe("processPaymentEscalation", () => {
     expect(mockSendPush).toHaveBeenCalledWith(
       debtor.id,
       "Past Game",
-      expect.stringContaining("€5.00"),
+      expect.stringContaining("5.00€"),
       expect.stringContaining("action=pay"),
     );
   });

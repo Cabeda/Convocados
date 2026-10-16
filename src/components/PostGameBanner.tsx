@@ -12,6 +12,7 @@ import CelebrationIcon from "@mui/icons-material/Celebration";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
+import { formatMoney, toCents } from "~/lib/money";
 import { MvpVotingCard } from "./MvpVotingCard";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { RecurrencePrompt } from "./RecurrencePrompt";
@@ -526,7 +527,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
                     <Typography variant="body2" fontWeight={600}>
                       {t("paymentsIsOwed", {
                         name: status.gameConfig.payerName,
-                        amount: summarizePayments(status.gamePayments).outstandingAmount.toFixed(2),
+                        amount: formatMoney(toCents(summarizePayments(status.gamePayments).outstandingAmount), status.costCurrency),
                       })}
                     </Typography>
                   ) : (
@@ -555,7 +556,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
                           size="small"
                           variant={isPaid ? "filled" : "outlined"}
                           color={chipColor}
-                          label={`${r.name}  ${r.amount.toFixed(2)}${r.isPayer ? ` · ${t("paymentsPayer")}` : ""}`}
+                          label={`${r.name}  ${formatMoney(toCents(r.amount), status.costCurrency)}${r.isPayer ? ` · ${t("paymentsPayer")}` : ""}`}
                           onClick={isManager && !r.isPayer ? () => handleToggleShare(r) : undefined}
                           sx={{ borderRadius: 2, fontWeight: isPaid ? 600 : 500, cursor: isManager && !r.isPayer ? "pointer" : "default" }}
                         />
@@ -575,7 +576,7 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
                           size="small"
                           variant={isPaid ? "filled" : "outlined"}
                           color={chipColor}
-                          label={`${p.playerName}  ${p.amount.toFixed(2)}`}
+                          label={`${p.playerName}  ${formatMoney(toCents(p.amount), status.costCurrency)}`}
                           onClick={() => cyclePaymentStatus(idx)}
                           sx={{
                             borderRadius: 2,

@@ -6,7 +6,7 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useT } from "~/lib/useT";
 import { useEventCost } from "~/lib/useEventCost";
-import { formatMoney, formatShortDate, type PaymentStatus } from "~/lib/money";
+import { formatMoney, formatShortDate, toCents, type PaymentStatus } from "~/lib/money";
 import { perPlayerShare } from "~/lib/gameCost";
 
 interface DebtorLine {
@@ -104,8 +104,8 @@ export function PaymentSurface({
           <PaymentsIcon fontSize="small" color="action" />
           {hasCost ? (
             <Typography variant="body2" fontWeight={600}>
-              {formatMoney(cost.totalAmount, cost.currency)}
-              {share ? ` · ${t("perPlayer", { amount: formatMoney(share, cost.currency) })}` : ""}
+              {formatMoney(toCents(cost.totalAmount), cost.currency)}
+              {share ? ` · ${t("perPlayer", { amount: formatMoney(toCents(share), cost.currency) })}` : ""}
             </Typography>
           ) : canEdit ? (
             <Button size="small" onClick={goToPayments}>{t("setPrice")}</Button>
@@ -123,11 +123,11 @@ export function PaymentSurface({
         {!canEdit && myDebt && (
           <Box sx={{ px: 0.5, pb: 0.5 }}>
             <Typography variant="body2" color="warning.main" fontWeight={600}>
-              {t("youOwe", { amount: formatMoney(myDebt.owedAmount, cost?.currency ?? "EUR") })}
+              {t("youOwe", { amount: formatMoney(toCents(myDebt.owedAmount), cost?.currency ?? "EUR") })}
             </Typography>
             {pendingLines.map((line) => (
               <Box key={line.gameId} sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5, flexWrap: "wrap" }}>
-                <Chip size="small" variant="outlined" color="warning" label={`${formatShortDate(line.dateTime)} · ${formatMoney(line.amount, cost?.currency ?? "EUR")}`} />
+                <Chip size="small" variant="outlined" color="warning" label={`${formatShortDate(line.dateTime)} · ${formatMoney(toCents(line.amount), cost?.currency ?? "EUR")}`} />
                 <Button size="small" variant="outlined" disabled={reporting} onClick={() => reportSent(line)}>
                   {t("paymentsReportSent")}
                 </Button>

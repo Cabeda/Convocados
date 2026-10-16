@@ -36,7 +36,7 @@ describe("PaymentSurface", () => {
       },
     });
     renderWithTheme(<PaymentSurface eventId="e1" canEdit isAuthenticated maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/50.00EUR/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/50.00€/)).toBeInTheDocument());
     expect(screen.getByText(/per player/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /view payments/i })).toBeInTheDocument();
   });
@@ -49,7 +49,7 @@ describe("PaymentSurface", () => {
       },
     });
     renderWithTheme(<PaymentSurface eventId="e1" canEdit isAuthenticated maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/5.00EUR/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/5.00€/)).toBeInTheDocument());
   });
 
   it("shows the you-owe CTA to a player with debt (not to the owner)", async () => {
@@ -61,7 +61,7 @@ describe("PaymentSurface", () => {
       },
     });
     renderWithTheme(<PaymentSurface eventId="e1" canEdit={false} isAuthenticated maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/You owe 10.00EUR/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/You owe 10.00€/)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /report sent/i })).toBeInTheDocument();
   });
 
@@ -71,7 +71,7 @@ describe("PaymentSurface", () => {
       "/api/events/e1/payments/settlement": { people: [], viewerEventPlayerId: null, viewerRole: "player" },
     });
     renderWithTheme(<PaymentSurface eventId="e1" canEdit={false} isAuthenticated={false} maxPlayers={10} />);
-    expect(screen.queryByText(/50.00EUR/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/50.00€/)).not.toBeInTheDocument();
   });
 });
 
@@ -79,20 +79,20 @@ describe("CostSection", () => {
   it("shows the price and an Edit button for a manager", async () => {
     mockFetch({ "/api/events/e1/cost": { totalAmount: 80, currency: "EUR", paymentMethods: null, effectivePaymentMethods: null, hasOverride: false } });
     renderWithTheme(<CostSection eventId="e1" isManager maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/80.00EUR/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/80.00€/)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /edit price/i })).toBeInTheDocument();
   });
 
   it("shows per-player share = total / maxPlayers", async () => {
     mockFetch({ "/api/events/e1/cost": { totalAmount: 50, currency: "EUR", paymentMethods: null, effectivePaymentMethods: null, hasOverride: false } });
     renderWithTheme(<CostSection eventId="e1" isManager={false} maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/5.00EUR/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/5.00€/)).toBeInTheDocument());
   });
 
   it("hides the Edit button for a regular player", async () => {
     mockFetch({ "/api/events/e1/cost": { totalAmount: 80, currency: "EUR", paymentMethods: null, effectivePaymentMethods: null, hasOverride: false } });
     renderWithTheme(<CostSection eventId="e1" isManager={false} maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/80.00EUR/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/80.00€/)).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /edit price/i })).not.toBeInTheDocument();
   });
 

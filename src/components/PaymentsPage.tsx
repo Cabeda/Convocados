@@ -6,7 +6,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
-import { formatMoney, formatShortDate } from "~/lib/money";
+import { formatMoney, formatShortDate, toCents } from "~/lib/money";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -176,7 +176,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
             {data.people.filter((p) => p.isPayer).map((p) => (
               <ListItem key={`r-${p.name}`} divider>
                 <ListItemText
-                  primary={t("paymentsIsOwed", { name: p.name, amount: formatMoney(p.owedToAmount, "EUR") })}
+                  primary={t("paymentsIsOwed", { name: p.name, amount: formatMoney(toCents(p.owedToAmount)) })}
                   secondary={p.lines.length > 0 ? `${t("paymentsUnsettledGames")} · ${p.lines.length}` : ""}
                 />
               </ListItem>
@@ -188,7 +188,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
             {data.people.filter((p) => !p.isPayer).map((p) => (
               <ListItem key={`d-${p.name}`} divider>
                 <ListItemText
-                  primary={t("paymentsOwes", { name: p.name, amount: formatMoney(p.owedAmount, "EUR") })}
+                  primary={t("paymentsOwes", { name: p.name, amount: formatMoney(toCents(p.owedAmount)) })}
                 />
               </ListItem>
             ))}
@@ -232,7 +232,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
                 <Box ml={1}>
                   <Typography variant="body2" color="text.secondary">
                     {g.payerName
-                      ? t("paymentsIsOwed", { name: g.payerName, amount: formatMoney(g.total, "EUR") })
+                      ? t("paymentsIsOwed", { name: g.payerName, amount: formatMoney(toCents(g.total)) })
                       : t("paymentsUnassignedPayer")}
                     {g.payerIsPlayer ? ` · ${t("paymentsPayer")}` : ""}
                   </Typography>
@@ -273,7 +273,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
           <List dense>
             {data.people.filter((p) => p.isPlayer && p.owedAmount > 0).map((p) => (
               <ListItem key={p.name} divider>
-                <ListItemText primary={t("paymentsOwes", { name: p.name, amount: formatMoney(p.owedAmount, "EUR") })} />
+                <ListItemText primary={t("paymentsOwes", { name: p.name, amount: formatMoney(toCents(p.owedAmount)) })} />
               </ListItem>
             ))}
           </List>

@@ -8,6 +8,7 @@ import PhoneIcon from "@mui/icons-material/Phone";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
+import { formatMoney, toCents } from "~/lib/money";
 import {
   type PaymentMethod,
   type PaymentMethodType,
@@ -40,7 +41,7 @@ export function PaymentMethodsList({ methods, amount, currency }: Props) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCopy = async (text: string, id: string) => {
-    const copyText = amount && amount > 0 ? `${text} — ${amount.toFixed(2)} ${currency ?? "EUR"}` : text;
+    const copyText = amount && amount > 0 ? `${text} — ${formatMoney(toCents(amount), currency)}` : text;
     await navigator.clipboard.writeText(copyText);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2500);

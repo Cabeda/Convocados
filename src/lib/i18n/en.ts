@@ -818,7 +818,7 @@ sportBadmintonSingles: "Badminton (singles)",
 
   // Payment nudge
   paymentNudgeTitle: "Settle up before you play",
-  paymentNudgeBalance: "You owe {amount} {currency} from {games} game(s)",
+  paymentNudgeBalance: "You owe {amount} from {games} game(s)",
   paymentNudgePayAndJoin: "Pay {amount} & join",
   paymentNudgeJoinLater: "Join and pay later",
   paymentNudgeBlocked: "Settle your balance to join",

@@ -10,6 +10,7 @@ import ReceiptIcon from "@mui/icons-material/Receipt";
 import HistoryIcon from "@mui/icons-material/History";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import { useT } from "~/lib/useT";
+import { formatMoney } from "~/lib/money";
 
 interface Props {
   eventId: string;
@@ -83,13 +84,6 @@ interface SettlePayload {
       createdAt: string;
     }>;
   };
-}
-
-function formatMoney(cents: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-  }).format(cents / 100);
 }
 
 export function SettleUpPage({ eventId }: Props) {
