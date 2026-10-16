@@ -8,7 +8,7 @@
  *  supports undo); the existing hard-delete X flow is being replaced by this.
  */
 import { prisma } from "./db.server";
-import { getActiveRosterState } from "./roster.server";
+import { getRosterCapacity } from "./roster.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { fireWebhooks } from "./webhook.server";
 import { syncPaymentsForEvent } from "./payments.server";
@@ -47,7 +47,10 @@ export interface ArchiveAndLeaveResult {
   /** True iff the removed player was in the active list AND after removal no bench players remain.
    *  False for bench-player removals (the bench wasn't touched). */
   benchEmptyAfter: boolean;
-  /** Whether the warn-the-rest push was fired (gated on benchEmptyAfter + within 48h). */
+  /** Whether the removal freed a spot inside the 48h-before-kickoff window — the
+   *  urgent "no replacement" case. The player-left push itself is NOT gated on
+   *  this (see archiveAndLeave), so callers must not read it as "was the group
+   *  notified". False for bench-player removals. */
   warned: boolean;
   /** Data for the client's undo snackbar (60s window — see undo-remove). */
   undo: {
@@ -58,7 +61,8 @@ export interface ArchiveAndLeaveResult {
   };
 }
 
-/** True when current time is within RSVP_WINDOW_HOURS before kickoff. Used to gate the warn-the-rest push. */
+/** True when current time is within RSVP_WINDOW_HOURS before kickoff. Marks the
+ *  urgent "no replacement near kickoff" case returned as `warned`. */
 export function isWithin48hBeforeKickoff(dateTime: Date, now: Date = new Date()): boolean {
   const hoursUntil = (dateTime.getTime() - now.getTime()) / (60 * 60 * 1000);
   return hoursUntil > 0 && hoursUntil <= RSVP_WINDOW_HOURS;
@@ -128,13 +132,15 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   // ADR 0016: the current game's GameParticipant rows are the authoritative
   // roster. Legacy Player rows accumulate across recurring occurrences and would
   // inflate the active/bench/spotsLeft logic below, so we derive that state from
-  // the shared getActiveRosterState helper (same source as the join path — this
+  // the shared Roster capacity module (same source as the join path — this
   // duplication is how #722 slipped through before).
-  const roster = await getActiveRosterState(eventId, event.maxPlayers, currentGameId);
-  const activeCountBefore = roster.activeCount;
-  const hasBench = roster.hasBench;
-  const firstBenchName = roster.firstBenchName ?? undefined;
-  const wasActive = roster.activeNames.has(rosterName);
+  const capacity = await getRosterCapacity(eventId, event.maxPlayers, currentGameId);
+  const spotsLeftBefore = capacity.spotsLeft;
+  const hasBench = capacity.hasBench;
+  const firstBenchName = capacity.bench[0]?.name ?? undefined;
+  const wasActive = capacity.active.some((m) => m.name === rosterName);
+  // The whole ordered Roster, active + bench — splitRoster splits it in two.
+  const roster = [...capacity.active, ...capacity.bench];
 
   // Soft-archive the Player row when there is one. Preserves the row + any Rsvp
   // keyed on this playerId. EventPlayer-native identities have no Player row.
@@ -201,9 +207,9 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   }
   await validateTeams(eventId, event.maxPlayers, currentGameId);
 
-  // spotsLeft after removal
-  const activeAfter = wasActive ? (hasBench ? event.maxPlayers : activeCountBefore - 1) : activeCountBefore;
-  const spotsLeft = Math.max(0, event.maxPlayers - activeAfter);
+  // Remaining capacity after the removal: an active leaver frees one spot unless
+  // the bench promotes straight into it (the leave flow fills the slot itself).
+  const spotsLeft = wasActive && !hasBench ? spotsLeftBefore + 1 : spotsLeftBefore;
 
   // Bench-empty after the removal. A bench is currently empty iff the total players fit
   // within maxPlayers (i.e. there were no bench players to start with). If the bench already
@@ -212,14 +218,21 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     ? !hasBench
     : undefined;
 
-  // Warn-the-rest push: within 48h AND wasActive AND bench is empty after.
-  const shouldWarn = wasActive
+  // The group always learns when an active player leaves and no bench player
+  // refills the slot: "Player joined / left" is a Tier 2 push (CONTEXT.md) and
+  // joins already notify unconditionally. The 48h window only marks the urgent
+  // near-kickoff case, surfaced to callers as `warned` — gating the *push* on it
+  // silently dropped the notification for any leave more than two days out
+  // (prod: a 92h-out self-leave on the 7/10 "Ninjas da Areosa" roster notified
+  // nobody).
+  const warned = wasActive
     && benchEmptyAfter
     && isWithin48hBeforeKickoff(event.dateTime);
+  const shouldNotifyGroup = wasActive && benchEmptyAfter;
 
   const url = `${origin}/events/${eventId}`;
   const spotsLeftStr = String(spotsLeft);
-  if (shouldWarn) {
+  if (shouldNotifyGroup) {
     await enqueueNotification(
       eventId,
       "player_left",
@@ -264,7 +277,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // ADR 0017: Spot-available push — fire whenever a spot opens and game is in the future (Tier 2).
   // Previously gated on 48h; now always fires so interested players/followers learn immediately.
-  const wasFull = activeCountBefore >= event.maxPlayers;
+  const wasFull = spotsLeftBefore === 0;
   if (wasActive && wasFull && !hasBench && spotsLeft > 0 && event.dateTime > new Date()) {
     await enqueueNotification(
       eventId,
@@ -304,10 +317,10 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   return {
     ok: true,
     benchEmptyAfter: benchEmptyAfter ?? false,
-    warned: !!shouldWarn,
+    warned: !!warned,
     undo: {
       name: rosterName,
-      order: player ? event.players.findIndex((p) => p.id === player.id) : roster.members.findIndex((m) => m.name === rosterName),
+      order: player ? event.players.findIndex((p) => p.id === player.id) : roster.findIndex((m) => m.name === rosterName),
       userId: identityUserId,
       removedAt: Date.now(),
     },

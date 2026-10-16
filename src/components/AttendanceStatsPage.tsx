@@ -9,6 +9,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
+import { dateFormatTag } from "~/lib/timezones";
 
 interface AttendanceRecord {
   name: string;
@@ -52,7 +53,7 @@ function PlayerRow({ player }: { player: AttendanceRecord }) {
   const pct = `${Math.round(player.attendanceRate * 100)}%`;
   const lastDate = useMemo(
     () => player.lastPlayed
-      ? new Date(player.lastPlayed).toLocaleDateString(locale === "pt" ? "pt-PT" : locale === "es" ? "es-ES" : locale === "fr" ? "fr-FR" : locale === "de" ? "de-DE" : locale === "it" ? "it-IT" : "en-GB", { day: "numeric", month: "short" })
+      ? new Date(player.lastPlayed).toLocaleDateString(dateFormatTag(locale), { day: "numeric", month: "short" })
       : "—",
     [player.lastPlayed, locale]
   );

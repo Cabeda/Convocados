@@ -2,6 +2,7 @@ import { prisma } from "./db.server";
 import { validatePaymentMethods, normalizePaymentMethod } from "./paymentMethods";
 import type { PaymentMethod } from "./paymentMethods";
 import { syncGamePayments } from "./settlement.server";
+import { getRosterCapacity } from "./roster.server";
 import { perPlayerShare } from "./gameCost";
 
 export interface SetCostInput {
@@ -47,10 +48,7 @@ export async function setEventCost(
   eventId: string,
   input: SetCostInput,
 ): Promise<SetCostResult> {
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    include: { players: { where: { archivedAt: null }, orderBy: { order: "asc" } } },
-  });
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw new Error("Event not found");
 
   const totalAmount = input.totalAmount;
@@ -100,7 +98,11 @@ export async function setEventCost(
     }
   }
 
-  const activePlayers = event.players.slice(0, event.maxPlayers);
+  // ADR 0016: the current Game's GameParticipant rows are the authoritative
+  // Roster. `event.players` reads the legacy event-scoped rows, which accumulate
+  // across an Event's Games — so on a recurring Event past its first Game this
+  // billed whoever had ever joined instead of who is playing this one.
+  const { active: activePlayers } = await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
   const share = perPlayerShare(totalAmount, event.maxPlayers);
 
   const scope = input.scope ?? "all_future";

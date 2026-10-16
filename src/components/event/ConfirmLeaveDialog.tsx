@@ -14,8 +14,8 @@ export type LeaveContext = "self" | "organizer";
  */
 export function computeBenchEmptyAfter(
   playerId: string,
-  players: { id: string }[],
-  active: { id: string }[],
+  players: readonly { id: string }[],
+  active: readonly { id: string }[],
   maxPlayers: number,
 ): boolean {
   const wasActive = active.some((p) => p.id === playerId);

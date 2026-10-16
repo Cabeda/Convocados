@@ -7,9 +7,16 @@
  * Followers' per-event mute overrides and the Event's notification defaults are
  * returned alongside so callers can apply the ADR 0017 resolution order without
  * re-querying.
+ *
+ * {@link resolveJobAudience} is the job-scoped form: it applies that resolution
+ * order once, so every channel reads the same recipient list off the same
+ * verdict instead of re-deriving it.
  */
 import { prisma } from "./db.server";
 import { getPingSuppressedUserIds } from "./inviteOptOut.server";
+import { resolveMuteTier, type MuteTierDecision } from "./notificationPrefs.server";
+import { getRosterCapacity } from "./roster.server";
+import type { NotificationJobType } from "./notificationQueue.server";
 
 export interface EventFollowOverrides {
   userId: string;
@@ -33,6 +40,9 @@ export interface EventAudience {
   follows: EventFollowOverrides[];
   ownerId: string | null;
   notificationDefaults: EventNotificationDefaults | null;
+  /** Roster capacity limits, for callers that resolve the ADR 0017 role tier. */
+  maxPlayers: number | null;
+  currentGameId: string | null;
 }
 
 /**
@@ -69,7 +79,7 @@ export async function resolveEventAudience(
     }),
     prisma.event.findUnique({
       where: { id: eventId },
-      select: { ownerId: true, notificationDefaults: true },
+      select: { ownerId: true, notificationDefaults: true, maxPlayers: true, currentGameId: true },
     }),
   ]);
 
@@ -91,5 +101,65 @@ export async function resolveEventAudience(
     follows,
     ownerId: event?.ownerId ?? null,
     notificationDefaults,
+    maxPlayers: event?.maxPlayers ?? null,
+    currentGameId: event?.currentGameId ?? null,
   };
+}
+
+/** One drained job's audience, resolved once and shared by every channel. */
+export interface JobAudience {
+  eventId: string;
+  /** Followers + Owner − exclusions − ping suppressions, in one list. */
+  userIds: string[];
+  /**
+   * The ADR 0004 mute / ADR 0017 role-tier verdict per recipient. The in-app feed
+   * stops at `"vetoed"`; push adds its own transport preference on top.
+   */
+  decisions: Map<string, MuteTierDecision>;
+}
+
+/**
+ * Resolve the audience for one notification job — the recipient list plus the
+ * mute + role-tier verdict for each of them, computed exactly once.
+ *
+ * Pass the result to every channel the job fans out to. A channel that needs
+ * fewer queries must not also be allowed to reach a different answer: the
+ * in-app feed reads `decisions`, push reads the same map plus its transport
+ * preference, and neither re-queries.
+ *
+ * `type` is optional because a direct `sendPushToEvent` without a jobType has
+ * always meant "deliver to the audience, filter by nothing" — so there is no
+ * verdict to reach and the map comes back empty.
+ */
+export async function resolveJobAudience(
+  eventId: string,
+  type: NotificationJobType | undefined,
+  opts: ResolveEventAudienceOptions = {},
+): Promise<JobAudience> {
+  const { userIds, follows, notificationDefaults, maxPlayers, currentGameId } = await resolveEventAudience(
+    eventId,
+    {
+      ...opts,
+      suppressPingDeclines: type ? isPingSuppressedType(type) : false,
+    },
+  );
+
+  // ADR 0017: the role tier asks whether the recipient is a Player on the CURRENT
+  // Game's Roster — active *or bench*. A bench member is still a Player, so reading
+  // `active` alone would silently veto every bench member for Tier-2 types.
+  const capacity =
+    maxPlayers === null ? null : await getRosterCapacity(eventId, maxPlayers, currentGameId);
+  const roster = capacity ? [...capacity.active, ...capacity.bench] : [];
+  const playerUserIds = new Set(roster.map((m) => m.userId).filter(Boolean) as string[]);
+  const overridesByUser = new Map(follows.map((f) => [f.userId, f]));
+  const decisions = new Map<string, MuteTierDecision>(
+    userIds.map((userId) => [
+      userId,
+      type
+        ? resolveMuteTier(type, overridesByUser.get(userId) ?? null, notificationDefaults, playerUserIds.has(userId))
+        : "open",
+    ]),
+  );
+
+  return { eventId, userIds, decisions };
 }

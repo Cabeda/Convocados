@@ -29,6 +29,7 @@ import EmailIcon from "@mui/icons-material/Email";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
+import { deriveEventPermissions } from "~/lib/eventView";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { WebhookSettings } from "./event/WebhookSettings";
@@ -197,10 +198,15 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   // Derived state (must be before effects that depend on them)
   const isAuthenticated = !!session?.user;
-  const isOwner = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
-  const isAdmin = !!event?.isAdmin;
-  const isOwnerless = event && !event.ownerId;
-  const canEdit = isOwnerless || isOwner || isAdmin;
+  // The shared derivation, so the screen and the server cannot disagree (ADR 0035):
+  // an ownerless UNLISTED event is editable by anyone (the share link is the
+  // capability), while an ownerless PUBLIC one (an Open Pickup) is read-only until
+  // adopted. Re-deriving this here is what made every control look editable and then
+  // fail on save (#1393).
+  const { isOwner, canEditSettings: canEdit } = deriveEventPermissions(
+    session?.user?.id ?? null,
+    { ownerId: event?.ownerId ?? null, isPublic: event?.isPublic ?? false, isAdmin: event?.isAdmin },
+  );
   const userId = session?.user?.id;
 
   useEffect(() => {

@@ -51,8 +51,3 @@ export async function getPingSuppressedUserIds(eventId: string): Promise<Set<str
 
   return suppressed;
 }
-
-/** Per-event opt-out check for a single EventPlayer row (with userId). */
-export function isEventInviteOptedOut(ep: { invitationOptOutAt: Date | null }): boolean {
-  return ep.invitationOptOutAt !== null;
-}

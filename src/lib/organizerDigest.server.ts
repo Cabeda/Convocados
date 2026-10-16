@@ -9,7 +9,7 @@
  * Upgrade path: per-event digest vs global; timezone-aware scheduling.
  */
 import { prisma } from "./db.server";
-import { getActiveRosterState } from "./roster.server";
+import { getRosterCapacity } from "./roster.server";
 import { sendPushToUser } from "./push.server";
 import { createLogger } from "./logger.server";
 
@@ -74,7 +74,7 @@ export async function processOrganizerDigests(): Promise<DigestResult> {
     // Build digest for each event
     const lines: string[] = [];
     for (const event of events) {
-      const playerCount = (await getActiveRosterState(event.id, event.maxPlayers, event.currentGameId)).totalCount;
+      const playerCount = (await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId)).totalCount;
       const spotsLeft = Math.max(0, event.maxPlayers - playerCount);
 
       // Pending payments — ADR 0016: the current Game's GamePayment roll

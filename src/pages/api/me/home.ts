@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
-import { getActiveRosterState } from "../../../lib/roster.server";
+import { getRosterCapacity } from "../../../lib/roster.server";
 import { findDiscoverableUpcomingEvents } from "../../../lib/discoverableEvents.server";
 import { computeHomeActions } from "../../../lib/homeActions.server";
 
@@ -104,7 +104,7 @@ export const GET: APIRoute = async ({ request }) => {
       timezone: row.timezone,
       sport: row.sport,
       maxPlayers: row.maxPlayers,
-      playerCount: (await getActiveRosterState(row.id, row.maxPlayers, row.currentGameId)).totalCount,
+      playerCount: (await getRosterCapacity(row.id, row.maxPlayers, row.currentGameId)).totalCount,
       isRecurring: row.isRecurring,
       status,
     })),

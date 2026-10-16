@@ -30,6 +30,7 @@ import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 import { ConfirmLeaveDialog, type LeaveContext, computeBenchEmptyAfter, computeWithin48h } from "./ConfirmLeaveDialog";
 import type { RsvpStatus } from "~/lib/rsvp";
+import { splitRoster } from "~/lib/rosterCapacity";
 
 export type { RsvpStatus } from "~/lib/rsvp";
 
@@ -310,8 +311,9 @@ export function PlayerList({
     setDragOverIndex(null);
   }, []);
 
-  const active = players.slice(0, maxPlayers);
-  const bench = players.slice(maxPlayers);
+  // `players` is the event GET's `players` payload, already filtered to the current
+  // Game's active Roster — the module owns only the active/bench split from here.
+  const { active, bench } = splitRoster(players, maxPlayers);
 
   // #XXX Attendance — guest pill opens a small menu (set Going / Declined / No response / Clear).
   // The previous cycle (Pending → Yes → No → Pending) was error-prone; the menu makes the action

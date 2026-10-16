@@ -21,8 +21,7 @@ import {
 } from "~/lib/stakesPreview";
 import { TeamField } from "./TeamField";
 import type { Imatch } from "~/lib/random";
-import { useT } from "~/lib/useT";
-import { detectLocale } from "~/lib/i18n";
+import { useLocale } from "~/lib/useT";
 import { addKnownName, getQjName } from "~/lib/knownNames";
 import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { isGameEnded } from "~/lib/gameStatus";
@@ -50,6 +49,7 @@ import { PushPromptBanner } from "./PushPromptBanner";
 import { ConfirmLeaveDialog, computeBenchEmptyAfter, computeWithin48h } from "./event/ConfirmLeaveDialog";
 import { deriveEventPermissions, canRemoveEventPlayer, findSelfRosterRow } from "~/lib/eventView";
 import { decidePaymentGate } from "~/lib/paymentGate";
+import { splitRoster } from "~/lib/rosterCapacity";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -68,8 +68,7 @@ function isHighIntentForPush(
 }
 
 export default function EventPage({ eventId }: { eventId: string }) {
-  const t = useT();
-  const locale = detectLocale();
+  const { locale, t } = useLocale();
   const { data: session, refetch: refetchSession } = useSession();
 
   // ADR 0018: Detect ?action= from notification deep links
@@ -1162,7 +1161,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {wasReset && (
               <Alert severity="info" icon={<EventRepeatIcon />}>
                 {t("recurringResetAlert", {
-                  date: formatDateInTz(gameDate, locale === "pt" ? "pt-PT" : "en-GB", event.timezone, {
+                  date: formatDateInTz(gameDate, locale, event.timezone, {
                     weekday: "long", month: "long", day: "numeric",
                   }),
                 })}
@@ -1266,7 +1265,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                           open: true,
                           benchEmptyAfter: computeBenchEmptyAfter(
                             myPlayer.id, event.players,
-                            event.players.slice(0, event.maxPlayers), event.maxPlayers,
+                            splitRoster(event.players, event.maxPlayers).active, event.maxPlayers,
                           ),
                           within48h: computeWithin48h(event.dateTime),
                           busy: false,

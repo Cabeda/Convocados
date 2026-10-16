@@ -19,7 +19,7 @@ import PublicIcon from "@mui/icons-material/Public";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { detectLocale, type TFunction } from "~/lib/i18n";
+import { detectLocale, type Locale, type TFunction } from "~/lib/i18n";
 import { getSportPreset } from "~/lib/sports";
 import { formatDateInTz } from "~/lib/timezones";
 
@@ -75,7 +75,7 @@ type ViewMode = "cards" | "table" | "map";
 
 function CardView({ events, locale, t }: {
   events: PublicEvent[];
-  locale: string;
+  locale: Locale;
   t: TFunction;
 }) {
   return (
@@ -139,7 +139,7 @@ function CardView({ events, locale, t }: {
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                   <AccessTimeIcon fontSize="small" color="action" />
                   <Typography variant="body2" color="text.secondary">
-                    {formatDateInTz(date, locale === "pt" ? "pt-PT" : "en-GB", ev.timezone || "UTC", {
+                    {formatDateInTz(date, locale, ev.timezone || "UTC", {
                       weekday: "short", month: "short", day: "numeric",
                       hour: "2-digit", minute: "2-digit",
                     })}
@@ -196,7 +196,7 @@ function CardView({ events, locale, t }: {
 
 function TableView({ events, locale, t }: {
   events: PublicEvent[];
-  locale: string;
+  locale: Locale;
   t: TFunction;
 }) {
   return (
@@ -238,7 +238,7 @@ function TableView({ events, locale, t }: {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" color="text.secondary" noWrap>
-                    {formatDateInTz(date, locale === "pt" ? "pt-PT" : "en-GB", ev.timezone || "UTC", {
+                    {formatDateInTz(date, locale, ev.timezone || "UTC", {
                       weekday: "short", month: "short", day: "numeric",
                       hour: "2-digit", minute: "2-digit",
                     })}
