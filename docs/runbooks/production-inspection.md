@@ -74,6 +74,29 @@ The other queue is different: `NotificationJob` (the notification outbox) stores
 (`DEAD_LETTER_TTL_DAYS`). To chase a notification failure, read the notification job's
 `failedAt` and correlate with logs while they are still live.
 
+## Did the merge actually deploy?
+
+Merging to `main` is the deploy, but a green merge is not proof one happened. `release.yml`
+triggers on `CI` completing, so **a CI run that never completes leaves the Release `skipped`**
+and nothing reaches production — twice in one session this was mistaken for a deploy until the
+workflow history was read.
+
+```bash
+gh run list --branch main --workflow Release --limit 3 \
+  --json displayTitle,conclusion,createdAt,headSha
+```
+
+Read the row for your merge commit:
+
+- `success` — version bumped, tagged, Fly deployed, Play internal track published, scheduler
+  worker deployed.
+- `skipped` — **nothing shipped.** Either CI had not completed when the Release was evaluated,
+  or it was cancelled by a newer push superseding the run.
+- absent — the Release never triggered; check the `CI` run for that sha first.
+
+Confirm from the other end too: `package.json`'s `version` on `main` should have moved, and the
+health endpoint below reports the running scheduler.
+
 ## Health
 
 ```bash

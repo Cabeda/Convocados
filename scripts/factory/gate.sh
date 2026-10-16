@@ -79,11 +79,11 @@ EOF
 fi
 
 # ── The Gates ───────────────────────────────────────────────────────────────
-run_gate lint pnpm lint --max-warnings 259 || exit 1
+run_gate lint pnpm lint || exit 1
 run_gate typecheck pnpm typecheck || exit 1
 run_gate vitest-coverage pnpm vitest run --coverage || exit 1
 run_gate route-coverage pnpm test:route-coverage || exit 1
-run_gate feature-parity pnpm sync:feature-parity-docs || exit 1
+run_gate feature-parity pnpm check:feature-parity || exit 1
 run_gate play-listing pnpm check:play-listing || exit 1
 run_gate play-screenshots pnpm check:play-screenshots || exit 1
 run_gate audit pnpm audit --audit-level high || exit 1
