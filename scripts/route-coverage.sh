@@ -44,6 +44,9 @@ for route in "${routes[@]}"; do
   fi
 done
 
+has_untested=false
+[ ${#untested[@]} -gt 0 ] && has_untested=true
+
 ratio=0
 if [ "$total" -gt 0 ]; then
   ratio=$(echo "scale=1; $tested * 100 / $total" | bc)
@@ -67,7 +70,7 @@ else
   echo "Routes without tests:            ${#untested[@]}"
   echo "Coverage ratio:                  ${ratio}%"
   echo ""
-  if [ ${#untested[@]} -gt 0 ]; then
+  if $has_untested; then
     echo "Untested routes:"
     for r in "${untested[@]}"; do
       echo "  - $r"
@@ -76,10 +79,12 @@ else
 fi
 
 # A report nobody can fail is not a gate. This measured 100% (148/148) when the
-# threshold was added, so any untested route is a regression — give it a test, or
-# add it to this script's exclusions if it genuinely cannot have one. Thresholds
-# move up only (AGENTS.md); this one is already at the ceiling.
-if [ ${#untested[@]} -gt 0 ]; then
+# floor was added, and thresholds move up only (AGENTS.md — the ratio is a floor,
+# never a ceiling). So an untested route is a regression: give it a test. A route
+# that genuinely cannot have one belongs in `docs/coverage.md` with its reason,
+# like every other documented exclusion — not silently filtered out of the list
+# above (CODING_STANDARDS.md → Never cheat a gate).
+if $has_untested; then
   echo ""
   echo "✗ ${#untested[@]} API route(s) have no test. Every route is covered today —" >&2
   echo "  adding one without a test is a regression. See AGENTS.md → Reviewing Checklist." >&2

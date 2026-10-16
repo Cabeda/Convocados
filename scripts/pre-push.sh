@@ -69,7 +69,7 @@ fi
 # and gets OOM-killed in normal worktrees, blocking every push.
 
 echo "→ Route coverage..."
-if ! sh "$root/scripts/route-coverage.sh"; then
+if ! bash "$root/scripts/route-coverage.sh"; then
   echo "✗ Route coverage failed. Push aborted."
   exit 1
 fi

@@ -110,7 +110,7 @@ This installs:
 - a **pre-commit** hook that runs `gitleaks` over staged changes and blocks the commit if a
   secret is found (`scripts/secret-scan.sh staged`), and
 - a **pre-push** hook that scans the commits actually being pushed, then runs `lint`,
-  `typecheck` and `vitest --coverage`.
+  `typecheck`, `vitest --coverage` and `route-coverage`.
 
 Never re-point the pre-push scan at the git index (`gitleaks ... --staged`): at push time the
 index is empty, so it checks nothing while reporting success. Push scanning must use the
@@ -208,9 +208,10 @@ budget is in question. The rules below are what every session obeys without reac
 anything.
 
 **Gates.** GATE 1 is the pre-push hook, and it is web-only: `pnpm lint`, `npm run
-typecheck`, `npx vitest run --coverage`, gitleaks over the pushed commits, and semgrep
-(warn-only). Before handing a Change back, also run what the hook does not:
-`pnpm test:route-coverage`, `pnpm sync:feature-parity-docs`, `pnpm audit --audit-level
+typecheck`, `npx vitest run --coverage`, `pnpm test:route-coverage` (which fails on any
+untested route), gitleaks over the pushed commits, and semgrep (warn-only). Before handing a
+Change back, also run what the hook does not:
+`pnpm sync:feature-parity-docs`, `pnpm audit --audit-level
 high`, and Gradle `./gradlew :app:assembleDebug :wear:assembleDebug :wear:lintDebug
 :wear:verifyRoborazziDebug`. GATE 2 is GitHub CI, which repeats those and adds Playwright
 (only when the diff touches `src/pages/**` or `e2e/**`). A Change over **400 changed lines
