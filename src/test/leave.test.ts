@@ -348,6 +348,32 @@ describe("archiveAndLeave — push notification gating", () => {
     );
   });
 
+  it("fires player_left for an active leaver outside 48h when the game is not full", async () => {
+    // Regression: #467 gated the player_left push behind the 48h window, so an
+    // active leave more than two days before kickoff notified nobody. Prod case:
+    // a self-leave 92h before kickoff on a 7/10 roster enqueued zero pushes.
+    const user = await seedUser("Alice", "u-alice");
+    const event = await seedEvent(null, 7 * 86400_000); // 7 days — outside 48h
+    // maxPlayers is 5; only 4 on the roster → not full and no bench.
+    const rows = await seedRoster(event.id, event.currentGameId!, [
+      { name: "Alice", userId: user.id },
+      { name: "P1" }, { name: "P2" }, { name: "P3" },
+    ]);
+
+    await archiveAndLeave({
+      eventId: event.id,
+      actor: { kind: "self", userId: user.id },
+      playerId: rows[0].player.id,
+    });
+
+    expect(enqueueNotification).toHaveBeenCalledWith(
+      event.id,
+      "player_left",
+      expect.objectContaining({ key: "notifyPlayerLeft", params: expect.objectContaining({ name: "Alice" }) }),
+      "u-alice",
+    );
+  });
+
   it("does NOT fire player_left for bench player removal (even within 48h + empty bench)", async () => {
     const user = await seedUser("Alice", "u-alice");
     const event = await seedEvent(null, 12 * 3600_000);
