@@ -10,6 +10,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { useT } from "~/lib/useT";
+import { formatMoney, toCents } from "~/lib/money";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -145,7 +146,7 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
   const formatTime = (time: string) => time.slice(0, 5); // "HH:mm:ss" -> "HH:mm"
   const formatPrice = (price: number | null, currency: string | null) =>
     price !== null && price !== undefined && !isNaN(price) && currency
-      ? new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price)
+      ? formatMoney(toCents(price), currency)
       : null;
 
   return (

@@ -15,6 +15,7 @@ import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import MapIcon from "@mui/icons-material/Map";
 import ListIcon from "@mui/icons-material/ViewList";
 import { useT } from "~/lib/useT";
+import { formatMoney, toCents } from "~/lib/money";
 
 interface CourtAlternative {
   tenantId: string;
@@ -94,7 +95,7 @@ function CourtAlternativesMap({ alternatives }: { alternatives: CourtAlternative
           <Popup>
             <strong>{alt.tenantName}</strong><br />
             {alt.resourceName} · {alt.slotTime}<br />
-            {alt.status === "booked" ? "Booked" : alt.price !== null ? `${alt.price} ${alt.currency}` : ""}
+            {alt.status === "booked" ? "Booked" : alt.price !== null ? formatMoney(toCents(alt.price), alt.currency) : ""}
           </Popup>
         </Marker>
       ))}
@@ -269,7 +270,7 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
 
   const formatPrice = (price: number | null, currency: string | null) =>
     price !== null && price !== undefined && !isNaN(price) && currency
-      ? new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price)
+      ? formatMoney(toCents(price), currency)
       : null;
 
   if (!hasCoordinates) {
