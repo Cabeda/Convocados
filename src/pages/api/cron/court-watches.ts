@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
+import { formatMoney, toCents } from "../../../lib/money";
 import { watchQueries, matchWatchInCourts, type CourtWatchMatch } from "~/lib/standaloneCourtWatch.server";
 import { fetchAvailabilityGrouped, availabilityKeyStr, purgeStaleAvailabilityCache } from "~/lib/availabilityCache.server";
 import { sendPushToUser } from "~/lib/push.server";
@@ -72,7 +73,7 @@ export const POST: APIRoute = async ({ request }) => {
       if (seen.has(sig)) continue;
       seen.add(sig);
       newHits.push({ watchId: watch.id, resourceId: m.resourceId, slotDate: m.slotDate, slotTime: m.slotTime });
-      const priceLabel = m.price !== null && m.currency ? ` — ${m.price}${m.currency}` : "";
+      const priceLabel = m.price !== null && m.currency ? ` — ${formatMoney(toCents(m.price), m.currency)}` : "";
       notifications.push({
         userId: watch.userId,
         title: `🎾 Court available: ${watch.tenantName}`,

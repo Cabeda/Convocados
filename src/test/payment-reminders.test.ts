@@ -136,7 +136,7 @@ describe("sendPaymentReminder", () => {
       sendPaymentReminder("p@example.com", {
         eventTitle: "Game",
         amount: "5.00€",
-          eventUrl: "https://convocados.fly.dev/events/x",
+        eventUrl: "https://convocados.fly.dev/events/x",
       }),
     ).rejects.toThrow("Failed to send payment reminder");
   });
