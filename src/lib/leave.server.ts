@@ -47,7 +47,10 @@ export interface ArchiveAndLeaveResult {
   /** True iff the removed player was in the active list AND after removal no bench players remain.
    *  False for bench-player removals (the bench wasn't touched). */
   benchEmptyAfter: boolean;
-  /** Whether the warn-the-rest push was fired (gated on benchEmptyAfter + within 48h). */
+  /** Whether the removal freed a spot inside the 48h-before-kickoff window — the
+   *  urgent "no replacement" case. The player-left push itself is NOT gated on
+   *  this (see archiveAndLeave), so callers must not read it as "was the group
+   *  notified". False for bench-player removals. */
   warned: boolean;
   /** Data for the client's undo snackbar (60s window — see undo-remove). */
   undo: {
@@ -58,7 +61,8 @@ export interface ArchiveAndLeaveResult {
   };
 }
 
-/** True when current time is within RSVP_WINDOW_HOURS before kickoff. Used to gate the warn-the-rest push. */
+/** True when current time is within RSVP_WINDOW_HOURS before kickoff. Marks the
+ *  urgent "no replacement near kickoff" case returned as `warned`. */
 export function isWithin48hBeforeKickoff(dateTime: Date, now: Date = new Date()): boolean {
   const hoursUntil = (dateTime.getTime() - now.getTime()) / (60 * 60 * 1000);
   return hoursUntil > 0 && hoursUntil <= RSVP_WINDOW_HOURS;
@@ -214,14 +218,21 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     ? !hasBench
     : undefined;
 
-  // Warn-the-rest push: within 48h AND wasActive AND bench is empty after.
-  const shouldWarn = wasActive
+  // The group always learns when an active player leaves and no bench player
+  // refills the slot: "Player joined / left" is a Tier 2 push (CONTEXT.md) and
+  // joins already notify unconditionally. The 48h window only marks the urgent
+  // near-kickoff case, surfaced to callers as `warned` — gating the *push* on it
+  // silently dropped the notification for any leave more than two days out
+  // (prod: a 92h-out self-leave on the 7/10 "Ninjas da Areosa" roster notified
+  // nobody).
+  const warned = wasActive
     && benchEmptyAfter
     && isWithin48hBeforeKickoff(event.dateTime);
+  const shouldNotifyGroup = wasActive && benchEmptyAfter;
 
   const url = `${origin}/events/${eventId}`;
   const spotsLeftStr = String(spotsLeft);
-  if (shouldWarn) {
+  if (shouldNotifyGroup) {
     await enqueueNotification(
       eventId,
       "player_left",
@@ -306,7 +317,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   return {
     ok: true,
     benchEmptyAfter: benchEmptyAfter ?? false,
-    warned: !!shouldWarn,
+    warned: !!warned,
     undo: {
       name: rosterName,
       order: player ? event.players.findIndex((p) => p.id === player.id) : roster.findIndex((m) => m.name === rosterName),
