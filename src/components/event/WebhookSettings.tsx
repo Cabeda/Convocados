@@ -46,10 +46,22 @@ interface Delivery {
 
 interface Props {
   eventId: string;
+  disabled?: boolean;
+  canEdit?: boolean;
+  readOnly?: boolean;
+  editable?: boolean;
+  enabled?: boolean;
 }
 
-export function WebhookSettings({ eventId }: Props) {
+export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable, enabled }: Props) {
+  const isDisabled =
+    disabled === true ||
+    canEdit === false ||
+    readOnly === true ||
+    editable === false ||
+    enabled === false;
   const t = useT();
+  const webhookDisabled = isDisabled;
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [url, setUrl] = useState("");
@@ -195,6 +207,7 @@ export function WebhookSettings({ eventId }: Props) {
             placeholder="https://example.com/receive"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
+            disabled={webhookDisabled}
           />
           <TextField
             size="small"
@@ -205,12 +218,13 @@ export function WebhookSettings({ eventId }: Props) {
             placeholder={t("webhookSecretPlaceholder")}
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
+            disabled={webhookDisabled}
           />
           <FormGroup row>
             {WEBHOOK_EVENT_TYPES.map((ev) => (
               <FormControlLabel
                 key={ev}
-                control={<Checkbox size="small" checked={events.includes(ev)} onChange={() => handleToggleEvent(ev)} />}
+                control={<Checkbox size="small" checked={events.includes(ev)} onChange={() => handleToggleEvent(ev)} disabled={webhookDisabled} />}
                 label={<Typography variant="body2">{t(`webhookEventType_${ev}`)}</Typography>}
               />
             ))}
@@ -221,7 +235,7 @@ export function WebhookSettings({ eventId }: Props) {
             size="small"
             startIcon={<AddIcon />}
             onClick={handleAdd}
-            disabled={saving}
+            disabled={saving || webhookDisabled}
             sx={{ alignSelf: "flex-start" }}
           >
             {t("webhookAdd")}
@@ -265,17 +279,17 @@ export function WebhookSettings({ eventId }: Props) {
                 }
               />
               <Tooltip title={t("webhookEdit")}>
-                <IconButton size="small" aria-label={t("webhookEdit")} onClick={() => handleOpenEdit(wh)}>
+                <IconButton size="small" aria-label={t("webhookEdit")} onClick={() => handleOpenEdit(wh)} disabled={webhookDisabled}>
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title={t("webhookTest")}>
-                <IconButton size="small" aria-label={t("webhookTest")} onClick={() => handleTest(wh.id)}>
+                <IconButton size="small" aria-label={t("webhookTest")} onClick={() => handleTest(wh.id)} disabled={webhookDisabled}>
                   <SendIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title={t("webhookDelete")}>
-                <IconButton size="small" aria-label={t("webhookDelete")} onClick={() => handleDelete(wh.id)}>
+                <IconButton size="small" aria-label={t("webhookDelete")} onClick={() => handleDelete(wh.id)} disabled={webhookDisabled}>
                   <DeleteIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -293,7 +307,7 @@ export function WebhookSettings({ eventId }: Props) {
             {WEBHOOK_EVENT_TYPES.map((ev) => (
               <FormControlLabel
                 key={ev}
-                control={<Checkbox size="small" checked={editEvents.includes(ev)} onChange={() => handleToggleEditEvent(ev)} />}
+                control={<Checkbox size="small" checked={editEvents.includes(ev)} onChange={() => handleToggleEditEvent(ev)} disabled={webhookDisabled} />}
                 label={<Typography variant="body2">{t(`webhookEventType_${ev}`)}</Typography>}
               />
             ))}
@@ -301,8 +315,8 @@ export function WebhookSettings({ eventId }: Props) {
           {editError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{editError}</Alert>}
         </DialogContent>
         <DialogActions>
-          <Button size="small" onClick={() => setEditing(null)}>{t("cancel")}</Button>
-          <Button size="small" variant="contained" onClick={handleSaveEdit}>{t("webhookSave")}</Button>
+          <Button size="small" onClick={() => setEditing(null)} disabled={webhookDisabled}>{t("cancel")}</Button>
+          <Button size="small" variant="contained" onClick={handleSaveEdit} disabled={webhookDisabled}>{t("webhookSave")}</Button>
         </DialogActions>
       </Dialog>
     </Stack>

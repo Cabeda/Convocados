@@ -1090,7 +1090,7 @@ export default function EventSettingsPage({ eventId }: Props) {
 
       {/* ── Integrations ── */}
       <SectionCard title={t("integrations")} icon={<IntegrationInstructionsIcon color="action" />}>
-        <WebhookSettings eventId={eventId} />
+        <WebhookSettings eventId={eventId} disabled={!canEdit} canEdit={canEdit} />
       </SectionCard>
 
       {/* ── Archive ── */}
