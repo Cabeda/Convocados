@@ -9,7 +9,7 @@
     "preview": "astro preview",
     "start": "sh ./scripts/start.sh",
     "setup-hooks": "sh ./scripts/install-hooks.sh",
-    "lint": "eslint src/ scripts/check-play-listing.mjs scripts/check-play-screenshots.mjs --no-ignore",
+    "lint": "eslint src/ scripts/check-play-listing.mjs scripts/check-play-screenshots.mjs --no-ignore --max-warnings 187",
     "typecheck": "tsc6",
     "test": "vitest run",
     "check:play-listing": "node scripts/check-play-listing.mjs",
@@ -37,6 +37,7 @@
     "screenshots": "sh -c 'PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/screenshots.ts'",
     "sync:i18n": "tsx scripts/generate-android-strings.ts",
     "sync:feature-parity-docs": "tsx scripts/generate-feature-parity-docs.ts",
+    "check:feature-parity": "tsx scripts/generate-feature-parity-docs.ts --check",
     "db:seed:settlement": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx prisma/seed-settlement-demo.ts'",
     "db:backfill:merged-identity": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/backfill-merged-player-identity.ts'",
     "db:repair:participant-order": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/repair-game-participant-order.ts \"$@\"' --"
