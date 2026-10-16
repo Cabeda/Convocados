@@ -15,7 +15,7 @@ import { prisma } from "./db.server";
  * A discovery-listed Event with its non-archived Player count.
  *
  * Roster counts must exclude archived rows: legacy Player rows accumulate across
- * recurring occurrences and `getActiveRosterState` (the authoritative accessor,
+ * recurring occurrences and `getRosterCapacity` (the authoritative accessor,
  * ADR 0016) filters `archivedAt: null`. Counting all `players` inflates
  * `playerCount` and under-reports `spotsLeft`.
  */

@@ -6,7 +6,7 @@
  */
 import { prisma } from "./db.server";
 import type { Prisma } from "./db.server";
-import { getActiveRosterState } from "./roster.server";
+import { getRosterCapacity } from "./roster.server";
 import { balanceTeams } from "./elo.server";
 import { Randomize } from "./random";
 import type { Imatch } from "./random";
@@ -158,7 +158,7 @@ export async function validateTeams(eventId: string, maxPlayers: number, current
   });
   if (teams.length === 0) return false;
 
-  const activeNames = (await getActiveRosterState(eventId, maxPlayers, currentGameId)).activeNames;
+  const activeNames = new Set((await getRosterCapacity(eventId, maxPlayers, currentGameId)).active.map((m) => m.name));
 
   const idsToRemove: string[] = [];
   for (const team of teams) {
@@ -197,7 +197,7 @@ export async function autoRandomizeIfFull(eventId: string, maxPlayers: number, c
   if (existingTeams > 0) return;
 
   // Count active players
-  const activeNames = (await getActiveRosterState(eventId, maxPlayers, currentGameId)).activeNames;
+  const activeNames = new Set((await getRosterCapacity(eventId, maxPlayers, currentGameId)).active.map((m) => m.name));
   if (activeNames.size < maxPlayers) return;
 
   // Game is full and no teams — auto-generate
@@ -262,7 +262,7 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
 
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: TEAM_EVENT_SELECT });
   const gameId = currentGameId ?? event?.currentGameId;
-  const activeNames = (await getActiveRosterState(eventId, event?.maxPlayers ?? 0, gameId)).activeNames;
+  const activeNames = new Set((await getRosterCapacity(eventId, event?.maxPlayers ?? 0, gameId)).active.map((m) => m.name));
   if (!activeNames.has(playerName)) return; // bench player — never onto the pitch
 
   if (event?.balanced && teams.length === 2) {
@@ -336,7 +336,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
   // re-run the event's draw instead of letting the promoted player inherit
   // the leaver's slot — ELO rebalance when balanced, fresh random otherwise.
   if (promotedName && teams.length === 2 && event) {
-    const activeNames = [...(await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames].filter((n) => n !== playerName);
+    const activeNames = [...new Set((await getRosterCapacity(eventId, event.maxPlayers, gameId)).active.map((m) => m.name))].filter((n) => n !== playerName);
     if (!activeNames.includes(promotedName)) {
       activeNames.push(promotedName);
     }
@@ -352,7 +352,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
 
   // Balanced mode without a promotion: rebalance the remaining players
   if (event?.balanced && teams.length === 2) {
-    const activeNames = [...(await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames].filter(n => n !== playerName);
+    const activeNames = [...new Set((await getRosterCapacity(eventId, event.maxPlayers, gameId)).active.map((m) => m.name))].filter(n => n !== playerName);
 
     if (activeNames.length >= 2) {
       await rebalanceTeams(eventId, teams, activeNames, [event.teamOneName, event.teamTwoName], event?.sport ?? null);

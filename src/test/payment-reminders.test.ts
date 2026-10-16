@@ -26,7 +26,7 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   checkOwnership: vi.fn(),
 }));
 
-import { _resetResendClient, sendPaymentReminder } from "~/lib/email.server";
+import { sendPaymentReminder } from "~/lib/email.server";
 import {
   getPlayersWithPendingPayments,
   markPaymentReminderSent,
@@ -96,7 +96,6 @@ async function seedPlayer(eventId: string, name: string, userId: string | null =
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  _resetResendClient();
   await prisma.paymentReminderLog.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();

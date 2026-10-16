@@ -1,6 +1,6 @@
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
-import { isPingSuppressedType, resolveEventAudience } from "./eventAudience.server";
+import { resolveJobAudience, type JobAudience } from "./eventAudience.server";
 import type { TranslationKey } from "./i18n";
 import pLimit from "p-limit";
 
@@ -228,6 +228,9 @@ async function _doDrain(): Promise<number> {
       grouped.map((group) =>
         limit(async () => {
           try {
+            const audience = await resolveJobAudience(group.eventId, group.type, {
+              excludeUserIds: group.senderClientId ? [group.senderClientId] : [],
+            });
             await sendPushToEvent(
               group.eventId,
               group.payload.title,
@@ -237,8 +240,10 @@ async function _doDrain(): Promise<number> {
               group.payload.spotsLeft,
               group.senderClientId ?? undefined,
               group.type,
+              undefined,
+              audience,
             );
-            await createInAppNotifications(group.eventId, group.type, group.payload, group.senderClientId);
+            await createInAppNotifications(audience, group.type, group.payload);
           } catch (err: unknown) {
             log.error({ eventId: group.eventId, err }, "Failed to process grouped notification");
           }
@@ -252,6 +257,12 @@ async function _doDrain(): Promise<number> {
         limit(async () => {
           try {
             const payload = JSON.parse(job.payload) as NotificationJobPayload;
+            const type = job.type as NotificationJobType;
+            // One resolution per job: push, mobile push and the in-app feed all
+            // read this one list, so a channel cannot reach a different answer.
+            const audience = await resolveJobAudience(job.eventId, type, {
+              excludeUserIds: job.senderClientId ? [job.senderClientId] : [],
+            });
             await sendPushToEvent(
               job.eventId,
               payload.title,
@@ -260,10 +271,11 @@ async function _doDrain(): Promise<number> {
               payload.url,
               payload.spotsLeft,
               job.senderClientId ?? undefined,
-              job.type as NotificationJobType,
+              type,
               payload.reminderType,
+              audience,
             );
-            await createInAppNotifications(job.eventId, job.type as NotificationJobType, payload, job.senderClientId);
+            await createInAppNotifications(audience, type, payload);
           } catch (err: unknown) {
             log.error({ jobId: job.id, eventId: job.eventId, type: job.type, err }, "Failed to process notification job");
             const nextRetry = job.retryCount + 1;
@@ -290,25 +302,26 @@ async function _doDrain(): Promise<number> {
 }
 
 /**
- * Create in-app notification records for all followers of an event.
+ * Create in-app notification records for the job's already-resolved audience.
  * These persist so users can see missed notifications in their feed.
+ *
+ * The feed reads the same mute + role-tier verdict push read off the same
+ * {@link JobAudience}, applied once per job. What it does not read is push's
+ * transport preference: a row here is how a Follower reads back a notification
+ * they were never pushed, so `pushEnabled` must not gate it.
  */
 async function createInAppNotifications(
-  eventId: string,
+  audience: JobAudience,
   type: NotificationJobType,
   payload: NotificationJobPayload,
-  senderClientId: string | null,
 ) {
+  const { eventId } = audience;
   try {
-    const { userIds } = await resolveEventAudience(eventId, {
-      excludeUserIds: senderClientId ? [senderClientId] : [],
-      suppressPingDeclines: isPingSuppressedType(type),
-    });
-
-    if (userIds.length === 0) return;
+    const recipients = audience.userIds.filter((userId) => audience.decisions.get(userId) !== "vetoed");
+    if (recipients.length === 0) return;
 
     await prisma.inAppNotification.createMany({
-      data: userIds.map((userId) => ({
+      data: recipients.map((userId) => ({
         userId,
         eventId,
         type,

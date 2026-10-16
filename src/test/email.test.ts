@@ -11,11 +11,10 @@ vi.mock("resend", () => {
   return { Resend: MockResend };
 });
 
-import { sendVerificationEmail, sendChangeEmailVerification, _resetResendClient } from "~/lib/email.server";
+import { sendVerificationEmail, sendChangeEmailVerification } from "~/lib/email.server";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  _resetResendClient();
 });
 
 describe("sendVerificationEmail", () => {

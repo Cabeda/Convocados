@@ -7,7 +7,8 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
-import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
+import { splitRoster } from "../../../../lib/rosterCapacity";
+import { getActivePlayers } from "../../../../lib/teamAssignment.server";
 import { applyFormationLayout } from "../../../../lib/teams";
 import { syncGamePayments } from "../../../../lib/settlement.server";
 import { syncGameFromTeamResults } from "../../../../lib/gameDualWrite.server";
@@ -30,27 +31,11 @@ export const POST: APIRoute = async ({ params, url, request }) => {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
-  // ADR 0016: when a currentGameId exists, the authoritative player list is
-  // GameParticipant (game-scoped), not the legacy Player table (event-scoped).
-  // The Player table may contain stale rows from prior recurring game cycles.
-  let allPlayers: { name: string; order: number }[];
-  if (event.currentGameId) {
-    const participants = await prisma.gameParticipant.findMany({
-      where: activeParticipantsWhere(event.currentGameId),
-      include: { eventPlayer: { select: { name: true } } },
-      orderBy: { order: "asc" },
-    });
-    allPlayers = participants.map((gp) => ({ name: gp.eventPlayer.name, order: gp.order }));
-  } else {
-    const rows = await prisma.player.findMany({
-      where: { eventId, archivedAt: null },
-      orderBy: { order: "asc" },
-    });
-    allPlayers = rows.map((p) => ({ name: p.name, order: p.order }));
-  }
-
-  // Take only active players for team generation
-  const players = allPlayers.slice(0, event.maxPlayers);
+  // ADR 0016: the current Game's GameParticipant rows are the authoritative Roster;
+  // the legacy Player rows accumulate across an Event's Games. getActivePlayers
+  // applies that filter, so splitRoster sees the filtered, ordered Roster.
+  const allPlayers = await getActivePlayers(eventId, event.currentGameId);
+  const players = splitRoster(allPlayers, event.maxPlayers).active;
 
   if (players.length < 2) return Response.json({ error: "Need at least 2 players." }, { status: 400 });
 

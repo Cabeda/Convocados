@@ -781,9 +781,9 @@ function putCtx(params: Record<string, string>, body: unknown) {
 }
 
 describe("PUT /api/events/[id]/reorder-players", () => {
-  it("returns 403 on ownerless events (owner required)", async () => {
+  it("returns 403 on ownerless PUBLIC events (unlisted ones are openly manageable)", async () => {
     mockAnonymous();
-    const id = await seedEvent(); // no owner
+    const id = await seedEvent({ isPublic: true }); // no owner, discoverable
     const p1 = await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
     const p2 = await testPrisma.player.create({ data: { name: "Bob", eventId: id, order: 1 } });
     const p3 = await testPrisma.player.create({ data: { name: "Charlie", eventId: id, order: 2 } });

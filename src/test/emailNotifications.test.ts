@@ -13,12 +13,10 @@ import {
   sendReminder,
   sendWeeklySummary,
   sendPlayerJoinedOwnerNotification,
-  _resetResendClient,
 } from "~/lib/email.server";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  _resetResendClient();
 });
 
 describe("sendGameInvite", () => {

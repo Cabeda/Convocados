@@ -3,10 +3,10 @@ import type { AuthContext } from "../authenticate.server";
 import type { ToolDef } from "./tools";
 import { McpError } from "./errors";
 import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../rosterCore.server";
-import { getActiveRosterState } from "../roster.server";
+import { getRosterCapacity } from "../roster.server";
 import { syncGamePayments } from "../settlement.server";
 import { syncGameFromTeamResults } from "../gameDualWrite.server";
-import { activeParticipantsWhere } from "../activeParticipants.server";
+import { splitRoster } from "../rosterCapacity";
 import { finishRosterAdd } from "../teamFormation.server";
 import { archiveAndLeave } from "../leave.server";
 import { Randomize } from "../random";
@@ -26,7 +26,7 @@ import { enqueuePushSetupHintSafe } from "../pushSetupHint";
 import { getNotificationPrefs } from "../notificationPrefs.server";
 import { sendPushToUser } from "../push.server";
 import { logEvent } from "../eventLog.server";
-import { assignTeams } from "../teamAssignment.server";
+import { assignTeams, getActivePlayers } from "../teamAssignment.server";
 import { setEventCost } from "../eventCost.server";
 import { claimPlayer as claimPlayerFn } from "../claimPlayer.server";
 
@@ -83,7 +83,7 @@ async function addPlayer(args: Record<string, unknown>, ctx: AuthContext) {
     throw new McpError(e instanceof Error ? e.message : "Player name is required.", -32602, 400);
   }
 
-  const roster = await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId);
+  const roster = await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
   if (roster.totalCount >= event.maxPlayers * 2) {
     throw new McpError(`The bench is full (maximum ${event.maxPlayers} bench players).`, -32001, 400);
   }
@@ -158,20 +158,9 @@ async function randomizeTeams(args: Record<string, unknown>, ctx: AuthContext) {
   if (!eventId) throw new McpError("eventId required", -32602, 400);
   const event = await requireEventAccess(ctx, eventId);
 
-  let allPlayers: { name: string; order: number }[];
-  if (event.currentGameId) {
-    const participants = await prisma.gameParticipant.findMany({
-      where: activeParticipantsWhere(event.currentGameId),
-      include: { eventPlayer: { select: { name: true } } },
-      orderBy: { order: "asc" },
-    });
-    allPlayers = participants.map((gp) => ({ name: gp.eventPlayer.name, order: gp.order }));
-  } else {
-    const rows = await prisma.player.findMany({ where: { eventId, archivedAt: null }, orderBy: { order: "asc" } });
-    allPlayers = rows.map((p) => ({ name: p.name, order: p.order }));
-  }
-
-  const players = allPlayers.slice(0, event.maxPlayers);
+  // ADR 0016: same filtered Roster the REST /randomize route draws from, so an
+  // agent-drawn write is built from the current Game's members and nobody else.
+  const players = splitRoster(await getActivePlayers(eventId, event.currentGameId), event.maxPlayers).active;
   if (players.length < 2) throw new McpError("Need at least 2 players.", -32001, 400);
 
   const balanced = args.balanced === true;

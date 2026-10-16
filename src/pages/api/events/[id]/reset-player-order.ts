@@ -1,10 +1,10 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { validateTeams } from "../../../../lib/teamFormation.server";
 
-/** POST — reset player order to original signup order (createdAt). Owner-only. */
+/** POST — reset player order to original signup order (createdAt). Authorization is the shared event-mutation seam (ADR 0035). */
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
@@ -13,8 +13,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin) return Response.json({ error: "Only the event owner can reset player order." }, { status: 403 });
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) return Response.json({ error: "Only the event owner can reset player order." }, { status: 403 });
 
   const players = await prisma.player.findMany({ where: { eventId }, orderBy: { createdAt: "asc" } });
 

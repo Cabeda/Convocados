@@ -82,7 +82,7 @@ describe("PUT /api/events/[id]/reorder-players", () => {
 
   it("returns 403 when not owner or admin", async () => {
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
-    const event = await seedEvent();
+    const event = await seedEvent({ isPublic: true });
     const res = await reorderPlayers(putCtx({ id: event.id }, { playerIds: [] }));
     expect(res.status).toBe(403);
   });

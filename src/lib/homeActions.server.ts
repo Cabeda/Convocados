@@ -17,7 +17,7 @@
  */
 import { prisma } from "./db.server";
 import { isGameEnded } from "./gameStatus";
-import { getActiveRosterState } from "./roster.server";
+import { getRosterCapacity } from "./roster.server";
 import { isHistoryParticipant } from "./snapshotParticipants";
 
 export type HomeActionType = "fill_spots" | "settle_score" | "pay_share" | "vote_mvp";
@@ -132,7 +132,7 @@ export async function computeHomeActions(
 
   // ── fill_spots ────────────────────────────────────────────────────────────
   for (const e of fillCandidates) {
-    const roster = await getActiveRosterState(e.id, e.maxPlayers, e.currentGameId);
+    const roster = await getRosterCapacity(e.id, e.maxPlayers, e.currentGameId);
     const spotsLeft = Math.max(0, e.maxPlayers - roster.totalCount);
     if (spotsLeft > 0) {
       actions.push({

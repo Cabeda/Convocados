@@ -27,8 +27,7 @@ import {
 import { GET as unsubscribeGET, POST as unsubscribePOST } from "~/pages/api/unsubscribe";
 
 import {
-  _resetResendClient,
-  sendGameInvite,
+    sendGameInvite,
   sendReminder,
   sendPaymentReminder,
   sendWeeklySummary,
@@ -57,7 +56,6 @@ async function seedUser(overrides: Record<string, unknown> = {}) {
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  _resetResendClient();
   mockSend.mockResolvedValue({ data: { id: "email-1" }, error: null });
   await testPrisma.notificationPreferences.deleteMany();
   await testPrisma.session.deleteMany();

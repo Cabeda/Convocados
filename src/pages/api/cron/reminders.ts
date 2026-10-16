@@ -21,6 +21,7 @@ import {
   markRecruitment24hSent,
 } from "~/lib/rsvp.server";
 import { createLogger } from "~/lib/logger.server";
+import { getRosterCapacity } from "~/lib/roster.server";
 import { fireWebhooks } from "~/lib/webhook.server";
 import { prisma } from "~/lib/db.server";
 import pLimit from "p-limit";
@@ -58,13 +59,17 @@ export const POST: APIRoute = async ({ request }) => {
           remindersToMark.push({ eventId: r.eventId, type });
           continue;
         }
+        // Remaining capacity is the Roster's answer (ADR 0016), read once and
+        // shared by the push and the email so the two channels cannot disagree.
+        const { spotsLeft } = await getRosterCapacity(r.eventId, r.maxPlayers, r.currentGameId);
+
         // Enqueue push notification — drained at end of cron after emails are sent
         await enqueueNotification(r.eventId, "reminder", {
           title: r.eventTitle,
           key: type === "24h" ? "notifyGameReminder24h" : type === "2h" ? "notifyGameReminder2h" : "notifyGameReminder1h",
           params: { title: r.eventTitle },
           url: `/events/${r.eventId}?action=rsvp`,
-          spotsLeft: 0,
+          spotsLeft,
           reminderType: type,
         });
         sent.push(`${r.eventId}:${type}`);
@@ -83,8 +88,6 @@ export const POST: APIRoute = async ({ request }) => {
           ? await prisma.notificationPreferences.findMany({ where: { userId: { in: userIds } } })
           : [];
         const prefsMap = new Map(prefsRows.map((p: { userId: string }) => [p.userId, p]));
-
-        const spotsLeft = r.players.length;
 
         // Send emails concurrently (bounded by EMAIL_CONCURRENCY)
         await Promise.allSettled(
@@ -188,12 +191,13 @@ export const POST: APIRoute = async ({ request }) => {
           select: { isRecurring: true },
         });
         const pgKey = pgEvent?.isRecurring ? "postGameNotificationRecurring" as const : "postGameNotification" as const;
+        const { spotsLeft } = await getRosterCapacity(r.eventId, r.maxPlayers, r.currentGameId);
         await enqueueNotification(r.eventId, "post_game", {
           title: r.eventTitle,
           key: pgKey,
           params: { title: r.eventTitle },
           url: `/events/${r.eventId}?action=add-score`,
-          spotsLeft: 0,
+          spotsLeft,
         });
         postGameRemindersSent.push(r.eventId);
         postGameRemindersToMark.push(r.eventId);
@@ -316,14 +320,11 @@ export const POST: APIRoute = async ({ request }) => {
     for (const e of t48hRecruitmentEvents) {
       const event = await prisma.event.findUnique({
         where: { id: e.id },
-        select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true },
+        select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true, currentGameId: true },
       });
       if (!event) continue;
 
-      const activePlayers = await prisma.player.count({
-        where: { eventId: event.id, archivedAt: null },
-      });
-      const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
+      const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
 
       // Only send if game is NOT full (has spots remaining)
       if (spotsLeft === 0) {
@@ -377,14 +378,11 @@ export const POST: APIRoute = async ({ request }) => {
     for (const e of t24hRecruitmentEvents) {
       const event = await prisma.event.findUnique({
         where: { id: e.id },
-        select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true, ownerId: true },
+        select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true, ownerId: true, currentGameId: true },
       });
       if (!event) continue;
 
-      const activePlayers = await prisma.player.count({
-        where: { eventId: event.id, archivedAt: null },
-      });
-      const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
+      const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
       if (spotsLeft === 0) {
         await markRecruitment24hSent(event.id);
         continue;

@@ -54,7 +54,7 @@ export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <AccessTimeIcon fontSize="small" color="action" />
             <Typography variant="body2" color="text.secondary">
-              {formatDateInTz(date, locale === "pt" ? "pt-PT" : "en-GB", game.timezone || "UTC", {
+              {formatDateInTz(date, locale, game.timezone || "UTC", {
                 weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
               })}
             </Typography>

@@ -1,3 +1,5 @@
+import type { Locale } from "./i18n";
+
 /**
  * Returns a curated list of IANA timezone identifiers with display labels.
  * Used in timezone pickers across the app.
@@ -54,17 +56,36 @@ export function detectTimezone(): string {
 }
 
 /**
+ * `Intl` needs a full BCP-47 tag; the app's `Locale` is a bare language code.
+ * The mapping lives here so no caller has to invent one — when that lived at
+ * the call site, ten surfaces collapsed every non-English locale to `en-GB`.
+ */
+const DATE_FORMAT_TAGS: Record<Locale, string> = {
+  en: "en-GB",
+  pt: "pt-PT",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  it: "it-IT",
+};
+
+/** The BCP-47 tag `Intl` formats this app locale in. */
+export function dateFormatTag(locale: Locale): string {
+  return DATE_FORMAT_TAGS[locale];
+}
+
+/**
  * Format a Date in a specific IANA timezone using toLocaleString.
  * Passes `timeZone` into the Intl options so the formatted output reflects
  * the event's timezone rather than the browser's local timezone.
  */
 export function formatDateInTz(
   date: Date,
-  locale: string,
+  locale: Locale,
   timezone: string,
   options: Intl.DateTimeFormatOptions = {},
 ): string {
-  return date.toLocaleString(locale, { ...options, timeZone: timezone || "UTC" });
+  return date.toLocaleString(dateFormatTag(locale), { ...options, timeZone: timezone || "UTC" });
 }
 
 /**

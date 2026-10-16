@@ -98,25 +98,36 @@ export interface EventFollowOverrides {
 }
 
 /**
- * Resolve whether a notification should be sent, considering per-event overrides
- * and the user's role (Player vs non-Player Follower) per ADR 0017.
- *
- * Resolution order:
+ * What the Event's mute + role-tier layers say about one recipient (ADR 0004,
+ * ADR 0017), with no transport preference involved. Resolution order:
  * 1. Per-event override on EventFollow (if not null, wins)
  * 2. Event admin default (if set)
  * 3. Role-based default: non-Players are muted for Tier 2 types
- * 4. Global user preference
+ *
+ * The outcome is three-valued because the layers can *decide* as well as
+ * refuse: an explicit `false` is the user force-enabling this category on this
+ * Event, which outranks their own global preference.
  */
-export function wantsPushWithOverrides(
-  prefs: NotificationPrefs,
+export type MuteTierDecision =
+  /** The user explicitly un-muted this on this Event — deliver regardless of global prefs. */
+  | "forced"
+  /** A mute, an Event default, or the role tier suppresses it. */
+  | "vetoed"
+  /** Nothing decided; the channel decides. */
+  | "open";
+
+/**
+ * Resolve the mute + role-tier layers shared by every delivery channel, so no
+ * two channels can drift apart on them. Push adds its global preference on top;
+ * the in-app feed has none.
+ */
+export function resolveMuteTier(
   type: NotificationJobType,
   overrides: EventFollowOverrides | null,
   eventDefaults?: Partial<Record<keyof EventFollowOverrides, boolean | null>> | null,
   /** Whether this user is an active Player in the current Game (ADR 0017) */
   isPlayerInCurrentGame?: boolean,
-): boolean {
-  if (!prefs.pushEnabled) return false;
-
+): MuteTierDecision {
   // Determine which override/default field applies
   let fieldName: keyof EventFollowOverrides | null = null;
   switch (type) {
@@ -147,23 +158,59 @@ export function wantsPushWithOverrides(
       break;
   }
 
-  // Resolution order: per-user override → event defaults (admin) → role-based default → global preference
+  // Resolution order: per-user override → event defaults (admin) → role-based default
   const userOverride = fieldName ? (overrides?.[fieldName] ?? null) : null;
-  if (userOverride === true) return false;
-  if (userOverride === false) return true;
+  if (userOverride !== null) return userOverride ? "vetoed" : "forced";
 
   const eventDefault = fieldName ? (eventDefaults?.[fieldName] ?? null) : null;
-  if (eventDefault === true) return false;
-  if (eventDefault === false) return true;
+  if (eventDefault !== null) return eventDefault ? "vetoed" : "forced";
 
   // ponytail: Role-based default (ADR 0017) — non-Players don't receive Tier 2 by default.
   // Upgrade path: if we add more tiers, this becomes a tier lookup table instead of a boolean.
   if (isPlayerInCurrentGame !== undefined && isGameLevelNotification(type) && !isPlayerInCurrentGame) {
-    return false;
+    return "vetoed";
   }
+
+  return "open";
+}
+
+/**
+ * Resolve whether a notification should be sent over push, on top of a verdict
+ * {@link resolveMuteTier} already reached: the global push preference on top of
+ * the mute + role-tier layers. A "forced" verdict short-circuits the per-type
+ * preference, so un-muting a category on an Event beats turning that category
+ * off globally.
+ *
+ * This is the push-only half of the audience rule — the in-app feed stops at the
+ * verdict, which is why the two channels cannot disagree about it.
+ */
+export function wantsPushWithDecision(
+  prefs: NotificationPrefs,
+  type: NotificationJobType,
+  decision: MuteTierDecision,
+): boolean {
+  if (!prefs.pushEnabled) return false;
+  if (decision !== "open") return decision === "forced";
 
   // Fall back to global preference
   return wantsPushForJobType(prefs, type);
+}
+
+/**
+ * {@link wantsPushWithDecision} for callers that hold the override layers rather
+ * than a resolved verdict. A job that has already resolved its audience once
+ * should call `resolveMuteTier` itself and use the verdict form, so the rule is
+ * applied once per job rather than once per recipient per channel.
+ */
+export function wantsPushWithOverrides(
+  prefs: NotificationPrefs,
+  type: NotificationJobType,
+  overrides: EventFollowOverrides | null,
+  eventDefaults?: Partial<Record<keyof EventFollowOverrides, boolean | null>> | null,
+  /** Whether this user is an active Player in the current Game (ADR 0017) */
+  isPlayerInCurrentGame?: boolean,
+): boolean {
+  return wantsPushWithDecision(prefs, type, resolveMuteTier(type, overrides, eventDefaults, isPlayerInCurrentGame));
 }
 
 /** Check if a user wants email reminders for a given reminder type */

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { checkOwnership } from "~/lib/auth.helpers.server";
+import { authorizeEventMutation } from "~/lib/eventAuthz.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { searchCourtAlternatives, parseCourtWatchConfig, type CourtWatchConfig } from "~/lib/courtAlternatives.server";
 import { isPlaytomicSport } from "~/lib/playtomic";
@@ -14,8 +14,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
-  if (!isOwner && !isAdmin) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only event owner or admins can search alternatives." }, { status: 403 });
   }
 
@@ -70,8 +70,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
-  if (!isOwner && !isAdmin) {
+  const authz = await authorizeEventMutation(request, event);
+  if (!authz.allowed) {
     return Response.json({ error: "Only event owner or admins can manage court watch." }, { status: 403 });
   }
 
