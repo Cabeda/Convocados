@@ -126,6 +126,10 @@ export function getDeepLink(
       const base = `https://revolut.me/${method.value}`;
       if (amount && amount > 0) {
         const params = new URLSearchParams();
+        // Revolut's wire format: a plain decimal, no symbol, no separator. This
+        // is a transport value the provider parses, not money a person reads —
+        // anything displayed goes through formatMoney.
+        // eslint-disable-next-line no-restricted-syntax -- provider wire format, not a display
         params.set("amount", amount.toFixed(2));
         if (currency) params.set("currency", currency);
         return `${base}?${params.toString()}`;

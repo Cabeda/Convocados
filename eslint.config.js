@@ -134,6 +134,46 @@ export default tseslint.config(
     },
   },
 
+  // ── One money format ────────────────────────────────────────────────────────
+  // Money renders through `src/lib/money.ts` and nowhere else. Three consecutive
+  // review rounds found a private formatter no test covered:
+  // `Intl.NumberFormat({ style: "currency" })` in two components, a hand-rolled
+  // symbol map in a third, `toFixed(2)` in a push body and a cron notification,
+  // and a `formatMoney` call that dropped its currency. The rule is mechanical,
+  // so it is a check here rather than a line in CODING_STANDARDS.
+  //
+  // Pinned by src/test/money-guardrail.test.ts, which fails if this block is
+  // deleted or de-scoped. `toFixed` is matched at precision 2 only: rating maths
+  // uses 3, percentages 0 and coordinates 6, and those are not money.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/money.ts", "src/test/**"],
+    rules: {
+      "no-restricted-syntax": ["error",
+        {
+          selector: "NewExpression[callee.object.name='Intl'][callee.property.name='NumberFormat']",
+          message:
+            "One money format: render money with formatMoney from src/lib/money.ts, not Intl.NumberFormat.",
+        },
+        {
+          selector: "CallExpression[callee.property.name='toFixed'][arguments.0.value=2]",
+          message:
+            "One money format: render money with formatMoney from src/lib/money.ts, not toFixed(2). A wire format that is not a display takes an eslint-disable with the reason.",
+        },
+        {
+          selector: "Literal[value=/[€£]/]",
+          message:
+            "One money format: the currency symbol lives in src/lib/money.ts. Render money with formatMoney.",
+        },
+        {
+          selector: "TemplateElement[value.raw=/[€£]/]",
+          message:
+            "One money format: the currency symbol lives in src/lib/money.ts. Render money with formatMoney.",
+        },
+      ],
+    },
+  },
+
   // ── Test files — relax some rules ───────────────────────────────────────────
   {
     files: ["src/test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"],
