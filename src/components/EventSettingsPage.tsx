@@ -27,6 +27,7 @@ import ArchiveIcon from "@mui/icons-material/Archive";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import EmailIcon from "@mui/icons-material/Email";
 import { useT } from "~/lib/useT";
+import { PasswordPrompt } from "./event/PasswordPrompt";
 import { SPORT_PRESETS } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
 import { deriveEventPermissions } from "~/lib/eventView";
@@ -128,6 +129,7 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   // Event data
   const [event, setEvent] = useState<EventSettings | null>(null);
+  const [lockedEvent, setLockedEvent] = useState<{ id: string; title: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
@@ -153,7 +155,16 @@ export default function EventSettingsPage({ eventId }: Props) {
   const fetchEvent = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}`);
-      if (res.ok) setEvent(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        if (data.locked) {
+          setLockedEvent({ id: data.id, title: data.title });
+          setEvent(null);
+          setLoading(false);
+          return;
+        }
+        setEvent(data);
+      }
     } catch { /* ignore */ }
     setLoading(false);
   }, [eventId]);
@@ -514,6 +525,18 @@ export default function EventSettingsPage({ eventId }: Props) {
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (lockedEvent) {
+    return (
+      <ThemeModeProvider>
+        <ResponsiveLayout>
+          <Stack spacing={2} sx={{ maxWidth: 640, mx: "auto", p: 2, alignItems: "center", pt: 8 }}>
+            <PasswordPrompt eventId={lockedEvent.id} title={lockedEvent.title} onUnlocked={fetchEvent} />
+          </Stack>
+        </ResponsiveLayout>
+      </ThemeModeProvider>
+    );
+  }
 
   if (loading) {
     return (

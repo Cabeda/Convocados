@@ -19,6 +19,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { deriveEventPermissions } from "~/lib/eventView";
+import { PasswordPrompt } from "./event/PasswordPrompt";
 
 interface PlayerRating {
   name: string;
@@ -62,6 +63,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [lockedEvent, setLockedEvent] = useState<{ id: string; title: string } | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -96,6 +98,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     ]);
     if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
     const ev = await evRes.json();
+    if (ev.locked) { setTitle(ev.title); setLockedEvent({ id: ev.id, title: ev.title }); setLoading(false); return; }
     if (ratRes.status === 403) { setTitle(ev.title); setHidden(true); setLoading(false); return; }
     const rat = ratRes.ok ? await ratRes.json() : { data: [], nextCursor: null, hasMore: false };
     setTitle(ev.title);
@@ -334,6 +337,16 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
           <EmojiEventsIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>{t("ratingsHidden")}</Typography>
           <Button variant="outlined" href={`/events/${eventId}`} startIcon={<ArrowBackIcon />}>{t("backToGame")}</Button>
+        </Container>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
+  );
+
+  if (lockedEvent) return (
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
+          <PasswordPrompt eventId={lockedEvent.id} title={lockedEvent.title} onUnlocked={() => { setLockedEvent(null); void load(); }} />
         </Container>
       </ResponsiveLayout>
     </ThemeModeProvider>
