@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
+import { authorizeEventMutation } from "~/lib/eventAuthz.server";
+import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { upsertGuestRsvp } from "~/lib/rsvp.server";
 import { isRsvpStatusValue, type RsvpStatus } from "~/lib/rsvp";
@@ -22,23 +23,18 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, ownerId: true, dateTime: true, title: true },
+    select: { id: true, ownerId: true, isPublic: true, accessPassword: true, dateTime: true, title: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const session = await getSession(request);
   if (!session?.user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
-  const { isOwner } = await checkOwnership(request, event.ownerId, session, eventId);
-  let isAdmin = false;
-  if (!isOwner) {
-    const admin = await prisma.eventAdmin.findUnique({
-      where: { eventId_userId: { eventId, userId: session.user.id } },
-      select: { id: true },
-    });
-    isAdmin = !!admin;
-  }
-  if (!isOwner && !isAdmin) {
+  // The seam answers whether this caller may mutate the Event — including the
+  // ownerless-unlisted rule and the password gate. This route adds one
+  // requirement of its own: a guest RSVP is attributed to an actor.
+  const authz = await authorizeEventMutation(request, event, session);
+  if (!authz.allowed) {
     return Response.json({ error: "Only the owner or an admin can set guest attendance." }, { status: 403 });
   }
 
