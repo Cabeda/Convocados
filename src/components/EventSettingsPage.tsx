@@ -568,7 +568,7 @@ export default function EventSettingsPage({ eventId }: Props) {
       <SectionCard title={t("eventSettingsGeneral")} icon={<PublicIcon color="action" />}>
         <Stack spacing={2}>
           <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
-            <Tooltip title={t("makePublicTooltip")}>
+            <Tooltip describeChild title={t("makePublicTooltip")}>
               <FormControlLabel
                 control={<Switch size="small" checked={event.isPublic} onChange={(e) => handleTogglePublic(e.target.checked)} disabled={!canEdit} />}
                 label={<Typography variant="body2">{t("makePublic")}</Typography>}
@@ -631,7 +631,7 @@ export default function EventSettingsPage({ eventId }: Props) {
       {/* ── Competition (ADR 0031) ── */}
       <SectionCard title={t("competitionSettings")} icon={<StarIcon color="action" />}>
         <Stack spacing={1}>
-          <Tooltip title={t("competitiveRankingsTooltip")}>
+          <Tooltip describeChild title={t("competitiveRankingsTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={(event.eloEnabled ?? true) && (event.rankEnabled ?? true)} onChange={(e) => handleToggleCompetition(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2" fontWeight={600}>{t("competitiveRankings")}</Typography>}
@@ -639,7 +639,7 @@ export default function EventSettingsPage({ eventId }: Props) {
           </Tooltip>
           <Typography variant="caption" color="text.secondary">{t("competitiveRankingsDesc")}</Typography>
           <Divider sx={{ my: 0.5 }} />
-          <Tooltip title={t("showCompetitiveDataTooltip")}>
+          <Tooltip describeChild title={t("showCompetitiveDataTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={event.showCompetitiveData ?? true} onChange={(e) => handleToggleShowCompetitiveData(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2">{t("showCompetitiveData")}</Typography>}
@@ -651,19 +651,19 @@ export default function EventSettingsPage({ eventId }: Props) {
             </AccordionSummary>
             <AccordionDetails sx={{ px: 0 }}>
               <Stack spacing={1}>
-                <Tooltip title={t("hideEloInTeamsTooltip")}>
+                <Tooltip describeChild title={t("hideEloInTeamsTooltip")}>
                   <FormControlLabel
                     control={<Switch size="small" checked={event.hideEloInTeams ?? false} onChange={(e) => handleToggleHideEloInTeams(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
                     label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("hideEloInTeams")}</Typography>}
                   />
                 </Tooltip>
-                <Tooltip title={t("allowManualRatingTooltip")}>
+                <Tooltip describeChild title={t("allowManualRatingTooltip")}>
                   <FormControlLabel
                     control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
                     label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("allowManualRating")}</Typography>}
                   />
                 </Tooltip>
-                <Tooltip title={t("rankDecayTooltip")}>
+                <Tooltip describeChild title={t("rankDecayTooltip")}>
                   <FormControlLabel
                     control={<Switch size="small" checked={event.rankDecayEnabled ?? false} onChange={(e) => handleToggleRankDecay(e.target.checked)} disabled={!canEdit || !(event.rankEnabled ?? true)} />}
                     label={<Typography variant="body2" color={!(event.rankEnabled ?? true) ? "text.disabled" : undefined}>{t("rankDecay")}</Typography>}
@@ -685,19 +685,19 @@ export default function EventSettingsPage({ eventId }: Props) {
       {/* ── Features ── */}
       <SectionCard title={t("eventSettingsFeatures")} icon={<IntegrationInstructionsIcon color="action" />}>
         <Stack spacing={1}>
-          <Tooltip title={t("splitCostsEnabledTooltip")}>
+          <Tooltip describeChild title={t("splitCostsEnabledTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={event.splitCostsEnabled ?? true} onChange={(e) => handleToggleSplitCosts(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2">{t("splitCostsEnabled")}</Typography>}
             />
           </Tooltip>
-          <Tooltip title={t("mvpEnabledTooltip")}>
+          <Tooltip describeChild title={t("mvpEnabledTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={event.mvpEnabled ?? true} onChange={(e) => handleToggleMvpEnabled(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2">{t("mvpEnabled")}</Typography>}
             />
           </Tooltip>
-          <Tooltip title={!(event.mvpEnabled ?? true) ? t("mvpEloDisabledBecauseMvpOff") : t("mvpEloEnabledTooltip")}>
+          <Tooltip describeChild title={!(event.mvpEnabled ?? true) ? t("mvpEloDisabledBecauseMvpOff") : t("mvpEloEnabledTooltip")}>
             <FormControlLabel
               control={
                 <Switch
