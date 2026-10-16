@@ -629,6 +629,8 @@ export interface SettlementSummaryView {
   activePlayerCount: number;
   /** Required playing slots — drives the fixed per-player share display. */
   maxPlayers: number;
+  /** The Event's currency, so a surface never assumes EUR. */
+  currency: string;
   totals: { unsettledGames: number; totalOwed: number; totalOwedTo: number };
 }
 
@@ -641,11 +643,17 @@ export async function getSettlementSummary(
   eventId: string,
   viewer: { role: ViewerRole; userId?: string | null },
 ): Promise<SettlementSummaryView> {
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { id: true, currentGameId: true, maxPlayers: true },
-  });
+  const [event, eventCost] = await Promise.all([
+    prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, currentGameId: true, maxPlayers: true },
+    }),
+    prisma.eventCost.findUnique({ where: { eventId }, select: { currency: true } }),
+  ]);
   if (!event) throw new Error("Event not found.");
+  // ADR 0007: the ledger is per-Event, so the currency is resolved once here and
+  // travels with the amounts — a surface must never assume EUR.
+  const currency = eventCost?.currency ?? "EUR";
 
   const games = await prisma.game.findMany({
     where: {
@@ -802,6 +810,7 @@ export async function getSettlementSummary(
     viewerEventPlayerId,
     activePlayerCount,
     maxPlayers: event.maxPlayers,
+    currency,
     totals: {
       unsettledGames: gameViews.length,
       totalOwed: isUnidentified ? 0 : people.reduce((s, p) => s + p.owedAmount, 0),
