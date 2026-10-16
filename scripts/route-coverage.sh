@@ -11,7 +11,16 @@ json_output=false
 [[ "${1:-}" == "--json" ]] && json_output=true
 
 # Collect all API route files (excluding auth, admin, cron — per vitest.config.ts exclusions)
-mapfile -t routes < <(find src/pages/api -name "*.ts" \
+#
+# A `while read` loop rather than `mapfile`: mapfile is a bash 4 builtin, and
+# macOS still ships bash 3.2 as /bin/bash. Under 3.2 `mapfile` is not found, the
+# array stays empty, `total` is 0 — and this gate would report a clean 100% while
+# checking nothing. Failing loudly is the point of a gate; silently passing is
+# worse than not having one.
+routes=()
+while IFS= read -r line; do
+  [ -n "$line" ] && routes+=("$line")
+done < <(find src/pages/api -name "*.ts" \
   | grep -v "src/pages/api/auth/" \
   | grep -v "src/pages/api/admin/" \
   | grep -v "src/pages/api/cron/" \
@@ -24,6 +33,12 @@ mapfile -t routes < <(find src/pages/api -name "*.ts" \
   | grep -v "src/pages/api/watch/" \
   | grep -v "src/pages/api/internal/" \
   | sort)
+
+# An empty route list means the collection above failed, not that the API is gone.
+if [ "${#routes[@]}" -eq 0 ]; then
+  echo "✗ No API routes were collected — the find/read above is broken, not the API." >&2
+  exit 1
+fi
 
 total=${#routes[@]}
 tested=0
