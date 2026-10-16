@@ -351,7 +351,9 @@ is idempotent. Reach for it on two triggers: a worktree that has just been creat
 compile or typecheck error naming a symbol the schema or a generated client should already
 have (a stale Prisma client is the usual cause, and regenerating by hand is the slow path). Worked detail that only some tasks need lives in
 [`docs/development-guide.md`](docs/development-guide.md): dev-server/worktree management,
-Bruno API flows, event lifecycle & game phases, and common code patterns. To inspect
+Bruno API flows, event lifecycle & game phases, and the **shared seams** — the one module that
+answers each recurring question (authorization, money, roster capacity, notification audience,
+locale dates), and the traps that come with them. To inspect
 production — read-only DB queries, the job queue, the scheduler — see
 [`docs/runbooks/production-inspection.md`](docs/runbooks/production-inspection.md).
 
