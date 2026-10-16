@@ -110,7 +110,7 @@ This installs:
 - a **pre-commit** hook that runs `gitleaks` over staged changes and blocks the commit if a
   secret is found (`scripts/secret-scan.sh staged`), and
 - a **pre-push** hook that scans the commits actually being pushed, then runs `lint`,
-  `typecheck` and `vitest --coverage`.
+  `typecheck`, `vitest --coverage` and `route-coverage`.
 
 Never re-point the pre-push scan at the git index (`gitleaks ... --staged`): at push time the
 index is empty, so it checks nothing while reporting success. Push scanning must use the
@@ -208,9 +208,10 @@ budget is in question. The rules below are what every session obeys without reac
 anything.
 
 **Gates.** GATE 1 is the pre-push hook, and it is web-only: `pnpm lint`, `npm run
-typecheck`, `npx vitest run --coverage`, gitleaks over the pushed commits, and semgrep
-(warn-only). Before handing a Change back, also run what the hook does not:
-`pnpm test:route-coverage`, `pnpm sync:feature-parity-docs`, `pnpm audit --audit-level
+typecheck`, `npx vitest run --coverage`, `pnpm test:route-coverage` (which fails on any
+untested route), gitleaks over the pushed commits, and semgrep (warn-only). Before handing a
+Change back, also run what the hook does not:
+`pnpm sync:feature-parity-docs`, `pnpm audit --audit-level
 high`, and Gradle `./gradlew :app:assembleDebug :wear:assembleDebug :wear:lintDebug
 :wear:verifyRoborazziDebug`. GATE 2 is GitHub CI, which repeats those and adds Playwright
 (only when the diff touches `src/pages/**` or `e2e/**`). A Change over **400 changed lines
@@ -343,6 +344,14 @@ android-app/               # Android (Gradle multi-module)
 The full tree, per-screen layout, and where each module's tests and screenshots live:
 [`docs/development-guide.md`](docs/development-guide.md).
 
+### Searching
+
+Use `rg` — or the harness's `grep` tool, which is ripgrep-backed — for every search. Both
+honour `.gitignore`; a shell `grep -rn` does not, and `src/lib/__generated__/` is a
+gitignored 6.2 MB generated Prisma client sitting inside `src/`. On one query
+(`accessPassword`) `rg` returned 7 KB across 26 files and a shell grep returned 190 KB
+across 30, with 133 of its hits inside the generated client.
+
 ## Reference guides
 
 Run `scripts/worktree-bootstrap.sh` before any gate — it repairs the half-installed
@@ -388,7 +397,11 @@ This project uses **[dex](https://dex.rip)** for issue tracking. Run `dex --help
 dex ready              # Find available work
 dex show <id>          # View issue details
 dex start <id>         # Claim work
-dex complete <id>      # Complete work
+dex complete <id> --result "what changed" --commit <sha>
+                       # Complete work. BOTH flags are required: --result is the
+                       # completion note, and --commit links the commit so the
+                       # GitHub issue closes when that commit merges. Use
+                       # --no-commit to complete without closing the issue.
 dex sync               # Push tasks to GitHub Issues
 ```
 

@@ -68,5 +68,11 @@ fi
 # It was removed from the pre-push hook because the Stryker run takes 1-2 hours
 # and gets OOM-killed in normal worktrees, blocking every push.
 
+echo "→ Route coverage..."
+if ! bash "$root/scripts/route-coverage.sh"; then
+  echo "✗ Route coverage failed. Push aborted."
+  exit 1
+fi
+
 echo "✓ All checks passed."
 exit 0
