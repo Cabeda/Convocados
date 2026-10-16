@@ -109,8 +109,10 @@ pnpm setup-hooks
 This installs:
 - a **pre-commit** hook that runs `gitleaks` over staged changes and blocks the commit if a
   secret is found (`scripts/secret-scan.sh staged`), and
-- a **pre-push** hook that scans the commits actually being pushed, then runs `lint`,
-  `typecheck`, `vitest --coverage` and `route-coverage`.
+- a **pre-push** hook that runs every cheap gate — `lint`, `typecheck`, `route-coverage`,
+  `check:feature-parity`, `check:play-listing`, `check:play-screenshots`, `audit` — then the
+  suite with coverage. The cheap checks run first so a fast failure does not wait four minutes
+  for the answer.
 
 Never re-point the pre-push scan at the git index (`gitleaks ... --staged`): at push time the
 index is empty, so it checks nothing while reporting success. Push scanning must use the
@@ -180,15 +182,23 @@ Never `git push origin main` directly. Always:
 
 ### Merge Authority
 
-`.github/CODEOWNERS` is `* @Cabeda`. Every file in the repo is owned by Cabeda, so **no
-Change can reach `main` without Cabeda's review** — this is branch protection, not a
-convention, and it is the one guarantee the Delivery Factory depends on.
+`.github/CODEOWNERS` is `* @Cabeda`, so GitHub requests Cabeda's review on every Change. What
+**stops a machine from merging** is not that request — the `main` ruleset sets
+`required_approving_review_count: 0` and `require_code_owner_review: false` — but the factory
+App's own permissions: `convocados-factory[bot]` holds no approve, merge, or workflow-edit
+right, so a green Change it authored still cannot be merged by it. Review is the process; the
+App's permission is the mechanism. Do not conflate them.
 
-Because GitHub never lets a PR author satisfy their own review requirement, **the factory
-must never push under the `Cabeda` identity**: it would author every one of its own
-Changes and permanently block them. The factory authenticates as a GitHub App
-(`convocados-factory[bot]`) which is deliberately **not** a code owner, and holds no
-approve, merge, or workflow-edit permission.
+The ruleset does enforce `CI` and `Analyze (javascript-typescript)`, and blocks deletion and
+non-fast-forward pushes to `main`. A `RepositoryRole: Admin` bypass (`bypass_mode: always`)
+lets the owner override — which is how a human merges their own PR, since GitHub never lets a
+PR author satisfy their own review requirement.
+
+> **Fixed 2026-10-16.** The ruleset also carried `code_quality: { severity: "errors" }` while
+> the repo had no Code Quality analysis at all, so *no* PR was ever mergeable without that
+> admin override — and the override disables every other rule in the set, including the
+> required checks. Protection looked present and was in fact always bypassed. The rule is
+> removed; verify a green PR merges with no `--admin` if you change this block.
 
 Consequence worth internalising: **merging a Change deploys it.** `release.yml` fires on
 CI green against `main` and then bumps the version, tags, releases, deploys Fly, publishes
@@ -207,14 +217,16 @@ Reach for it when writing or reviewing a factory Change, or when a label, a gate
 budget is in question. The rules below are what every session obeys without reaching for
 anything.
 
-**Gates.** GATE 1 is the pre-push hook, and it is web-only: `pnpm lint`, `npm run
-typecheck`, `npx vitest run --coverage`, `pnpm test:route-coverage` (which fails on any
-untested route), gitleaks over the pushed commits, and semgrep (warn-only). Before handing a
-Change back, also run what the hook does not:
-`pnpm sync:feature-parity-docs`, `pnpm audit --audit-level
-high`, and Gradle `./gradlew :app:assembleDebug :wear:assembleDebug :wear:lintDebug
-:wear:verifyRoborazziDebug`. GATE 2 is GitHub CI, which repeats those and adds Playwright
-(only when the diff touches `src/pages/**` or `e2e/**`). A Change over **400 changed lines
+**Gates.** GATE 1 is the pre-push hook, and it is web-only. It runs the cheap checks first —
+`pnpm lint` (errors **and** the warning cap, which lives on the script so CI enforces the same
+number), `pnpm test:route-coverage` (fails on any untested route),
+`pnpm check:feature-parity`, `pnpm check:play-listing`, `pnpm check:play-screenshots`,
+`pnpm audit --audit-level high`, gitleaks over the pushed commits, and semgrep (warn-only) —
+then `pnpm typecheck` and the suite with coverage. `src/test/gate-parity.test.ts` fails if this
+hook and `scripts/factory/gate.sh` disagree about the cheap set, so "GATE 1 passed" has one
+meaning. The slow gates stay out of the hook: run `pnpm test:e2e` and the Gradle
+`:app`/`:wear` builds yourself before handing a Change back. GATE 2 is GitHub CI, which repeats
+GATE 1 and adds Playwright, the Android builds and Lighthouse. A Change over **400 changed lines
 or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate. The
 one exception a Change may claim without being split: a change and the test harness that
 re-encodes its invariant are one unit, because neither half is correct alone. Claim it in
