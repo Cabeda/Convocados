@@ -255,26 +255,37 @@ describe("degenerate inputs", () => {
   });
 });
 
+/**
+ * Spawning Node to run the checker takes well under a second on an idle machine,
+ * but the suite runs 394 files across a thread pool and the pre-push hook adds a
+ * coverage run on top. Under that contention the spawn is starved past vitest's
+ * 30s `testTimeout` and the test fails on a machine that is merely busy — it
+ * aborted several pushes before this bound existed. Both the child's kill
+ * timeout and the tests' own timeout use the same number so the child cannot
+ * outlive the test that started it.
+ */
+const SPAWN_TIMEOUT_MS = 120_000;
+
 describe("the CLI fails closed", () => {
   it("rejects an unknown flag instead of using the defaults", () => {
     const result = spawnSync(
       process.execPath,
       [join(root, "scripts/check-play-screenshots.mjs"), "--wibble", "x"],
-      { encoding: "utf8" },
+      { encoding: "utf8", timeout: SPAWN_TIMEOUT_MS },
     );
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("unknown flag");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("accepts --dir pointing at a compliant directory", () => {
     writeShapes(() => [...appBg(), 255]);
     const result = spawnSync(
       process.execPath,
       [join(root, "scripts/check-play-screenshots.mjs"), "--dir", dir, "--color", colorFile],
-      { encoding: "utf8" },
+      { encoding: "utf8", timeout: SPAWN_TIMEOUT_MS },
     );
     expect(result.status).toBe(0);
-  });
+  }, SPAWN_TIMEOUT_MS);
 });
 
 describe("readImage", () => {

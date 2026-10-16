@@ -343,6 +343,14 @@ android-app/               # Android (Gradle multi-module)
 The full tree, per-screen layout, and where each module's tests and screenshots live:
 [`docs/development-guide.md`](docs/development-guide.md).
 
+### Searching
+
+Use `rg` — or the harness's `grep` tool, which is ripgrep-backed — for every search. Both
+honour `.gitignore`; a shell `grep -rn` does not, and `src/lib/__generated__/` is a
+gitignored 6.2 MB generated Prisma client sitting inside `src/`. On one query
+(`accessPassword`) `rg` returned 7 KB across 26 files and a shell grep returned 190 KB
+across 30, with 133 of its hits inside the generated client.
+
 ## Reference guides
 
 Run `scripts/worktree-bootstrap.sh` before any gate — it repairs the half-installed
@@ -386,7 +394,11 @@ This project uses **[dex](https://dex.rip)** for issue tracking. Run `dex --help
 dex ready              # Find available work
 dex show <id>          # View issue details
 dex start <id>         # Claim work
-dex complete <id>      # Complete work
+dex complete <id> --result "what changed" --commit <sha>
+                       # Complete work. BOTH flags are required: --result is the
+                       # completion note, and --commit links the commit so the
+                       # GitHub issue closes when that commit merges. Use
+                       # --no-commit to complete without closing the issue.
 dex sync               # Push tasks to GitHub Issues
 ```
 

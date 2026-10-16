@@ -74,3 +74,14 @@ else
     done
   fi
 fi
+
+# A report nobody can fail is not a gate. This measured 100% (148/148) when the
+# threshold was added, so any untested route is a regression — give it a test, or
+# add it to this script's exclusions if it genuinely cannot have one. Thresholds
+# move up only (AGENTS.md); this one is already at the ceiling.
+if [ ${#untested[@]} -gt 0 ]; then
+  echo ""
+  echo "✗ ${#untested[@]} API route(s) have no test. Every route is covered today —" >&2
+  echo "  adding one without a test is a regression. See AGENTS.md → Reviewing Checklist." >&2
+  exit 1
+fi
