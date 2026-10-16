@@ -16,7 +16,6 @@ import path from "node:path";
  */
 const ROOT = process.cwd();
 const DOC = path.join(ROOT, "docs/feature-parity.md");
-const SCRIPT = path.join(ROOT, "scripts/generate-feature-parity-docs.ts");
 
 const original = existsSync(DOC) ? readFileSync(DOC, "utf-8") : null;
 
@@ -25,7 +24,10 @@ afterEach(() => {
 });
 
 function runCheck() {
-  return spawnSync("npx", ["tsx", SCRIPT, "--check"], {
+  // Spawn the repo's own gate command, not a proxy for it: `npx tsx` exits 127
+  // on CI (tsx is a devDependency, resolved through pnpm's layout), and the
+  // thing worth proving is that the command the gate runs reports drift.
+  return spawnSync("pnpm", ["check:feature-parity"], {
     cwd: ROOT,
     encoding: "utf8",
     timeout: 120_000,
@@ -64,7 +66,11 @@ describe("feature-parity --check", () => {
   it("still writes when --check is absent, so the generator keeps working", () => {
     writeFileSync(DOC, "stale");
 
-    const result = spawnSync("npx", ["tsx", SCRIPT], { cwd: ROOT, encoding: "utf8", timeout: 120_000 });
+    const result = spawnSync("pnpm", ["sync:feature-parity-docs"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
 
     expect(result.status).toBe(0);
     expect(readFileSync(DOC, "utf-8")).toBe(original);
