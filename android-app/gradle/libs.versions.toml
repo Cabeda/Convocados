@@ -1,6 +1,6 @@
 [versions]
 agp = "9.4.1"
-kotlin = "2.4.10"
+kotlin = "2.4.21"
 ksp = "2.3.12"
 googleServices = "4.5.0"
 crashlytics = "3.0.8"
