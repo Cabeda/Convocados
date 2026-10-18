@@ -435,6 +435,8 @@ const pt: TranslationKeys = {
   webhookDeliveryStatus_success: "entregue",
   webhookDeliveryStatus_failed: "falhou",
   webhookDeliveryStatus_pending: "pendente",
+  webhookDisabled: "Desativado",
+  webhookReEnable: "Reativar",
 
   // ELO / Ratings
   showCompetitiveData: "Mostrar dados competitivos",

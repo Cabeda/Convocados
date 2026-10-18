@@ -408,6 +408,8 @@ const it: TranslationKeys = {
   webhookDeliveryStatus_success: "consegnato",
   webhookDeliveryStatus_failed: "errore",
   webhookDeliveryStatus_pending: "in attesa",
+  webhookDisabled: "Disattivato",
+  webhookReEnable: "Riattiva",
   showCompetitiveData: "Mostra dati competitivi",
   showCompetitiveDataTooltip: "Mostra classifiche, punteggi e statistiche ai giocatori. Quando disattivato, i dati vengono ancora registrati per bilanciare le squadre ma nascosti ai giocatori.",
   ratingsHidden: "La valutazione abilità è nascosta per questo evento.",

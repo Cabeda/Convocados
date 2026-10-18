@@ -408,6 +408,8 @@ const fr: TranslationKeys = {
   webhookDeliveryStatus_success: "remis",
   webhookDeliveryStatus_failed: "échec",
   webhookDeliveryStatus_pending: "en attente",
+  webhookDisabled: "Désactivé",
+  webhookReEnable: "Réactiver",
   showCompetitiveData: "Afficher les données compétitives",
   showCompetitiveDataTooltip: "Afficher les classements, scores et statistiques aux joueurs. Désactivé, les données sont toujours enregistrées pour équilibrer les équipes mais cachées aux joueurs.",
   ratingsHidden: "Le classement de compétence est masqué pour cet événement.",

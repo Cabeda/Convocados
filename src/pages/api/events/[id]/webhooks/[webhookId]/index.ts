@@ -35,28 +35,52 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   if (!authorized.ok) return authorized.response;
 
   const body = await request.json();
-  if (!Array.isArray(body.events)) {
-    return Response.json({ error: "events is required." }, { status: 400 });
+
+  const updateData: { events?: string; disabled?: boolean } = {};
+
+  if (body.events !== undefined) {
+    if (!Array.isArray(body.events)) {
+      return Response.json({ error: "events is required." }, { status: 400 });
+    }
+    const invalid = body.events.filter((e: string) => !VALID_EVENTS.includes(e));
+    if (invalid.length > 0) {
+      return Response.json(
+        { error: `Unknown event type(s): ${invalid.join(", ")}. Valid: ${VALID_EVENTS.join(", ")}` },
+        { status: 400 },
+      );
+    }
+    updateData.events = JSON.stringify(body.events);
   }
 
-  const invalid = body.events.filter((e: string) => !VALID_EVENTS.includes(e));
-  if (invalid.length > 0) {
-    return Response.json(
-      { error: `Unknown event type(s): ${invalid.join(", ")}. Valid: ${VALID_EVENTS.join(", ")}` },
-      { status: 400 },
-    );
+  if (body.disabled !== undefined) {
+    if (typeof body.disabled !== "boolean") {
+      return Response.json({ error: "disabled must be a boolean." }, { status: 400 });
+    }
+    updateData.disabled = body.disabled;
   }
 
-  const events: string[] = body.events;
+  if (Object.keys(updateData).length === 0) {
+    return Response.json({ error: "Nothing to update." }, { status: 400 });
+  }
+
   const webhook = await prisma.webhookSubscription.update({
     where: { id: webhookId },
-    data: { events: JSON.stringify(events) },
+    data: updateData,
   });
+
+  // Re-enabling resets the consecutive-failure streak so health checks do not
+  // immediately re-disable the subscription on the next failed delivery.
+  if (body.disabled === false) {
+    await prisma.webhookDelivery.deleteMany({
+      where: { webhookId, status: "failed" },
+    });
+  }
 
   return Response.json({
     id: webhook.id,
     url: webhook.url,
     events: JSON.parse(webhook.events),
+    disabled: webhook.disabled,
   });
 };
 
