@@ -1631,12 +1631,12 @@ fun EventDetailScreen(
         val autoPayPref by viewModel.autoPayOnJoin.collectAsStateWithLifecycle()
         AlertDialog(onDismissRequest = { viewModel.dismissPaymentNudge() }, title = { Text(stringResource(R.string.settle_up_title)) }, text = {
             Column {
-                if (callerBalance != null) Text(stringResource(R.string.owe_amount, formatMoney(callerBalance.amount, ds.cost?.currency ?: "EUR"), callerBalance.gamesOwed))
+                if (callerBalance != null) Text(stringResource(R.string.owe_amount, formatMoney(callerBalance.amount, state.cost?.currency ?: "EUR"), callerBalance.gamesOwed))
                 state.balance?.aggregate?.let { agg -> if (agg.totalCount > 0) { Spacer(Modifier.height(8.dp)); Text(stringResource(R.string.paid_for_last_game, agg.paidCount, agg.totalCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.always_show_payment), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f)); Switch(checked = autoPayPref, onCheckedChange = { viewModel.setAutoPayOnJoin(it) }) }
             }
-        }, confirmButton = { val userName = user?.name ?: ""; Button(onClick = { viewModel.markSentAndJoin(eventId, userName) }, colors = ButtonDefaults.buttonColors(containerColor = paymentTokens.colorFor(ExpressiveSemanticRole.Payment), contentColor = paymentTokens.onColorFor(ExpressiveSemanticRole.Payment))) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user?.name ?: "") }) { Text(stringResource(R.string.join_pay_later)) } })
+        }, confirmButton = { val userName = user?.name ?: ""; Button(onClick = { viewModel.markSentAndJoin(eventId, userName) }, colors = ButtonDefaults.buttonColors(containerColor = paymentTokens.colorFor(ExpressiveSemanticRole.Payment), contentColor = paymentTokens.onColorFor(ExpressiveSemanticRole.Payment))) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, formatMoney(callerBalance.amount, state.cost?.currency ?: "EUR")) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user?.name ?: "") }) { Text(stringResource(R.string.join_pay_later)) } })
     }
 }
 
