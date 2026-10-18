@@ -204,9 +204,9 @@
     <string name="paid_streak">%1$d Spiele bezahlt in Folge</string>
     <string name="on_bench">Du bist auf der Bank</string>
     <string name="joined_as">Du bist als %1$s beigetreten</string>
-    <string name="owe_amount">Du schuldest €%1$s aus %2$d Spiel(en)</string>
+    <string name="owe_amount">Du schuldest %1$s aus %2$d Spiel(en)</string>
     <string name="settle_balance">Begleiche deinen offenen Betrag, um beizutreten.</string>
-    <string name="pay_and_join">€%1$s zahlen &amp; beitreten</string>
+    <string name="pay_and_join">%1$s zahlen &amp; beitreten</string>
     <string name="join_as">Beitreten (%1$s)</string>
     <string name="removed_tap_undo">%1$s entfernt — tippen zum Rückgängigmachen</string>
     <string name="vs">VS</string>
