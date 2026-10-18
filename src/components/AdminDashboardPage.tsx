@@ -22,6 +22,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
+import { dateFormatTag } from "~/lib/timezones";
 import { useSession } from "~/lib/auth.client";
 
 interface AdminStats {
@@ -639,7 +641,7 @@ export default function AdminDashboardPage() {
                                   </Typography>
                                 </TableCell>
                                 <TableCell>{u.email}</TableCell>
-                                <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                                <TableCell>{new Date(u.createdAt).toLocaleDateString(dateFormatTag(detectLocale()))}</TableCell>
                                 <TableCell>
                                   {u.pushPlatform && (
                                     <Chip

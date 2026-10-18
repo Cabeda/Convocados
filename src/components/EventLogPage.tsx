@@ -20,6 +20,8 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
+import { dateFormatTag } from "~/lib/timezones";
 import type { TranslationKey } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
 
@@ -208,7 +210,7 @@ function formatRelativeTime(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString(dateFormatTag(detectLocale()));
 }
 
 export default function EventLogPage({ eventId }: { eventId: string }) {

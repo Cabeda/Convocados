@@ -10,6 +10,8 @@ import ReceiptIcon from "@mui/icons-material/Receipt";
 import HistoryIcon from "@mui/icons-material/History";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
+import { dateFormatTag } from "~/lib/timezones";
 import { formatMoney, toCents } from "~/lib/money";
 
 interface Props {
@@ -382,7 +384,7 @@ function ActivityTab({ data }: { data: SettlePayload }) {
         <TableBody>
           {data.you.transactions.map((tx) => (
             <TableRow key={tx.id}>
-              <TableCell>{new Date(tx.createdAt).toLocaleString()}</TableCell>
+              <TableCell>{new Date(tx.createdAt).toLocaleString(dateFormatTag(detectLocale()))}</TableCell>
               <TableCell>
                 <Chip label={tx.reason} size="small" />
                 {tx.statusAfter && (
@@ -435,7 +437,7 @@ function ExtrasTab({ data }: { data: SettlePayload; onChange: () => void }) {
                 }}
               >
                 <Typography sx={{ flex: 1 }}>
-                  <strong>{d.label}</strong> · {new Date(d.declaredAt).toLocaleDateString()}
+                  <strong>{d.label}</strong> · {new Date(d.declaredAt).toLocaleDateString(dateFormatTag(detectLocale()))}
                 </Typography>
                 <Typography color="error.main" fontWeight={600}>
                   −{formatMoney(d.amountCents, d.currency)}

@@ -21,7 +21,7 @@ import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
 import { isPlaytomicSport } from "~/lib/playtomic";
 import { getRandomTitle, type TitleLocale } from "~/lib/randomTitles";
-import { COMMON_TIMEZONES, detectTimezone, fromDateTimeLocalValue } from "~/lib/timezones";
+import { COMMON_TIMEZONES, detectTimezone, fromDateTimeLocalValue, dateFormatTag } from "~/lib/timezones";
 
 const DAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
 const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
@@ -242,7 +242,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
             if (val === "daily") return t("daily");
             if (val === "weekly") return t("weeklyOnDay", { day: t(DAYS[jsDayToDayIndex(new Date(dateTime).getDay())].key) });
             if (val === "monthly") return t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) });
-            if (val === "yearly") return t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) });
+            if (val === "yearly") return t("annually", { date: new Date(dateTime).toLocaleDateString(dateFormatTag(locale as any), { month: "short", day: "numeric" }) });
             if (val === "custom") return t("customRecurrence");
             return "";
           }}
@@ -266,7 +266,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
             {t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) })}
           </MenuItem>
           <MenuItem value="yearly">
-            {t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) })}
+            {t("annually", { date: new Date(dateTime).toLocaleDateString(dateFormatTag(locale as any), { month: "short", day: "numeric" }) })}
           </MenuItem>
           <Divider />
           <MenuItem value="custom">{t("customRecurrence")}</MenuItem>
