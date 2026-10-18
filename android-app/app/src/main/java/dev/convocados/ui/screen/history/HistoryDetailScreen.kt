@@ -29,6 +29,7 @@ import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.util.formatMoney
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.GameHistory
 import dev.convocados.data.api.MatchEventRequest
@@ -462,7 +463,7 @@ fun HistoryDetailScreen(
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(p.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                                    p.amount?.let { Text(fmtMoney(it), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall) }
+                                    p.amount?.let { Text(formatMoney(it, "EUR"), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall) }
                                 }
                                 Box(
                                     Modifier.clip(RoundedCornerShape(50)).background(
@@ -576,4 +577,3 @@ internal fun TennisSetEditor(sets: List<SetScore>, onChange: (List<SetScore>) ->
     }
 }
 
-private fun fmtMoney(amount: Double): String = "\u20AC%.2f".format(amount)

@@ -33,6 +33,7 @@ import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.util.formatMoney
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
@@ -917,7 +918,7 @@ private fun HomeActionCard(action: HomeAction, onClick: () -> Unit) {
 }
 
 private fun formatAmount(amount: Double?, currency: String?): String =
-    "%.2f %s".format(amount ?: 0.0, currency ?: "EUR")
+    formatMoney(amount ?: 0.0, currency)
 
 /**
  * A pending invitation: "Rui invited you to play" with a real choice. The user

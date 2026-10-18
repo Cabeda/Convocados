@@ -233,9 +233,9 @@
     <string name="paid_streak">%1$d game paid streak</string>
     <string name="on_bench">You\'re on the bench</string>
     <string name="joined_as">You joined as %1$s</string>
-    <string name="owe_amount">You owe €%1$s from %2$d game(s)</string>
+    <string name="owe_amount">You owe %1$s from %2$d game(s)</string>
     <string name="settle_balance">Settle your outstanding balance to join.</string>
-    <string name="pay_and_join">Pay €%1$s &amp; join</string>
+    <string name="pay_and_join">Pay %1$s &amp; join</string>
     <string name="join_as">Join (%1$s)</string>
     <string name="removed_tap_undo">%1$s removed — tap to undo</string>
     <string name="vs">VS</string>

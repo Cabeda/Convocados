@@ -204,9 +204,9 @@
     <string name="paid_streak">sequência de %1$d jogos pagos</string>
     <string name="on_bench">Estás nos suplentes</string>
     <string name="joined_as">Entraste como %1$s</string>
-    <string name="owe_amount">Deves €%1$s de %2$d jogo(s)</string>
+    <string name="owe_amount">Deves %1$s de %2$d jogo(s)</string>
     <string name="settle_balance">Regulariza o teu saldo pendente para entrar.</string>
-    <string name="pay_and_join">Pagar €%1$s e entrar</string>
+    <string name="pay_and_join">Pagar %1$s e entrar</string>
     <string name="join_as">Entrar (%1$s)</string>
     <string name="removed_tap_undo">%1$s removido — toca para anular</string>
     <string name="vs">VS</string>

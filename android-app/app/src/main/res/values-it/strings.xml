@@ -204,9 +204,9 @@
     <string name="paid_streak">serie di %1$d partite pagate</string>
     <string name="on_bench">Sei in panchina</string>
     <string name="joined_as">Ti sei unito come %1$s</string>
-    <string name="owe_amount">Devi €%1$s per %2$d partita(e)</string>
+    <string name="owe_amount">Devi %1$s per %2$d partita(e)</string>
     <string name="settle_balance">Salda il tuo saldo in sospeso per unirti.</string>
-    <string name="pay_and_join">Paga €%1$s e unisciti</string>
+    <string name="pay_and_join">Paga %1$s e unisciti</string>
     <string name="join_as">Unisciti (%1$s)</string>
     <string name="removed_tap_undo">%1$s rimosso — tocca per annullare</string>
     <string name="vs">VS</string>
