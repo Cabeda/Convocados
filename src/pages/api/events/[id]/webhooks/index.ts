@@ -61,6 +61,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       id: webhook.id,
       url: webhook.url,
       events: JSON.parse(webhook.events),
+      disabled: webhook.disabled,
       createdAt: webhook.createdAt.toISOString(),
     });
   } catch (e) {
@@ -92,6 +93,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       id: w.id,
       url: w.url,
       events: JSON.parse(w.events),
+      disabled: w.disabled,
       createdAt: w.createdAt.toISOString(),
     })),
   });

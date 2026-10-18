@@ -31,6 +31,7 @@ interface Webhook {
   id: string;
   url: string;
   events: string[];
+  disabled: boolean;
   createdAt: string;
 }
 
@@ -181,6 +182,19 @@ export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable
     }
   };
 
+  const handleReEnable = async (id: string) => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/webhooks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ disabled: false }),
+      });
+      if (res.ok) await fetchWebhooks();
+    } catch {
+      setError(t("webhookAddError"));
+    }
+  };
+
   const statusChip = (status: string) => {
     const map: Record<string, "success" | "error" | "warning" | "default"> = {
       success: "success", failed: "error", pending: "warning",
@@ -264,6 +278,7 @@ export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable
                 secondary={
                   <Stack spacing={0.5}>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {wh.disabled && <Chip size="small" label={t("webhookDisabled")} color="error" />}
                       {wh.events.length === 0
                         ? <Chip size="small" label={t("webhookAllEvents")} />
                         : wh.events.map((e) => <Chip key={e} size="small" label={eventTypeLabel(e, t)} />)}
@@ -278,6 +293,13 @@ export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable
                   </Stack>
                 }
               />
+              {wh.disabled && (
+                <Tooltip title={t("webhookReEnable")}>
+                  <IconButton size="small" aria-label={t("webhookReEnable")} onClick={() => handleReEnable(wh.id)}>
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title={t("webhookEdit")}>
                 <IconButton size="small" aria-label={t("webhookEdit")} onClick={() => handleOpenEdit(wh)} disabled={webhookDisabled}>
                   <EditIcon fontSize="small" />
