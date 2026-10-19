@@ -24,7 +24,7 @@ dex sync               # Push tasks to GitHub Issues
 - The local ledger and GitHub Issues are **two ledgers**, not one, and they disagree by
   design — including for machine-filed tasks, which follow a different path back. The
   ownership table and the machine exception live in
-  [`docs/development-guide.md`](docs/development-guide.md); reach for it when a task's
+  [`docs/development-guide.md`](./development-guide.md); reach for it when a task's
   GitHub state does not match the ledger.
 - `dex` reads the **working tree**: never `git stash` or `git checkout --` the `.dex/`
   directory while working, or the task list silently disappears
