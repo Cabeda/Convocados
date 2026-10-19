@@ -1248,8 +1248,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
               // #1269: a linked row still matches on userId; an anonymous row added by
               // the organizer has no userId, so fall back to the normalized name match.
               const myPlayer = session?.user?.id ? findSelfRosterRow(event.players, session.user!) : null;
-              if (myPlayer) {
-                const unlinked = !myPlayer.userId;
+              // #1331: name-match is removal-only. A linked row (userId) counts as
+              // participation and shows the "you joined as" hero; an unlinked
+              // name-matched row only grants self-leave via the roster X.
+              if (myPlayer?.userId) {
+                const unlinked = false;
                 const isOnBench = event.players.findIndex((p) => p.id === myPlayer.id) >= event.maxPlayers;
                 return (
                   <Paper elevation={1} sx={{ borderRadius: 3, p: 2, display: "flex", alignItems: "center", gap: 1.5 }}>
