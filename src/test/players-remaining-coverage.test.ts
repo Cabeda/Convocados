@@ -7,11 +7,12 @@ import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { sendPushToUser } from "~/lib/push.server";
 import { sendPlayerInviteToRegister, sendGameInvite, sendPlayerJoinedOwnerNotification } from "~/lib/email.server";
+import type * as EmailServer from "~/lib/email.server";
 
 vi.mock("~/lib/auth.helpers.server", () => ({ getSession: vi.fn(), checkOwnership: vi.fn() }));
 vi.mock("~/lib/push.server", () => ({ sendPushToUser: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("~/lib/email.server", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("~/lib/email.server")>();
+  const actual = await importOriginal<typeof EmailServer>();
   return {
     ...actual,
     sendPlayerInviteToRegister: vi.fn().mockResolvedValue(undefined),

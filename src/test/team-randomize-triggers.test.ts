@@ -38,11 +38,12 @@ vi.mock("~/lib/webhook.server", () => ({
 }));
 
 vi.mock("~/lib/random", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("~/lib/random")>();
+  const actual = await importOriginal<typeof RandomModule>();
   return { ...actual, Randomize: vi.fn(actual.Randomize) };
 });
 
 import { Randomize } from "~/lib/random";
+import type * as RandomModule from "~/lib/random";
 const mockRandomize = vi.mocked(Randomize);
 
 const mockGetSession = vi.mocked(getSession);

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import type * as DbServer from "~/lib/db.server";
 
 vi.mock("~/lib/db.server", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("~/lib/db.server")>();
+  const mod = await importOriginal<typeof DbServer>();
   return { ...mod, runDbOptimize: vi.fn().mockResolvedValue([]) };
 });
 
