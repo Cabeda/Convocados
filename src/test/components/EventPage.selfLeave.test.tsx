@@ -77,12 +77,6 @@ function renderEvent(players: Row[]) {
   renderWithTheme(<EventPage eventId="evt-1" />);
 }
 
-function deleteCalls() {
-  const all = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls as Array<
-    [string, RequestInit | undefined]
-  >;
-  return all.filter(([url, init]) => String(url).includes("/players") && init?.method === "DELETE");
-}
 
 beforeEach(() => {
   mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
