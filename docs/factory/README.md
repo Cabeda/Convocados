@@ -105,6 +105,7 @@ reads the truth from GitHub.
 | `factory:review` | Awaiting Cabeda. The Factory's only success state. |
 | `factory:blocked` | Budget spent or target unreachable. Waits for a human. |
 | `factory:explored` | Filed by an Explorer. **Not** queued. |
+| `wayfinder:grilling` | Spec not yet implementable — needs a grilling session first. **Not** queued. |
 
 Queue order: `dex:priority-1` → `-2` → `-3`, oldest first within each. A Claim is a comment
 on the Issue; the next run reads claims before selecting, and a stale claim is reclaimed
@@ -184,3 +185,56 @@ any budget ends the run as **Blocked**, with the evidence attached.
 the Change `factory:review` and comments a summary: what changed, linked Issue, gates
 passed, coverage delta, and the full transcript. Blocking state is `factory:blocked`; a
 Blocked Issue stays out of the queue until a human clears it.
+
+## Gates (detail)
+
+GATE 1 is the pre-push hook, and it is web-only: `pnpm lint`, `npm run
+typecheck`, `npx vitest run --coverage`, `pnpm test:route-coverage` (which fails on any
+untested route), gitleaks over the pushed commits, and semgrep (warn-only). Before handing a
+Change back, also run what the hook does not:
+`pnpm sync:feature-parity-docs`, `pnpm audit --audit-level
+high`, and Gradle `./gradlew :app:assembleDebug :wear:assembleDebug :wear:lintDebug
+:wear:verifyRoborazziDebug`. GATE 2 is GitHub CI, which repeats those and adds Playwright
+(only when the diff touches `src/pages/**` or `e2e/**`). A Change over **400 changed lines
+or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate. The
+one exception a Change may claim without being split: a change and the test harness that
+re-encodes its invariant are one unit, because neither half is correct alone. Claim it in
+the PR body rather than silently exceeding.
+The cap governs a **factory Change** (one ticket); a human-driven integration wave PR may
+exceed it only when every ticket merged into it individually stayed under the cap — and the
+wave PR description must **list the merged ticket PR numbers**, so the claim is checkable
+rather than prose. On a
+wave: run targeted tests after each merge and the full suite **once** at the end of the
+wave — re-running everything per merge re-pays for merging, not for the work, and CI is the
+backstop.
+
+`pnpm audit` sits in GATE 1 deliberately: a fresh CVE in a transitive dependency is not
+repairable by editing our code, so it must fail fast as Blocked instead of burning the CI
+loop.
+
+## Rules (non-negotiable)
+
+- **Only Cabeda applies or removes `ready-for-agent`.** Explorers may not label their own
+  output, and the Factory may not pull work that was not offered.
+- **`wayfinder:grilling` marks an Issue whose spec is not yet implementable** — it needs a
+  grilling session to improve/review the spec first. The Factory ignores it; it is promoted
+  to `ready-for-agent` only after the spec is sharp. Only Cabeda applies or removes it.
+- **Only Cabeda merges.** No agent merges, ever, including after approval.
+- **`FACTORY_AUTOMERGE=true` (a repo variable) is the single exception, and it is
+  off by default.** It lets `scripts/factory/automerge-run.ts` arm GitHub auto-merge
+  on **machine-authored Dependabot bumps only**, and nothing else. Four properties
+  keep that narrow — the four properties, each with the failure it prevents
+  (a green run on a stale base, `pull-requests: write` calling the merge
+  endpoint, an armed merge that survives unsetting the variable), are in this
+  README. Reach for them when touching the automerge workflow or deciding whether an arm
+  is still valid. The workflow also honours `FACTORY_PAUSED` first, like every other
+  factory entry point.
+
+  A human-authored Change is **never** auto-merged, at any gate state. Setting this
+  variable is the activation, and no machine may set or clear it.
+- **The factory branches from `origin/main` only** — never from a local checkout or another
+  feature branch, so no Change inherits half-finished work.
+- **`FACTORY_PAUSED=true` (a repo variable) stops everything** at every entry point. No
+  machine may set or clear it.
+- **Agents may edit AGENTS.md, but the edit ships as its own PR**, flagged in the
+  description. A machine that edits its own constitution is unauditable.

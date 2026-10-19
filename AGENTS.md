@@ -91,13 +91,10 @@ UI drift.
 
 ### 5 & 6. Thresholds are a ratchet; metrics are never gamed
 
-Thresholds move **up** only, and no measured number — coverage, k6 latency, Lighthouse
-budget, bundle size, PR diff size — may pass by changing the measurement instead of the
-code. The full rule, with the proxy cheats enumerated (deleting tests, `exclude` entries,
-`/* c8 ignore */`, weaker assertions, warmer caches, smaller inputs), is in
-[`CODING_STANDARDS.md`](CODING_STANDARDS.md) under **Never cheat a gate**, which the
-reviewer applies at review time. If coverage drops, write the test that covers the gap
-and raise the threshold to the new measured value.
+Thresholds move **up** only. Full rule (proxy cheats, coverage, k6, Lighthouse, bundle
+size, PR diff size) in [`CODING_STANDARDS.md`](CODING_STANDARDS.md) under
+**Never cheat a gate**. If coverage drops, write the test that covers the gap and raise
+the threshold.
 
 ## Development Workflow
 
@@ -199,65 +196,28 @@ Android to the Play internal track, and deploys the scheduler. One click is prod
 The factory turns `ready-for-agent` Issues into ready-to-prod Changes without being asked,
 and proposes improvements nobody asked for. It never merges.
 
-**Roles, reach, budgets, handoff and the automerge exception** are documented in
-[`docs/factory/README.md`](docs/factory/README.md): the five roles and what each one never
-does, the two structural gaps in the Reviewer's reach, the Attempt/token budgets, the
-`awaiting-human` handoff, and the four properties that keep `FACTORY_AUTOMERGE` narrow.
-Reach for it when writing or reviewing a factory Change, or when a label, a gate or a
-budget is in question. The rules below are what every session obeys without reaching for
-anything.
+**Roles, reach, budgets, handoff, automerge, and gates** are documented in
+[`docs/factory/README.md`](docs/factory/README.md) (the loop, roles table, states, build
+order, gates detail). Reach for it when writing or reviewing a factory Change, or when a
+label, gate, or budget is in question.
 
-**Gates.** GATE 1 is the pre-push hook, and it is web-only: `pnpm lint`, `npm run
-typecheck`, `npx vitest run --coverage`, `pnpm test:route-coverage` (which fails on any
-untested route), gitleaks over the pushed commits, and semgrep (warn-only). Before handing a
-Change back, also run what the hook does not:
-`pnpm sync:feature-parity-docs`, `pnpm audit --audit-level
-high`, and Gradle `./gradlew :app:assembleDebug :wear:assembleDebug :wear:lintDebug
-:wear:verifyRoborazziDebug`. GATE 2 is GitHub CI, which repeats those and adds Playwright
-(only when the diff touches `src/pages/**` or `e2e/**`). A Change over **400 changed lines
-or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate. The
-one exception a Change may claim without being split: a change and the test harness that
-re-encodes its invariant are one unit, because neither half is correct alone. Claim it in
-the PR body rather than silently exceeding.
-The cap governs a **factory Change** (one ticket); a human-driven integration wave PR may
-exceed it only when every ticket merged into it individually stayed under the cap — and the
-wave PR description must **list the merged ticket PR numbers**, so the claim is checkable
-rather than prose. On a
-wave: run targeted tests after each merge and the full suite **once** at the end of the
-wave — re-running everything per merge re-pays for merging, not for the work, and CI is the
-backstop.
-
-`pnpm audit` sits in GATE 1 deliberately: a fresh CVE in a transitive dependency is not
-repairable by editing our code, so it must fail fast as Blocked instead of burning the CI
-loop.
-
-**Rules for anything in this repository's factory, human or machine:**
+**Rules every session obeys without reaching for anything:**
 
 - **Only Cabeda applies or removes `ready-for-agent`.** Explorers may not label their own
   output, and the Factory may not pull work that was not offered.
+- **`wayfinder:grilling` marks an Issue whose spec is not yet implementable** — it needs a
+  grilling session first. The Factory ignores it; promotion to `ready-for-agent` is
+  Cabeda's call.
 - **Only Cabeda merges.** No agent merges, ever, including after approval.
-- **`FACTORY_AUTOMERGE=true` (a repo variable) is the single exception, and it is
-  off by default.** It lets `scripts/factory/automerge-run.ts` arm GitHub auto-merge
-  on **machine-authored Dependabot bumps only**, and nothing else. Four properties
-  keep that narrow — the four properties, each with the failure it prevents
-  (a green run on a stale base, `pull-requests: write` calling the merge
-  endpoint, an armed merge that survives unsetting the variable), are in
-  [`docs/factory/README.md`](docs/factory/README.md). Reach for them when
-  touching the automerge workflow or deciding whether an arm is still valid.
-  The workflow also honours `FACTORY_PAUSED` first, like every other factory
-  entry point.
+- **`FACTORY_AUTOMERGE=true`** is the single exception (Dependabot bumps only); see README
+  for the four properties. A human-authored Change is never auto-merged.
+- **`FACTORY_PAUSED=true` stops everything** at every entry point.
+- **The factory branches from `origin/main` only.**
+- **Agents may edit this file, but the edit ships as its own PR.**
 
-  A human-authored Change is **never** auto-merged, at any gate state. Setting this
-  variable is the activation, and no machine may set or clear it.
-- **The factory branches from `origin/main` only** — never from a local checkout or another
-  feature branch, so no Change inherits half-finished work.
-- **`FACTORY_PAUSED=true` (a repo variable) stops everything** at every entry point. No
-  machine may set or clear it.
-- **Agents may edit this file, but the edit ships as its own PR**, flagged in the
-  description. A machine that edits its own constitution is unauditable.
+See `docs/factory/` for the runbooks, `docs/factory/CONTEXT.md` for vocabulary, and
+`CONTEXT-MAP.md`.
 
-See `docs/factory/` for the runbooks, `docs/factory/CONTEXT.md` for the vocabulary, and
-`CONTEXT-MAP.md` for how the two contexts relate.
 
 ## Testing Guidelines
 
@@ -328,20 +288,7 @@ on Wear, test-scaffolding extraction, fixture placement) live in
 
 ## Project Structure
 
-```
-src/                        # Web app source
-├── components/             # React components (.tsx)
-├── pages/api/              # Astro API routes (.ts)
-├── lib/                    # i18n per locale, *.server.ts, shared utils
-├── test/                   # Unit + integration tests
-└── prisma/schema.prisma
-android-app/               # Android (Gradle multi-module)
-├── app/                    # :app — phone/tablet
-├── wear/                   # :wear — Wear OS (standalone)
-└── settings.gradle.kts     # :app and :wear
-```
-
-The full tree, per-screen layout, and where each module's tests and screenshots live:
+Full tree, per-screen layout, tests, and screenshots:
 [`docs/development-guide.md`](docs/development-guide.md).
 
 ### Searching
@@ -389,45 +336,10 @@ Before submitting a PR:
 
 ## Issue Tracker (dex)
 
-This project uses **[dex](https://dex.rip)** for issue tracking. Run `dex --help` for the CLI.
-
-### Quick Reference
-
-```bash
-dex ready              # Find available work
-dex show <id>          # View issue details
-dex start <id>         # Claim work
-dex complete <id> --result "what changed" --commit <sha>
-                       # Complete work. BOTH flags are required: --result is the
-                       # completion note, and --commit links the commit so the
-                       # GitHub issue closes when that commit merges. Use
-                       # --no-commit to complete without closing the issue.
-dex sync               # Push tasks to GitHub Issues
-```
-
-### Rules
-
-- Use `dex` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- GitHub sync is enabled with `on_change = true` (auto-sync on every mutation)
-- Tasks are stored at `.dex/tasks.jsonl` (committed to repo) and synced to GitHub Issues
-- The local ledger and GitHub Issues are **two ledgers**, not one, and they disagree by
-  design — including for machine-filed tasks, which follow a different path back. The
-  ownership table and the machine exception live in
-  [`docs/development-guide.md`](docs/development-guide.md); reach for it when a task's
-  GitHub state does not match the ledger.
-- `dex` reads the **working tree**: never `git stash` or `git checkout --` the `.dex/`
-  directory while working, or the task list silently disappears
-- `.gitattributes` unions `.dex/tasks.jsonl` on merge, so integration branches do not
-  conflict on the ledger. The union splices lines silently, and task records are mutable
-  (`completed`, `updated_at` are rewritten in place), so if both sides edited the same
-  task the ledger ends up with two lines sharing one id. Run
-  `node scripts/dex-dedupe.mjs --check` before pushing and fix any duplicate it reports
-  (`node scripts/dex-dedupe.mjs` keeps the newest `updated_at` per id, then commit).
-  `src/test/agent-env-guardrails.test.ts` fails CI on a duplicate id, and the `dex-ledger`
-  CI job runs the same `--check`.
-  `.dex/sync-state.json` is derived state with no merge attribute (`merge=ours` would be
-  inert without a config-registered driver): on conflict take either side wholesale and
-  delete the markers — never splice.
+This project uses **[dex](https://dex.rip)** for issue tracking. Full reference (quick
+commands, rules, ledger/merge handling): [`docs/dex.md`](docs/dex.md). Run `dex --help`
+for the CLI. Storage: `.dex/tasks.jsonl` (committed); syncs to GitHub Issues. Reconcile
+duplicate ledger ids with `node scripts/dex-dedupe.mjs --check`.
 
 ## Session Completion
 
