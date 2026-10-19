@@ -25,6 +25,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
+import dev.convocados.util.formatMoney
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.SettlementGame
 import dev.convocados.data.api.SettlementSummary
@@ -129,12 +130,12 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 if (payers.isNotEmpty()) {
                                     Text(stringResource(R.string.payments_to_receive), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                    payers.forEach { p -> Text(stringResource(R.string.payments_is_owed, p.name, fmtMoney(p.owedToAmount)), style = MaterialTheme.typography.bodyMedium) }
+                                    payers.forEach { p -> Text(stringResource(R.string.payments_is_owed, p.name, formatMoney(p.owedToAmount, "EUR")), style = MaterialTheme.typography.bodyMedium) }
                                 }
                                 if (debtors.isNotEmpty()) {
                                     if (payers.isNotEmpty()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     Text(stringResource(R.string.payments_to_pay), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                    debtors.forEach { p -> Text(stringResource(R.string.payments_owes, p.name, fmtMoney(p.owedAmount)), style = MaterialTheme.typography.bodyMedium) }
+                                    debtors.forEach { p -> Text(stringResource(R.string.payments_owes, p.name, formatMoney(p.owedAmount, "EUR")), style = MaterialTheme.typography.bodyMedium) }
                                 }
                             }
                         }
@@ -160,7 +161,7 @@ private fun SettlementGameCard(g: SettlementGame, isManager: Boolean, busy: Bool
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(shortDate(g.dateTime), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    g.payerName?.let { Text(stringResource(R.string.payments_is_owed, it, fmtMoney(g.total)), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+                    g.payerName?.let { Text(stringResource(R.string.payments_is_owed, it, formatMoney(g.total, "EUR")), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                 }
                 // #1236: the payer settles their own game from here too — same
                 // condition as web (payer && debtorCount > 0).
@@ -189,7 +190,6 @@ private fun SettlementGameCard(g: SettlementGame, isManager: Boolean, busy: Bool
     }
 }
 
-private fun fmtMoney(amount: Double): String = "\u20AC%.2f".format(amount)
 
 private fun shortDate(iso: String): String {
     val d = runCatching { java.time.Instant.parse(iso).atZone(java.time.ZoneId.systemDefault()) }.getOrNull() ?: return iso

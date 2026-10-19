@@ -84,6 +84,49 @@ test surface.
 - A feature that ships on web ships on Android in the same change
   (`pnpm sync:feature-parity-docs` is the check, not the exception).
 
+## A gate must be able to fail
+
+A check that cannot report a failure is not a gate; it is a green light with a checklist drawn
+on it. Two of them shipped here, both found the same way — by making the thing they check
+*broken* and watching what they said:
+
+- `route-coverage` printed a ratio and always exited 0. Wiring it into the hook would have
+  changed nothing.
+- `feature-parity` ran a **generator**: it rewrote the file it was checking and exited 0, so a
+  stale `docs/feature-parity.md` could never be reported. That is the general shape to watch —
+  a gate that *repairs* rather than *compares*.
+
+So, before wiring any check into a gate:
+
+- **Prove it red.** Break the thing it guards, run the check, and watch it fail. If it does not,
+  the check is the bug. (Both fixes above carry a test that pins the failure, not just the pass.)
+- **A generator never gates.** Add `--check`, or do not gate it.
+- **A threshold belongs to one owner.** The lint warning cap existed as `--max-warnings 259` in
+  the pre-push hook *and* in `scripts/factory/gate.sh`, while CI had none at all — three
+  statements of one number, two of them wrong, against a real count of 187. It now lives on the
+  `lint` script in `package.json`, pinned to the measured count so it can only fall. A number
+  copied into a second runner has already diverged.
+- `src/test/gate-parity.test.ts` fails when the hook and `scripts/factory/gate.sh` disagree
+  about which cheap checks run, so "the gate passed" cannot mean two things.
+
+## Big modules: extract, do not grow
+
+Four components are over 1,000 lines — `EventPage` 1504, `HistoryCardFull` 1500,
+`EventSettingsPage` 1144, `PlayerList` 1067 — and each is a place where a small change has a
+wide blast radius and where hand-written `useCallback` dependency arrays fight the compiler.
+Two of them needed compensating edits in a single session for exactly that reason.
+
+There is deliberately no `max-lines` rule: it cannot tell a 1,500-line component from a
+1,646-line translations file, and the 25 warnings it would raise are noise, not pressure.
+
+The standard is a judgement call:
+
+- **Extract from them; do not add to them.** A new feature goes in a new module the component
+  composes.
+- A PR that grows one of these by more than ~50 lines should say why in its body.
+- Prefer the seams the architecture wave established (`docs/development-guide.md` → *the shared
+  seams*) over a fifth helper inside a large component.
+
 ## Never cheat a gate
 
 The coverage thresholds in `vitest.config.ts` (`thresholds.lines`, `.statements`,

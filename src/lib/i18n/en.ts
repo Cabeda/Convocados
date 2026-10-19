@@ -434,6 +434,8 @@ const en = {
   webhookDeliveryStatus_success: "delivered",
   webhookDeliveryStatus_failed: "failed",
   webhookDeliveryStatus_pending: "pending",
+  webhookDisabled: "Disabled",
+  webhookReEnable: "Re-enable",
 
   // ELO / Ratings
   showCompetitiveData: "Show competitive data",

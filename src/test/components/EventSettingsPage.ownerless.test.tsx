@@ -68,8 +68,8 @@ function routeFetch(event: Record<string, unknown>) {
  */
 function settingsControls() {
   return {
-    publicToggle: screen.getByRole("switch", { name: /visible on the public games page/i }),
-    competitionToggle: screen.getByRole("switch", { name: /seasonal Rank ladder/i }),
+    publicToggle: screen.getByRole("switch", { name: /Public/i }),
+    competitionToggle: screen.getByRole("switch", { name: /Competitive rankings/i }),
     durationField: screen.getByRole("spinbutton"),
   };
 }

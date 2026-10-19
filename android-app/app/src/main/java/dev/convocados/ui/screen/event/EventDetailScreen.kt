@@ -66,6 +66,7 @@ import androidx.lifecycle.viewModelScope
 import coil3.compose.SubcomposeAsyncImage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
+import dev.convocados.util.formatMoney
 import dev.convocados.data.api.*
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
@@ -1334,7 +1335,7 @@ fun EventDetailScreen(
                                             Icon(Icons.Default.Payments, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                                             Spacer(Modifier.width(6.dp))
                                             Text(
-                                                "${cost.currency} ${"%.2f".format(cost.totalAmount)} total · ${"%.2f".format(perPlayer)} / player",
+                                                "${formatMoney(cost.totalAmount, cost.currency)} total · ${formatMoney(perPlayer, cost.currency)} / player",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.SemiBold
                                             )
@@ -1415,10 +1416,10 @@ fun EventDetailScreen(
                                 if (myPlayer == null) {
                                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (hasDebt && enforcement != "off") Text(stringResource(R.string.owe_amount, "%.2f".format(callerBalance.amount), callerBalance.gamesOwed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                            if (hasDebt && enforcement != "off") Text(stringResource(R.string.owe_amount, formatMoney(callerBalance.amount, ds.cost?.currency ?: "EUR"), callerBalance.gamesOwed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                                             val userName = effectiveUser.name
                                             Button(onClick = { if (hasDebt && enforcement != "off") viewModel.showPaymentNudge() else viewModel.addPlayer(eventId, userName, true) }, enabled = !ds.paymentGateBlocked, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (hasDebt && enforcement != "off") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)) {
-                                                Text(if (hasDebt && enforcement != "off") stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.join_as, userName), fontWeight = FontWeight.Bold)
+                                                Text(if (hasDebt && enforcement != "off") stringResource(R.string.pay_and_join, formatMoney(callerBalance.amount, ds.cost?.currency ?: "EUR")) else stringResource(R.string.join_as, userName), fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
@@ -1630,12 +1631,12 @@ fun EventDetailScreen(
         val autoPayPref by viewModel.autoPayOnJoin.collectAsStateWithLifecycle()
         AlertDialog(onDismissRequest = { viewModel.dismissPaymentNudge() }, title = { Text(stringResource(R.string.settle_up_title)) }, text = {
             Column {
-                if (callerBalance != null) Text(stringResource(R.string.owe_amount, "%.2f".format(callerBalance.amount), callerBalance.gamesOwed))
+                if (callerBalance != null) Text(stringResource(R.string.owe_amount, formatMoney(callerBalance.amount, state.cost?.currency ?: "EUR"), callerBalance.gamesOwed))
                 state.balance?.aggregate?.let { agg -> if (agg.totalCount > 0) { Spacer(Modifier.height(8.dp)); Text(stringResource(R.string.paid_for_last_game, agg.paidCount, agg.totalCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.always_show_payment), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f)); Switch(checked = autoPayPref, onCheckedChange = { viewModel.setAutoPayOnJoin(it) }) }
             }
-        }, confirmButton = { val userName = user?.name ?: ""; Button(onClick = { viewModel.markSentAndJoin(eventId, userName) }, colors = ButtonDefaults.buttonColors(containerColor = paymentTokens.colorFor(ExpressiveSemanticRole.Payment), contentColor = paymentTokens.onColorFor(ExpressiveSemanticRole.Payment))) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user?.name ?: "") }) { Text(stringResource(R.string.join_pay_later)) } })
+        }, confirmButton = { val userName = user?.name ?: ""; Button(onClick = { viewModel.markSentAndJoin(eventId, userName) }, colors = ButtonDefaults.buttonColors(containerColor = paymentTokens.colorFor(ExpressiveSemanticRole.Payment), contentColor = paymentTokens.onColorFor(ExpressiveSemanticRole.Payment))) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, formatMoney(callerBalance.amount, state.cost?.currency ?: "EUR")) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user?.name ?: "") }) { Text(stringResource(R.string.join_pay_later)) } })
     }
 }
 

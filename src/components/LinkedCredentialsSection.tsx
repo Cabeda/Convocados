@@ -8,6 +8,8 @@ import KeyIcon from "@mui/icons-material/Key";
 import LinkIcon from "@mui/icons-material/Link";
 import GoogleIcon from "@mui/icons-material/Google";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
+import { dateFormatTag } from "~/lib/timezones";
 import { authClient } from "~/lib/auth.client";
 
 interface CredentialView {
@@ -247,7 +249,7 @@ export function LinkedCredentialsSection({ profilePath }: { profilePath?: string
               {pendingMerge &&
                 t("mergeConfirmDesc", {
                   email: pendingMerge.absorbedEmail,
-                  date: new Date(pendingMerge.absorbedCreatedAt).toLocaleDateString(),
+                  date: new Date(pendingMerge.absorbedCreatedAt).toLocaleDateString(dateFormatTag(detectLocale())),
                 })}
             </Typography>
           </Stack>

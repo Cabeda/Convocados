@@ -204,9 +204,9 @@
     <string name="paid_streak">série de %1$d matchs payés</string>
     <string name="on_bench">Vous êtes sur le banc</string>
     <string name="joined_as">Vous avez rejoint en tant que %1$s</string>
-    <string name="owe_amount">Vous devez €%1$s pour %2$d match(s)</string>
+    <string name="owe_amount">Vous devez %1$s pour %2$d match(s)</string>
     <string name="settle_balance">Réglez votre solde en attente pour rejoindre.</string>
-    <string name="pay_and_join">Payer €%1$s et rejoindre</string>
+    <string name="pay_and_join">Payer %1$s et rejoindre</string>
     <string name="join_as">Rejoindre (%1$s)</string>
     <string name="removed_tap_undo">%1$s retiré — touchez pour annuler</string>
     <string name="vs">VS</string>

@@ -27,6 +27,7 @@ import ArchiveIcon from "@mui/icons-material/Archive";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import EmailIcon from "@mui/icons-material/Email";
 import { useT } from "~/lib/useT";
+import { PasswordPrompt } from "./event/PasswordPrompt";
 import { SPORT_PRESETS } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
 import { deriveEventPermissions } from "~/lib/eventView";
@@ -128,6 +129,7 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   // Event data
   const [event, setEvent] = useState<EventSettings | null>(null);
+  const [lockedEvent, setLockedEvent] = useState<{ id: string; title: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
@@ -153,7 +155,16 @@ export default function EventSettingsPage({ eventId }: Props) {
   const fetchEvent = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}`);
-      if (res.ok) setEvent(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        if (data.locked) {
+          setLockedEvent({ id: data.id, title: data.title });
+          setEvent(null);
+          setLoading(false);
+          return;
+        }
+        setEvent(data);
+      }
     } catch { /* ignore */ }
     setLoading(false);
   }, [eventId]);
@@ -515,6 +526,18 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  if (lockedEvent) {
+    return (
+      <ThemeModeProvider>
+        <ResponsiveLayout>
+          <Stack spacing={2} sx={{ maxWidth: 640, mx: "auto", p: 2, alignItems: "center", pt: 8 }}>
+            <PasswordPrompt eventId={lockedEvent.id} title={lockedEvent.title} onUnlocked={fetchEvent} />
+          </Stack>
+        </ResponsiveLayout>
+      </ThemeModeProvider>
+    );
+  }
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
@@ -568,7 +591,7 @@ export default function EventSettingsPage({ eventId }: Props) {
       <SectionCard title={t("eventSettingsGeneral")} icon={<PublicIcon color="action" />}>
         <Stack spacing={2}>
           <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
-            <Tooltip title={t("makePublicTooltip")}>
+            <Tooltip describeChild title={t("makePublicTooltip")}>
               <FormControlLabel
                 control={<Switch size="small" checked={event.isPublic} onChange={(e) => handleTogglePublic(e.target.checked)} disabled={!canEdit} />}
                 label={<Typography variant="body2">{t("makePublic")}</Typography>}
@@ -631,7 +654,7 @@ export default function EventSettingsPage({ eventId }: Props) {
       {/* ── Competition (ADR 0031) ── */}
       <SectionCard title={t("competitionSettings")} icon={<StarIcon color="action" />}>
         <Stack spacing={1}>
-          <Tooltip title={t("competitiveRankingsTooltip")}>
+          <Tooltip describeChild title={t("competitiveRankingsTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={(event.eloEnabled ?? true) && (event.rankEnabled ?? true)} onChange={(e) => handleToggleCompetition(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2" fontWeight={600}>{t("competitiveRankings")}</Typography>}
@@ -639,7 +662,7 @@ export default function EventSettingsPage({ eventId }: Props) {
           </Tooltip>
           <Typography variant="caption" color="text.secondary">{t("competitiveRankingsDesc")}</Typography>
           <Divider sx={{ my: 0.5 }} />
-          <Tooltip title={t("showCompetitiveDataTooltip")}>
+          <Tooltip describeChild title={t("showCompetitiveDataTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={event.showCompetitiveData ?? true} onChange={(e) => handleToggleShowCompetitiveData(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2">{t("showCompetitiveData")}</Typography>}
@@ -651,19 +674,19 @@ export default function EventSettingsPage({ eventId }: Props) {
             </AccordionSummary>
             <AccordionDetails sx={{ px: 0 }}>
               <Stack spacing={1}>
-                <Tooltip title={t("hideEloInTeamsTooltip")}>
+                <Tooltip describeChild title={t("hideEloInTeamsTooltip")}>
                   <FormControlLabel
                     control={<Switch size="small" checked={event.hideEloInTeams ?? false} onChange={(e) => handleToggleHideEloInTeams(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
                     label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("hideEloInTeams")}</Typography>}
                   />
                 </Tooltip>
-                <Tooltip title={t("allowManualRatingTooltip")}>
+                <Tooltip describeChild title={t("allowManualRatingTooltip")}>
                   <FormControlLabel
                     control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
                     label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("allowManualRating")}</Typography>}
                   />
                 </Tooltip>
-                <Tooltip title={t("rankDecayTooltip")}>
+                <Tooltip describeChild title={t("rankDecayTooltip")}>
                   <FormControlLabel
                     control={<Switch size="small" checked={event.rankDecayEnabled ?? false} onChange={(e) => handleToggleRankDecay(e.target.checked)} disabled={!canEdit || !(event.rankEnabled ?? true)} />}
                     label={<Typography variant="body2" color={!(event.rankEnabled ?? true) ? "text.disabled" : undefined}>{t("rankDecay")}</Typography>}
@@ -685,19 +708,19 @@ export default function EventSettingsPage({ eventId }: Props) {
       {/* ── Features ── */}
       <SectionCard title={t("eventSettingsFeatures")} icon={<IntegrationInstructionsIcon color="action" />}>
         <Stack spacing={1}>
-          <Tooltip title={t("splitCostsEnabledTooltip")}>
+          <Tooltip describeChild title={t("splitCostsEnabledTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={event.splitCostsEnabled ?? true} onChange={(e) => handleToggleSplitCosts(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2">{t("splitCostsEnabled")}</Typography>}
             />
           </Tooltip>
-          <Tooltip title={t("mvpEnabledTooltip")}>
+          <Tooltip describeChild title={t("mvpEnabledTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={event.mvpEnabled ?? true} onChange={(e) => handleToggleMvpEnabled(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2">{t("mvpEnabled")}</Typography>}
             />
           </Tooltip>
-          <Tooltip title={!(event.mvpEnabled ?? true) ? t("mvpEloDisabledBecauseMvpOff") : t("mvpEloEnabledTooltip")}>
+          <Tooltip describeChild title={!(event.mvpEnabled ?? true) ? t("mvpEloDisabledBecauseMvpOff") : t("mvpEloEnabledTooltip")}>
             <FormControlLabel
               control={
                 <Switch
@@ -1090,7 +1113,7 @@ export default function EventSettingsPage({ eventId }: Props) {
 
       {/* ── Integrations ── */}
       <SectionCard title={t("integrations")} icon={<IntegrationInstructionsIcon color="action" />}>
-        <WebhookSettings eventId={eventId} />
+        <WebhookSettings eventId={eventId} disabled={!canEdit} canEdit={canEdit} />
       </SectionCard>
 
       {/* ── Archive ── */}

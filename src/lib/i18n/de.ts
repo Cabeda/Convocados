@@ -408,6 +408,8 @@ const de: TranslationKeys = {
   webhookDeliveryStatus_success: "zugestellt",
   webhookDeliveryStatus_failed: "fehlgeschlagen",
   webhookDeliveryStatus_pending: "ausstehend",
+  webhookDisabled: "Deaktiviert",
+  webhookReEnable: "Reaktivieren",
   showCompetitiveData: "Wettbewerbsdaten anzeigen",
   showCompetitiveDataTooltip: "Ranglisten, Ergebnisse und Statistiken für Spieler anzeigen. Wenn deaktiviert, werden Daten weiterhin für die Teambalance erfasst, aber vor Spielern verborgen.",
   ratingsHidden: "Die Fähigkeitsbewertung ist für dieses Event verborgen.",

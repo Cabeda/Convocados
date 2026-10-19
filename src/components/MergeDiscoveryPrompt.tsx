@@ -11,6 +11,8 @@ import {
 } from "@mui/material";
 import { useSession } from "~/lib/auth.client";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
+import { dateFormatTag } from "~/lib/timezones";
 
 interface PendingMerge {
   absorbedUserId: string;
@@ -107,7 +109,7 @@ export default function MergeDiscoveryPrompt() {
           <Typography variant="body2">
             {t("mergeConfirmDesc", {
               email: pending.absorbedEmail,
-              date: new Date(pending.absorbedCreatedAt).toLocaleDateString(),
+              date: new Date(pending.absorbedCreatedAt).toLocaleDateString(dateFormatTag(detectLocale())),
             })}
           </Typography>
         </Stack>
