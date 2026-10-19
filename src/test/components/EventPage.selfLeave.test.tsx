@@ -77,12 +77,6 @@ function renderEvent(players: Row[]) {
   renderWithTheme(<EventPage eventId="evt-1" />);
 }
 
-function deleteCalls() {
-  const all = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls as Array<
-    [string, RequestInit | undefined]
-  >;
-  return all.filter(([url, init]) => String(url).includes("/players") && init?.method === "DELETE");
-}
 
 beforeEach(() => {
   mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
@@ -96,11 +90,14 @@ afterEach(() => {
 });
 
 describe("EventPage — self-leave on an unlinked roster row (#1269)", () => {
-  it("shows the Leave button when the signed-in user's name matches an unlinked row", async () => {
+  it("does NOT show the joined hero when the signed-in user's name matches an unlinked row (#1331 removal-only)", async () => {
     renderEvent([{ id: "p-1", name: "José Silva", userId: null }]);
-    expect(await screen.findByText("You joined as José Silva")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Leave" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /join as/i })).not.toBeInTheDocument();
+    // Name-match is removal-only: participation requires a linked row, so the
+    // "you joined as" hero (and its confirmed Leave) does not render. The user
+    // can still self-leave via the roster X, and Join is available to link.
+    expect(await screen.findByRole("button", { name: /join as/i })).toBeInTheDocument();
+    expect(screen.queryByText("You joined as José Silva")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Leave" })).not.toBeInTheDocument();
   });
 
   it("does NOT show the Leave button when no roster row matches the user", async () => {
@@ -113,35 +110,6 @@ describe("EventPage — self-leave on an unlinked roster row (#1269)", () => {
     renderEvent([{ id: "p-1", name: "Jose Silva", userId: "u-someone-else" }]);
     expect(await screen.findByRole("button", { name: /join as/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Leave" })).not.toBeInTheDocument();
-  });
-
-  it("confirms with the self copy, then removes through the existing DELETE /players route", async () => {
-    const user = userEvent.setup();
-    renderEvent([{ id: "p-unlinked", name: "José Silva", userId: null }]);
-
-    await user.click(await screen.findByRole("button", { name: "Leave" }));
-    expect(await screen.findByText("Leave this game?")).toBeInTheDocument();
-    expect(screen.getByText("You'll be removed from the player list.")).toBeInTheDocument();
-
-    await user.click(screen.getByTestId("leave-dialog-confirm"));
-
-    const calls = deleteCalls();
-    expect(calls.length).toBeGreaterThan(0);
-    const [url, init] = calls[calls.length - 1];
-    expect(String(url)).toContain("/api/events/evt-1/players");
-    expect(JSON.parse(String(init?.body))).toEqual({ playerId: "p-unlinked" });
-  });
-
-  it("does not fire the DELETE until the dialog is confirmed", async () => {
-    const user = userEvent.setup();
-    renderEvent([{ id: "p-unlinked", name: "José Silva", userId: null }]);
-
-    await user.click(await screen.findByRole("button", { name: "Leave" }));
-    await screen.findByText("Leave this game?");
-    expect(deleteCalls()).toHaveLength(0);
-
-    await user.click(screen.getByTestId("leave-dialog-cancel"));
-    expect(deleteCalls()).toHaveLength(0);
   });
 
   it("keeps the LINKED self-leave on the existing /leave path, with no name match required", async () => {

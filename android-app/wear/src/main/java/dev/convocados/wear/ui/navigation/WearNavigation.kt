@@ -124,6 +124,10 @@ fun WearNavigation(
                     onContinueQuickGame = {
                         launchQuickGame(navController, "continue", null, null)
                     },
+                    finishedQuickGame = activeQuickGame.isStarted && !activeQuickGame.isLive(System.currentTimeMillis()),
+                    onViewFinishedQuickGame = {
+                        launchQuickGame(navController, "continue", null, null)
+                    },
                 )
             }
 

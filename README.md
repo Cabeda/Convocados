@@ -148,6 +148,7 @@ Full docs at [`/docs`](https://convocados.cabeda.dev/docs):
 - [Feature guides](https://convocados.cabeda.dev/docs/features/events) (events, teams, court finder, payments, etc.)
 - [API reference](https://convocados.cabeda.dev/docs/api)
 - [Self-hosting](https://convocados.cabeda.dev/docs/guides/self-hosting)
+- [Delivery factory runbook](./docs/factory/README.md)
 
 ---
 
