@@ -59,6 +59,8 @@ fun GamesScreen(
     onHistory: () -> Unit = {},
     continueQuickGame: Boolean = false,
     onContinueQuickGame: () -> Unit = {},
+    finishedQuickGame: Boolean = false,
+    onViewFinishedQuickGame: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val now by remember { tickFlow() }.collectAsState(initial = Instant.now())
@@ -268,6 +270,27 @@ fun GamesScreen(
                                 ) {
                                     Text(
                                         text = stringResource(R.string.continue_quick_game),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
+                        }
+
+                        // #1315: a finished quick game leaves a tile with no destination.
+                        // Signpost it on the landing screen so the result can be saved
+                        // in one tap instead of 3 taps + a swipe.
+                        if (finishedQuickGame) {
+                            item {
+                                Button(
+                                    onClick = onViewFinishedQuickGame,
+                                    modifier = Modifier.fillMaxWidth().roundListInset(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    ),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.view_finished_quick_game),
                                         style = MaterialTheme.typography.labelMedium,
                                     )
                                 }
