@@ -23,6 +23,34 @@ ready-for-agent Issue
 
 Nothing above is "done". Every path ends at a human or at **Blocked**.
 
+## Gates
+
+**GATE 1 is the pre-push hook, and it is web-only.** It runs the cheap checks first —
+`pnpm lint` (errors **and** the warning cap, which lives on the script so CI enforces the
+same number), `pnpm test:route-coverage` (fails on any untested route),
+`pnpm check:feature-parity`, `pnpm check:play-listing`, `pnpm check:play-screenshots`,
+`pnpm audit --audit-level high`, gitleaks over the pushed commits, and semgrep (warn-only) —
+then `pnpm typecheck` and the suite with coverage. `src/test/gate-parity.test.ts` fails if
+that hook and `scripts/factory/gate.sh` disagree about the cheap set, so "GATE 1 passed" has
+one meaning. The slow gates stay out of the hook: run `pnpm test:e2e` and the Gradle
+`:app`/`:wear` builds yourself before handing a Change back. GATE 2 is GitHub CI, which
+repeats GATE 1 and adds Playwright, the Android builds and Lighthouse.
+
+A Change over **400 changed lines or 20 files** fails GATE 1 and must **split and hand back**
+— never silently truncate. The one exception a Change may claim without being split: a
+change and the test harness that re-encodes its invariant are one unit, because neither half
+is correct alone. Claim it in the PR body rather than silently exceeding. The cap governs a
+**factory Change** (one ticket); a human-driven integration wave PR may exceed it only when
+every ticket merged into it individually stayed under the cap — and the wave PR description
+must **list the merged ticket PR numbers**, so the claim is checkable rather than prose. On a
+wave: run targeted tests after each merge and the full suite **once** at the end of the
+wave — re-running everything per merge re-pays for merging, not for the work, and CI is the
+backstop.
+
+`pnpm audit` sits in GATE 1 deliberately: a fresh CVE in a transitive dependency is not
+repairable by editing our code, so it must fail fast as Blocked instead of burning the CI
+loop.
+
 ## Roles
 
 Each role is a **primary agent** in `.opencode/agents/` — primary, because the action's

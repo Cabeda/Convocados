@@ -134,6 +134,40 @@ describe("agent environment guardrails", () => {
     expect(agents).toContain("docs/runbooks/production-inspection.md");
   });
 
+  it("keeps AGENTS.md to steps plus pointers by parking its reference blocks behind them", async () => {
+    // AGENTS.md is pushed into every session's context on every turn, so a
+    // reference block parked here is paid for by all of them (#1367). The line
+    // budget is what stops the next "just add it here"; the moved prose must
+    // land where the pointer sends the reader, or the pointer strands them.
+    const agents = await read("AGENTS.md");
+    const lines = agents.split("\n").length;
+    expect(
+      lines,
+      `AGENTS.md is ${lines} lines — park reference behind docs/factory/ or docs/development-guide.md instead of growing it`,
+    ).toBeLessThan(400);
+
+    // The four blocks the decision moved no longer carry their reference prose…
+    expect(agents).not.toContain("GATE 1 is the pre-push hook");
+    expect(agents).not.toContain("warm caches, smaller inputs");
+    expect(agents).not.toContain("dex ready");
+    expect(agents).not.toContain("└── prisma/schema.prisma");
+
+    // …while the pointers that send a reader to them do…
+    expect(agents).toContain("docs/factory/README.md");
+    expect(agents).toContain("docs/development-guide.md");
+
+    // …and the prose actually landed there. A pointer to an empty shelf strands
+    // the next reader exactly as a dropped pointer would.
+    const factory = await read("docs/factory/README.md");
+    expect(factory).toContain("GATE 1 is the pre-push hook");
+    expect(factory).toMatch(/gate-parity\.test\.ts/);
+    expect(factory).toMatch(/400 changed lines/);
+
+    const guide = await read("docs/development-guide.md");
+    expect(guide).toContain("dex ready");
+    expect(guide).toContain("└── schema.prisma");
+  });
+
   it("ships a read-only production query wrapper and stops citing the absent sqlite3 CLI", async () => {
     const scriptPath = "scripts/prod-query.sh";
     expect(existsSync(join(root, scriptPath))).toBe(true);
