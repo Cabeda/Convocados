@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.convocados.wear.ui.screen.score.ScoreFixtureContent
+import dev.convocados.wear.ui.screen.score.ScoreUiState
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -46,7 +47,7 @@ class WearLargeFontTest {
     @Config(qualifiers = "w390dp-h390dp-round")
     fun liveScoreRound() {
         shot2x("round_live_score_2x") { liveScore() }
-        assertStatusAboveClock()
+        assertStatusAboveClock(expectedStatus = "Will sync")
     }
 
     // The strictest bezel: the offline status sits just above the clock.
@@ -54,8 +55,39 @@ class WearLargeFontTest {
     @Config(qualifiers = "w227dp-h227dp-round")
     fun liveScoreSmallRound() {
         shot2x("small_round_live_score_2x") { liveScore() }
-        assertStatusAboveClock()
+        assertStatusAboveClock(expectedStatus = "Will sync")
     }
+
+    // The longer of the two statuses: it is the one that used to run widest.
+    @Test
+    @Config(qualifiers = "w227dp-h227dp-round")
+    fun liveScoreSignInSmallRound() {
+        shot2x("small_round_live_score_sign_in_2x") {
+            liveScore(WearFixtures.liveScore.copy(signInRequired = true))
+        }
+        assertStatusAboveClock(expectedStatus = "Sign in again")
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun liveScoreSquare() {
+        shot2x("square_live_score_2x") { liveScore() }
+        assertStatusAboveClock(expectedStatus = "Will sync")
+    }
+
+    // A large round display carries the full sentence on one line.
+    @Test
+    @Config(qualifiers = "w454dp-h454dp-round")
+    fun liveScoreLargeRound() {
+        shot2x("large_round_live_score_2x") { liveScore() }
+        assertStatusAboveClock(expectedStatus = "Will sync")
+    }
+
+    // Tennis keeps its status in flow rather than overlaid, so it must not be
+    // squeezed out of the tiles at 2x.
+    @Test
+    @Config(qualifiers = "w227dp-h227dp-round")
+    fun tennisSmallRound() = shot2x("small_round_tennis_2x") { tennis() }
 
     private fun shot2x(name: String, content: @Composable () -> Unit) {
         composeRule.setContent {
@@ -69,15 +101,16 @@ class WearLargeFontTest {
 
     /**
      * Both the offline status and the clock are anchored to the bottom, so a
-     * large font scale used to draw the status over the clock.
+     * large font scale used to draw the status over the clock. Matching the
+     * text exactly also proves the compact form — not the full sentence that
+     * happens to fit — is what rendered.
      */
-    private fun assertStatusAboveClock() {
+    private fun assertStatusAboveClock(expectedStatus: String) {
         val status = composeRule.onAllNodes(
-            // Matches both the full sentence and its large-font short form.
-            hasText("Will sync", substring = true),
+            hasText(expectedStatus),
             useUnmergedTree = true,
         ).fetchSemanticsNodes().firstOrNull()
-        assertNotNull("offline status not rendered", status)
+        assertNotNull("\"$expectedStatus\" not rendered", status)
         val clock = composeRule.onAllNodes(
             SemanticsMatcher("clock text") { node ->
                 node.config.getOrNull(SemanticsProperties.Text)
@@ -104,8 +137,20 @@ class WearLargeFontTest {
         WearHistoryFixtureContent(WearFixtures.history, now = WearFixtures.now)
 
     @Composable
-    private fun liveScore() = ScoreFixtureContent(
-        state = WearFixtures.liveScore,
+    private fun liveScore(state: ScoreUiState = WearFixtures.liveScore) =
+        ScoreFixtureContent(
+            state = state,
+            now = WearFixtures.now,
+            onIncrementOne = {},
+            onIncrementTwo = {},
+            onDecrementOne = {},
+            onDecrementTwo = {},
+            onUndo = {},
+        )
+
+    @Composable
+    private fun tennis() = ScoreFixtureContent(
+        state = WearFixtures.tennisScore,
         now = WearFixtures.now,
         onIncrementOne = {},
         onIncrementTwo = {},

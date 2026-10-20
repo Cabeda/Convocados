@@ -438,13 +438,11 @@ internal fun TennisScoreEditor(
             )
             if (state.isOfflineQueued || state.isLocalStart) {
                 Text(
-                    text = stringResource(
-                        if (state.signInRequired) R.string.sign_in_again else R.string.will_sync_online,
-                    ),
+                    text = offlineStatusText(state.signInRequired),
                     style = MaterialTheme.typography.labelSmall,
                     color = Warning,
                     textAlign = TextAlign.Center,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -687,16 +685,8 @@ internal fun ScoreTimeOverlay(
                 if (offline) {
                     // The full sentence is wider than the chord of a round
                     // display at ~2x, so it gets a short form that fits.
-                    val compactStatus = LocalDensity.current.fontScale > 1.5f
                     Text(
-                        text = stringResource(
-                            when {
-                                state.signInRequired && compactStatus -> R.string.sign_in_again_short
-                                state.signInRequired -> R.string.sign_in_again
-                                compactStatus -> R.string.will_sync_online_short
-                                else -> R.string.will_sync_online
-                            },
-                        ),
+                        text = offlineStatusText(state.signInRequired),
                         style = MaterialTheme.typography.labelSmall,
                         color = Warning,
                         textAlign = TextAlign.Center,
@@ -711,6 +701,26 @@ internal fun ScoreTimeOverlay(
             }
         }
     }
+}
+
+/**
+ * Play's large-font sweep renders at 2x. At 1.5x the full status sentence is
+ * already as wide as the chord of a 227dp round display, so that scale and
+ * above use the short form.
+ */
+private const val COMPACT_STATUS_FONT_SCALE = 1.5f
+
+@Composable
+private fun offlineStatusText(signInRequired: Boolean): String {
+    val compact = LocalDensity.current.fontScale >= COMPACT_STATUS_FONT_SCALE
+    return stringResource(
+        when {
+            signInRequired && compact -> R.string.sign_in_again_short
+            signInRequired -> R.string.sign_in_again
+            compact -> R.string.will_sync_online_short
+            else -> R.string.will_sync_online
+        },
+    )
 }
 
 /**
