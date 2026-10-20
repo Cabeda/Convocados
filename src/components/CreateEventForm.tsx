@@ -242,7 +242,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
             if (val === "daily") return t("daily");
             if (val === "weekly") return t("weeklyOnDay", { day: t(DAYS[jsDayToDayIndex(new Date(dateTime).getDay())].key) });
             if (val === "monthly") return t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) });
-            if (val === "yearly") return t("annually", { date: new Date(dateTime).toLocaleDateString(dateFormatTag(locale as any), { month: "short", day: "numeric" }) });
+            if (val === "yearly") return t("annually", { date: new Date(dateTime).toLocaleDateString(dateFormatTag(locale), { month: "short", day: "numeric" }) });
             if (val === "custom") return t("customRecurrence");
             return "";
           }}
@@ -266,7 +266,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
             {t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) })}
           </MenuItem>
           <MenuItem value="yearly">
-            {t("annually", { date: new Date(dateTime).toLocaleDateString(dateFormatTag(locale as any), { month: "short", day: "numeric" }) })}
+            {t("annually", { date: new Date(dateTime).toLocaleDateString(dateFormatTag(locale), { month: "short", day: "numeric" }) })}
           </MenuItem>
           <Divider />
           <MenuItem value="custom">{t("customRecurrence")}</MenuItem>

@@ -168,6 +168,10 @@ test.describe("Snackbar notifications", () => {
     });
     expect(signInRes.ok()).toBeTruthy();
 
+    // The page settles on its own first: the rankings route navigates again
+    // by itself, and a goto issued while that navigation is in flight is
+    // "interrupted by another navigation to the same URL".
+    await page.waitForLoadState("networkidle");
     await page.goto(`/events/${eventId}/rankings`);
     await expect(page.locator("text=AnonymousPlayer")).toBeVisible({ timeout: 10_000 });
   });

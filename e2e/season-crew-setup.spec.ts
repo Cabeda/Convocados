@@ -63,7 +63,12 @@ async function dragMemberToCrew(page: Page, membershipId: string, crewIndex: num
   if (!sourceBox || !targetBox) throw new Error("drag source/target not visible");
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
   await page.mouse.down();
+  // The grip starts the drag on the pointer move *after* the press, so the
+  // press needs a frame to register. Without it the drop is swallowed and the
+  // member silently stays in its crew.
+  await page.waitForTimeout(150);
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 20 });
+  await page.waitForTimeout(150);
   await page.mouse.up();
 }
 
