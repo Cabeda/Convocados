@@ -31,15 +31,19 @@ The spike grants no build go, and nothing in this ADR builds.
 - `Wallet` in `CONTEXT.md` stays what it already is — Game Units, a per-(User, Event) count
   of missed games — and does not become money.
 
-Revenue comes from the two levers the model already exposes, and each is split into its own
-Issue rather than built here (per the same decision):
+Revenue comes from two levers short of custody, and each is split into its own Issue
+rather than built here (per the same decision):
 
-1. **Platform application fee on Connect charges.** The plumbing is model-ready:
-   `EventCost.platformFeeCents` defaults to `0` beside a platform-level default, and
-   destination charges are collected with `losses_collector` / `fees_collector =
-   application`. ADR 0038 already records that taking a non-zero fee is a business/legal
-   step-change, not a config flip — that Issue must carry its own acceptance criterion
-   (price, rollout, what organizers and players are told).
+1. **Platform application fee on Connect charges.** ADR 0038 designs the plumbing: a
+   per-transaction fee as `EventCost.platformFeeCents` (default `0`) beside a
+   platform-level default, with destination charges collected via `losses_collector` /
+   `fees_collector = application`. The design is settled; the code is not — no
+   `platformFeeCents` column exists in `EventCost`, and no checkout call sets an
+   application fee or those collector parameters (`src/lib/paymentProvider.server.ts`).
+   The fee Issue therefore includes that schema and charge work, and ADR 0038 already
+   records that taking a non-zero fee is a business/legal step-change on top, not a
+   config flip — it must carry its own acceptance criterion (price, rollout, what
+   organizers and players are told).
 2. **Organizer subscriptions and premium features.** The subscription machinery exists for
    players (ADR 0008: monthly subscription, Game Units, end-of-following-month expiry); an
    organizer tier is a product decision layered on it, again its own Issue.
@@ -74,7 +78,8 @@ funds) plus real answers to the three items above — never this ADR alone.
   comment thread.
 - The application-fee Issue and the organizer-subscription Issue are the revenue work. This
   ADR prices nothing and authorises neither.
-- Nothing about the payments code, the ledger, or `CONTEXT.md` changes: the model already
-  carries `platformFeeCents`, and ADR 0038 stands as written.
+- Nothing about the payments code, the ledger, or `CONTEXT.md` changes: ADR 0038 stands
+  as written, and `platformFeeCents` remains what ADR 0038 records — a design commitment
+  with no column behind it yet.
 - The open questions stay open and unverified until a human with external access answers
   them; a later reader must not treat this file as research.

@@ -49,4 +49,14 @@ describe("ADR 0053 — no custodial wallet (GH-1081)", () => {
     expect(doc).toMatch(/open questions/i);
     expect(doc).toMatch(/not researched|unverified/i);
   });
+
+  it("never presents the fee plumbing as already built when the repo has none", () => {
+    const doc = read();
+    const schema = readFileSync(resolve(root, "prisma/schema.prisma"), "utf8");
+    const schemaHasFee = /model EventCost[^}]*\bplatformFeeCents\b/s.test(schema);
+    if (!schemaHasFee) {
+      expect(doc).not.toMatch(/plumbing is model-ready/i);
+      expect(doc).not.toMatch(/model already carries/i);
+    }
+  });
 });
