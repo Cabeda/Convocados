@@ -75,6 +75,14 @@ describe("the work job cannot outlive its credential", () => {
     const agent = jobs().factory.steps?.find((s) => s.uses?.startsWith("anomalyco/opencode"));
     expect(JSON.stringify(agent?.env ?? {})).toContain("github.token");
   });
+
+  it("uploads the hidden handoff directory", () => {
+    // upload-artifact skips hidden paths unless asked: run 39447497995 logged
+    // "No files were found with the provided path: .factory-handoff/" and
+    // delivered an empty Blocked even though the work was committed.
+    const upload = jobs().factory.steps?.find((s) => s.uses === "actions/upload-artifact@v7");
+    expect(upload?.with?.["include-hidden-files"]).toBe(true);
+  });
 });
 
 describe("delivery runs after the work, with a fresh token", () => {
