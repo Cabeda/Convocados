@@ -6,11 +6,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
+import dev.convocados.wear.ui.screen.quick.QuickScoreContent
 import dev.convocados.wear.ui.screen.score.ScoreFixtureContent
 import dev.convocados.wear.ui.screen.score.ScoreUiState
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
@@ -83,11 +85,102 @@ class WearLargeFontTest {
         assertStatusAboveClock(expectedStatus = "Will sync")
     }
 
-    // Tennis keeps its status in flow rather than overlaid, so it must not be
-    // squeezed out of the tiles at 2x.
+    // A 227dp round display is in the repo's matrix — the 1× goldens cover it
+    // — but the tennis screen does not fit on one at 2x: the tile needs about
+    // 132dp and the display leaves about 77dp. The golden records that
+    // degradation, which #1463 tracks; the test asserts on 320dp, the
+    // smallest display the app ships on.
     @Test
     @Config(qualifiers = "w227dp-h227dp-round")
     fun tennisSmallRound() = shot2x("small_round_tennis_2x") { tennis() }
+
+    // The smallest display the app ships on: the score and every action label
+    // must be readable at 2x.
+    @Test
+    @Config(qualifiers = "w320dp-h320dp-round")
+    fun tennisSmallestSupportedRound() {
+        shot2x("smallest_round_tennis_2x") { tennis() }
+        for (score in listOf("40", "30")) {
+            assertNotNull(
+                "score $score not rendered",
+                composeRule.onAllNodes(
+                    hasContentDescription(score),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+        for (label in listOf("Next", "Tie", "Undo", "Teams")) {
+            assertNotNull(
+                "action label $label not rendered",
+                composeRule.onAllNodes(
+                    hasText(label),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+    }
+
+    // The quick-game tennis editor has its own header and its own action row,
+    // so it carries the same defect class: the labels wrapped and the header
+    // ran outside the bezel.
+    @Test
+    @Config(qualifiers = "w320dp-h320dp-round")
+    fun quickTennisSmallestSupportedRound() {
+        shot2x("smallest_round_quick_tennis_2x") { quickTennis() }
+        for (label in listOf("Next", "Tie")) {
+            assertNotNull(
+                "quick action label $label not rendered",
+                composeRule.onAllNodes(
+                    hasText(label),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+    }
+
+    // The square leg: a square display has the room for the full labels, so
+    // the short forms are a round-only concession.
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun tennisSquare() {
+        shot2x("square_tennis_2x") { tennis() }
+        for (label in listOf("Next set", "Tiebreak")) {
+            assertNotNull(
+                "action label $label not rendered",
+                composeRule.onAllNodes(
+                    hasText(label),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun quickTennisSquare() {
+        shot2x("square_quick_tennis_2x") { quickTennis() }
+        for (label in listOf("Next set", "Tiebreak")) {
+            assertNotNull(
+                "quick action label $label not rendered",
+                composeRule.onAllNodes(
+                    hasText(label),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+    }
+
+    @Composable
+    private fun quickTennis() = QuickScoreContent(
+        state = WearFixtures.quickTennis,
+        nowOverride = WearFixtures.now,
+        onIncrementOne = {},
+        onIncrementTwo = {},
+        onDecrementOne = {},
+        onDecrementTwo = {},
+        onNextSet = {},
+        onToggleTiebreak = {},
+    )
 
     private fun shot2x(name: String, content: @Composable () -> Unit) {
         composeRule.setContent {

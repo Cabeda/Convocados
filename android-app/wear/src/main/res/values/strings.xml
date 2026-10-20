@@ -59,9 +59,15 @@
     <string name="sport_tennis">Tennis</string>
     <string name="sport_padel">Padel</string>
     <string name="quick_set_number">Set %1$d</string>
-    <string name="quick_tiebreak">Tiebreak</string>
-    <string name="quick_games">Games</string>
-    <string name="quick_next_set">Next set</string>
+    <string name="tiebreak">Tiebreak</string>
+    <string name="games">Games</string>
+    <string name="next_set">Next set</string>
+    <string name="undo">Undo</string>
+    <!-- Short forms for a large font scale: a label that does not fit the
+         button is cut, not scaled. -->
+    <string name="next_short">Next</string>
+    <string name="tiebreak_short">Tie</string>
+    <string name="end_short">End</string>
     <string name="duration_label">Game</string>
     <string name="alarm_label">Alarm</string>
     <string name="minutes_value">%1$d min</string>

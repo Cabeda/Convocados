@@ -402,23 +402,41 @@ internal fun TennisScoreEditor(
     val kickoffMs = state.kickoffEpochMs
     val gameOver = kickoffMs != null && state.game != null &&
         now.toEpochMilli() >= kickoffMs + sportDurationMinutes(state.game.sport) * 60_000L
+    val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+    // The sets won are the only place the match history appears on the watch,
+    // so the history only steps aside where the score needs the room: on a
+    // 227dp round display at 2x the tiles are left about 77dp and a tile needs
+    // about 132dp.
+    val showHistory = !largeFont || LocalConfiguration.current.screenHeightDp >= MIN_DISPLAY_DP_FOR_SET_HISTORY
+    val history = state.scoreSets.joinToString(" · ") { set ->
+        if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
+    }.ifEmpty { "New set" }
     Box(Modifier.fillMaxSize()) {
         Column(
             // Bottom reserve keeps the two action rows clear of the
             // GameClock pill overlay (BottomCenter) on short round screens.
-            Modifier.fillMaxSize().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 22.dp),
+            Modifier.fillMaxSize().padding(
+                start = 4.dp,
+                end = 4.dp,
+                // The extra top reserve at a large font scale keeps the
+                // header inside the bezel, where the circle is still narrow.
+                top = if (largeFont && LocalConfiguration.current.isScreenRound) 12.dp else 4.dp,
+                bottom = 22.dp,
+            ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = state.scoreSets.joinToString(" · ") { set ->
-                    if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
-                }.ifEmpty { "New set" } + "  ·  ${displayTennisPoint(currentGame)}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (showHistory) {
+                Text(
+                    // At a large font scale the point is already in the tiles,
+                    // so only the sets won are left to show.
+                    text = if (largeFont) history else "$history  ·  ${displayTennisPoint(currentGame)}",
+                    style = if (largeFont) MaterialTheme.typography.labelSmall else MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = if (largeFont) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             state.legacyScalarScore?.let { (one, two) ->
                 Text(
                     text = "Legacy result $one-$two · tap a team to start point scoring",
@@ -461,6 +479,7 @@ internal fun TennisScoreEditor(
                     onDecrement = onDecrementOne,
                     enabled = true,
                     modifier = Modifier.weight(1f),
+                    nameStyle = tennisNameStyle(),
                 )
                 TeamScoreButton(
                     teamName = state.teamTwoName,
@@ -476,6 +495,7 @@ internal fun TennisScoreEditor(
                     onDecrement = onDecrementTwo,
                     enabled = true,
                     modifier = Modifier.weight(1f),
+                    nameStyle = tennisNameStyle(),
                 )
             }
             // Expressive ButtonGroups (connected buttons with animated width)
@@ -491,20 +511,25 @@ internal fun TennisScoreEditor(
                         onClick = onFinish,
                         modifier = Modifier.animateWidth(setSource),
                         interactionSource = setSource,
-                    ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.finish_game)) } }
+                    ) { TennisActionLabel(stringResource(R.string.finish_game), stringResource(R.string.end_short)) }
                 } else {
                     Button(
                         onClick = onNextSet,
                         enabled = state.scoreSets.size < 5,
                         modifier = Modifier.animateWidth(setSource),
                         interactionSource = setSource,
-                    ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("Next set") } }
+                    ) { TennisActionLabel(stringResource(R.string.next_set), stringResource(R.string.next_short)) }
                 }
                 Button(
                     onClick = onToggleTiebreak,
                     modifier = Modifier.animateWidth(tiebreakSource),
                     interactionSource = tiebreakSource,
-                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") } }
+                ) {
+                    TennisActionLabel(
+                        text = stringResource(if (state.isTiebreakScoring) R.string.games else R.string.tiebreak),
+                        short = stringResource(if (state.isTiebreakScoring) R.string.games else R.string.tiebreak_short),
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(4.dp))
             ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
@@ -512,12 +537,12 @@ internal fun TennisScoreEditor(
                     onClick = onUndo,
                     modifier = Modifier.animateWidth(undoSource),
                     interactionSource = undoSource,
-                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("Undo") } }
+                ) { TennisActionLabel(stringResource(R.string.undo)) }
                 Button(
                     onClick = onTeams,
                     modifier = Modifier.animateWidth(teamsSource),
                     interactionSource = teamsSource,
-                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.teams_title)) } }
+                ) { TennisActionLabel(stringResource(R.string.teams_title)) }
             }
         }
         ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride, showTopStatus = false, showOfflineStatus = false)
@@ -703,16 +728,9 @@ internal fun ScoreTimeOverlay(
     }
 }
 
-/**
- * Play's large-font sweep renders at 2x. At 1.5x the full status sentence is
- * already as wide as the chord of a 227dp round display, so that scale and
- * above use the short form.
- */
-private const val COMPACT_STATUS_FONT_SCALE = 1.5f
-
 @Composable
 private fun offlineStatusText(signInRequired: Boolean): String {
-    val compact = LocalDensity.current.fontScale >= COMPACT_STATUS_FONT_SCALE
+    val compact = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
     return stringResource(
         when {
             signInRequired && compact -> R.string.sign_in_again_short

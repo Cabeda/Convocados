@@ -33,9 +33,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,6 +94,68 @@ internal fun teamScoreTileShape(isRound: Boolean, isLeft: Boolean): Shape {
     }
 }
 
+/**
+ * Play's large-font sweep renders at 2x. At 1.5x the full status sentence is
+ * already as wide as the chord of a 227dp round display, so that scale and
+ * above use the short form — and the tennis layouts drop their set history
+ * where the score needs the room.
+ */
+internal const val LARGE_FONT_SCALE = 1.5f
+
+/**
+ * The shortest display the tennis editors keep the sets won on at a large
+ * font scale.
+ *
+ * Below this the score needs the room: on a 227dp round display at 2x the
+ * tiles are left about 77dp and a tile needs about 132dp. Both editors read
+ * this constant, so the two screens cannot drift apart on it.
+ */
+internal const val MIN_DISPLAY_DP_FOR_SET_HISTORY = 320
+
+/**
+ * An action label that stays on one line.
+ *
+ * A label that wraps is not scaled down, it is *cut*: the second line falls
+ * outside the button's height and the user reads "Ne xt". One line with an
+ * ellipsis is legible at any font scale.
+ *
+ * On a round display the button is a slice of a circle, so at a large font
+ * scale the label also takes its short form and a smaller type: a square
+ * display has the room for the full label.
+ */
+@Composable
+internal fun TennisActionLabel(text: String, short: String = text) {
+    val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+    val tight = largeFont && LocalConfiguration.current.isScreenRound
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        if (tight) {
+            Text(
+                text = short,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Text(text = text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * The team name's type in the narrow tennis tiles.
+ *
+ * A tile is half a display wide, so at a large font scale the default
+ * `titleSmall` is cut ("Northsi…"); it steps down instead. Both tennis
+ * editors read this, so they cannot drift on it.
+ */
+@Composable
+internal fun tennisNameStyle(): TextStyle? =
+    if (LocalDensity.current.fontScale >= LARGE_FONT_SCALE) {
+        MaterialTheme.typography.labelSmall
+    } else {
+        null
+    }
+
 @Composable
 internal fun TeamScoreButton(
     teamName: String,
@@ -104,6 +168,11 @@ internal fun TeamScoreButton(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.large,
+    /**
+     * The team name's type. A narrow tile (the tennis pair) needs a smaller
+     * one at a large font scale, or the name is cut to "Northsi…".
+     */
+    nameStyle: TextStyle? = null,
 ) {
     val view = LocalView.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -199,7 +268,7 @@ internal fun TeamScoreButton(
     ) {
         Text(
             text = teamName,
-            style = MaterialTheme.typography.titleSmall,
+            style = nameStyle ?: MaterialTheme.typography.titleSmall,
             color = contentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
