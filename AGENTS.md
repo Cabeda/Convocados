@@ -209,70 +209,28 @@ Android to the Play internal track, and deploys the scheduler. One click is prod
 The factory turns `ready-for-agent` Issues into ready-to-prod Changes without being asked,
 and proposes improvements nobody asked for. It never merges.
 
-**Roles, reach, budgets, handoff and the automerge exception** are documented in
-[`docs/factory/README.md`](docs/factory/README.md): the five roles and what each one never
-does, the two structural gaps in the Reviewer's reach, the Attempt/token budgets, the
-`awaiting-human` handoff, and the four properties that keep `FACTORY_AUTOMERGE` narrow.
-Reach for it when writing or reviewing a factory Change, or when a label, a gate or a
-budget is in question. The rules below are what every session obeys without reaching for
-anything.
+**Gates (how GATE 1 actually runs), roles, reach, budgets, handoff and the automerge
+exception** are documented in [`docs/factory/README.md`](docs/factory/README.md); the
+vocabulary in [`docs/factory/CONTEXT.md`](docs/factory/CONTEXT.md), and how the two contexts
+relate in [`CONTEXT-MAP.md`](CONTEXT-MAP.md). Reach for them when writing or reviewing a
+factory Change, or when a label, a gate or a budget is in question. The rules every session
+obeys without reaching for anything:
 
-**Gates.** GATE 1 is the pre-push hook, and it is web-only. It runs the cheap checks first —
-`pnpm lint` (errors **and** the warning cap, which lives on the script so CI enforces the same
-number), `pnpm test:route-coverage` (fails on any untested route),
-`pnpm check:feature-parity`, `pnpm check:play-listing`, `pnpm check:play-screenshots`,
-`pnpm audit --audit-level high`, gitleaks over the pushed commits, and semgrep (warn-only) —
-then `pnpm typecheck` and the suite with coverage. `src/test/gate-parity.test.ts` fails if this
-hook and `scripts/factory/gate.sh` disagree about the cheap set, so "GATE 1 passed" has one
-meaning. The slow gates stay out of the hook: run `pnpm test:e2e` and the Gradle
-`:app`/`:wear` builds yourself before handing a Change back. GATE 2 is GitHub CI, which repeats
-GATE 1 and adds Playwright, the Android builds and Lighthouse. A Change over **400 changed lines
-or 20 files** fails GATE 1 and must **split and hand back** — never silently truncate. The
-one exception a Change may claim without being split: a change and the test harness that
-re-encodes its invariant are one unit, because neither half is correct alone. Claim it in
-the PR body rather than silently exceeding.
-The cap governs a **factory Change** (one ticket); a human-driven integration wave PR may
-exceed it only when every ticket merged into it individually stayed under the cap — and the
-wave PR description must **list the merged ticket PR numbers**, so the claim is checkable
-rather than prose. On a
-wave: run targeted tests after each merge and the full suite **once** at the end of the
-wave — re-running everything per merge re-pays for merging, not for the work, and CI is the
-backstop.
-
-`pnpm audit` sits in GATE 1 deliberately: a fresh CVE in a transitive dependency is not
-repairable by editing our code, so it must fail fast as Blocked instead of burning the CI
-loop.
-
-**Rules for anything in this repository's factory, human or machine:**
-
-- **Only Cabeda applies or removes `ready-for-agent`.** Explorers may not label their own
-  output, and the Factory may not pull work that was not offered.
+- **Only Cabeda applies or removes `ready-for-agent`, and only Cabeda merges** — no agent
+  merges, ever, including after approval. Explorers may not label their own output, and the
+  Factory may not pull work that was not offered.
 - **`wayfinder:grilling` marks an Issue whose spec is not yet implementable** — it needs a
   grilling session first. The Factory ignores it; promotion to `ready-for-agent` is
   Cabeda's call.
-- **Only Cabeda merges.** No agent merges, ever, including after approval.
-- **`FACTORY_AUTOMERGE=true` (a repo variable) is the single exception, and it is
-  off by default.** It lets `scripts/factory/automerge-run.ts` arm GitHub auto-merge
-  on **machine-authored Dependabot bumps only**, and nothing else. Four properties
-  keep that narrow — the four properties, each with the failure it prevents
-  (a green run on a stale base, `pull-requests: write` calling the merge
-  endpoint, an armed merge that survives unsetting the variable), are in
-  `scripts/factory/automerge-run.ts`. Reach for them when
-  touching the automerge workflow or deciding whether an arm is still valid.
-  The workflow also honours `FACTORY_PAUSED` first, like every other factory
-  entry point.
-
-  A human-authored Change is **never** auto-merged, at any gate state. Setting this
-  variable is the activation, and no machine may set or clear it.
-- **The factory branches from `origin/main` only** — never from a local checkout or another
-  feature branch, so no Change inherits half-finished work.
-- **`FACTORY_PAUSED=true` (a repo variable) stops everything** at every entry point. No
+- **`FACTORY_AUTOMERGE=true` (a repo variable) arms auto-merge for machine-authored
+  Dependabot bumps only**, off by default; a human-authored Change is never auto-merged at
+  any gate state. Its four narrowing properties are in
+  [`scripts/factory/automerge-run.ts`](scripts/factory/automerge-run.ts).
+- **`FACTORY_PAUSED=true` (a repo variable) stops everything** at every entry point; no
   machine may set or clear it.
+- **The factory branches from `origin/main` only**, so no Change inherits half-finished work.
 - **Agents may edit this file, but the edit ships as its own PR**, flagged in the
   description. A machine that edits its own constitution is unauditable.
-
-See `docs/factory/` for the runbooks, `docs/factory/CONTEXT.md` for the vocabulary, and
-`CONTEXT-MAP.md` for how the two contexts relate.
 
 ## Testing Guidelines
 
