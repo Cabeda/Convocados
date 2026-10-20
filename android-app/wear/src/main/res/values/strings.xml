@@ -63,6 +63,7 @@
     <string name="minutes_value">%1$d min</string>
     <string name="start_quick_game">Start</string>
     <string name="continue_quick_game">Continue game</string>
+    <string name="view_finished_quick_game">View finished game</string>
     <string name="restart_quick_game">Restart</string>
     <string name="quick_end_hint">Swipe up to end</string>
     <string name="quick_swipe_hint">↑ End · ↓ Save</string>

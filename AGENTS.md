@@ -247,6 +247,9 @@ loop.
 
 - **Only Cabeda applies or removes `ready-for-agent`.** Explorers may not label their own
   output, and the Factory may not pull work that was not offered.
+- **`wayfinder:grilling` marks an Issue whose spec is not yet implementable** — it needs a
+  grilling session first. The Factory ignores it; promotion to `ready-for-agent` is
+  Cabeda's call.
 - **Only Cabeda merges.** No agent merges, ever, including after approval.
 - **`FACTORY_AUTOMERGE=true` (a repo variable) is the single exception, and it is
   off by default.** It lets `scripts/factory/automerge-run.ts` arm GitHub auto-merge
@@ -254,7 +257,7 @@ loop.
   keep that narrow — the four properties, each with the failure it prevents
   (a green run on a stale base, `pull-requests: write` calling the merge
   endpoint, an armed merge that survives unsetting the variable), are in
-  [`docs/factory/README.md`](docs/factory/README.md). Reach for them when
+  `scripts/factory/automerge-run.ts`. Reach for them when
   touching the automerge workflow or deciding whether an arm is still valid.
   The workflow also honours `FACTORY_PAUSED` first, like every other factory
   entry point.
@@ -340,20 +343,7 @@ on Wear, test-scaffolding extraction, fixture placement) live in
 
 ## Project Structure
 
-```
-src/                        # Web app source
-├── components/             # React components (.tsx)
-├── pages/api/              # Astro API routes (.ts)
-├── lib/                    # i18n per locale, *.server.ts, shared utils
-├── test/                   # Unit + integration tests
-└── prisma/schema.prisma
-android-app/               # Android (Gradle multi-module)
-├── app/                    # :app — phone/tablet
-├── wear/                   # :wear — Wear OS (standalone)
-└── settings.gradle.kts     # :app and :wear
-```
-
-The full tree, per-screen layout, and where each module's tests and screenshots live:
+Full tree, per-screen layout, tests, and screenshots:
 [`docs/development-guide.md`](docs/development-guide.md).
 
 ### Searching
@@ -401,45 +391,10 @@ Before submitting a PR:
 
 ## Issue Tracker (dex)
 
-This project uses **[dex](https://dex.rip)** for issue tracking. Run `dex --help` for the CLI.
-
-### Quick Reference
-
-```bash
-dex ready              # Find available work
-dex show <id>          # View issue details
-dex start <id>         # Claim work
-dex complete <id> --result "what changed" --commit <sha>
-                       # Complete work. BOTH flags are required: --result is the
-                       # completion note, and --commit links the commit so the
-                       # GitHub issue closes when that commit merges. Use
-                       # --no-commit to complete without closing the issue.
-dex sync               # Push tasks to GitHub Issues
-```
-
-### Rules
-
-- Use `dex` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- GitHub sync is enabled with `on_change = true` (auto-sync on every mutation)
-- Tasks are stored at `.dex/tasks.jsonl` (committed to repo) and synced to GitHub Issues
-- The local ledger and GitHub Issues are **two ledgers**, not one, and they disagree by
-  design — including for machine-filed tasks, which follow a different path back. The
-  ownership table and the machine exception live in
-  [`docs/development-guide.md`](docs/development-guide.md); reach for it when a task's
-  GitHub state does not match the ledger.
-- `dex` reads the **working tree**: never `git stash` or `git checkout --` the `.dex/`
-  directory while working, or the task list silently disappears
-- `.gitattributes` unions `.dex/tasks.jsonl` on merge, so integration branches do not
-  conflict on the ledger. The union splices lines silently, and task records are mutable
-  (`completed`, `updated_at` are rewritten in place), so if both sides edited the same
-  task the ledger ends up with two lines sharing one id. Run
-  `node scripts/dex-dedupe.mjs --check` before pushing and fix any duplicate it reports
-  (`node scripts/dex-dedupe.mjs` keeps the newest `updated_at` per id, then commit).
-  `src/test/agent-env-guardrails.test.ts` fails CI on a duplicate id, and the `dex-ledger`
-  CI job runs the same `--check`.
-  `.dex/sync-state.json` is derived state with no merge attribute (`merge=ours` would be
-  inert without a config-registered driver): on conflict take either side wholesale and
-  delete the markers — never splice.
+This project uses **[dex](https://dex.rip)** for issue tracking. Full reference (quick
+commands, rules, ledger/merge handling): [`docs/dex.md`](docs/dex.md). Run `dex --help`
+for the CLI. Storage: `.dex/tasks.jsonl` (committed); syncs to GitHub Issues. Reconcile
+duplicate ledger ids with `node scripts/dex-dedupe.mjs --check`.
 
 ## Session Completion
 

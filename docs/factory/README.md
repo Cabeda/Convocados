@@ -105,6 +105,7 @@ reads the truth from GitHub.
 | `factory:review` | Awaiting Cabeda. The Factory's only success state. |
 | `factory:blocked` | Budget spent or target unreachable. Waits for a human. |
 | `factory:explored` | Filed by an Explorer. **Not** queued. |
+| `wayfinder:grilling` | Spec not yet implementable — needs a grilling session first. **Not** queued. |
 
 Queue order: `dex:priority-1` → `-2` → `-3`, oldest first within each. A Claim is a comment
 on the Issue; the next run reads claims before selecting, and a stale claim is reclaimed

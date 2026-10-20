@@ -190,11 +190,12 @@ class QuickScoreViewModel @Inject constructor(
         }
         val endMs = kickoffMs + durationMinutes * 60_000L
         val fires = mutableListOf<AlarmFire>()
+        val nowMs = System.currentTimeMillis()
         var k = 1
         while (true) {
             val t = kickoffMs + k.toLong() * intervalMinutes * 60_000L
             if (t > endMs) break
-            fires += AlarmFire(t, pulses = 2)
+            if (t > nowMs) fires += AlarmFire(t, pulses = 2)
             k++
         }
         alarmScheduler.reschedule(QUICK_EVENT_ID, fires)
