@@ -39,7 +39,8 @@ exactly as it does today — the tracked/untracked ledger, unchanged (same appro
 
 - **Custodial wallet**: Convocados holds funds, users have balances and
   request withdrawals. Rejected for now — it triggers PSD2 / e-money licensing, fund
-  safeguarding, KYC, and long financial-record retention. Revisit as a deliberate spike.
+  safeguarding, KYC, and long financial-record retention. Revisit as a deliberate spike —
+  that spike ran (GH-1081) and closed decided-no in ADR 0053.
 - **Separate charges and transfers**: rejected — a single, known destination account per charge
   is exactly the destination-charge case; separate transfers add complexity for no benefit.
 
