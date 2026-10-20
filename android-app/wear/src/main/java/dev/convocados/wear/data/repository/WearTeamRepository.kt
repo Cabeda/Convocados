@@ -109,16 +109,23 @@ class WearTeamRepository @Inject constructor(
             Result.success(AddPlayerOutcome.ADDED)
         } catch (e: Exception) {
             if (e.isTransientOfflineFailure()) {
-                pendingActionDao.insert(
-                    PendingActionEntity(
-                        kind = PendingActionEntity.KIND_ADD_PLAYER,
-                        eventId = eventId,
-                        playerName = name,
-                        idempotencyKey = idempotencyKey,
-                    ),
-                )
-                Log.w("WearTeamRepo", "Add player for $eventId queued offline", e)
-                Result.success(AddPlayerOutcome.QUEUED)
+                val queued = runCatching {
+                    pendingActionDao.insert(
+                        PendingActionEntity(
+                            kind = PendingActionEntity.KIND_ADD_PLAYER,
+                            eventId = eventId,
+                            playerName = name,
+                            idempotencyKey = idempotencyKey,
+                        ),
+                    )
+                }
+                if (queued.isSuccess) {
+                    Log.w("WearTeamRepo", "Add player for $eventId queued offline", e)
+                    Result.success(AddPlayerOutcome.QUEUED)
+                } else {
+                    Log.e("WearTeamRepo", "Failed to queue add for $eventId", queued.exceptionOrNull())
+                    Result.failure(e)
+                }
             } else {
                 Log.w("WearTeamRepo", "Failed to add player to $eventId", e)
                 Result.failure(e)
@@ -143,8 +150,10 @@ class WearTeamRepository @Inject constructor(
                 refreshTeams(action.eventId)
                 synced++
             } catch (e: Exception) {
-                if (e is dev.convocados.wear.data.api.ApiException && e.code == 401) {
-                    // Session expired: keep the queued add for after sign-in.
+                val code = (e as? dev.convocados.wear.data.api.ApiException)?.code
+                if (code == 401 || code == 403) {
+                    // Auth state (a stale refresh token also surfaces as 403):
+                    // keep the queued add for after sign-in.
                     pendingActionDao.incrementRetry(action.id)
                 } else if (!e.isTransientOfflineFailure()) {
                     pendingActionDao.deleteById(action.id)

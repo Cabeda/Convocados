@@ -309,34 +309,38 @@ class WearGameRepositoryTest {
     }
 
     @Test
-    fun `syncPendingStarts keeps the local game when the session expired`() = runTest {
-        val action = PendingActionEntity(
-            id = 3L,
-            kind = PendingActionEntity.KIND_START_GAME,
-            eventId = "e1",
-            idempotencyKey = "key",
-        )
-        val local = WearHistoryEntity(
-            id = WearGameRepository.LOCAL_START_PREFIX + "e1",
-            eventId = "e1",
-            dateTime = "2025-01-01T10:00:00Z",
-            scoreOne = 4,
-            scoreTwo = 3,
-            teamOneName = "Red",
-            teamTwoName = "Blue",
-            editable = true,
-        )
-        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
-        coEvery { client.createWatchGameHistory("e1") } throws ApiException(401, "expired")
-        coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+    fun `syncPendingStarts keeps the local game when auth fails`() = runTest {
+        var id = 3L
+        for (code in listOf(401, 403)) {
+            val action = PendingActionEntity(
+                id = id,
+                kind = PendingActionEntity.KIND_START_GAME,
+                eventId = "e1",
+                idempotencyKey = "key",
+            )
+            val local = WearHistoryEntity(
+                id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+                eventId = "e1",
+                dateTime = "2025-01-01T10:00:00Z",
+                scoreOne = 4,
+                scoreTwo = 3,
+                teamOneName = "Red",
+                teamTwoName = "Blue",
+                editable = true,
+            )
+            coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
+            coEvery { client.createWatchGameHistory("e1") } throws ApiException(code, "expired")
+            coEvery { historyDao.getByEvent("e1") } returns listOf(local)
 
-        val synced = repository.syncPendingStarts()
+            val synced = repository.syncPendingStarts()
 
-        assertEquals(0, synced)
-        coVerify { pendingActionDao.incrementRetry(3L) }
-        coVerify(exactly = 0) { pendingActionDao.deleteById(3L) }
-        coVerify(exactly = 0) { pendingScoreDao.deleteByHistory(any(), any()) }
-        coVerify(exactly = 0) { historyDao.deleteById(any()) }
+            assertEquals(0, synced)
+            coVerify { pendingActionDao.incrementRetry(id) }
+            coVerify(exactly = 0) { pendingActionDao.deleteById(id) }
+            coVerify(exactly = 0) { pendingScoreDao.deleteByHistory(any(), any()) }
+            coVerify(exactly = 0) { historyDao.deleteById(any()) }
+            id++
+        }
     }
 
     @Test

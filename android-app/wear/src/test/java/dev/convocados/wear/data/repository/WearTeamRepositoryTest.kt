@@ -219,4 +219,27 @@ class WearTeamRepositoryTest {
         coVerify { pendingActionDao.deleteById(8L) }
         coVerify { client.getTeams("e1") }
     }
+
+    @Test
+    fun `syncPendingAddPlayers keeps the queued add when auth fails`() = runTest {
+        var id = 9L
+        for (code in listOf(401, 403)) {
+            val action = PendingActionEntity(
+                id = id,
+                kind = PendingActionEntity.KIND_ADD_PLAYER,
+                eventId = "e1",
+                playerName = "Alice",
+                idempotencyKey = "stored-key",
+            )
+            coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
+            coEvery { client.addPlayer(any(), any(), any()) } throws ApiException(code, "auth")
+
+            val synced = repository.syncPendingAddPlayers()
+
+            assertEquals(0, synced)
+            coVerify { pendingActionDao.incrementRetry(id) }
+            coVerify(exactly = 0) { pendingActionDao.deleteById(id) }
+            id++
+        }
+    }
 }

@@ -2,6 +2,7 @@ package dev.convocados.wear.ui.screen.teams
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.KnownPlayer
 import dev.convocados.wear.data.api.KnownPlayersResponse
@@ -9,6 +10,7 @@ import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.KnownPlayersStore
 import dev.convocados.wear.data.repository.AddPlayerOutcome
 import dev.convocados.wear.data.repository.WearTeamRepository
+import dev.convocados.wear.data.sync.ScoreSyncWorker
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +32,7 @@ class AddPlayerViewModel @Inject constructor(
     private val client: WearApiClient,
     private val repository: WearTeamRepository,
     private val knownStore: KnownPlayersStore,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddPlayerUiState())
@@ -81,6 +84,11 @@ class AddPlayerViewModel @Inject constructor(
                                 it.known
                             },
                         )
+                    }
+                    // Replay as soon as the watch reconnects instead of waiting
+                    // for the 15-minute periodic job.
+                    if (outcome == AddPlayerOutcome.QUEUED) {
+                        ScoreSyncWorker.enqueueOneTime(workManager)
                     }
                 }
                 .onFailure { e ->

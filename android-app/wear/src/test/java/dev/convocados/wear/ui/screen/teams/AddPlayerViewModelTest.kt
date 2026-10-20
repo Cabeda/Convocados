@@ -5,6 +5,7 @@ import dev.convocados.wear.data.api.KnownPlayersResponse
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.KnownPlayersStore
 import dev.convocados.wear.data.repository.AddPlayerOutcome
+import androidx.work.WorkManager
 import dev.convocados.wear.data.repository.WearTeamRepository
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,7 @@ class AddPlayerViewModelTest {
     private val client = mockk<WearApiClient>()
     private val repository = mockk<WearTeamRepository>(relaxed = true)
     private val store = mockk<KnownPlayersStore>(relaxed = true)
+    private val workManager = mockk<WorkManager>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -35,7 +37,7 @@ class AddPlayerViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeViewModel() = AddPlayerViewModel(client, repository, store)
+    private fun makeViewModel() = AddPlayerViewModel(client, repository, store, workManager)
 
     @Test
     fun `load falls back to the cached list when the network fails`() = runTest {

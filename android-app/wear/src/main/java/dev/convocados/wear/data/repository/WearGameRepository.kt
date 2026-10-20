@@ -145,11 +145,19 @@ class WearGameRepository @Inject constructor(
     } catch (e: Exception) {
         if (e.isTransientOfflineFailure()) {
             // Queue before seeding: a crash in between must not leave a
-            // placeholder that nothing will ever adopt.
-            enqueueStart(eventId)
-            seedLocalHistory(eventId)
-            Log.w("WearGameRepo", "Start for $eventId queued offline", e)
-            Result.success(Unit)
+            // placeholder that nothing will ever adopt. A local write failure
+            // is reported, never thrown out of this graceful path.
+            val queued = runCatching {
+                enqueueStart(eventId)
+                seedLocalHistory(eventId)
+            }
+            if (queued.isSuccess) {
+                Log.w("WearGameRepo", "Start for $eventId queued offline", e)
+                Result.success(Unit)
+            } else {
+                Log.e("WearGameRepo", "Failed to queue start for $eventId", queued.exceptionOrNull())
+                Result.failure(e)
+            }
         } else {
             Log.w("WearGameRepo", "Failed to start game $eventId", e)
             Result.failure(e)
@@ -173,9 +181,11 @@ class WearGameRepository @Inject constructor(
                 pendingActionDao.deleteById(action.id)
                 synced++
             } catch (e: ApiException) {
-                if (e.code == 401) {
-                    // Session expired: keep the local game and its scores so they
-                    // survive a re-sign-in. Discarding here would erase the night.
+                if (e.code == 401 || e.code == 403) {
+                    // Auth state, not a server business rule: a stale refresh
+                    // token also surfaces as 403. Keep the local game and its
+                    // scores so they survive a re-sign-in; discarding would
+                    // erase the night on the most likely reconnect path.
                     pendingActionDao.incrementRetry(action.id)
                 } else if (e.code == 409 || !e.isTransientOfflineFailure()) {
                     // Server wins: drop the local game and its scores, then re-fetch.
