@@ -10,11 +10,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonGroup
@@ -37,7 +42,9 @@ import dev.convocados.wear.ui.ongoing.ongoingScoreText
 import dev.convocados.wear.ui.ongoing.shouldShowQuickGameOngoing
 import dev.convocados.wear.ui.screen.score.GameClock
 import dev.convocados.wear.ui.screen.score.GameEdgeProgress
+import dev.convocados.wear.ui.screen.score.LARGE_FONT_SCALE
 import dev.convocados.wear.ui.screen.score.TeamScoreButton
+import dev.convocados.wear.ui.screen.score.TennisActionLabel
 import kotlinx.coroutines.delay
 import java.time.Instant
 
@@ -256,31 +263,74 @@ private fun QuickSetScoreEditor(
             "${set.teamOne}-${set.teamTwo}"
         }
     }.ifEmpty { "0-0" }
+    val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+    // The sets won are the only place the match history appears, so the
+    // history only steps aside where the score needs the room.
+    val showHistory = !largeFont || LocalConfiguration.current.screenHeightDp >= 320
+    // The tiles are half a display wide, so at a large font scale the team
+    // name needs a smaller type or it is cut.
+    val nameStyle = if (largeFont) MaterialTheme.typography.labelSmall else null
 
     Column(
         modifier = modifier
-            .padding(start = 4.dp, end = 4.dp, top = 28.dp, bottom = 28.dp),
+            // The swipe hint pill sits at the top of the screen and grows with
+            // the font, so the header clears it at a large font scale.
+            .padding(
+                start = 4.dp,
+                end = 4.dp,
+                top = if (largeFont) 54.dp else 28.dp,
+                bottom = 28.dp,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = "$setSummary  ·  ${state.scoreOne}-${state.scoreTwo}  ·  ${displayTennisPoint(currentGame)}",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = if (isTiebreak) {
-                stringResource(R.string.quick_tiebreak)
-            } else {
-                stringResource(R.string.quick_set_number, state.scoreSets.size.coerceAtLeast(1))
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (largeFont) {
+            // One line at a large font scale: the set number and the sets won.
+            // The hint pill owns the top of the quick screen, so a second
+            // header line would sit under it.
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                        append(
+                            if (isTiebreak) {
+                                stringResource(R.string.quick_tiebreak)
+                            } else {
+                                stringResource(R.string.quick_set_number, state.scoreSets.size.coerceAtLeast(1))
+                            },
+                        )
+                    }
+                    if (showHistory) {
+                        append("  ·  ")
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                            append(setSummary)
+                        }
+                    }
+                },
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Text(
+                text = "$setSummary  ·  ${state.scoreOne}-${state.scoreTwo}  ·  ${displayTennisPoint(currentGame)}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = if (isTiebreak) {
+                    stringResource(R.string.quick_tiebreak)
+                } else {
+                    stringResource(R.string.quick_set_number, state.scoreSets.size.coerceAtLeast(1))
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -302,6 +352,7 @@ private fun QuickSetScoreEditor(
                 onDecrement = onDecrementOne,
                 enabled = true,
                 modifier = Modifier.weight(1f),
+                nameStyle = nameStyle,
             )
             TeamScoreButton(
                 teamName = stringResource(R.string.team_default_2),
@@ -317,6 +368,7 @@ private fun QuickSetScoreEditor(
                 onDecrement = onDecrementTwo,
                 enabled = true,
                 modifier = Modifier.weight(1f),
+                nameStyle = nameStyle,
             )
         }
         // Expressive connected actions instead of loose CompactButtons.
@@ -329,17 +381,19 @@ private fun QuickSetScoreEditor(
                 modifier = Modifier.animateWidth(nextSetSource),
                 interactionSource = nextSetSource,
             ) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.quick_next_set))
-                }
+                TennisActionLabel(
+                    text = stringResource(R.string.quick_next_set),
+                    short = stringResource(R.string.next_short),
+                )
             }
             Button(onClick = onToggleTiebreak,
                 modifier = Modifier.animateWidth(tiebreakSource),
                 interactionSource = tiebreakSource,
             ) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(if (isTiebreak) R.string.quick_games else R.string.quick_tiebreak))
-                }
+                TennisActionLabel(
+                    text = stringResource(if (isTiebreak) R.string.quick_games else R.string.quick_tiebreak),
+                    short = stringResource(if (isTiebreak) R.string.quick_games else R.string.tiebreak_short),
+                )
             }
         }
     }

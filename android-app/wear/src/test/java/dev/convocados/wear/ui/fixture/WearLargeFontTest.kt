@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
+import dev.convocados.wear.ui.screen.quick.QuickScoreContent
 import dev.convocados.wear.ui.screen.score.ScoreFixtureContent
 import dev.convocados.wear.ui.screen.score.ScoreUiState
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
@@ -116,6 +117,36 @@ class WearLargeFontTest {
             )
         }
     }
+
+    // The quick-game tennis editor has its own header and its own action row,
+    // so it carries the same defect class: the labels wrapped and the header
+    // ran outside the bezel.
+    @Test
+    @Config(qualifiers = "w320dp-h320dp-round")
+    fun quickTennisSmallestSupportedRound() {
+        shot2x("smallest_round_quick_tennis_2x") { quickTennis() }
+        for (label in listOf("Next", "Tie")) {
+            assertNotNull(
+                "quick action label $label not rendered",
+                composeRule.onAllNodes(
+                    hasText(label),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+    }
+
+    @Composable
+    private fun quickTennis() = QuickScoreContent(
+        state = WearFixtures.quickTennis,
+        nowOverride = WearFixtures.now,
+        onIncrementOne = {},
+        onIncrementTwo = {},
+        onDecrementOne = {},
+        onDecrementTwo = {},
+        onNextSet = {},
+        onToggleTiebreak = {},
+    )
 
     private fun shot2x(name: String, content: @Composable () -> Unit) {
         composeRule.setContent {

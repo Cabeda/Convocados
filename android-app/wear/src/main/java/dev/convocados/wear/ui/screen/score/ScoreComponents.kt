@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -90,6 +91,40 @@ internal fun teamScoreTileShape(isRound: Boolean, isLeft: Boolean): Shape {
             lineTo(0f, size.height)
         }
         close()
+    }
+}
+
+/**
+ * Play's large-font sweep renders at 2x. At 1.5x the full status sentence is
+ * already as wide as the chord of a 227dp round display, so that scale and
+ * above use the short form — and the tennis layouts drop their set history
+ * where the score needs the room.
+ */
+internal const val LARGE_FONT_SCALE = 1.5f
+
+/**
+ * An action label that stays on one line.
+ *
+ * A label that wraps is not scaled down, it is *cut*: the second line falls
+ * outside the button's height and the user reads "Ne xt". One line with an
+ * ellipsis is legible at any font scale — and at a large font scale the label
+ * also steps down a type and takes its short form, because the button cannot
+ * grow and a label that does not fit is cut, not scaled.
+ */
+@Composable
+internal fun TennisActionLabel(text: String, short: String = text) {
+    val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        if (largeFont) {
+            Text(
+                text = short,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Text(text = text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
