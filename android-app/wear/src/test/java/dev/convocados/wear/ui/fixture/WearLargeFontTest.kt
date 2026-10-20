@@ -6,6 +6,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -83,11 +84,38 @@ class WearLargeFontTest {
         assertStatusAboveClock(expectedStatus = "Will sync")
     }
 
-    // Tennis keeps its status in flow rather than overlaid, so it must not be
-    // squeezed out of the tiles at 2x.
+    // A 227dp round display cannot run this app (minSdk 35, Wear OS 5.1+), and
+    // at 2x the tennis screen does not fit on one anyway: the golden records
+    // the degradation that #1463 tracks, not a state the app ships in.
     @Test
     @Config(qualifiers = "w227dp-h227dp-round")
     fun tennisSmallRound() = shot2x("small_round_tennis_2x") { tennis() }
+
+    // The smallest display the app ships on: the score and every action label
+    // must be readable at 2x.
+    @Test
+    @Config(qualifiers = "w320dp-h320dp-round")
+    fun tennisSmallestSupportedRound() {
+        shot2x("smallest_round_tennis_2x") { tennis() }
+        for (score in listOf("40", "30")) {
+            assertNotNull(
+                "score $score not rendered",
+                composeRule.onAllNodes(
+                    hasContentDescription(score),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+        for (label in listOf("Next", "Tie", "Undo", "Teams")) {
+            assertNotNull(
+                "action label $label not rendered",
+                composeRule.onAllNodes(
+                    hasText(label),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+    }
 
     private fun shot2x(name: String, content: @Composable () -> Unit) {
         composeRule.setContent {

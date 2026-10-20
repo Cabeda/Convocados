@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,6 +105,11 @@ internal fun TeamScoreButton(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.large,
+    /**
+     * The team name's type. A narrow tile (the tennis pair) needs a smaller
+     * one at a large font scale, or the name is cut to "Northsi…".
+     */
+    nameStyle: TextStyle? = null,
 ) {
     val view = LocalView.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -199,7 +205,7 @@ internal fun TeamScoreButton(
     ) {
         Text(
             text = teamName,
-            style = MaterialTheme.typography.titleSmall,
+            style = nameStyle ?: MaterialTheme.typography.titleSmall,
             color = contentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

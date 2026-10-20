@@ -402,6 +402,14 @@ internal fun TennisScoreEditor(
     val kickoffMs = state.kickoffEpochMs
     val gameOver = kickoffMs != null && state.game != null &&
         now.toEpochMilli() >= kickoffMs + sportDurationMinutes(state.game.sport) * 60_000L
+    // At a large font scale the set history is the longest line on the screen
+    // and the current point is already in the tiles, so the history steps
+    // aside for the score: on a 227dp round display at 2x everything else
+    // needs the room.
+    val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+    // The tennis tiles are half a display wide, so at a large font scale the
+    // team name needs a smaller type or it is cut to "Northsi…".
+    val tennisNameStyle = if (largeFont) MaterialTheme.typography.labelSmall else null
     Box(Modifier.fillMaxSize()) {
         Column(
             // Bottom reserve keeps the two action rows clear of the
@@ -409,16 +417,18 @@ internal fun TennisScoreEditor(
             Modifier.fillMaxSize().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = state.scoreSets.joinToString(" · ") { set ->
-                    if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
-                }.ifEmpty { "New set" } + "  ·  ${displayTennisPoint(currentGame)}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (!largeFont) {
+                Text(
+                    text = state.scoreSets.joinToString(" · ") { set ->
+                        if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
+                    }.ifEmpty { "New set" } + "  ·  ${displayTennisPoint(currentGame)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             state.legacyScalarScore?.let { (one, two) ->
                 Text(
                     text = "Legacy result $one-$two · tap a team to start point scoring",
@@ -461,6 +471,7 @@ internal fun TennisScoreEditor(
                     onDecrement = onDecrementOne,
                     enabled = true,
                     modifier = Modifier.weight(1f),
+                    nameStyle = tennisNameStyle,
                 )
                 TeamScoreButton(
                     teamName = state.teamTwoName,
@@ -476,6 +487,7 @@ internal fun TennisScoreEditor(
                     onDecrement = onDecrementTwo,
                     enabled = true,
                     modifier = Modifier.weight(1f),
+                    nameStyle = tennisNameStyle,
                 )
             }
             // Expressive ButtonGroups (connected buttons with animated width)
@@ -491,20 +503,25 @@ internal fun TennisScoreEditor(
                         onClick = onFinish,
                         modifier = Modifier.animateWidth(setSource),
                         interactionSource = setSource,
-                    ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.finish_game)) } }
+                    ) { TennisActionLabel(stringResource(R.string.finish_game), "End") }
                 } else {
                     Button(
                         onClick = onNextSet,
                         enabled = state.scoreSets.size < 5,
                         modifier = Modifier.animateWidth(setSource),
                         interactionSource = setSource,
-                    ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("Next set") } }
+                    ) { TennisActionLabel("Next set", "Next") }
                 }
                 Button(
                     onClick = onToggleTiebreak,
                     modifier = Modifier.animateWidth(tiebreakSource),
                     interactionSource = tiebreakSource,
-                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") } }
+                ) {
+                    TennisActionLabel(
+                        text = if (state.isTiebreakScoring) "Games" else "Tiebreak",
+                        short = if (state.isTiebreakScoring) "Games" else "Tie",
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(4.dp))
             ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
@@ -512,15 +529,41 @@ internal fun TennisScoreEditor(
                     onClick = onUndo,
                     modifier = Modifier.animateWidth(undoSource),
                     interactionSource = undoSource,
-                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("Undo") } }
+                ) { TennisActionLabel("Undo") }
                 Button(
                     onClick = onTeams,
                     modifier = Modifier.animateWidth(teamsSource),
                     interactionSource = teamsSource,
-                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.teams_title)) } }
+                ) { TennisActionLabel(stringResource(R.string.teams_title)) }
             }
         }
         ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride, showTopStatus = false, showOfflineStatus = false)
+    }
+}
+
+/**
+ * An action label that stays on one line.
+ *
+ * A label that wraps is not scaled down, it is *cut*: the second line falls
+ * outside the button's height and the user reads "Ne xt". One line with an
+ * ellipsis is legible at any font scale — and at a large font scale the label
+ * also steps down a type and takes its short form, because the button cannot
+ * grow and a label that does not fit is cut, not scaled.
+ */
+@Composable
+private fun TennisActionLabel(text: String, short: String = text) {
+    val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        if (largeFont) {
+            Text(
+                text = short,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Text(text = text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -706,13 +749,14 @@ internal fun ScoreTimeOverlay(
 /**
  * Play's large-font sweep renders at 2x. At 1.5x the full status sentence is
  * already as wide as the chord of a 227dp round display, so that scale and
- * above use the short form.
+ * above use the short form — and the tennis layout drops its set history for
+ * the same reason.
  */
-private const val COMPACT_STATUS_FONT_SCALE = 1.5f
+private const val LARGE_FONT_SCALE = 1.5f
 
 @Composable
 private fun offlineStatusText(signInRequired: Boolean): String {
-    val compact = LocalDensity.current.fontScale >= COMPACT_STATUS_FONT_SCALE
+    val compact = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
     return stringResource(
         when {
             signInRequired && compact -> R.string.sign_in_again_short
