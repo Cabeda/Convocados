@@ -13,6 +13,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { randomInt } from "node:crypto";
 import { computeGameUpdates } from "../src/lib/elo";
 import { getDefaultDurationMinutes } from "../src/lib/sports";
 import { seedCrewSeason } from "./seed-crew-season";
@@ -93,11 +94,14 @@ const SPORT_MAX_PLAYERS: Record<string, number> = {
 };
 
 function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+  // crypto.randomInt, not Math.random: the seed writes the chosen element to
+  // the database, and CodeQL reads a Math.random index into a written field
+  // as insecure randomness (js/insecure-randomness).
+  return arr[randomInt(arr.length)];
 }
 
 function randInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  return randomInt(min, max + 1);
 }
 
 function generateTitle(sport: string, location: string): string {
@@ -233,8 +237,8 @@ async function main() {
       data: {
         title,
         location: venue.name,
-        latitude: venue.lat, // codeql[js/insecure-randomness] false-positive: dev seed data
-        longitude: venue.lng, // codeql[js/insecure-randomness] false-positive: dev seed data
+        latitude: venue.lat,
+        longitude: venue.lng,
         dateTime,
         maxPlayers,
         sport,
