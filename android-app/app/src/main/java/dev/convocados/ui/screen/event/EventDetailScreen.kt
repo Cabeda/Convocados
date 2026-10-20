@@ -84,6 +84,7 @@ import dev.convocados.ui.screen.rankings.SeasonRankReveal
 import dev.convocados.ui.theme.expressiveMotion
 import dev.convocados.ui.theme.expressiveTokens
 import dev.convocados.util.buildRankExplainerUrl
+import dev.convocados.util.findSelfRosterRow
 import dev.convocados.util.openInCustomTab
 import dev.convocados.util.outcomeFromScore
 import dev.convocados.designsystem.ExpressiveMotion
@@ -1257,7 +1258,9 @@ fun EventDetailScreen(
                 val active = activePlayersOf(ev)
                 val bench = benchPlayersOf(ev)
                 val isOwner = effectiveUser?.id == ev.ownerId && ev.ownerId != null
-                val myPlayer = effectiveUser?.let { u -> ev.players.find { it.name.equals(u.name, true) } }
+                // #1269: linked rows match on userId; an anonymous row added by the
+                // organizer matches on the normalized name (same rule as web).
+                val myPlayer = findSelfRosterRow(ev.players, effectiveUser)
                 val isOnBench = myPlayer != null && ev.players.indexOf(myPlayer) >= ev.maxPlayers
                 val currentNames = ev.players.map { it.name.lowercase() }.toSet()
                 val fillFraction = if (ev.maxPlayers > 0) active.size.toFloat() / ev.maxPlayers else 0f
