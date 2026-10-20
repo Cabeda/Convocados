@@ -5,6 +5,7 @@ import dev.convocados.wear.data.api.AddPlayerRequest
 import dev.convocados.wear.data.api.TeamPlayer
 import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.api.UpdateTeamsRequest
+import dev.convocados.wear.data.api.SessionExpiredException
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.api.isRetryableLater
 import dev.convocados.wear.data.local.dao.PendingActionDao
@@ -23,7 +24,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** Whether an add reached the server now or was queued for reconnect. */
-enum class AddPlayerOutcome { ADDED, QUEUED }
+enum class AddPlayerOutcome { ADDED, QUEUED, QUEUED_SIGN_IN_REQUIRED }
 
 @Singleton
 class WearTeamRepository @Inject constructor(
@@ -80,6 +81,9 @@ class WearTeamRepository @Inject constructor(
 
         return try {
             client.updateTeams(eventId, UpdateTeamsRequest(serverOneIds, serverTwoIds))
+            // This write carries the whole roster, so it supersedes every older
+            // queued change for the event. Replaying one would undo it.
+            pendingRosterChangeDao.deleteByEventId(eventId)
             refreshTeams(eventId)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -138,7 +142,10 @@ class WearTeamRepository @Inject constructor(
                 }
                 if (queued.isSuccess) {
                     Log.w("WearTeamRepo", "Add player for $eventId queued offline", e)
-                    Result.success(AddPlayerOutcome.QUEUED)
+                    Result.success(
+                        if (e is SessionExpiredException) AddPlayerOutcome.QUEUED_SIGN_IN_REQUIRED
+                        else AddPlayerOutcome.QUEUED,
+                    )
                 } else {
                     Log.e("WearTeamRepo", "Failed to queue add for $eventId", queued.exceptionOrNull())
                     Result.failure(e)
@@ -157,7 +164,7 @@ class WearTeamRepository @Inject constructor(
      */
     suspend fun syncPendingAddPlayers(): Int {
         var synced = 0
-        val assigned = mutableListOf<Triple<String, String, String>>() // eventId, name, team
+        val adopted = mutableListOf<AdoptedAdd>()
         val touchedEvents = linkedSetOf<String>()
         // No retry cap: the add carries a stable idempotency key, so replay is
         // safe until a non-transient answer removes it.
@@ -171,11 +178,10 @@ class WearTeamRepository @Inject constructor(
             try {
                 val local = playerDao.getById(localId)
                 client.addPlayer(action.eventId, AddPlayerRequest(name), action.idempotencyKey)
-                pendingActionDao.deleteById(action.id)
-                playerDao.deleteById(localId)
-                if (local != null && local.teamAssignment != "unassigned") {
-                    assigned += Triple(action.eventId, name, local.teamAssignment)
-                }
+                // The action stays queued until the roster refresh lands, so a
+                // failure here replays (idempotently) instead of dropping the
+                // assignment the organizer made offline.
+                adopted += AdoptedAdd(action.id, action.eventId, name, localId, local?.teamAssignment)
                 touchedEvents += action.eventId
                 synced++
             } catch (e: Exception) {
@@ -194,13 +200,23 @@ class WearTeamRepository @Inject constructor(
         }
         // One refresh per event, after the loop: refreshing mid-replay would
         // re-read a roster that later iterations are still changing.
-        touchedEvents.forEach { refreshTeams(it) }
-        assigned.forEach { (eventId, name, team) -> reapplyTeamAssignment(eventId, name, team) }
+        val refreshed = touchedEvents.associateWith { refreshTeams(it).isSuccess }
+        for (add in adopted) {
+            if (refreshed[add.eventId] != true) {
+                // No server ids to apply the assignment to yet; keep the add
+                // queued and adopt it on the next run.
+                pendingActionDao.incrementRetry(add.actionId)
+                continue
+            }
+            pendingActionDao.deleteById(add.actionId)
+            playerDao.deleteById(add.localId)
+            reapplyTeamAssignment(add.eventId, add.name, add.teamAssignment)
+        }
         return synced
     }
 
     /** Put a locally-added player back on the team chosen before the replay. */
-    private suspend fun reapplyTeamAssignment(eventId: String, name: String, team: String) {
+    private suspend fun reapplyTeamAssignment(eventId: String, name: String, team: String?) {
         if (team != "teamOne" && team != "teamTwo") return
         val players = playerDao.observePlayers(eventId).first()
         // shortcut: same-named players are ambiguous; the first unassigned match
@@ -254,3 +270,12 @@ class WearTeamRepository @Inject constructor(
         teamAssignment = assignment,
     )
 }
+
+/** A queued add whose server create succeeded but whose roster is not adopted yet. */
+private data class AdoptedAdd(
+    val actionId: Long,
+    val eventId: String,
+    val name: String,
+    val localId: String,
+    val teamAssignment: String?,
+)

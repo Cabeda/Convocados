@@ -107,6 +107,29 @@ class WearTeamRepositoryTest {
     }
 
     @Test
+    fun `a successful roster write supersedes the queued changes for the event`() = runTest {
+        coEvery { playerDao.observePlayers("e1") } returns flowOf(
+            listOf(WearPlayerEntity("p1", "e1", "Alice", 0, "unassigned")),
+        )
+        coEvery { client.updateTeams(any(), any()) } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2"),
+            maxPlayers = 10,
+        )
+        coEvery { client.getTeams("e1") } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2"),
+            maxPlayers = 10,
+        )
+
+        repository.updateTeams("e1", listOf("p1"), emptyList())
+
+        // The full-roster write makes every older queued change obsolete; a
+        // replay of one would undo it (the reviewer's stale-roster race).
+        coVerify { pendingRosterChangeDao.deleteByEventId("e1") }
+    }
+
+    @Test
     fun `updateTeams never sends a locally-added player id`() = runTest {
         val localId = WearPlayerEntity.LOCAL_PREFIX + "key"
         val players = listOf(
@@ -198,6 +221,16 @@ class WearTeamRepositoryTest {
     }
 
     @Test
+    fun `addPlayer queues but asks for a sign-in when the session expired`() = runTest {
+        coEvery { client.addPlayer(any(), any(), any()) } throws SessionExpiredException("Refresh rejected (400)")
+
+        val result = repository.addPlayer("e1", "Alice")
+
+        assertEquals(AddPlayerOutcome.QUEUED_SIGN_IN_REQUIRED, result.getOrNull())
+        coVerify { pendingActionDao.insert(match { it.playerName == "Alice" }) }
+    }
+
+    @Test
     fun `addPlayer does not queue a permanent server rejection`() = runTest {
         coEvery { client.addPlayer("e1", any(), any()) } throws ApiException(403, "Game ended")
 
@@ -273,9 +306,37 @@ class WearTeamRepositoryTest {
 
         assertEquals(1, repository.syncPendingAddPlayers())
 
-        // The local echo is gone, and the adopted server player is back on team one.
+        // The local echo is gone, the adopted server player is back on team one,
+        // and the stale queued change (queued before the add landed) cannot
+        // replay over it.
         coVerify { playerDao.deleteById(localId) }
+        coVerify { pendingRosterChangeDao.deleteByEventId("e1") }
         coVerify { client.updateTeams("e1", match { it.teamOnePlayerIds == listOf("p1") && it.teamTwoPlayerIds.isEmpty() }) }
+    }
+
+    @Test
+    fun `an add whose roster refresh fails stays queued so the assignment is not lost`() = runTest {
+        val localId = WearPlayerEntity.LOCAL_PREFIX + "k2"
+        val action = PendingActionEntity(
+            id = 13L,
+            kind = PendingActionEntity.KIND_ADD_PLAYER,
+            eventId = "e1",
+            playerName = "Alice",
+            idempotencyKey = "k2",
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
+        coEvery { playerDao.getById(localId) } returns WearPlayerEntity(
+            localId, "e1", "Alice", Int.MAX_VALUE, "teamOne",
+        )
+        coEvery { client.addPlayer(any(), any(), any()) } just Runs
+        coEvery { client.getTeams("e1") } throws IOException("Dropped after the add")
+
+        assertEquals(1, repository.syncPendingAddPlayers())
+
+        // No server ids yet: keep the action (idempotent replay) and the echo.
+        coVerify { pendingActionDao.incrementRetry(13L) }
+        coVerify(exactly = 0) { pendingActionDao.deleteById(13L) }
+        coVerify(exactly = 0) { playerDao.deleteById(localId) }
     }
 
     @Test

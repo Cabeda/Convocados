@@ -171,6 +171,14 @@ interface PendingRosterChangeDao {
 
     @Query("DELETE FROM pending_roster_changes WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /**
+     * Drop every queued change for an event. `updateTeams` always writes the
+     * complete roster, so once one succeeds every earlier change for that event
+     * is superseded — replaying them would undo the newer write (#1343).
+     */
+    @Query("DELETE FROM pending_roster_changes WHERE eventId = :eventId")
+    suspend fun deleteByEventId(eventId: String)
 }
 
 @Dao

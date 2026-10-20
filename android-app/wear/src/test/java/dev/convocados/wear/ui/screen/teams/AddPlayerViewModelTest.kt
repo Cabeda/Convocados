@@ -78,6 +78,20 @@ class AddPlayerViewModelTest {
     }
 
     @Test
+    fun `a queued add with an expired session asks for a sign-in`() = runTest {
+        coEvery { repository.addPlayer("e1", "Alice") } returns
+            Result.success(AddPlayerOutcome.QUEUED_SIGN_IN_REQUIRED)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+        viewModel.add("e1", "Alice")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.signInRequired)
+    }
+
+    @Test
     fun `add removes the name when the server accepted it`() = runTest {
         every { store.load("e1") } returns listOf(KnownPlayer("Alice"))
         coEvery { repository.observePendingAddNames("e1") } returns MutableStateFlow(emptyList())

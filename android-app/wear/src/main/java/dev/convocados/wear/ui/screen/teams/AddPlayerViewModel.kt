@@ -24,6 +24,8 @@ data class AddPlayerUiState(
     val isLoading: Boolean = true,
     val adding: String? = null,
     val queuedNames: Set<String> = emptySet(),
+    /** A queued add is blocked on a sign-in, not just on the network. */
+    val signInRequired: Boolean = false,
     val error: String? = null,
 )
 
@@ -83,11 +85,12 @@ class AddPlayerViewModel @Inject constructor(
                             } else {
                                 it.known
                             },
+                            signInRequired = outcome == AddPlayerOutcome.QUEUED_SIGN_IN_REQUIRED,
                         )
                     }
                     // Replay as soon as the watch reconnects instead of waiting
                     // for the 15-minute periodic job.
-                    if (outcome == AddPlayerOutcome.QUEUED) {
+                    if (outcome != AddPlayerOutcome.ADDED) {
                         ScoreSyncWorker.enqueueOneTime(workManager)
                     }
                 }

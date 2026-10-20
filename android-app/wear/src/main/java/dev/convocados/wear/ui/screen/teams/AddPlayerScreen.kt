@@ -17,6 +17,7 @@ import dev.convocados.wear.R
 import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.roundListInset
 import dev.convocados.wear.ui.roundBezelClip
+import dev.convocados.wear.ui.theme.Warning
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 
 @Composable
@@ -122,6 +123,17 @@ internal fun AddPlayerContent(
                                     )
                                 }
                             },
+                        )
+                    }
+                }
+
+                if (state.signInRequired) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.sign_in_again),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Warning,
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
                         )
                     }
                 }
