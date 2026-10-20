@@ -106,6 +106,38 @@ fun roundCeilingWidth(rule: ComposeContentTestRule): Float =
     rule.onNodeWithTag(ROUND_SAFE_ANCHOR_TAG).fetchSemanticsNode().boundsInRoot.width
 
 /**
+ * Every corner of [bounds] must sit inside the round bezel of [display].
+ *
+ * [bezelInsetPx] is what the bezel ring itself takes off the display radius.
+ * [tolerance] is the slack the caller can justify: a layout assertion forgives a
+ * pixel of composition rounding, while a pure-geometry caller passes ~0 so the
+ * rounding choice itself is pinned.
+ */
+fun assertCornersInsideBezel(
+    label: String,
+    bounds: Rect,
+    display: Rect,
+    bezelInsetPx: Float,
+    because: String,
+    tolerance: Float = 1.5f,
+) {
+    val radius = (minOf(display.width, display.height) / 2f) - bezelInsetPx
+    listOf(
+        bounds.left to bounds.top,
+        bounds.right to bounds.top,
+        bounds.left to bounds.bottom,
+        bounds.right to bounds.bottom,
+    ).forEach { (x, y) ->
+        val distance = hypot(x - display.center.x, y - display.center.y)
+        assertTrue(
+            ("%s corner (%.1f, %.1f) sits %.1fpx from the centre, outside the %.1fpx bezel " +
+                "radius — %s").format(label, x, y, distance, radius, because),
+            distance <= radius + tolerance,
+        )
+    }
+}
+
+/**
  * The invariant that replaced "every round-safe row shares one band".
  *
  * `roundListInset` used to be the flat [ROUND_LIST_INSET] at every scroll
@@ -127,23 +159,15 @@ fun assertRowInsideBezel(rule: ComposeContentTestRule, label: String, bounds: Re
     val tolerance = 1f
     if (bounds.width <= ceiling + tolerance) return
 
-    val display = rule.onRoot().fetchSemanticsNode().boundsInRoot
-    val radius = (minOf(display.width, display.height) / 2f) - with(rule.density) { ROUND_BEZEL_INSET.toPx() }
-    listOf(
-        bounds.left to bounds.top,
-        bounds.right to bounds.top,
-        bounds.left to bounds.bottom,
-        bounds.right to bounds.bottom,
-    ).forEach { (x, y) ->
-        val distance = hypot(x - display.center.x, y - display.center.y)
-        assertTrue(
-            ("%s spans %.1fpx, wider than the %.1fpx the flat inset allows, and its corner at " +
-                "(%.1f, %.1f) sits %.1fpx from the centre — outside the %.1fpx bezel radius, so the " +
-                "position-aware inset widened a row the circle had no room for")
-                .format(label, bounds.width, ceiling, x, y, distance, radius),
-            distance <= radius + 1.5f,
-        )
-    }
+    assertCornersInsideBezel(
+        label = label,
+        bounds = bounds,
+        display = rule.onRoot().fetchSemanticsNode().boundsInRoot,
+        bezelInsetPx = with(rule.density) { ROUND_BEZEL_INSET.toPx() },
+        because = ("it spans %.1fpx, wider than the %.1fpx the flat inset allows, so the " +
+            "position-aware inset widened a row the circle had no room for")
+            .format(bounds.width, ceiling),
+    )
 }
 
 /** Scrolls [matcher] into view on the screen's list and measures its bounds. */
