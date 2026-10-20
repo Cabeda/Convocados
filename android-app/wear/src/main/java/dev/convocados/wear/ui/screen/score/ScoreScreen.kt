@@ -411,9 +411,6 @@ internal fun TennisScoreEditor(
     val history = state.scoreSets.joinToString(" · ") { set ->
         if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
     }.ifEmpty { "New set" }
-    // The tennis tiles are half a display wide, so at a large font scale the
-    // team name needs a smaller type or it is cut to "Northsi…".
-    val tennisNameStyle = if (largeFont) MaterialTheme.typography.labelSmall else null
     Box(Modifier.fillMaxSize()) {
         Column(
             // Bottom reserve keeps the two action rows clear of the
@@ -482,7 +479,7 @@ internal fun TennisScoreEditor(
                     onDecrement = onDecrementOne,
                     enabled = true,
                     modifier = Modifier.weight(1f),
-                    nameStyle = tennisNameStyle,
+                    nameStyle = tennisNameStyle(),
                 )
                 TeamScoreButton(
                     teamName = state.teamTwoName,
@@ -498,7 +495,7 @@ internal fun TennisScoreEditor(
                     onDecrement = onDecrementTwo,
                     enabled = true,
                     modifier = Modifier.weight(1f),
-                    nameStyle = tennisNameStyle,
+                    nameStyle = tennisNameStyle(),
                 )
             }
             // Expressive ButtonGroups (connected buttons with animated width)

@@ -85,9 +85,11 @@ class WearLargeFontTest {
         assertStatusAboveClock(expectedStatus = "Will sync")
     }
 
-    // A 227dp round display cannot run this app (minSdk 35, Wear OS 5.1+), and
-    // at 2x the tennis screen does not fit on one anyway: the golden records
-    // the degradation that #1463 tracks, not a state the app ships in.
+    // A 227dp round display is in the repo's matrix — the 1× goldens cover it
+    // — but the tennis screen does not fit on one at 2x: the tile needs about
+    // 132dp and the display leaves about 77dp. The golden records that
+    // degradation, which #1463 tracks; the test asserts on 320dp, the
+    // smallest display the app ships on.
     @Test
     @Config(qualifiers = "w227dp-h227dp-round")
     fun tennisSmallRound() = shot2x("small_round_tennis_2x") { tennis() }
@@ -155,7 +157,18 @@ class WearLargeFontTest {
 
     @Test
     @Config(qualifiers = "w390dp-h390dp-notround")
-    fun quickTennisSquare() = shot2x("square_quick_tennis_2x") { quickTennis() }
+    fun quickTennisSquare() {
+        shot2x("square_quick_tennis_2x") { quickTennis() }
+        for (label in listOf("Next set", "Tiebreak")) {
+            assertNotNull(
+                "quick action label $label not rendered",
+                composeRule.onAllNodes(
+                    hasText(label),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+    }
 
     @Composable
     private fun quickTennis() = QuickScoreContent(

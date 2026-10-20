@@ -45,6 +45,7 @@ import dev.convocados.wear.ui.screen.score.GameEdgeProgress
 import dev.convocados.wear.ui.screen.score.LARGE_FONT_SCALE
 import dev.convocados.wear.ui.screen.score.MIN_DISPLAY_DP_FOR_SET_HISTORY
 import dev.convocados.wear.ui.screen.score.TeamScoreButton
+import dev.convocados.wear.ui.screen.score.tennisNameStyle
 import dev.convocados.wear.ui.screen.score.TennisActionLabel
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -268,9 +269,6 @@ private fun QuickSetScoreEditor(
     // The sets won are the only place the match history appears, so the
     // history only steps aside where the score needs the room.
     val showHistory = !largeFont || LocalConfiguration.current.screenHeightDp >= MIN_DISPLAY_DP_FOR_SET_HISTORY
-    // The tiles are half a display wide, so at a large font scale the team
-    // name needs a smaller type or it is cut.
-    val nameStyle = if (largeFont) MaterialTheme.typography.labelSmall else null
 
     Column(
         modifier = modifier
@@ -353,7 +351,7 @@ private fun QuickSetScoreEditor(
                 onDecrement = onDecrementOne,
                 enabled = true,
                 modifier = Modifier.weight(1f),
-                nameStyle = nameStyle,
+                nameStyle = tennisNameStyle(),
             )
             TeamScoreButton(
                 teamName = stringResource(R.string.team_default_2),
@@ -369,7 +367,7 @@ private fun QuickSetScoreEditor(
                 onDecrement = onDecrementTwo,
                 enabled = true,
                 modifier = Modifier.weight(1f),
-                nameStyle = nameStyle,
+                nameStyle = tennisNameStyle(),
             )
         }
         // Expressive connected actions instead of loose CompactButtons.

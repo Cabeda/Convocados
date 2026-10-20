@@ -141,6 +141,21 @@ internal fun TennisActionLabel(text: String, short: String = text) {
     }
 }
 
+/**
+ * The team name's type in the narrow tennis tiles.
+ *
+ * A tile is half a display wide, so at a large font scale the default
+ * `titleSmall` is cut ("Northsi…"); it steps down instead. Both tennis
+ * editors read this, so they cannot drift on it.
+ */
+@Composable
+internal fun tennisNameStyle(): TextStyle? =
+    if (LocalDensity.current.fontScale >= LARGE_FONT_SCALE) {
+        MaterialTheme.typography.labelSmall
+    } else {
+        null
+    }
+
 @Composable
 internal fun TeamScoreButton(
     teamName: String,
