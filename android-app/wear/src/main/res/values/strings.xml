@@ -93,6 +93,7 @@
     <string name="add_player_button">Add player</string>
     <string name="no_known_players">No known players</string>
     <string name="adding_label">Adding…</string>
+    <string name="queued_label">Queued</string>
     <string name="done_label">Done</string>
     <string name="arrived_label">arrived</string>
     <string name="live_badge">LIVE</string>

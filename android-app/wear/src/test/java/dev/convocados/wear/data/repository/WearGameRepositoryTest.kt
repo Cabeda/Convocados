@@ -25,6 +25,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -207,7 +208,7 @@ class WearGameRepositoryTest {
 
     @Test
     fun `startGame accepts offline by seeding a local history and queueing the start`() = runTest {
-        coEvery { client.startWatchGame("e1") } throws Exception("Offline")
+        coEvery { client.startWatchGame("e1") } throws IOException("Offline")
         coEvery { gameDao.getGame("e1") } returns makeGame("e1")
         coEvery { historyDao.getByEvent("e1") } returns emptyList()
 
@@ -305,6 +306,60 @@ class WearGameRepositoryTest {
         coVerify { pendingScoreDao.deleteByHistory("e1", WearGameRepository.LOCAL_START_PREFIX + "e1") }
         coVerify { historyDao.deleteById(WearGameRepository.LOCAL_START_PREFIX + "e1") }
         coVerify { client.get<PaginatedHistory>(any()) }
+    }
+
+    @Test
+    fun `syncPendingStarts keeps the local game when the session expired`() = runTest {
+        val action = PendingActionEntity(
+            id = 3L,
+            kind = PendingActionEntity.KIND_START_GAME,
+            eventId = "e1",
+            idempotencyKey = "key",
+        )
+        val local = WearHistoryEntity(
+            id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+            eventId = "e1",
+            dateTime = "2025-01-01T10:00:00Z",
+            scoreOne = 4,
+            scoreTwo = 3,
+            teamOneName = "Red",
+            teamTwoName = "Blue",
+            editable = true,
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
+        coEvery { client.createWatchGameHistory("e1") } throws ApiException(401, "expired")
+        coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+
+        val synced = repository.syncPendingStarts()
+
+        assertEquals(0, synced)
+        coVerify { pendingActionDao.incrementRetry(3L) }
+        coVerify(exactly = 0) { pendingActionDao.deleteById(3L) }
+        coVerify(exactly = 0) { pendingScoreDao.deleteByHistory(any(), any()) }
+        coVerify(exactly = 0) { historyDao.deleteById(any()) }
+    }
+
+    @Test
+    fun `refreshHistory drops a local placeholder when no start is queued`() = runTest {
+        val local = WearHistoryEntity(
+            id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+            eventId = "e1",
+            dateTime = "2025-01-01T10:00:00Z",
+            scoreOne = 0,
+            scoreTwo = 0,
+            teamOneName = "Red",
+            teamTwoName = "Blue",
+            editable = true,
+        )
+        coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+        coEvery { pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, "e1") } returns emptyList()
+        coEvery { client.get<PaginatedHistory>(any()) } returns PaginatedHistory(data = emptyList())
+        coEvery { pendingScoreDao.getAll() } returns emptyList()
+
+        val result = repository.refreshHistory("e1")
+
+        assertTrue(result.isSuccess)
+        coVerify { historyDao.refreshHistory("e1", match { it.isEmpty() }) }
     }
 
     private fun eventSummary(id: String) = EventSummary(

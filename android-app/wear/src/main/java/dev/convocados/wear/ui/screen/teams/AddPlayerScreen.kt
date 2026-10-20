@@ -78,13 +78,17 @@ fun AddPlayerScreen(
                         Button(
                             onClick = { viewModel.add(eventId, player.name) },
                             modifier = Modifier.fillMaxWidth().roundListInset(),
-                            enabled = state.adding == null,
+                            enabled = state.adding == null && player.name !in state.queuedNames,
                             label = {
                                 Text(text = player.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             },
                             secondaryLabel = {
-                                if (state.adding == player.name) {
-                                    Text(
+                                when {
+                                    player.name in state.queuedNames -> Text(
+                                        text = stringResource(R.string.queued_label),
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                    state.adding == player.name -> Text(
                                         text = stringResource(R.string.adding_label),
                                         style = MaterialTheme.typography.labelSmall,
                                     )

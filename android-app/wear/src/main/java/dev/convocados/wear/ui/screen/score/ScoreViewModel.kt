@@ -160,6 +160,9 @@ class ScoreViewModel @Inject constructor(
             _uiState.update {
                 it.copy(isStarting = false, error = startErrorMessage(result.exceptionOrNull()))
             }
+            // A queued start should replay as soon as the watch reconnects, not
+            // wait for the periodic job.
+            if (result.isSuccess) ScoreSyncWorker.enqueueOneTime(workManager)
         }
     }
 

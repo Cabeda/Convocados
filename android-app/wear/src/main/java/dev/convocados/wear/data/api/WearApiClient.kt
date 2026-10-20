@@ -304,13 +304,14 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 class ApiException(val code: Int, message: String) : Exception(message)
 
 /**
- * A failure worth queueing and replaying on reconnect (#1343). Network errors,
- * timeouts and server-side 5xx/429 are transient; a 4xx we caused (bad input,
- * forbidden, conflict) will fail the same way forever and must surface instead.
+ * A failure worth queueing and replaying on reconnect (#1343). Network errors
+ * and server-side 5xx/429 are transient; a 4xx we caused (bad input, forbidden,
+ * conflict) and a deterministic local failure (serialization) must surface.
  */
 internal fun Throwable.isTransientOfflineFailure(): Boolean = when (this) {
     is ApiException -> code == 0 || code == 408 || code == 429 || code >= 500
-    else -> true
+    is java.io.IOException -> true
+    else -> false
 }
 
 private val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {

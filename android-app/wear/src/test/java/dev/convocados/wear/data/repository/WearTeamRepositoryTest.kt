@@ -12,8 +12,10 @@ import dev.convocados.wear.data.local.dao.WearPlayerDao
 import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import io.mockk.*
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -130,17 +132,17 @@ class WearTeamRepositoryTest {
 
         val result = repository.addPlayer("e1", "Alice")
 
-        assertTrue(result.isSuccess)
+        assertEquals(AddPlayerOutcome.ADDED, result.getOrNull())
         coVerify { client.addPlayer("e1", match { it.name == "Alice" }, match { it.isNotBlank() }) }
     }
 
     @Test
     fun `addPlayer queues a pending action when the network is unavailable`() = runTest {
-        coEvery { client.addPlayer("e1", any(), any()) } throws Exception("Offline")
+        coEvery { client.addPlayer("e1", any(), any()) } throws IOException("Offline")
 
         val result = repository.addPlayer("e1", "Alice")
 
-        assertTrue(result.isSuccess)
+        assertEquals(AddPlayerOutcome.QUEUED, result.getOrNull())
         coVerify {
             pendingActionDao.insert(
                 match {
@@ -161,6 +163,13 @@ class WearTeamRepositoryTest {
 
         assertTrue(result.isFailure)
         coVerify(exactly = 0) { pendingActionDao.insert(any()) }
+    }
+
+    @Test
+    fun `observePendingAddNames delegates to the queue`() = runTest {
+        coEvery { pendingActionDao.observeAddNames("e1") } returns flowOf(listOf("Alice"))
+
+        assertEquals(listOf("Alice"), repository.observePendingAddNames("e1").first())
     }
 
     @Test

@@ -6,7 +6,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.KnownPlayer
 import dev.convocados.wear.data.api.KnownPlayersResponse
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.local.KnownPlayersStore
+import dev.convocados.wear.data.repository.AddPlayerOutcome
 import dev.convocados.wear.data.repository.WearTeamRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +21,7 @@ data class AddPlayerUiState(
     val known: List<KnownPlayer> = emptyList(),
     val isLoading: Boolean = true,
     val adding: String? = null,
+    val queuedNames: Set<String> = emptySet(),
     val error: String? = null,
 )
 
@@ -25,30 +29,59 @@ data class AddPlayerUiState(
 class AddPlayerViewModel @Inject constructor(
     private val client: WearApiClient,
     private val repository: WearTeamRepository,
+    private val knownStore: KnownPlayersStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddPlayerUiState())
     val uiState: StateFlow<AddPlayerUiState> = _uiState.asStateFlow()
+    private var queuedJob: Job? = null
 
     fun load(eventId: String) {
+        if (queuedJob == null) {
+            queuedJob = viewModelScope.launch {
+                repository.observePendingAddNames(eventId).collect { names ->
+                    _uiState.update { it.copy(queuedNames = names.toSet()) }
+                }
+            }
+        }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            // Offline the server list is unreachable; the last successful list
+            // keeps the screen usable instead of showing "no known players".
+            val cached = knownStore.load(eventId)
+            _uiState.update { it.copy(known = cached, isLoading = cached.isEmpty(), error = null) }
             try {
                 val res = client.get<KnownPlayersResponse>("/api/events/$eventId/known-players")
+                knownStore.save(eventId, res.players)
                 _uiState.update { it.copy(known = res.players, isLoading = false) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load") }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = if (cached.isEmpty()) e.message ?: "Failed to load" else null,
+                    )
+                }
             }
         }
     }
 
     fun add(eventId: String, name: String) {
-        if (_uiState.value.adding != null) return
+        if (_uiState.value.adding != null || name in _uiState.value.queuedNames) return
         viewModelScope.launch {
             _uiState.update { it.copy(adding = name, error = null) }
             repository.addPlayer(eventId, name)
-                .onSuccess {
-                    _uiState.update { it.copy(adding = null, known = it.known.filterNot { k -> k.name == name }) }
+                .onSuccess { outcome ->
+                    _uiState.update {
+                        it.copy(
+                            adding = null,
+                            // A queued add stays listed and is labelled from the
+                            // queue flow; a server add is now on the roster.
+                            known = if (outcome == AddPlayerOutcome.ADDED) {
+                                it.known.filterNot { k -> k.name == name }
+                            } else {
+                                it.known
+                            },
+                        )
+                    }
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(adding = null, error = e.message ?: "Failed to add") }

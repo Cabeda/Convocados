@@ -163,17 +163,15 @@ interface PendingRosterChangeDao {
 
 @Dao
 interface PendingActionDao {
-    @Query("SELECT * FROM pending_actions ORDER BY createdAt ASC")
-    suspend fun getAll(): List<PendingActionEntity>
-
-    @Query("SELECT COUNT(*) FROM pending_actions")
-    fun observeCount(): Flow<Int>
-
     @Query("SELECT * FROM pending_actions WHERE kind = :kind ORDER BY createdAt ASC")
     suspend fun getByKind(kind: String): List<PendingActionEntity>
 
     @Query("SELECT * FROM pending_actions WHERE kind = :kind AND eventId = :eventId")
     suspend fun getByKindAndEvent(kind: String, eventId: String): List<PendingActionEntity>
+
+    /** Names still queued, so the add-player screen can label them "Queued". */
+    @Query("SELECT playerName FROM pending_actions WHERE kind = 'add_player' AND eventId = :eventId")
+    fun observeAddNames(eventId: String): Flow<List<String>>
 
     @Insert
     suspend fun insert(action: PendingActionEntity)

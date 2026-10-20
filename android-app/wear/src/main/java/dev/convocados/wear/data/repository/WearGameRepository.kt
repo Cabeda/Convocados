@@ -94,9 +94,12 @@ class WearGameRepository @Inject constructor(
         val remoteHistory = history.data.map { it.toHistoryEntity(eventId) }
         val remoteIds = remoteHistory.mapTo(mutableSetOf()) { it.id }
         // A locally-started game has no server row yet; keep its placeholder
-        // across a refresh until syncPendingStarts re-keys it (#1343).
+        // across a refresh only while a start is still queued (#1343). Without
+        // the guard a crash between seed and enqueue would strand it forever.
+        val hasPendingStart =
+            pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, eventId).isNotEmpty()
         val mergedHistory = (remoteHistory + cached.filter {
-            it.id !in remoteIds && (it.id in pendingByHistory || it.id.startsWith(LOCAL_START_PREFIX))
+            it.id !in remoteIds && (it.id in pendingByHistory || (hasPendingStart && it.id.startsWith(LOCAL_START_PREFIX)))
         })
             .map { local ->
                 pendingByHistory[local.id]?.let { pending ->
@@ -141,8 +144,10 @@ class WearGameRepository @Inject constructor(
         Result.success(Unit)
     } catch (e: Exception) {
         if (e.isTransientOfflineFailure()) {
-            seedLocalHistory(eventId)
+            // Queue before seeding: a crash in between must not leave a
+            // placeholder that nothing will ever adopt.
             enqueueStart(eventId)
+            seedLocalHistory(eventId)
             Log.w("WearGameRepo", "Start for $eventId queued offline", e)
             Result.success(Unit)
         } else {
@@ -168,7 +173,11 @@ class WearGameRepository @Inject constructor(
                 pendingActionDao.deleteById(action.id)
                 synced++
             } catch (e: ApiException) {
-                if (e.code == 409 || !e.isTransientOfflineFailure()) {
+                if (e.code == 401) {
+                    // Session expired: keep the local game and its scores so they
+                    // survive a re-sign-in. Discarding here would erase the night.
+                    pendingActionDao.incrementRetry(action.id)
+                } else if (e.code == 409 || !e.isTransientOfflineFailure()) {
                     // Server wins: drop the local game and its scores, then re-fetch.
                     discardLocalStart(action.eventId)
                     pendingActionDao.deleteById(action.id)

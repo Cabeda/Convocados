@@ -22,6 +22,9 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Whether an add reached the server now or was queued for reconnect. */
+enum class AddPlayerOutcome { ADDED, QUEUED }
+
 @Singleton
 class WearTeamRepository @Inject constructor(
     private val client: WearApiClient,
@@ -89,17 +92,21 @@ class WearTeamRepository @Inject constructor(
         }
     }
 
+    /** Names added offline and still waiting to replay, for "Queued" feedback. */
+    fun observePendingAddNames(eventId: String): Flow<List<String>> =
+        pendingActionDao.observeAddNames(eventId)
+
     /**
      * Add a player to the event roster. Offline-first (#1343): a transient
      * failure queues the add with a stable idempotency key, so the reconnect
      * replay cannot create a duplicate. Permanent rejections surface.
      */
-    suspend fun addPlayer(eventId: String, name: String): Result<Unit> {
+    suspend fun addPlayer(eventId: String, name: String): Result<AddPlayerOutcome> {
         val idempotencyKey = UUID.randomUUID().toString()
         return try {
             client.addPlayer(eventId, AddPlayerRequest(name), idempotencyKey)
             refreshTeams(eventId)
-            Result.success(Unit)
+            Result.success(AddPlayerOutcome.ADDED)
         } catch (e: Exception) {
             if (e.isTransientOfflineFailure()) {
                 pendingActionDao.insert(
@@ -111,7 +118,7 @@ class WearTeamRepository @Inject constructor(
                     ),
                 )
                 Log.w("WearTeamRepo", "Add player for $eventId queued offline", e)
-                Result.success(Unit)
+                Result.success(AddPlayerOutcome.QUEUED)
             } else {
                 Log.w("WearTeamRepo", "Failed to add player to $eventId", e)
                 Result.failure(e)
@@ -136,7 +143,10 @@ class WearTeamRepository @Inject constructor(
                 refreshTeams(action.eventId)
                 synced++
             } catch (e: Exception) {
-                if (!e.isTransientOfflineFailure()) {
+                if (e is dev.convocados.wear.data.api.ApiException && e.code == 401) {
+                    // Session expired: keep the queued add for after sign-in.
+                    pendingActionDao.incrementRetry(action.id)
+                } else if (!e.isTransientOfflineFailure()) {
                     pendingActionDao.deleteById(action.id)
                     refreshTeams(action.eventId)
                 } else {
