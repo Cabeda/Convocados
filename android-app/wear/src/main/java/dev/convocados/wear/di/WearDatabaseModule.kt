@@ -9,6 +9,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dev.convocados.wear.data.local.WearDatabase
+import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
@@ -24,7 +25,7 @@ object WearDatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): WearDatabase =
         Room.databaseBuilder(context, WearDatabase::class.java, "convocados_wear.db")
-            .addMigrations(WearDatabase.MIGRATION_5_6, WearDatabase.MIGRATION_6_7)
+            .addMigrations(WearDatabase.MIGRATION_5_6, WearDatabase.MIGRATION_6_7, WearDatabase.MIGRATION_7_8)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
@@ -42,6 +43,9 @@ object WearDatabaseModule {
 
     @Provides
     fun providePendingRosterChangeDao(db: WearDatabase): PendingRosterChangeDao = db.pendingRosterChangeDao()
+
+    @Provides
+    fun providePendingActionDao(db: WearDatabase): PendingActionDao = db.pendingActionDao()
 
     @Provides
     @Singleton

@@ -37,13 +37,12 @@ permission:
     # The gates are defined by the pre-push hook. Bypassing them is cheating on
     # the tests, not passing them.
     "git push --no-verify*": deny
-    # main is human-owned; factory work goes to factory/<issue>.
-    "git push origin main*": deny
-    "git push origin refs/heads/main*": deny
-    # Deny every push, then allow exactly one destination. Last match wins, so
-    # a human branch is not pushable even though it is not named above.
-    "git push origin *": deny
-    "git push origin factory/*": allow
+    # Nothing here writes to the remote: `deliver` pushes with a token minted
+    # after this run, because an App token lives 60 minutes and a run may take
+    # 110 (#937). This job has no contents:write scope either.
+    "git push*": deny
+    "gh pr create*": deny
+    "gh pr edit*": deny
     # Label state is the Factory's memory, and only Cabeda writes the queue.
     "gh label*": deny
     "gh issue edit*--add-label*": deny
@@ -83,10 +82,19 @@ reason. Any feature that adds ceremony for the organizer is a defect, not a feat
    `assembleDebug` for `:app` and `:wear`, and `pnpm audit --audit-level high`. A Change over
    **400 changed lines or 20 files** fails Gate 1: split it and hand back, or report Blocked with
    the split you propose. Never truncate work to fit.
-7. **Push and open the Change** to `factory/<issue>`, linked to the Issue.
-8. **Watch Gate 2** (GitHub CI). If red, the Repairer agent owns the repair; you do not.
-9. **Handoff**: label the Change `factory:review` and comment the summary — what changed, the
-   linked Issue, the Gates passed, the coverage delta, and the full transcript. Then stop.
+7. **Commit; do not push.** Every write that leaves the runner belongs to the workflow's
+   `deliver` job, which mints a fresh App token after you finish. An App token lives 60 minutes
+   and this run may take 110; pushing here is how a finished, green change was lost (#937).
+8. **Gate 2 is not yours.** If the Change goes red, the Repairer agent owns the repair.
+9. **Handoff**: write these files, then stop:
+   - `.factory-handoff/status` — `review`, or `blocked` when the work cannot ship.
+   - `.factory-handoff/branch` — the `factory/<issue>-<slug>` branch you committed on.
+   - `.factory-handoff/title` — the Change title (conventional commits).
+   - `.factory-handoff/pr-body.md` — the body, checked with `pnpm check:pr-body ...`.
+   - `.factory-handoff/comment.md` — what changed, the linked Issue, the Gates passed, the
+     coverage delta, and the full transcript.
+   The `deliver` job pushes the branch, opens the Change, labels it `factory:review`, and posts
+   the comment. `.factory-handoff/` is gitignored; never commit it.
 
 ## Budgets are hard stops
 
@@ -96,8 +104,8 @@ tail, and what you tried. A Budget is not a hint to wrap up.
 
 ## Rules that are not negotiable
 
-- **Never merge, never release, never label, never touch a human branch.** You may push only to
-  `factory/*`.
+- **Never merge, never release, never label, never push.** You do not write to the remote at
+  all, and you never touch a human branch; `deliver` owns the push.
 - **Never lower a threshold** to make a Gate pass. Coverage, budgets and assertions are gates, not
   suggestions. If coverage drops, write tests for the gap and raise the thresholds.
 - **Never weaken a test** to get green: no deleting tests, no `.skip`, no `exclude`, no
@@ -112,6 +120,7 @@ tail, and what you tried. A Budget is not a hint to wrap up.
 
 ## When you are stuck
 
-Blocked is a legitimate outcome and is always better than a quiet shrug. Label the Issue
-`factory:blocked`, state what you tried, and stop. A Blocked Issue waits for Cabeda and is not
-re-queued.
+Blocked is a legitimate outcome and is always better than a quiet shrug. Write `blocked` to
+`.factory-handoff/status`, put what you tried and its evidence in `.factory-handoff/comment.md`,
+and stop. `deliver` labels the Issue `factory:blocked` and posts the evidence. A Blocked Issue
+waits for Cabeda and is not re-queued.

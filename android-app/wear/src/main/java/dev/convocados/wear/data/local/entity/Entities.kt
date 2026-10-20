@@ -56,7 +56,15 @@ data class WearHistoryEntity(
     val teamsSnapshot: String? = null,
     val editable: Boolean,
     val scoreSetsJson: String? = null,
-)
+) {
+    companion object {
+        /**
+         * Marks a history row created locally when a game was started offline
+         * (#1343). Its id is not a server id until syncPendingStarts adopts it.
+         */
+        const val LOCAL_START_PREFIX = "local-start:"
+    }
+}
 
 /** Cached team player for a specific event. */
 @Entity(tableName = "wear_players", foreignKeys = [])
@@ -66,7 +74,16 @@ data class WearPlayerEntity(
     val name: String,
     val order: Int,
     val teamAssignment: String, // "teamOne" | "teamTwo" | "unassigned" | "bench"
-)
+) {
+    companion object {
+        /**
+         * A player added offline (#1343), shown on the Teams screen until the
+         * queued add replays. Never sent to the server: the next refresh
+         * replaces this row with the server's.
+         */
+        const val LOCAL_PREFIX = "local-player:"
+    }
+}
 
 /** Pending roster change queued for sync when online. */
 @Entity(tableName = "pending_roster_changes")
@@ -78,3 +95,31 @@ data class PendingRosterChangeEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0,
 )
+
+/**
+ * A watch mutation queued while offline and replayed on reconnect (#1343).
+ * Score edits and roster swaps have their own queues; this one covers the
+ * create-shaped actions: starting a game and adding a player.
+ */
+@Entity(tableName = "pending_actions")
+data class PendingActionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val kind: String,
+    val eventId: String,
+    val playerName: String? = null,
+    /**
+     * Stable key so a replay after a partial success cannot add the player
+     * twice. Null for a start: that create is idempotent per day server-side
+     * and carries no key.
+     */
+    val idempotencyKey: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val retryCount: Int = 0,
+    /** The queue is blocked on a sign-in, not on the network (durable surface). */
+    val needsSignIn: Boolean = false,
+) {
+    companion object {
+        const val KIND_START_GAME = "start_game"
+        const val KIND_ADD_PLAYER = "add_player"
+    }
+}

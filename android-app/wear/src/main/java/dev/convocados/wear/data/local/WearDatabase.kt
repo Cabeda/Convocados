@@ -4,11 +4,13 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.dao.WearPlayerDao
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.PendingRosterChangeEntity
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -22,8 +24,9 @@ import dev.convocados.wear.data.local.entity.WearPlayerEntity
         WearHistoryEntity::class,
         WearPlayerEntity::class,
         PendingRosterChangeEntity::class,
+        PendingActionEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class WearDatabase : RoomDatabase() {
@@ -32,8 +35,26 @@ abstract class WearDatabase : RoomDatabase() {
     abstract fun pendingScoreDao(): PendingScoreDao
     abstract fun playerDao(): WearPlayerDao
     abstract fun pendingRosterChangeDao(): PendingRosterChangeDao
+    abstract fun pendingActionDao(): PendingActionDao
 
     companion object {
+        /** v7 to v8: queue create-shaped watch actions (start game, add player). */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pending_actions` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`kind` TEXT NOT NULL, " +
+                        "`eventId` TEXT NOT NULL, " +
+                        "`playerName` TEXT, " +
+                        "`idempotencyKey` TEXT, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`retryCount` INTEGER NOT NULL, " +
+                        "`needsSignIn` INTEGER NOT NULL DEFAULT 0)",
+                )
+            }
+        }
+
         /** v6 to v7: preserve whether a nullable score baseline was captured. */
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {

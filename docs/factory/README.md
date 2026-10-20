@@ -14,7 +14,7 @@ ready-for-agent Issue
   → Factory: branch from origin/main, work in an isolated workspace
   → Gate 1 (local): lint · typecheck · vitest --coverage · route-coverage
                      feature-parity · Gradle assembleDebug :app + :wear · audit
-  → push factory/<issue> → open Change
+  → commit + handoff artifact → deliver job (fresh token): push factory/<issue>, open Change
   → Gate 2 (GitHub CI)         → red: Repairer, fresh session, same branch
   → Reviewer: independent review against Mission + Core Principles
   → Handoff: label factory:review, comment the summary and transcript
@@ -30,7 +30,7 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 
 | Agent | Trigger | May | May not |
 |---|---|---|---|
-| `factory` | Issue labelled `ready-for-agent` | edit, commit, push `factory/*`, open Change | merge, release, label, touch a human branch |
+| `factory` | Issue labelled `ready-for-agent` | edit, commit, write the handoff artifact | push, open a Change, merge, release, label, touch a human branch (the `deliver` job pushes and opens the Change with a token minted after the run) |
 | `repairer` | Gate red | same as factory, budget 3 | exceed its Attempt budget |
 | `reviewer` | `pull_request` opened/synchronize | comment, push fixes to `factory/*` | approve; edit a human branch; review a Change it cannot reach |
 | `explorer-performance` | schedule (nightly) | read, run committed benchmarks, file Issues | edit code, label Issues |

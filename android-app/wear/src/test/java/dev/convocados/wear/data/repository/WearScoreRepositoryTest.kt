@@ -9,6 +9,7 @@ import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
+import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -522,6 +523,40 @@ class WearScoreRepositoryTest {
         coVerify { historyDao.updateScore("h1", 2, 0, capture(scoreSetsJson)) }
         assertTrue(scoreSetsJson.captured.contains("pointTeamOne"))
         coVerify { client.patchGameHistory("/api/events/e1/history/h1", match { (it as dev.convocados.wear.data.api.ScoreRequest).scoreSets == sets }) }
+    }
+
+    @Test
+    fun `submitScore queues against a locally-started history without a network call`() = runTest {
+        val localId = WearHistoryEntity.LOCAL_START_PREFIX + "e1"
+        coEvery { historyDao.getHistoryById(localId) } returns WearHistoryEntity(
+            id = localId, eventId = "e1", dateTime = "2025-01-01T10:00:00Z",
+            scoreOne = 0, scoreTwo = 0, teamOneName = "A", teamTwoName = "B", editable = true,
+        )
+        coEvery { pendingScoreDao.getByHistory("e1", localId) } returns emptyList()
+
+        val result = repository.submitScore("e1", localId, 1, 0, "A", "B")
+
+        assertTrue(result.isFailure)
+        coVerify { historyDao.updateScore(localId, 1, 0, null) }
+        coVerify { pendingScoreDao.insert(match { it.historyId == localId && it.scoreOne == 1 }) }
+        coVerify(exactly = 0) { client.patchGameHistory(any(), any()) }
+    }
+
+    @Test
+    fun `syncPendingScores leaves edits against an offline start queued`() = runTest {
+        val localId = WearHistoryEntity.LOCAL_START_PREFIX + "e1"
+        val pending = PendingScoreEntity(
+            id = 1, eventId = "e1", historyId = localId,
+            scoreOne = 1, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
+        )
+        coEvery { pendingScoreDao.getAll() } returns listOf(pending)
+
+        val synced = repository.syncPendingScores()
+
+        assertEquals(0, synced)
+        coVerify(exactly = 0) { client.getGameHistory(any()) }
+        coVerify(exactly = 0) { pendingScoreDao.delete(any()) }
+        coVerify(exactly = 0) { pendingScoreDao.incrementRetry(any()) }
     }
 
 }

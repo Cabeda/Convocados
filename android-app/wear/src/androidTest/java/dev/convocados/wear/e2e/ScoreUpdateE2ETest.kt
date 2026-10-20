@@ -117,8 +117,8 @@ class ScoreUpdateE2ETest {
         historyDao = db.historyDao()
         pendingScoreDao = db.pendingScoreDao()
 
-        teamRepository = WearTeamRepository(apiClient, db.playerDao(), db.pendingRosterChangeDao())
-        repository = WearGameRepository(apiClient, gameDao, historyDao, teamRepository, pendingScoreDao)
+        teamRepository = WearTeamRepository(apiClient, db.playerDao(), gameDao, db.pendingRosterChangeDao(), db.pendingActionDao())
+        repository = WearGameRepository(apiClient, gameDao, historyDao, teamRepository, pendingScoreDao, db.pendingActionDao())
         scoreRepository = WearScoreRepository(apiClient, historyDao, pendingScoreDao)
     }
 

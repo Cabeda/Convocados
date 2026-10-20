@@ -434,7 +434,10 @@ internal fun GameChip(
             )
         },
         secondaryLabel = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 if (timeState == GameListTimeState.LIVE) {
                     Text(
                         text = stringResource(R.string.live_badge),

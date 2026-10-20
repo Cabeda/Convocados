@@ -114,3 +114,6 @@ src/lib/__generated__/
 
 # Factory Gate 1 logs (scripts/factory/gate.sh)
 .factory-gate/
+
+# Factory handoff: the agent's bundle and summary, delivered by the next job
+.factory-handoff/

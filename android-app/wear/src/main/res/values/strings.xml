@@ -35,6 +35,10 @@
     <string name="score_hint">tap +1 · hold −1</string>
     <string name="saving">Saving…</string>
     <string name="will_sync_online">Will sync when online</string>
+    <!-- Short forms for a large font scale, where the full sentence is wider than a round display. -->
+    <string name="will_sync_online_short">Will sync</string>
+    <string name="sign_in_again_short">Sign in again</string>
+    <string name="sign_in_again">Session expired — sign in again</string>
     <string name="retry">Retry</string>
     <string name="done">Done</string>
     <string name="team_default_1">Team 1</string>
@@ -93,6 +97,7 @@
     <string name="add_player_button">Add player</string>
     <string name="no_known_players">No known players</string>
     <string name="adding_label">Adding…</string>
+    <string name="queued_label">Queued</string>
     <string name="done_label">Done</string>
     <string name="arrived_label">arrived</string>
     <string name="live_badge">LIVE</string>
