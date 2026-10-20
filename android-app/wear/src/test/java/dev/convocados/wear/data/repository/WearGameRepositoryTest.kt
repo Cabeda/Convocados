@@ -307,10 +307,10 @@ class WearGameRepositoryTest {
 
     @Test
     fun `syncPendingStarts discards the queued start and refetches when the server wins`() = runTest {
-        // 404 (event deleted) and 400 (invalid request) are the reachable
-        // business answers; neither is a reason to keep a local-only game.
+        // 403 (lapsed member) and 404 (event deleted) are what the endpoint
+        // actually answers; neither is a reason to keep a local-only game.
         var id = 2L
-        for (code in listOf(404, 400)) {
+        for (code in listOf(403, 404)) {
             val action = PendingActionEntity(
                 id = id,
                 kind = PendingActionEntity.KIND_START_GAME,
