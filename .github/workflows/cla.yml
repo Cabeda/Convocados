@@ -35,7 +35,7 @@ jobs:
           # into ...", PR merges) — without it every merge commit demands a
           # signature from an account that cannot sign, and the check fails on
           # main itself (post #1319).
-          allowlist: "Cabeda,GitHub,dependabot[bot],github-actions[bot],renovate[bot],convocarados-factory[bot]"
+          allowlist: "Cabeda,GitHub,dependabot[bot],github-actions[bot],renovate[bot],convocados-factory[bot]"
           custom-notsigned-prcomment: >
             Thanks for the contribution! Please read and sign the
             [Contributor License Agreement](https://github.com/Cabeda/Convocados/blob/main/CLA.md)
