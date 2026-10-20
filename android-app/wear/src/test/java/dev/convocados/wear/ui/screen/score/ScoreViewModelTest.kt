@@ -2,6 +2,7 @@ package dev.convocados.wear.ui.screen.score
 
 import app.cash.turbine.test
 import dev.convocados.wear.data.api.ApiException
+import dev.convocados.wear.data.api.SessionExpiredException
 import dev.convocados.wear.data.api.PostGameStatus
 import dev.convocados.wear.data.api.SeasonRankMovement
 import dev.convocados.wear.data.api.SetScore
@@ -10,6 +11,7 @@ import dev.convocados.wear.data.alarm.GameSettings
 import dev.convocados.wear.data.alarm.GameSettingsStore
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
+import dev.convocados.wear.data.repository.StartOutcome
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearScoreRepository
 import androidx.work.WorkManager
@@ -243,7 +245,7 @@ class ScoreViewModelTest {
 
     @Test
     fun `startGame success leaves no error`() = runTest {
-        coEvery { repository.startGame(any()) } returns Result.success(Unit)
+        coEvery { repository.startGame(any()) } returns Result.success(StartOutcome.STARTED)
 
         val viewModel = makeViewModel()
         viewModel.startGame()
@@ -255,6 +257,27 @@ class ScoreViewModelTest {
             assertNull(state.error)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `a queued start with an expired session asks for a sign-in`() = runTest {
+        coEvery { repository.startGame(any()) } returns Result.success(StartOutcome.QUEUED_SIGN_IN_REQUIRED)
+
+        val viewModel = makeViewModel()
+        viewModel.startGame()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertTrue(state.signInRequired)
+            assertNull(state.error)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `startErrorMessage names an expired session by type, not by code`() {
+        assertEquals("Session expired — sign in again", startErrorMessage(SessionExpiredException("400")))
     }
 
     @Test

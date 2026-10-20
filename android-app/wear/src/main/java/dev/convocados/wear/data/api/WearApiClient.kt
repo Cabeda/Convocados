@@ -65,21 +65,24 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
         path: String,
         body: Any? = null,
         retry: Boolean = true,
+        idempotencyKey: String? = null,
     ): HttpResponse {
-        val tokens = tokenStore.getTokens() ?: throw ApiException(401, "Not authenticated")
+        val tokens = tokenStore.getTokens() ?: throw SessionExpiredException("Not authenticated")
 
         var response = client.request("$baseUrl$path") {
             this.method = method
             header("Authorization", "Bearer ${tokens.accessToken}")
+            if (idempotencyKey != null) header("Idempotency-Key", idempotencyKey)
             if (body != null) setBody(body)
         }
 
         if (response.status == HttpStatusCode.Unauthorized && retry) {
             refreshToken()
-            val newTokens = tokenStore.getTokens() ?: throw ApiException(401, "Session expired")
+            val newTokens = tokenStore.getTokens() ?: throw SessionExpiredException("Session expired")
             response = client.request("$baseUrl$path") {
                 this.method = method
                 header("Authorization", "Bearer ${newTokens.accessToken}")
+                if (idempotencyKey != null) header("Idempotency-Key", idempotencyKey)
                 if (body != null) setBody(body)
             }
         }
@@ -93,7 +96,7 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 
     @PublishedApi
     internal suspend fun refreshToken() {
-        val tokens = tokenStore.getTokens() ?: throw ApiException(401, "No refresh token")
+        val tokens = tokenStore.getTokens() ?: throw SessionExpiredException("No refresh token")
         val response = try {
             client.post("$baseUrl/api/auth/oauth2/token") {
                 contentType(ContentType.Application.FormUrlEncoded)
@@ -103,10 +106,16 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
             throw ApiException(0, "Network error during refresh: ${e.message}")
         }
         if (!response.status.isSuccess()) {
-            if (response.status.value == 401 || response.status.value == 403) {
+            val code = response.status.value
+            // 400 invalid_grant is the token endpoint's answer for an expired,
+            // revoked or rotated-beyond-reuse refresh token; 401/403 are the
+            // same outcome. None of them is a business rejection of the queued
+            // action, so they are typed, not passed through as ApiException.
+            if (code == 400 || code == 401 || code == 403) {
                 tokenStore.clearTokens()
+                throw SessionExpiredException("Refresh rejected ($code)")
             }
-            throw ApiException(response.status.value, "Refresh failed (${response.status.value})")
+            throw ApiException(code, "Refresh failed ($code)")
         }
         val data: OAuthTokenResponse = response.body()
         tokenStore.setTokens(
@@ -142,6 +151,15 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 
     suspend fun post(path: String, body: Any? = null) {
         authenticatedRequest(HttpMethod.Post, path, body)
+    }
+
+    /** POST with a stable idempotency key so an offline replay cannot duplicate the write. */
+    suspend fun postIdempotent(path: String, body: Any?, idempotencyKey: String) {
+        authenticatedRequest(HttpMethod.Post, path, body, idempotencyKey = idempotencyKey)
+    }
+
+    suspend fun addPlayer(eventId: String, request: AddPlayerRequest, idempotencyKey: String) {
+        postIdempotent("/api/events/$eventId/players", request, idempotencyKey)
     }
 
     suspend inline fun <reified T> postForResult(path: String, body: Any? = null): T =
@@ -290,6 +308,27 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 }
 
 class ApiException(val code: Int, message: String) : Exception(message)
+
+/**
+ * The refresh grant itself was rejected (#1343). A status code cannot identify
+ * this: the token endpoint answers 400 `invalid_grant` for an expired, revoked
+ * or rotated-beyond-reuse refresh token — the same shape as a business 400. So
+ * the origin is typed here, and a reconnect after sign-out is never mistaken
+ * for "server wins" and never wipes queued local data.
+ */
+class SessionExpiredException(message: String) : Exception(message)
+
+/**
+ * A failure worth queueing and replaying later (#1343): offline, a timeout, a
+ * server hiccup, or an expired session. A 4xx we caused (bad input, forbidden,
+ * conflict) and a deterministic local failure must surface instead.
+ */
+internal fun Throwable.isRetryableLater(): Boolean = when (this) {
+    is SessionExpiredException -> true
+    is ApiException -> code == 0 || code == 401 || code == 408 || code == 429 || code >= 500
+    is java.io.IOException -> true
+    else -> false
+}
 
 private val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
     override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}

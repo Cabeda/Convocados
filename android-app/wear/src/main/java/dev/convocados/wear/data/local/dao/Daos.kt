@@ -1,6 +1,7 @@
 package dev.convocados.wear.data.local.dao
 
 import androidx.room.*
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.PendingRosterChangeEntity
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -78,6 +79,9 @@ interface WearHistoryDao {
 
     @Query("UPDATE wear_history SET scoreOne = :scoreOne, scoreTwo = :scoreTwo, scoreSetsJson = :scoreSetsJson WHERE id = :historyId")
     suspend fun updateScore(historyId: String, scoreOne: Int?, scoreTwo: Int?, scoreSetsJson: String? = null)
+
+    @Query("DELETE FROM wear_history WHERE id = :historyId")
+    suspend fun deleteById(historyId: String)
 }
 
 @Dao
@@ -107,6 +111,9 @@ interface PendingScoreDao {
     @Query("UPDATE pending_scores SET retryCount = retryCount + 1 WHERE id = :id")
     suspend fun incrementRetry(id: Long)
 
+    @Query("UPDATE pending_scores SET historyId = :toHistoryId WHERE historyId = :fromHistoryId")
+    suspend fun rekeyHistory(fromHistoryId: String, toHistoryId: String)
+
     @Query("DELETE FROM pending_scores WHERE id = :id")
     suspend fun deleteById(id: Long)
 }
@@ -119,12 +126,24 @@ interface WearPlayerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(players: List<WearPlayerEntity>)
 
-    @Query("DELETE FROM wear_players WHERE eventId = :eventId")
-    suspend fun deleteByEvent(eventId: String)
+    @Query("SELECT * FROM wear_players WHERE id = :id")
+    suspend fun getById(id: String): WearPlayerEntity?
+
+    @Query("DELETE FROM wear_players WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    /**
+     * Replace the server roster, but keep the `local-player:` echoes of adds
+     * that are still queued (#1343): a refresh must not erase a player the
+     * organizer just added offline. A replay removes its own echo once the
+     * server row exists.
+     */
+    @Query("DELETE FROM wear_players WHERE eventId = :eventId AND id NOT LIKE 'local-player:%'")
+    suspend fun deleteServerPlayers(eventId: String)
 
     @Transaction
     suspend fun refreshPlayers(eventId: String, players: List<WearPlayerEntity>) {
-        deleteByEvent(eventId)
+        deleteServerPlayers(eventId)
         insertAll(players)
     }
 }
@@ -151,5 +170,46 @@ interface PendingRosterChangeDao {
     suspend fun incrementRetry(id: Long)
 
     @Query("DELETE FROM pending_roster_changes WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    /**
+     * Drop every queued change for an event. `updateTeams` always writes the
+     * complete roster, so once one succeeds every earlier change for that event
+     * is superseded — replaying them would undo the newer write (#1343).
+     */
+    @Query("DELETE FROM pending_roster_changes WHERE eventId = :eventId")
+    suspend fun deleteByEventId(eventId: String)
+
+    @Query("SELECT * FROM pending_roster_changes WHERE eventId = :eventId ORDER BY createdAt ASC")
+    suspend fun getByEvent(eventId: String): List<PendingRosterChangeEntity>
+}
+
+@Dao
+interface PendingActionDao {
+    @Query("SELECT * FROM pending_actions WHERE kind = :kind ORDER BY createdAt ASC")
+    suspend fun getByKind(kind: String): List<PendingActionEntity>
+
+    @Query("SELECT * FROM pending_actions WHERE kind = :kind AND eventId = :eventId")
+    suspend fun getByKindAndEvent(kind: String, eventId: String): List<PendingActionEntity>
+
+    /** Names still queued, so the add-player screen can label them "Queued". */
+    @Query("SELECT playerName FROM pending_actions WHERE kind = 'add_player' AND eventId = :eventId")
+    fun observeAddNames(eventId: String): Flow<List<String>>
+
+    @Insert
+    suspend fun insert(action: PendingActionEntity)
+
+    @Query("UPDATE pending_actions SET retryCount = retryCount + 1 WHERE id = :id")
+    suspend fun incrementRetry(id: Long)
+
+    /** Set when a replay is rejected by an expired session, cleared on success. */
+    @Query("UPDATE pending_actions SET needsSignIn = 1 WHERE id = :id")
+    suspend fun markNeedsSignIn(id: Long)
+
+    /** Durable: a queued action that cannot sync until the user signs in again. */
+    @Query("SELECT COUNT(*) > 0 FROM pending_actions WHERE eventId = :eventId AND needsSignIn = 1")
+    fun observeNeedsSignIn(eventId: String): Flow<Boolean>
+
+    @Query("DELETE FROM pending_actions WHERE id = :id")
     suspend fun deleteById(id: Long)
 }

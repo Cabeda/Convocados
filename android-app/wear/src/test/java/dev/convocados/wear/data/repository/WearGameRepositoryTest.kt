@@ -1,25 +1,32 @@
 package dev.convocados.wear.data.repository
 
 import app.cash.turbine.test
+import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.EventSummary
 import dev.convocados.wear.data.api.GameHistory
 import dev.convocados.wear.data.api.MyGamesResponse
 import dev.convocados.wear.data.api.PaginatedHistory
+import dev.convocados.wear.data.api.SessionExpiredException
 import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamsResponse
+import dev.convocados.wear.data.api.WatchGameResponse
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
+import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import io.mockk.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -30,13 +37,14 @@ class WearGameRepositoryTest {
     private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val historyDao = mockk<WearHistoryDao>(relaxed = true)
     private val pendingScoreDao = mockk<PendingScoreDao>(relaxed = true)
+    private val pendingActionDao = mockk<PendingActionDao>(relaxed = true)
     private val teamRepository = mockk<WearTeamRepository>(relaxUnitFun = true)
 
     private lateinit var repository: WearGameRepository
 
     @Before
     fun setup() {
-        repository = WearGameRepository(client, gameDao, historyDao, teamRepository, pendingScoreDao)
+        repository = WearGameRepository(client, gameDao, historyDao, teamRepository, pendingScoreDao, pendingActionDao)
     }
 
     @Test
@@ -195,6 +203,206 @@ class WearGameRepositoryTest {
         coEvery { gameDao.getGame("missing") } returns null
 
         assertNull(repository.getGame("missing"))
+    }
+
+    // --- #1343 offline queue: start game ---
+
+    @Test
+    fun `startGame accepts offline by seeding a local history and queueing the start`() = runTest {
+        coEvery { client.startWatchGame("e1") } throws IOException("Offline")
+        coEvery { gameDao.getGame("e1") } returns makeGame("e1")
+        coEvery { historyDao.getByEvent("e1") } returns emptyList()
+
+        val result = repository.startGame("e1")
+
+        assertEquals(StartOutcome.QUEUED, result.getOrNull())
+        coVerify {
+            pendingActionDao.insert(
+                match { it.kind == PendingActionEntity.KIND_START_GAME && it.eventId == "e1" },
+            )
+        }
+        coVerify {
+            historyDao.insertAll(
+                match { rows ->
+                    rows.single().id == WearGameRepository.LOCAL_START_PREFIX + "e1" &&
+                        rows.single().eventId == "e1"
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `startGame queues but asks for a sign-in when the session expired`() = runTest {
+        coEvery { client.startWatchGame("e1") } throws SessionExpiredException("Refresh rejected (400)")
+        coEvery { gameDao.getGame("e1") } returns makeGame("e1")
+        coEvery { historyDao.getByEvent("e1") } returns emptyList()
+
+        val result = repository.startGame("e1")
+
+        // Never lose the night: the game is seeded and queued, but the screen
+        // must say that signing in is what unblocks the replay.
+        assertEquals(StartOutcome.QUEUED_SIGN_IN_REQUIRED, result.getOrNull())
+        coVerify { pendingActionDao.insert(match { it.kind == PendingActionEntity.KIND_START_GAME }) }
+        coVerify { historyDao.insertAll(match { rows -> rows.single().id == WearGameRepository.LOCAL_START_PREFIX + "e1" }) }
+    }
+
+    @Test
+    fun `startNeedsSignIn reads the durable flag left by a rejected replay`() = runTest {
+        coEvery { pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, "e1") } returns listOf(
+            PendingActionEntity(
+                kind = PendingActionEntity.KIND_START_GAME,
+                eventId = "e1",
+                needsSignIn = true,
+            ),
+        )
+
+        assertTrue(repository.startNeedsSignIn("e1"))
+    }
+
+    @Test
+    fun `startGame does not queue a permanent server rejection`() = runTest {
+        coEvery { client.startWatchGame("e1") } throws ApiException(400, "Assign teams first")
+
+        val result = repository.startGame("e1")
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { pendingActionDao.insert(any()) }
+        coVerify(exactly = 0) { historyDao.insertAll(any()) }
+    }
+
+    @Test
+    fun `syncPendingStarts rekeys the local history and queued scores to the server id`() = runTest {
+        val action = PendingActionEntity(
+            id = 1L,
+            kind = PendingActionEntity.KIND_START_GAME,
+            eventId = "e1",
+            idempotencyKey = "key",
+        )
+        val local = WearHistoryEntity(
+            id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+            eventId = "e1",
+            dateTime = "2025-01-01T10:00:00Z",
+            scoreOne = 2,
+            scoreTwo = 1,
+            teamOneName = "Red",
+            teamTwoName = "Blue",
+            editable = true,
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
+        coEvery { client.createWatchGameHistory("e1") } returns WatchGameResponse(id = "h1", created = true)
+        coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+        coEvery { client.get<PaginatedHistory>(any()) } returns PaginatedHistory(
+            data = listOf(GameHistory(id = "h1", dateTime = "2025-01-01T10:00:00Z", teamOneName = "Red", teamTwoName = "Blue")),
+        )
+        coEvery { pendingScoreDao.getAll() } returns emptyList()
+
+        val synced = repository.syncPendingStarts()
+
+        assertEquals(1, synced)
+        coVerify { pendingScoreDao.rekeyHistory(WearGameRepository.LOCAL_START_PREFIX + "e1", "h1") }
+        coVerify { historyDao.insertAll(match { rows -> rows.any { it.id == "h1" } }) }
+        coVerify { historyDao.deleteById(WearGameRepository.LOCAL_START_PREFIX + "e1") }
+        coVerify { pendingActionDao.deleteById(1L) }
+    }
+
+    @Test
+    fun `syncPendingStarts discards the queued start and refetches when the server wins`() = runTest {
+        // 403 (lapsed member) and 404 (event deleted) are what the endpoint
+        // actually answers; neither is a reason to keep a local-only game.
+        var id = 2L
+        for (code in listOf(403, 404)) {
+            val action = PendingActionEntity(
+                id = id,
+                kind = PendingActionEntity.KIND_START_GAME,
+                eventId = "e1",
+                idempotencyKey = "key",
+            )
+            val local = WearHistoryEntity(
+                id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+                eventId = "e1",
+                dateTime = "2025-01-01T10:00:00Z",
+                scoreOne = 0,
+                scoreTwo = 0,
+                teamOneName = "Red",
+                teamTwoName = "Blue",
+                editable = true,
+            )
+            coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
+            coEvery { client.createWatchGameHistory("e1") } throws ApiException(code, "rejected")
+            coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+            coEvery { client.get<PaginatedHistory>(any()) } returns PaginatedHistory(data = emptyList())
+
+            val synced = repository.syncPendingStarts()
+
+            assertEquals(0, synced)
+            coVerify { pendingActionDao.deleteById(id) }
+            coVerify { pendingScoreDao.deleteByHistory("e1", WearGameRepository.LOCAL_START_PREFIX + "e1") }
+            coVerify { historyDao.deleteById(WearGameRepository.LOCAL_START_PREFIX + "e1") }
+            coVerify { client.get<PaginatedHistory>(any()) }
+            id++
+        }
+    }
+
+    @Test
+    fun `syncPendingStarts keeps the local game when the session expired`() = runTest {
+        var id = 6L
+        val errors = listOf<Exception>(
+            ApiException(401, "unauthorized"),
+            SessionExpiredException("Refresh rejected (400)"),
+        )
+        for (error in errors) {
+            val action = PendingActionEntity(
+                id = id,
+                kind = PendingActionEntity.KIND_START_GAME,
+                eventId = "e1",
+                idempotencyKey = "key",
+            )
+            val local = WearHistoryEntity(
+                id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+                eventId = "e1",
+                dateTime = "2025-01-01T10:00:00Z",
+                scoreOne = 4,
+                scoreTwo = 3,
+                teamOneName = "Red",
+                teamTwoName = "Blue",
+                editable = true,
+            )
+            coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
+            coEvery { client.createWatchGameHistory("e1") } throws error
+            coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+
+            val synced = repository.syncPendingStarts()
+
+            assertEquals(0, synced)
+            coVerify { pendingActionDao.incrementRetry(id) }
+            coVerify(exactly = 0) { pendingActionDao.deleteById(id) }
+            coVerify(exactly = 0) { pendingScoreDao.deleteByHistory(any(), any()) }
+            coVerify(exactly = 0) { historyDao.deleteById(any()) }
+            id++
+        }
+    }
+
+    @Test
+    fun `refreshHistory drops a local placeholder when no start is queued`() = runTest {
+        val local = WearHistoryEntity(
+            id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+            eventId = "e1",
+            dateTime = "2025-01-01T10:00:00Z",
+            scoreOne = 0,
+            scoreTwo = 0,
+            teamOneName = "Red",
+            teamTwoName = "Blue",
+            editable = true,
+        )
+        coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+        coEvery { pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, "e1") } returns emptyList()
+        coEvery { client.get<PaginatedHistory>(any()) } returns PaginatedHistory(data = emptyList())
+        coEvery { pendingScoreDao.getAll() } returns emptyList()
+
+        val result = repository.refreshHistory("e1")
+
+        assertTrue(result.isSuccess)
+        coVerify { historyDao.refreshHistory("e1", match { it.isEmpty() }) }
     }
 
     private fun eventSummary(id: String) = EventSummary(

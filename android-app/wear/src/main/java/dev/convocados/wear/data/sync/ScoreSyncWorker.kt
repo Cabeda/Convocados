@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearScoreRepository
 import dev.convocados.wear.data.repository.WearTeamRepository
 import java.util.concurrent.TimeUnit
@@ -19,13 +20,21 @@ class ScoreSyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val scoreRepository: WearScoreRepository,
     private val teamRepository: WearTeamRepository,
+    private val gameRepository: WearGameRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         return try {
+            // Starts first: a game created offline owns the history row that any
+            // queued score edits (#1343) were written against.
+            val syncedStarts = gameRepository.syncPendingStarts()
+            val syncedAdds = teamRepository.syncPendingAddPlayers()
             val syncedScores = scoreRepository.syncPendingScores()
             val syncedRosters = teamRepository.syncPendingRosterChanges()
-            Log.d("ScoreSyncWorker", "Synced $syncedScores scores, $syncedRosters roster changes")
+            Log.d(
+                "ScoreSyncWorker",
+                "Synced $syncedStarts starts, $syncedAdds adds, $syncedScores scores, $syncedRosters roster changes",
+            )
             Result.success()
         } catch (e: Exception) {
             Log.e("ScoreSyncWorker", "Sync failed", e)

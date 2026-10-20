@@ -1,10 +1,15 @@
 package dev.convocados.wear.data.repository
 
 import android.util.Log
+import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.api.SessionExpiredException
+import dev.convocados.wear.data.api.isRetryableLater
+import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearTeamRepository
@@ -16,16 +21,21 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+/** How a start landed: now, or queued locally for the reconnect replay. */
+enum class StartOutcome { STARTED, QUEUED, QUEUED_SIGN_IN_REQUIRED }
+
 class WearGameRepository @Inject constructor(
     private val client: WearApiClient,
     private val gameDao: WearGameDao,
     private val historyDao: WearHistoryDao,
     private val teamRepository: WearTeamRepository,
     private val pendingScoreDao: PendingScoreDao,
+    private val pendingActionDao: PendingActionDao,
 ) {
     /** Observable list of all cached games, sorted by dateTime. */
     fun observeGames(): Flow<List<WearGameEntity>> = gameDao.getAllGames()
@@ -86,7 +96,14 @@ class WearGameRepository @Inject constructor(
             .associateBy { it.historyId }
         val remoteHistory = history.data.map { it.toHistoryEntity(eventId) }
         val remoteIds = remoteHistory.mapTo(mutableSetOf()) { it.id }
-        val mergedHistory = (remoteHistory + cached.filter { it.id !in remoteIds && it.id in pendingByHistory })
+        // A locally-started game has no server row yet; keep its placeholder
+        // across a refresh only while a start is still queued (#1343). Without
+        // the guard a crash between seed and enqueue would strand it forever.
+        val hasPendingStart =
+            pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, eventId).isNotEmpty()
+        val mergedHistory = (remoteHistory + cached.filter {
+            it.id !in remoteIds && (it.id in pendingByHistory || (hasPendingStart && it.id.startsWith(LOCAL_START_PREFIX)))
+        })
             .map { local ->
                 pendingByHistory[local.id]?.let { pending ->
                     local.copy(
@@ -118,14 +135,143 @@ class WearGameRepository @Inject constructor(
     /**
      * Start score tracking for an event (creates today's history record if
      * teams are assigned), then refresh the local history cache.
+     *
+     * Offline-first (#1343): when the watch has no network, the start is
+     * accepted locally — a placeholder history lets scoring continue — and the
+     * create is queued for [syncPendingStarts]. A permanent rejection still
+     * fails so the UI can explain it.
      */
-    suspend fun startGame(eventId: String): Result<Unit> = try {
+    suspend fun startGame(eventId: String): Result<StartOutcome> = try {
         client.startWatchGame(eventId)
         refreshHistory(eventId)
-        Result.success(Unit)
+        Result.success(StartOutcome.STARTED)
     } catch (e: Exception) {
-        Log.w("WearGameRepo", "Failed to start game $eventId", e)
-        Result.failure(e)
+        if (e.isRetryableLater()) {
+            // Queue before seeding: a crash in between must not leave a
+            // placeholder that nothing will ever adopt. A local write failure
+            // is reported, never thrown out of this graceful path.
+            val queued = runCatching {
+                enqueueStart(eventId, needsSignIn = e is SessionExpiredException)
+                seedLocalHistory(eventId)
+            }
+            if (queued.isSuccess) {
+                Log.w("WearGameRepo", "Start for $eventId queued offline", e)
+                // An expired session still queues (never lose the night), but
+                // the score screen must say that signing in is what unblocks it.
+                Result.success(
+                    if (e is SessionExpiredException) StartOutcome.QUEUED_SIGN_IN_REQUIRED
+                    else StartOutcome.QUEUED,
+                )
+            } else {
+                Log.e("WearGameRepo", "Failed to queue start for $eventId", queued.exceptionOrNull())
+                Result.failure(e)
+            }
+        } else {
+            Log.w("WearGameRepo", "Failed to start game $eventId", e)
+            Result.failure(e)
+        }
+    }
+
+    /** Durable: a queued start that cannot sync until the user signs in again. */
+    suspend fun startNeedsSignIn(eventId: String): Boolean =
+        pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, eventId)
+            .any { it.needsSignIn }
+
+    /**
+     * Replay queued starts. The server create is idempotent per day, so a
+     * replay is safe; the returned id replaces the local placeholder and any
+     * scores queued against it. A business 4xx means the server has moved on
+     * (server wins): discard the action and re-fetch.
+     */
+    suspend fun syncPendingStarts(): Int {
+        var synced = 0
+        // No retry cap: the create is idempotent and the placeholder must not be
+        // abandoned locally; a non-transient answer removes the action below.
+        for (action in pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME)) {
+            try {
+                val created = client.createWatchGameHistory(action.eventId)
+                adoptServerHistory(action.eventId, created.id)
+                pendingActionDao.deleteById(action.id)
+                synced++
+            } catch (e: ApiException) {
+                if (e.isRetryableLater()) {
+                    // Offline or a server hiccup: keep the local game and its
+                    // scores. A rejected refresh is a SessionExpiredException,
+                    // which the generic catch below also keeps — its 400 never
+                    // lands here as a business answer and erases the night.
+                    pendingActionDao.incrementRetry(action.id)
+                } else {
+                    // Server wins (404 gone, 403 no longer a member, 409): drop
+                    // the local game and its scores, then re-fetch.
+                    discardLocalStart(action.eventId)
+                    pendingActionDao.deleteById(action.id)
+                    refreshHistory(action.eventId)
+                }
+                Log.w("WearGameRepo", "Start replay rejected for ${action.eventId}", e)
+            } catch (e: Exception) {
+                // An expired session is why the retry keeps failing: record it
+                // so the score screen can ask for a sign-in, durably.
+                if (e is SessionExpiredException) pendingActionDao.markNeedsSignIn(action.id)
+                pendingActionDao.incrementRetry(action.id)
+                Log.w("WearGameRepo", "Start replay failed for ${action.eventId}", e)
+            }
+        }
+        return synced
+    }
+
+    private suspend fun enqueueStart(eventId: String, needsSignIn: Boolean) {
+        if (pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, eventId).isNotEmpty()) return
+        pendingActionDao.insert(
+            PendingActionEntity(
+                kind = PendingActionEntity.KIND_START_GAME,
+                eventId = eventId,
+                // No key: this create is idempotent per day server-side.
+                needsSignIn = needsSignIn,
+            ),
+        )
+    }
+
+    private suspend fun seedLocalHistory(eventId: String) {
+        val localId = LOCAL_START_PREFIX + eventId
+        if (historyDao.getByEvent(eventId).any { it.id == localId }) return
+        val game = gameDao.getGame(eventId)
+        historyDao.insertAll(
+            listOf(
+                WearHistoryEntity(
+                    id = localId,
+                    eventId = eventId,
+                    // Now sorts the placeholder ahead of older history; the game
+                    // window bounds it, so it stays inside today.
+                    dateTime = Instant.now().toString(),
+                    scoreOne = 0,
+                    scoreTwo = 0,
+                    teamOneName = game?.teamOneName ?: "Team 1",
+                    teamTwoName = game?.teamTwoName ?: "Team 2",
+                    editable = true,
+                ),
+            ),
+        )
+    }
+
+    private suspend fun adoptServerHistory(eventId: String, serverId: String) {
+        historyDao.getByEvent(eventId)
+            .filter { it.id.startsWith(LOCAL_START_PREFIX) }
+            .forEach { local ->
+                historyDao.insertAll(listOf(local.copy(id = serverId)))
+                pendingScoreDao.rekeyHistory(local.id, serverId)
+                historyDao.deleteById(local.id)
+            }
+        refreshHistory(eventId)
+    }
+
+    /** Server wins: the queued start will never apply, so its local game and scores go. */
+    private suspend fun discardLocalStart(eventId: String) {
+        historyDao.getByEvent(eventId)
+            .filter { it.id.startsWith(LOCAL_START_PREFIX) }
+            .forEach { local ->
+                pendingScoreDao.deleteByHistory(eventId, local.id)
+                historyDao.deleteById(local.id)
+            }
     }
 
     /** Get a cached game by ID. */
@@ -162,4 +308,9 @@ class WearGameRepository @Inject constructor(
             // the column would wipe offline-queued scores on upgrade.
             editable = true,
         )
+
+    companion object {
+        /** Prefix for a locally-started history that has no server id yet. */
+        const val LOCAL_START_PREFIX = WearHistoryEntity.LOCAL_START_PREFIX
+    }
 }

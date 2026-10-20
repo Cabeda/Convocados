@@ -435,9 +435,11 @@ internal fun TennisScoreEditor(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (state.isOfflineQueued) {
+            if (state.isOfflineQueued || state.isLocalStart) {
                 Text(
-                    text = stringResource(R.string.will_sync_online),
+                    text = stringResource(
+                        if (state.signInRequired) R.string.sign_in_again else R.string.will_sync_online,
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = Warning,
                     textAlign = TextAlign.Center,
@@ -672,9 +674,11 @@ internal fun ScoreTimeOverlay(
             }
         }
 
-        if (showOfflineStatus && state.isOfflineQueued) {
+        if (showOfflineStatus && (state.isOfflineQueued || state.isLocalStart)) {
             Text(
-                text = stringResource(R.string.will_sync_online),
+                text = stringResource(
+                    if (state.signInRequired) R.string.sign_in_again else R.string.will_sync_online,
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = Warning,
                 textAlign = TextAlign.Center,
