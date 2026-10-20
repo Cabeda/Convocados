@@ -23,7 +23,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
-import kotlin.math.hypot
 
 private const val POLE_ROW = "pole_row"
 private const val EQUATOR_ROW = "equator_row"
@@ -189,24 +188,13 @@ class RoundListInsetPositionTest {
      * room for that width, which is exactly when it stays inside the bezel.
      */
     private fun assertRowInsideBezel(tag: String, bounds: Rect) {
-        val display = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
-        val radius = (minOf(display.width, display.height) / 2f) -
-            with(composeRule.density) { ROUND_BEZEL_INSET.toPx() }
-        val tolerance = 1.5f
-        listOf(
-            bounds.left to bounds.top,
-            bounds.right to bounds.top,
-            bounds.left to bounds.bottom,
-            bounds.right to bounds.bottom,
-        ).forEach { (x, y) ->
-            val distance = hypot(x - display.center.x, y - display.center.y)
-            assertTrue(
-                ("%s corner (%.1f, %.1f) sits %.1fpx from the centre, outside the %.1fpx bezel " +
-                    "radius — the position-aware inset widened a row the circle had no room for")
-                    .format(tag, x, y, distance, radius),
-                distance <= radius + tolerance,
-            )
-        }
+        assertCornersInsideBezel(
+            label = tag,
+            bounds = bounds,
+            display = composeRule.onRoot().fetchSemanticsNode().boundsInRoot,
+            bezelInsetPx = with(composeRule.density) { ROUND_BEZEL_INSET.toPx() },
+            because = "the position-aware inset widened a row the circle had no room for",
+        )
     }
 
     /**
