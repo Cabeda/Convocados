@@ -215,7 +215,7 @@ class WearGameRepositoryTest {
 
         val result = repository.startGame("e1")
 
-        assertTrue(result.isSuccess)
+        assertEquals(StartOutcome.QUEUED, result.getOrNull())
         coVerify {
             pendingActionDao.insert(
                 match { it.kind == PendingActionEntity.KIND_START_GAME && it.eventId == "e1" },
@@ -229,6 +229,21 @@ class WearGameRepositoryTest {
                 },
             )
         }
+    }
+
+    @Test
+    fun `startGame queues but asks for a sign-in when the session expired`() = runTest {
+        coEvery { client.startWatchGame("e1") } throws SessionExpiredException("Refresh rejected (400)")
+        coEvery { gameDao.getGame("e1") } returns makeGame("e1")
+        coEvery { historyDao.getByEvent("e1") } returns emptyList()
+
+        val result = repository.startGame("e1")
+
+        // Never lose the night: the game is seeded and queued, but the screen
+        // must say that signing in is what unblocks the replay.
+        assertEquals(StartOutcome.QUEUED_SIGN_IN_REQUIRED, result.getOrNull())
+        coVerify { pendingActionDao.insert(match { it.kind == PendingActionEntity.KIND_START_GAME }) }
+        coVerify { historyDao.insertAll(match { rows -> rows.single().id == WearGameRepository.LOCAL_START_PREFIX + "e1" }) }
     }
 
     @Test

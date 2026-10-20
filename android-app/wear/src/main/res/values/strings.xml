@@ -35,6 +35,7 @@
     <string name="score_hint">tap +1 · hold −1</string>
     <string name="saving">Saving…</string>
     <string name="will_sync_online">Will sync when online</string>
+    <string name="sign_in_again">Session expired — sign in again</string>
     <string name="retry">Retry</string>
     <string name="done">Done</string>
     <string name="team_default_1">Team 1</string>

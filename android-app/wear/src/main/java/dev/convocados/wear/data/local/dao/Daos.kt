@@ -126,12 +126,24 @@ interface WearPlayerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(players: List<WearPlayerEntity>)
 
-    @Query("DELETE FROM wear_players WHERE eventId = :eventId")
-    suspend fun deleteByEvent(eventId: String)
+    @Query("SELECT * FROM wear_players WHERE id = :id")
+    suspend fun getById(id: String): WearPlayerEntity?
+
+    @Query("DELETE FROM wear_players WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    /**
+     * Replace the server roster, but keep the `local-player:` echoes of adds
+     * that are still queued (#1343): a refresh must not erase a player the
+     * organizer just added offline. A replay removes its own echo once the
+     * server row exists.
+     */
+    @Query("DELETE FROM wear_players WHERE eventId = :eventId AND id NOT LIKE 'local-player:%'")
+    suspend fun deleteServerPlayers(eventId: String)
 
     @Transaction
     suspend fun refreshPlayers(eventId: String, players: List<WearPlayerEntity>) {
-        deleteByEvent(eventId)
+        deleteServerPlayers(eventId)
         insertAll(players)
     }
 }

@@ -3,6 +3,7 @@ package dev.convocados.wear.data.repository
 import android.util.Log
 import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.api.SessionExpiredException
 import dev.convocados.wear.data.api.isRetryableLater
 import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
@@ -26,6 +27,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+/** How a start landed: now, or queued locally for the reconnect replay. */
+enum class StartOutcome { STARTED, QUEUED, QUEUED_SIGN_IN_REQUIRED }
+
 class WearGameRepository @Inject constructor(
     private val client: WearApiClient,
     private val gameDao: WearGameDao,
@@ -138,10 +142,10 @@ class WearGameRepository @Inject constructor(
      * create is queued for [syncPendingStarts]. A permanent rejection still
      * fails so the UI can explain it.
      */
-    suspend fun startGame(eventId: String): Result<Unit> = try {
+    suspend fun startGame(eventId: String): Result<StartOutcome> = try {
         client.startWatchGame(eventId)
         refreshHistory(eventId)
-        Result.success(Unit)
+        Result.success(StartOutcome.STARTED)
     } catch (e: Exception) {
         if (e.isRetryableLater()) {
             // Queue before seeding: a crash in between must not leave a
@@ -153,7 +157,12 @@ class WearGameRepository @Inject constructor(
             }
             if (queued.isSuccess) {
                 Log.w("WearGameRepo", "Start for $eventId queued offline", e)
-                Result.success(Unit)
+                // An expired session still queues (never lose the night), but
+                // the score screen must say that signing in is what unblocks it.
+                Result.success(
+                    if (e is SessionExpiredException) StartOutcome.QUEUED_SIGN_IN_REQUIRED
+                    else StartOutcome.QUEUED,
+                )
             } else {
                 Log.e("WearGameRepo", "Failed to queue start for $eventId", queued.exceptionOrNull())
                 Result.failure(e)

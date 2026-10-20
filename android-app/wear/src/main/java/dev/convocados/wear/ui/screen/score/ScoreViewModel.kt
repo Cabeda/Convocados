@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.ApiException
+import dev.convocados.wear.data.api.SessionExpiredException
 import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.api.TennisTeam
 import dev.convocados.wear.data.api.WearApiClient
@@ -19,6 +20,7 @@ import dev.convocados.wear.data.alarm.computeAlarmTimes
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.data.repository.StartOutcome
 import dev.convocados.wear.data.repository.WearScoreRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
 import dev.convocados.wear.util.parseInstant
@@ -51,6 +53,8 @@ data class ScoreUiState(
     val isOfflineQueued: Boolean = false,
     /** The game was started offline (#1343); the server has no history yet. */
     val isLocalStart: Boolean = false,
+    /** The queued start is blocked on a sign-in, not just on the network. */
+    val signInRequired: Boolean = false,
     val kickoffEpochMs: Long? = null,
     val nextAlarmAtMs: Long? = null,
     val error: String? = null,
@@ -161,7 +165,11 @@ class ScoreViewModel @Inject constructor(
             _uiState.update { it.copy(isStarting = true, error = null) }
             val result = repository.startGame(eventId)
             _uiState.update {
-                it.copy(isStarting = false, error = startErrorMessage(result.exceptionOrNull()))
+                it.copy(
+                    isStarting = false,
+                    error = startErrorMessage(result.exceptionOrNull()),
+                    signInRequired = result.getOrNull() == StartOutcome.QUEUED_SIGN_IN_REQUIRED,
+                )
             }
             // A queued start should replay as soon as the watch reconnects, not
             // wait for the periodic job.
@@ -399,7 +407,8 @@ internal fun isRetryableScoreFailure(exception: Throwable): Boolean = when (exce
 internal fun startErrorMessage(e: Throwable?): String? = when {
     e == null -> null
     e is ApiException && e.code == 400 -> "Assign teams first"
-    e is ApiException && e.code == 401 -> "Session expired — sign in again"
+    e is SessionExpiredException || (e is ApiException && e.code == 401) ->
+        "Session expired — sign in again"
     e is ApiException && e.code == 403 -> parseApiError(e.message) ?: "Not authorized"
     e is ApiException -> "Couldn't start (${e.code})"
     else -> "Couldn't start — check connection"

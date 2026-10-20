@@ -150,9 +150,15 @@ class WearTeamRepository @Inject constructor(
         }
     }
 
-    /** Replay queued adds. Server wins on a 4xx: discard the action and re-fetch. */
+    /**
+     * Replay queued adds. Server wins on a business 4xx: discard the action and
+     * re-fetch. A team the organizer set on a local echo before reconnect is
+     * re-applied once the server id exists (#1343).
+     */
     suspend fun syncPendingAddPlayers(): Int {
         var synced = 0
+        val assigned = mutableListOf<Triple<String, String, String>>() // eventId, name, team
+        val touchedEvents = linkedSetOf<String>()
         // No retry cap: the add carries a stable idempotency key, so replay is
         // safe until a non-transient answer removes it.
         for (action in pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER)) {
@@ -161,10 +167,16 @@ class WearTeamRepository @Inject constructor(
                 pendingActionDao.deleteById(action.id)
                 continue
             }
+            val localId = WearPlayerEntity.LOCAL_PREFIX + action.idempotencyKey
             try {
+                val local = playerDao.getById(localId)
                 client.addPlayer(action.eventId, AddPlayerRequest(name), action.idempotencyKey)
                 pendingActionDao.deleteById(action.id)
-                refreshTeams(action.eventId)
+                playerDao.deleteById(localId)
+                if (local != null && local.teamAssignment != "unassigned") {
+                    assigned += Triple(action.eventId, name, local.teamAssignment)
+                }
+                touchedEvents += action.eventId
                 synced++
             } catch (e: Exception) {
                 if (e.isRetryableLater()) {
@@ -174,12 +186,33 @@ class WearTeamRepository @Inject constructor(
                     pendingActionDao.incrementRetry(action.id)
                 } else {
                     pendingActionDao.deleteById(action.id)
-                    refreshTeams(action.eventId)
+                    playerDao.deleteById(localId)
+                    touchedEvents += action.eventId
                 }
                 Log.w("WearTeamRepo", "Add player replay failed for ${action.eventId}", e)
             }
         }
+        // One refresh per event, after the loop: refreshing mid-replay would
+        // re-read a roster that later iterations are still changing.
+        touchedEvents.forEach { refreshTeams(it) }
+        assigned.forEach { (eventId, name, team) -> reapplyTeamAssignment(eventId, name, team) }
         return synced
+    }
+
+    /** Put a locally-added player back on the team chosen before the replay. */
+    private suspend fun reapplyTeamAssignment(eventId: String, name: String, team: String) {
+        if (team != "teamOne" && team != "teamTwo") return
+        val players = playerDao.observePlayers(eventId).first()
+        // shortcut: same-named players are ambiguous; the first unassigned match
+        // wins. Fine for a friend group, revisit if duplicate names get common.
+        val adopted = players.firstOrNull { it.name == name && it.teamAssignment == "unassigned" } ?: return
+        val oneIds = players.filter { it.teamAssignment == "teamOne" }.map { it.id }
+        val twoIds = players.filter { it.teamAssignment == "teamTwo" }.map { it.id }
+        updateTeams(
+            eventId,
+            if (team == "teamOne") oneIds + adopted.id else oneIds,
+            if (team == "teamTwo") twoIds + adopted.id else twoIds,
+        )
     }
 
     suspend fun syncPendingRosterChanges(): Int {

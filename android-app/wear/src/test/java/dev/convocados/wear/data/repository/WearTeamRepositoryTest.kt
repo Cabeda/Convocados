@@ -239,6 +239,46 @@ class WearTeamRepositoryTest {
     }
 
     @Test
+    fun `an offline add keeps the team the organizer assigned before reconnect`() = runTest {
+        val localId = WearPlayerEntity.LOCAL_PREFIX + "k1"
+        val action = PendingActionEntity(
+            id = 12L,
+            kind = PendingActionEntity.KIND_ADD_PLAYER,
+            eventId = "e1",
+            playerName = "Alice",
+            idempotencyKey = "k1",
+        )
+        val rosterAfterAdopt = listOf(
+            WearPlayerEntity("p1", "e1", "Alice", 0, "unassigned"),
+            WearPlayerEntity("p2", "e1", "Bob", 1, "unassigned"),
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
+        coEvery { playerDao.getById(localId) } returns WearPlayerEntity(
+            localId, "e1", "Alice", Int.MAX_VALUE, "teamOne",
+        )
+        coEvery { playerDao.observePlayers("e1") } returns flowOf(rosterAfterAdopt)
+        coEvery { client.addPlayer(any(), any(), any()) } just Runs
+        coEvery { client.getTeams("e1") } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2"),
+            unassigned = listOf(TeamPlayer("p2", "Bob", 1)),
+            maxPlayers = 10,
+        )
+        coEvery { client.updateTeams(any(), any()) } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2"),
+            unassigned = listOf(TeamPlayer("p2", "Bob", 1)),
+            maxPlayers = 10,
+        )
+
+        assertEquals(1, repository.syncPendingAddPlayers())
+
+        // The local echo is gone, and the adopted server player is back on team one.
+        coVerify { playerDao.deleteById(localId) }
+        coVerify { client.updateTeams("e1", match { it.teamOnePlayerIds == listOf("p1") && it.teamTwoPlayerIds.isEmpty() }) }
+    }
+
+    @Test
     fun `syncPendingAddPlayers discards the queued add and refetches when the server wins`() = runTest {
         var action = PendingActionEntity(
             id = 8L,
