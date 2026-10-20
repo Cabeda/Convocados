@@ -60,12 +60,16 @@ jobs:
           FACTORY_MODEL: ${{ vars.FACTORY_MODEL }}
         run: node scripts/factory/decline-notice.ts
 
+  # Work. Nothing here writes to the remote: the App token is minted in
+  # `deliver` below, *after* this job. An App token lives 60 minutes and this
+  # step may run 110 — minting it here is how #937 finished a green change and
+  # lost it to `Bad credentials`, while the job still reported success.
   factory:
-    # Everything flows through the App token minted below. The default
-    # GITHUB_TOKEN needs no scope here, and must not carry one: it lives in the
-    # runner's environment for the whole job, so its scopes are blast radius we
-    # do not need (ADR 0046).
-    permissions: {}
+    # Read the repo and claim the Issue; this token has no push or PR scope, so
+    # the split is enforced, not merely instructed (ADR 0046).
+    permissions:
+      contents: read
+      issues: write
     # The factory is inert until its identity exists: no App id and no model
     # means step 2 is not finished, and an unconfigured run is a red run that
     # teaches nobody anything. The wizard sets both, and that is the activation.
@@ -106,19 +110,6 @@ jobs:
         env:
           DATABASE_URL: file:./prisma/dev.db
 
-      - name: Mint an installation token for our App
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
-          private-key: ${{ secrets.FACTORY_APP_KEY }}
-          # Least privilege, stated per run: contents to push factory/*,
-          # pull-requests to open Changes and comment, issues to file the
-          # evidence. No workflows permission, so the factory cannot edit the
-          # workflows that run it.
-          permission-contents: write
-          permission-pull-requests: write
-          permission-issues: write
       - name: Run the Factory
         # The real budget. A step that times out exits non-zero, and this absorbs
         # it, so the job — and therefore the Change's check list — stays green.
@@ -130,10 +121,9 @@ jobs:
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
         env:
-          # Our own App's installation token, minted per run (ADR 0048) — not
-          # the opencode App's OIDC exchange, whose scopes would be a third
-          # party's promise instead of the deny-list we can audit (ADR 0046).
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The job's own token: read the repo, claim the Issue, and report a
+          # failure. It cannot push or open a Change even if it outlives the run.
+          GITHUB_TOKEN: ${{ github.token }}
           # Provider credentials for vars.FACTORY_MODEL. The unset ones are empty
           # strings, which is harmless: opencode picks the one the model needs.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -153,9 +143,106 @@ jobs:
 
             Follow `.opencode/agents/factory.md`. Branch `factory/<issue-number>-<slug>` from
             origin/main, TDD the change, run `bash scripts/factory/gate.sh` (add
-            `--skip-android` only if the diff cannot touch Kotlin), push that branch, open the
-            Change linked to the Issue, and end at Handoff (`factory:review` plus a summary
-            comment) or Blocked (`factory:blocked` plus the evidence).
+            `--skip-android` only if the diff cannot touch Kotlin), commit, then write the
+            handoff to `.factory-handoff/`: `status` (`review` or `blocked`), `branch`, `title`,
+            `pr-body.md`, and `comment.md`.
 
-            Do not merge, do not label, do not touch a human branch. If the Issue has no
-            verifiable acceptance criterion, that is Blocked, not a licence to improvise.
+            Do not push, open the Change, comment, or label: the `deliver` job does all four
+            with a token minted after you finish, because an App token expires in 60 minutes
+            and this run may take 110. Your branch and commits leave the runner in the
+            `.factory-handoff` artifact.
+
+            Do not merge, do not touch a human branch. If the Issue has no verifiable
+            acceptance criterion, that is Blocked — say so in the handoff, do not improvise.
+
+      # Lose nothing if the run stopped mid-edit: uncommitted work becomes a
+      # commit on the agent's branch and rides the same bundle.
+      - name: Package the work for delivery
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .factory-handoff
+          branch="$(cat .factory-handoff/branch 2>/dev/null || git branch --show-current)"
+          case "$branch" in
+            factory/*) ;;
+            *) echo "No factory branch; nothing to deliver."; exit 0 ;;
+          esac
+          if ! git rev-parse --verify --quiet "refs/heads/$branch" >/dev/null; then
+            echo "Branch $branch does not exist; nothing to deliver."
+            exit 0
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git -c user.name="convocados-factory[bot]" \
+                -c user.email="convocados-factory[bot]@users.noreply.github.com" \
+                commit -m "factory: work in progress for #${{ github.event.issue.number || inputs.issue }}"
+          fi
+          if [ "$(git rev-list --count "origin/main..$branch")" = "0" ]; then
+            echo "$branch has no commits beyond origin/main; nothing to deliver."
+            exit 0
+          fi
+          git bundle create .factory-handoff/change.bundle "origin/main..$branch"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: factory-handoff
+          path: .factory-handoff/
+          if-no-files-found: warn
+
+  # The only job that writes to GitHub. Its token is minted *here*, after the
+  # agent has finished, so it is valid for the few seconds this takes no matter
+  # how long the work took. #937 and #1452 both ended here with a dead token.
+  deliver:
+    needs: factory
+    if: >-
+      always() &&
+      vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_APP_ID != '' &&
+      vars.FACTORY_MODEL != '' &&
+      ((github.event_name == 'workflow_dispatch') ||
+       contains(github.event.label.name, 'ready-for-agent'))
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # The bundle's prerequisite is the origin/main the agent branched
+          # from, which may no longer be the tip. A shallow clone cannot
+          # satisfy that prerequisite, so delivery needs real history.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        # A run that produced nothing still needs a voice: the script reports
+        # Blocked instead of leaving the Issue looking unclaimed.
+        continue-on-error: true
+        with:
+          name: factory-handoff
+          path: .factory-handoff
+
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Least privilege, stated per run: contents to push factory/*,
+          # pull-requests to open Changes and comment, issues to label and file
+          # the evidence. No workflows permission, so the factory cannot edit the
+          # workflows that run it.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Push the branch, open the Change, and report
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HANDOFF_DIR: .factory-handoff
+        run: node scripts/factory/deliver.ts
