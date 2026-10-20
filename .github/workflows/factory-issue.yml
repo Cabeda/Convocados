@@ -188,6 +188,10 @@ jobs:
         with:
           name: factory-handoff
           path: .factory-handoff/
+          # The directory is hidden, and v4+ skips hidden paths by default:
+          # without this the upload reports "no files were found" and the whole
+          # run is delivered as an empty Blocked (observed on run 39447497995).
+          include-hidden-files: true
           if-no-files-found: warn
 
   # The only job that writes to GitHub. Its token is minted *here*, after the
