@@ -104,6 +104,10 @@ class WearTeamRepository @Inject constructor(
     fun observePendingAddNames(eventId: String): Flow<List<String>> =
         pendingActionDao.observeAddNames(eventId)
 
+    /** Durable: a queued action that cannot sync until the user signs in again. */
+    fun observeSignInRequired(eventId: String): Flow<Boolean> =
+        pendingActionDao.observeNeedsSignIn(eventId)
+
     /**
      * Add a player to the event roster. Offline-first (#1343): a transient
      * failure queues the add with a stable idempotency key, so the reconnect
@@ -124,6 +128,7 @@ class WearTeamRepository @Inject constructor(
                             eventId = eventId,
                             playerName = name,
                             idempotencyKey = idempotencyKey,
+                            needsSignIn = e is SessionExpiredException,
                         ),
                     )
                     // Echo the add on the roster the organizer actually reads,
@@ -170,25 +175,26 @@ class WearTeamRepository @Inject constructor(
         // safe until a non-transient answer removes it.
         for (action in pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER)) {
             val name = action.playerName
-            if (name == null) {
+            val key = action.idempotencyKey
+            if (name == null || key == null) {
                 pendingActionDao.deleteById(action.id)
                 continue
             }
-            val localId = WearPlayerEntity.LOCAL_PREFIX + action.idempotencyKey
+            val localId = WearPlayerEntity.LOCAL_PREFIX + key
             try {
                 val local = playerDao.getById(localId)
-                client.addPlayer(action.eventId, AddPlayerRequest(name), action.idempotencyKey)
+                client.addPlayer(action.eventId, AddPlayerRequest(name), key)
                 // The action stays queued until the roster refresh lands, so a
                 // failure here replays (idempotently) instead of dropping the
                 // assignment the organizer made offline.
                 adopted += AdoptedAdd(action.id, action.eventId, name, localId, local?.teamAssignment)
                 touchedEvents += action.eventId
-                synced++
             } catch (e: Exception) {
                 if (e.isRetryableLater()) {
                     // Offline, a server hiccup or an expired session: keep the
                     // add. A rejected refresh is typed, so it cannot be
                     // mistaken for the game-ending business 403.
+                    if (e is SessionExpiredException) pendingActionDao.markNeedsSignIn(action.id)
                     pendingActionDao.incrementRetry(action.id)
                 } else {
                     pendingActionDao.deleteById(action.id)
@@ -211,6 +217,7 @@ class WearTeamRepository @Inject constructor(
             pendingActionDao.deleteById(add.actionId)
             playerDao.deleteById(add.localId)
             reapplyTeamAssignment(add.eventId, add.name, add.teamAssignment)
+            synced++
         }
         return synced
     }
@@ -222,14 +229,24 @@ class WearTeamRepository @Inject constructor(
         // shortcut: same-named players are ambiguous; the first unassigned match
         // wins. Fine for a friend group, revisit if duplicate names get common.
         val adopted = players.firstOrNull { it.name == name && it.teamAssignment == "unassigned" } ?: return
-        val oneIds = players.filter { it.teamAssignment == "teamOne" }.map { it.id }
-        val twoIds = players.filter { it.teamAssignment == "teamTwo" }.map { it.id }
+        // The newest queued change holds the organizer's full last intent,
+        // including moves made while the add was still queued. Merging into it
+        // (rather than rebuilding from the server roster) keeps those moves.
+        val queued = pendingRosterChangeDao.getByEvent(eventId).lastOrNull()
+        val oneIds = queued?.let { decodeTeam(it.teamOnePlayerIds) }
+            ?: players.filter { it.teamAssignment == "teamOne" }.map { it.id }
+        val twoIds = queued?.let { decodeTeam(it.teamTwoPlayerIds) }
+            ?: players.filter { it.teamAssignment == "teamTwo" }.map { it.id }
         updateTeams(
             eventId,
-            if (team == "teamOne") oneIds + adopted.id else oneIds,
-            if (team == "teamTwo") twoIds + adopted.id else twoIds,
+            if (team == "teamOne") oneIds - adopted.id + adopted.id else oneIds - adopted.id,
+            if (team == "teamTwo") twoIds - adopted.id + adopted.id else twoIds - adopted.id,
         )
     }
+
+    private fun decodeTeam(jsonList: String): List<String> =
+        runCatching { kotlinx.serialization.json.Json.decodeFromString<List<String>>(jsonList) }
+            .getOrDefault(emptyList())
 
     suspend fun syncPendingRosterChanges(): Int {
         val pending = pendingRosterChangeDao.getAll()

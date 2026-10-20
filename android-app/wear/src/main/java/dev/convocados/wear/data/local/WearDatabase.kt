@@ -47,9 +47,10 @@ abstract class WearDatabase : RoomDatabase() {
                         "`kind` TEXT NOT NULL, " +
                         "`eventId` TEXT NOT NULL, " +
                         "`playerName` TEXT, " +
-                        "`idempotencyKey` TEXT NOT NULL, " +
+                        "`idempotencyKey` TEXT, " +
                         "`createdAt` INTEGER NOT NULL, " +
-                        "`retryCount` INTEGER NOT NULL)",
+                        "`retryCount` INTEGER NOT NULL, " +
+                        "`needsSignIn` INTEGER NOT NULL DEFAULT 0)",
                 )
             }
         }

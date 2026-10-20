@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -44,9 +45,13 @@ class AddPlayerViewModel @Inject constructor(
     fun load(eventId: String) {
         if (queuedJob == null) {
             queuedJob = viewModelScope.launch {
-                repository.observePendingAddNames(eventId).collect { names ->
-                    _uiState.update { it.copy(queuedNames = names.toSet()) }
-                }
+                combine(
+                    repository.observePendingAddNames(eventId),
+                    repository.observeSignInRequired(eventId),
+                ) { names, needsSignIn -> names to needsSignIn }
+                    .collect { (names, needsSignIn) ->
+                        _uiState.update { it.copy(queuedNames = names.toSet(), signInRequired = needsSignIn) }
+                    }
             }
         }
         viewModelScope.launch {

@@ -145,6 +145,10 @@ class WearShapeScreenshotTest {
 
     @Test
     @Config(qualifiers = "w390dp-h390dp-notround")
+    fun addPlayerSquare() = shot("square_add_player") { addPlayer() }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
     fun addPlayerQueuedSquare() = shot("square_add_player_queued") { addPlayer(queued = "Bob") }
 
     // The bottom "Start" CTA lives below the fold on compact devices; capture it

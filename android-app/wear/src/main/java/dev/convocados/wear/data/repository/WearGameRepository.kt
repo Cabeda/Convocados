@@ -22,7 +22,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.Instant
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -152,7 +151,7 @@ class WearGameRepository @Inject constructor(
             // placeholder that nothing will ever adopt. A local write failure
             // is reported, never thrown out of this graceful path.
             val queued = runCatching {
-                enqueueStart(eventId)
+                enqueueStart(eventId, needsSignIn = e is SessionExpiredException)
                 seedLocalHistory(eventId)
             }
             if (queued.isSuccess) {
@@ -172,6 +171,11 @@ class WearGameRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    /** Durable: a queued start that cannot sync until the user signs in again. */
+    suspend fun startNeedsSignIn(eventId: String): Boolean =
+        pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, eventId)
+            .any { it.needsSignIn }
 
     /**
      * Replay queued starts. The server create is idempotent per day, so a
@@ -205,6 +209,9 @@ class WearGameRepository @Inject constructor(
                 }
                 Log.w("WearGameRepo", "Start replay rejected for ${action.eventId}", e)
             } catch (e: Exception) {
+                // An expired session is why the retry keeps failing: record it
+                // so the score screen can ask for a sign-in, durably.
+                if (e is SessionExpiredException) pendingActionDao.markNeedsSignIn(action.id)
                 pendingActionDao.incrementRetry(action.id)
                 Log.w("WearGameRepo", "Start replay failed for ${action.eventId}", e)
             }
@@ -212,13 +219,14 @@ class WearGameRepository @Inject constructor(
         return synced
     }
 
-    private suspend fun enqueueStart(eventId: String) {
+    private suspend fun enqueueStart(eventId: String, needsSignIn: Boolean) {
         if (pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, eventId).isNotEmpty()) return
         pendingActionDao.insert(
             PendingActionEntity(
                 kind = PendingActionEntity.KIND_START_GAME,
                 eventId = eventId,
-                idempotencyKey = UUID.randomUUID().toString(),
+                // No key: this create is idempotent per day server-side.
+                needsSignIn = needsSignIn,
             ),
         )
     }

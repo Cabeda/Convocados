@@ -93,6 +93,9 @@ class ScoreViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
+            // Durable: a queued start blocked on an expired session still asks
+            // for a sign-in after a process death or a screen re-entry.
+            val needsSignIn = repository.startNeedsSignIn(eventId)
             val game = repository.getGame(eventId)
             val scheduledKickoffMs = game?.dateTime?.let { parseInstant(it)?.toEpochMilli() }
             val durationMinutes = game?.let { sportDurationMinutes(it.sport) } ?: 60
@@ -152,6 +155,7 @@ class ScoreViewModel @Inject constructor(
                         nextAlarmFraction = nextAlarmFraction,
                         keepScreenOn = settings.keepScreenOn,
                         isLocalStart = history?.id?.startsWith(WearHistoryEntity.LOCAL_START_PREFIX) == true,
+                        signInRequired = needsSignIn || state.signInRequired,
                         isLoading = false,
                     )
                 }

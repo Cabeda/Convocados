@@ -107,10 +107,16 @@ data class PendingActionEntity(
     val kind: String,
     val eventId: String,
     val playerName: String? = null,
-    /** Stable key so a replay after a partial success cannot add the player twice. */
-    val idempotencyKey: String,
+    /**
+     * Stable key so a replay after a partial success cannot add the player
+     * twice. Null for a start: that create is idempotent per day server-side
+     * and carries no key.
+     */
+    val idempotencyKey: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0,
+    /** The queue is blocked on a sign-in, not on the network (durable surface). */
+    val needsSignIn: Boolean = false,
 ) {
     companion object {
         const val KIND_START_GAME = "start_game"

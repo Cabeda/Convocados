@@ -179,6 +179,9 @@ interface PendingRosterChangeDao {
      */
     @Query("DELETE FROM pending_roster_changes WHERE eventId = :eventId")
     suspend fun deleteByEventId(eventId: String)
+
+    @Query("SELECT * FROM pending_roster_changes WHERE eventId = :eventId ORDER BY createdAt ASC")
+    suspend fun getByEvent(eventId: String): List<PendingRosterChangeEntity>
 }
 
 @Dao
@@ -198,6 +201,14 @@ interface PendingActionDao {
 
     @Query("UPDATE pending_actions SET retryCount = retryCount + 1 WHERE id = :id")
     suspend fun incrementRetry(id: Long)
+
+    /** Set when a replay is rejected by an expired session, cleared on success. */
+    @Query("UPDATE pending_actions SET needsSignIn = 1 WHERE id = :id")
+    suspend fun markNeedsSignIn(id: Long)
+
+    /** Durable: a queued action that cannot sync until the user signs in again. */
+    @Query("SELECT COUNT(*) > 0 FROM pending_actions WHERE eventId = :eventId AND needsSignIn = 1")
+    fun observeNeedsSignIn(eventId: String): Flow<Boolean>
 
     @Query("DELETE FROM pending_actions WHERE id = :id")
     suspend fun deleteById(id: Long)

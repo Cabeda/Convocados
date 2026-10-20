@@ -11,6 +11,7 @@ import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearPlayerDao
 import dev.convocados.wear.data.local.entity.PendingActionEntity
+import dev.convocados.wear.data.local.entity.PendingRosterChangeEntity
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import io.mockk.*
 import kotlinx.coroutines.flow.first
@@ -202,7 +203,7 @@ class WearTeamRepositoryTest {
                     it.kind == PendingActionEntity.KIND_ADD_PLAYER &&
                         it.eventId == "e1" &&
                         it.playerName == "Alice" &&
-                        it.idempotencyKey.isNotBlank()
+                        it.idempotencyKey?.isNotBlank() == true
                 },
             )
         }
@@ -331,12 +332,65 @@ class WearTeamRepositoryTest {
         coEvery { client.addPlayer(any(), any(), any()) } just Runs
         coEvery { client.getTeams("e1") } throws IOException("Dropped after the add")
 
-        assertEquals(1, repository.syncPendingAddPlayers())
+        // Counts adopted adds only: the create landed, but the roster is unknown.
+        assertEquals(0, repository.syncPendingAddPlayers())
 
         // No server ids yet: keep the action (idempotent replay) and the echo.
         coVerify { pendingActionDao.incrementRetry(13L) }
         coVerify(exactly = 0) { pendingActionDao.deleteById(13L) }
         coVerify(exactly = 0) { playerDao.deleteById(localId) }
+    }
+
+    @Test
+    fun `an offline add does not undo another player's queued move`() = runTest {
+        val localId = WearPlayerEntity.LOCAL_PREFIX + "k3"
+        val action = PendingActionEntity(
+            id = 14L,
+            kind = PendingActionEntity.KIND_ADD_PLAYER,
+            eventId = "e1",
+            playerName = "Bob",
+            idempotencyKey = "k3",
+        )
+        val queuedMove = PendingRosterChangeEntity(
+            id = 1L,
+            eventId = "e1",
+            teamOnePlayerIds = "[\"p1\"]",
+            teamTwoPlayerIds = "[]",
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
+        coEvery { playerDao.getById(localId) } returns WearPlayerEntity(
+            localId, "e1", "Bob", Int.MAX_VALUE, "teamTwo",
+        )
+        coEvery { pendingRosterChangeDao.getByEvent("e1") } returns listOf(queuedMove)
+        coEvery { playerDao.observePlayers("e1") } returns flowOf(
+            listOf(
+                WearPlayerEntity("p1", "e1", "Alice", 0, "unassigned"),
+                WearPlayerEntity("p2", "e1", "Bob", 1, "unassigned"),
+            ),
+        )
+        coEvery { client.addPlayer(any(), any(), any()) } just Runs
+        coEvery { client.getTeams("e1") } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1"),
+            teamTwo = TeamInfo(name = "Team 2"),
+            unassigned = listOf(TeamPlayer("p1", "Alice", 0), TeamPlayer("p2", "Bob", 1)),
+            maxPlayers = 10,
+        )
+        coEvery { client.updateTeams(any(), any()) } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2", players = listOf(TeamPlayer("p2", "Bob", 1))),
+            maxPlayers = 10,
+        )
+
+        repository.syncPendingAddPlayers()
+
+        // Alice's offline move survives: the adopted add merges into the queued
+        // intent instead of rebuilding a roster from the refreshed server state.
+        coVerify {
+            client.updateTeams(
+                "e1",
+                match { it.teamOnePlayerIds == listOf("p1") && it.teamTwoPlayerIds == listOf("p2") },
+            )
+        }
     }
 
     @Test

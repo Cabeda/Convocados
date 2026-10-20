@@ -247,6 +247,19 @@ class WearGameRepositoryTest {
     }
 
     @Test
+    fun `startNeedsSignIn reads the durable flag left by a rejected replay`() = runTest {
+        coEvery { pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, "e1") } returns listOf(
+            PendingActionEntity(
+                kind = PendingActionEntity.KIND_START_GAME,
+                eventId = "e1",
+                needsSignIn = true,
+            ),
+        )
+
+        assertTrue(repository.startNeedsSignIn("e1"))
+    }
+
+    @Test
     fun `startGame does not queue a permanent server rejection`() = runTest {
         coEvery { client.startWatchGame("e1") } throws ApiException(400, "Assign teams first")
 
