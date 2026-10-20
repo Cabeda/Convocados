@@ -136,6 +136,27 @@ class WearLargeFontTest {
         }
     }
 
+    // The square leg: a square display has the room for the full labels, so
+    // the short forms are a round-only concession.
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun tennisSquare() {
+        shot2x("square_tennis_2x") { tennis() }
+        for (label in listOf("Next set", "Tiebreak")) {
+            assertNotNull(
+                "action label $label not rendered",
+                composeRule.onAllNodes(
+                    hasText(label),
+                    useUnmergedTree = true,
+                ).fetchSemanticsNodes().firstOrNull(),
+            )
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun quickTennisSquare() = shot2x("square_quick_tennis_2x") { quickTennis() }
+
     @Composable
     private fun quickTennis() = QuickScoreContent(
         state = WearFixtures.quickTennis,

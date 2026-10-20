@@ -117,15 +117,18 @@ internal const val MIN_DISPLAY_DP_FOR_SET_HISTORY = 320
  *
  * A label that wraps is not scaled down, it is *cut*: the second line falls
  * outside the button's height and the user reads "Ne xt". One line with an
- * ellipsis is legible at any font scale — and at a large font scale the label
- * also steps down a type and takes its short form, because the button cannot
- * grow and a label that does not fit is cut, not scaled.
+ * ellipsis is legible at any font scale.
+ *
+ * On a round display the button is a slice of a circle, so at a large font
+ * scale the label also takes its short form and a smaller type: a square
+ * display has the room for the full label.
  */
 @Composable
 internal fun TennisActionLabel(text: String, short: String = text) {
     val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+    val tight = largeFont && LocalConfiguration.current.isScreenRound
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        if (largeFont) {
+        if (tight) {
             Text(
                 text = short,
                 style = MaterialTheme.typography.labelSmall,

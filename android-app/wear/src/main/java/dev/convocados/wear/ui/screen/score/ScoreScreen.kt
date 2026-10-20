@@ -418,12 +418,12 @@ internal fun TennisScoreEditor(
         Column(
             // Bottom reserve keeps the two action rows clear of the
             // GameClock pill overlay (BottomCenter) on short round screens.
-            // The extra top reserve at a large font scale keeps the header
-            // inside the bezel, where the circle is still narrow.
             Modifier.fillMaxSize().padding(
                 start = 4.dp,
                 end = 4.dp,
-                top = if (largeFont) 12.dp else 4.dp,
+                // The extra top reserve at a large font scale keeps the
+                // header inside the bezel, where the circle is still narrow.
+                top = if (largeFont && LocalConfiguration.current.isScreenRound) 12.dp else 4.dp,
                 bottom = 22.dp,
             ),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -540,7 +540,7 @@ internal fun TennisScoreEditor(
                     onClick = onUndo,
                     modifier = Modifier.animateWidth(undoSource),
                     interactionSource = undoSource,
-                ) { TennisActionLabel("Undo") }
+                ) { TennisActionLabel(stringResource(R.string.undo)) }
                 Button(
                     onClick = onTeams,
                     modifier = Modifier.animateWidth(teamsSource),

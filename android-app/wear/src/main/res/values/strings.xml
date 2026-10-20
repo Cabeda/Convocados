@@ -62,6 +62,7 @@
     <string name="tiebreak">Tiebreak</string>
     <string name="games">Games</string>
     <string name="next_set">Next set</string>
+    <string name="undo">Undo</string>
     <!-- Short forms for a large font scale: a label that does not fit the
          button is cut, not scaled. -->
     <string name="next_short">Next</string>
