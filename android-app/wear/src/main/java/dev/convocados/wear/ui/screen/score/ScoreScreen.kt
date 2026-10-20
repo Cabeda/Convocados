@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -437,13 +438,11 @@ internal fun TennisScoreEditor(
             )
             if (state.isOfflineQueued || state.isLocalStart) {
                 Text(
-                    text = stringResource(
-                        if (state.signInRequired) R.string.sign_in_again else R.string.will_sync_online,
-                    ),
+                    text = offlineStatusText(state.signInRequired),
                     style = MaterialTheme.typography.labelSmall,
                     color = Warning,
                     textAlign = TextAlign.Center,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -618,6 +617,9 @@ internal fun ScoreTimeOverlay(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Hoisted out of the game block so the clock and the offline status can
+        // share one bottom band below.
+        var clockText: String? = null
         state.game?.let { game ->
             val kickoffMs = state.kickoffEpochMs ?: parseInstant(game.dateTime)?.toEpochMilli()
             if (kickoffMs != null) {
@@ -631,12 +633,7 @@ internal fun ScoreTimeOverlay(
                 )
                 if (elapsedMs >= 0) {
                     val s = elapsedMs / 1000
-                    GameClock(
-                        text = "%d:%02d".format(s / 60, s % 60),
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 4.dp),
-                    )
+                    clockText = "%d:%02d".format(s / 60, s % 60)
                 }
             }
         }
@@ -674,22 +671,56 @@ internal fun ScoreTimeOverlay(
             }
         }
 
-        if (showOfflineStatus && (state.isOfflineQueued || state.isLocalStart)) {
-            Text(
-                text = stringResource(
-                    if (state.signInRequired) R.string.sign_in_again else R.string.will_sync_online,
-                ),
-                style = MaterialTheme.typography.labelSmall,
-                color = Warning,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+        val offline = showOfflineStatus && (state.isOfflineQueued || state.isLocalStart)
+        if (offline || clockText != null) {
+            // One bottom band: stacking (instead of anchoring both to
+            // BottomCenter) lets a large font scale push the status up over the
+            // clock rather than drawing it through the clock and the bezel.
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 26.dp),
-            )
+                    .padding(bottom = if (clockText == null) 26.dp else 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (offline) {
+                    // The full sentence is wider than the chord of a round
+                    // display at ~2x, so it gets a short form that fits.
+                    Text(
+                        text = offlineStatusText(state.signInRequired),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Warning,
+                        textAlign = TextAlign.Center,
+                        // One line: at a large font scale a second line grows
+                        // up into the score and out through the bezel.
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
+                clockText?.let { GameClock(text = it) }
+            }
         }
     }
+}
+
+/**
+ * Play's large-font sweep renders at 2x. At 1.5x the full status sentence is
+ * already as wide as the chord of a 227dp round display, so that scale and
+ * above use the short form.
+ */
+private const val COMPACT_STATUS_FONT_SCALE = 1.5f
+
+@Composable
+private fun offlineStatusText(signInRequired: Boolean): String {
+    val compact = LocalDensity.current.fontScale >= COMPACT_STATUS_FONT_SCALE
+    return stringResource(
+        when {
+            signInRequired && compact -> R.string.sign_in_again_short
+            signInRequired -> R.string.sign_in_again
+            compact -> R.string.will_sync_online_short
+            else -> R.string.will_sync_online
+        },
+    )
 }
 
 /**
