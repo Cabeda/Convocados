@@ -43,6 +43,7 @@ import dev.convocados.wear.ui.ongoing.shouldShowQuickGameOngoing
 import dev.convocados.wear.ui.screen.score.GameClock
 import dev.convocados.wear.ui.screen.score.GameEdgeProgress
 import dev.convocados.wear.ui.screen.score.LARGE_FONT_SCALE
+import dev.convocados.wear.ui.screen.score.MIN_DISPLAY_DP_FOR_SET_HISTORY
 import dev.convocados.wear.ui.screen.score.TeamScoreButton
 import dev.convocados.wear.ui.screen.score.TennisActionLabel
 import kotlinx.coroutines.delay
@@ -266,7 +267,7 @@ private fun QuickSetScoreEditor(
     val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
     // The sets won are the only place the match history appears, so the
     // history only steps aside where the score needs the room.
-    val showHistory = !largeFont || LocalConfiguration.current.screenHeightDp >= 320
+    val showHistory = !largeFont || LocalConfiguration.current.screenHeightDp >= MIN_DISPLAY_DP_FOR_SET_HISTORY
     // The tiles are half a display wide, so at a large font scale the team
     // name needs a smaller type or it is cut.
     val nameStyle = if (largeFont) MaterialTheme.typography.labelSmall else null
@@ -292,7 +293,7 @@ private fun QuickSetScoreEditor(
                     withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
                         append(
                             if (isTiebreak) {
-                                stringResource(R.string.quick_tiebreak)
+                                stringResource(R.string.tiebreak)
                             } else {
                                 stringResource(R.string.quick_set_number, state.scoreSets.size.coerceAtLeast(1))
                             },
@@ -321,7 +322,7 @@ private fun QuickSetScoreEditor(
             )
             Text(
                 text = if (isTiebreak) {
-                    stringResource(R.string.quick_tiebreak)
+                    stringResource(R.string.tiebreak)
                 } else {
                     stringResource(R.string.quick_set_number, state.scoreSets.size.coerceAtLeast(1))
                 },
@@ -382,7 +383,7 @@ private fun QuickSetScoreEditor(
                 interactionSource = nextSetSource,
             ) {
                 TennisActionLabel(
-                    text = stringResource(R.string.quick_next_set),
+                    text = stringResource(R.string.next_set),
                     short = stringResource(R.string.next_short),
                 )
             }
@@ -391,8 +392,8 @@ private fun QuickSetScoreEditor(
                 interactionSource = tiebreakSource,
             ) {
                 TennisActionLabel(
-                    text = stringResource(if (isTiebreak) R.string.quick_games else R.string.quick_tiebreak),
-                    short = stringResource(if (isTiebreak) R.string.quick_games else R.string.tiebreak_short),
+                    text = stringResource(if (isTiebreak) R.string.games else R.string.tiebreak),
+                    short = stringResource(if (isTiebreak) R.string.games else R.string.tiebreak_short),
                 )
             }
         }

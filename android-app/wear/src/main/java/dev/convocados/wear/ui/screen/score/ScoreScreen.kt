@@ -407,7 +407,7 @@ internal fun TennisScoreEditor(
     // so the history only steps aside where the score needs the room: on a
     // 227dp round display at 2x the tiles are left about 77dp and a tile needs
     // about 132dp.
-    val showHistory = !largeFont || LocalConfiguration.current.screenHeightDp >= 320
+    val showHistory = !largeFont || LocalConfiguration.current.screenHeightDp >= MIN_DISPLAY_DP_FOR_SET_HISTORY
     val history = state.scoreSets.joinToString(" · ") { set ->
         if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
     }.ifEmpty { "New set" }
@@ -521,7 +521,7 @@ internal fun TennisScoreEditor(
                         enabled = state.scoreSets.size < 5,
                         modifier = Modifier.animateWidth(setSource),
                         interactionSource = setSource,
-                    ) { TennisActionLabel("Next set", stringResource(R.string.next_short)) }
+                    ) { TennisActionLabel(stringResource(R.string.next_set), stringResource(R.string.next_short)) }
                 }
                 Button(
                     onClick = onToggleTiebreak,
@@ -529,8 +529,8 @@ internal fun TennisScoreEditor(
                     interactionSource = tiebreakSource,
                 ) {
                     TennisActionLabel(
-                        text = if (state.isTiebreakScoring) "Games" else "Tiebreak",
-                        short = if (state.isTiebreakScoring) "Games" else stringResource(R.string.tiebreak_short),
+                        text = stringResource(if (state.isTiebreakScoring) R.string.games else R.string.tiebreak),
+                        short = stringResource(if (state.isTiebreakScoring) R.string.games else R.string.tiebreak_short),
                     )
                 }
             }
