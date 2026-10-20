@@ -3,6 +3,7 @@ package dev.convocados.wear.ui.screen.teams
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,20 @@ fun AddPlayerScreen(
     val state by viewModel.uiState.collectAsState()
     val settingsState by settingsViewModel.uiState.collectAsState()
     RememberKeepScreenOn(settingsState.keepScreenOn && !settingsState.isLoading)
+
+    AddPlayerContent(
+        state = state,
+        onAdd = { viewModel.add(eventId, it) },
+        onDone = onDone,
+    )
+}
+
+@Composable
+internal fun AddPlayerContent(
+    state: AddPlayerUiState,
+    onAdd: (String) -> Unit,
+    onDone: () -> Unit,
+) {
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
@@ -59,8 +74,8 @@ fun AddPlayerScreen(
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                           }
-    }
+                    }
+                }
 
                 if (state.isLoading) {
                     item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().padding(8.dp)) }
@@ -75,18 +90,31 @@ fun AddPlayerScreen(
                     }
                 } else {
                     items(state.known, key = { it.name }) { player ->
+                        val queued = player.name in state.queuedNames
                         Button(
-                            onClick = { viewModel.add(eventId, player.name) },
+                            onClick = { onAdd(player.name) },
                             modifier = Modifier.fillMaxWidth().roundListInset(),
-                            enabled = state.adding == null && player.name !in state.queuedNames,
+                            enabled = state.adding == null && !queued,
                             label = {
-                                Text(text = player.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    text = player.name,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    // Disabled buttons dim their content; a
+                                    // queued row must still be readable.
+                                    color = if (queued) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    } else {
+                                        Color.Unspecified
+                                    },
+                                )
                             },
                             secondaryLabel = {
                                 when {
-                                    player.name in state.queuedNames -> Text(
+                                    queued -> Text(
                                         text = stringResource(R.string.queued_label),
                                         style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                     state.adding == player.name -> Text(
                                         text = stringResource(R.string.adding_label),
@@ -119,7 +147,6 @@ fun AddPlayerScreen(
                     }
                 }
             }
-    
- }
+        }
     }
 }

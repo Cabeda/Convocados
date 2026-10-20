@@ -9,8 +9,11 @@ import androidx.compose.ui.test.performScrollToNode
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.convocados.wear.ui.screen.quick.QuickScoreContent
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
+import dev.convocados.wear.data.api.KnownPlayer
 import dev.convocados.wear.ui.screen.quick.SaveQuickGameContent
 import dev.convocados.wear.ui.screen.score.ScoreFixtureContent
+import dev.convocados.wear.ui.screen.teams.AddPlayerContent
+import dev.convocados.wear.ui.screen.teams.AddPlayerUiState
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import org.junit.Rule
 import org.junit.Test
@@ -129,6 +132,21 @@ class WearShapeScreenshotTest {
     @Config(qualifiers = "w390dp-h390dp-round")
     fun quickTennisRound() = shot("round_quick_tennis") { quickTennis() }
 
+    // The offline add (#1343): the default list, and the row a queued add
+    // leaves behind. Captured on both shapes because the row renders inside
+    // the bezel-clipped round column.
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun addPlayerRound() = shot("round_add_player") { addPlayer() }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun addPlayerQueuedRound() = shot("round_add_player_queued") { addPlayer(queued = "Bob") }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun addPlayerQueuedSquare() = shot("square_add_player_queued") { addPlayer(queued = "Bob") }
+
     // The bottom "Start" CTA lives below the fold on compact devices; capture it
     // scrolled into view, which is the state Play rejected (clipped by bezel).
     @Test
@@ -209,6 +227,19 @@ class WearShapeScreenshotTest {
     @Composable
     private fun history() {
         WearHistoryFixtureContent(WearFixtures.history, now = WearFixtures.now)
+    }
+
+    @Composable
+    private fun addPlayer(queued: String? = null) {
+        AddPlayerContent(
+            state = AddPlayerUiState(
+                known = listOf(KnownPlayer("Alice"), KnownPlayer("Bob"), KnownPlayer("Carla")),
+                isLoading = false,
+                queuedNames = queued?.let(::setOf) ?: emptySet(),
+            ),
+            onAdd = {},
+            onDone = {},
+        )
     }
 
     @Composable

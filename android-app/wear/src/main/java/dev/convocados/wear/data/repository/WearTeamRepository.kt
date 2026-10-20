@@ -6,7 +6,7 @@ import dev.convocados.wear.data.api.TeamPlayer
 import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.api.UpdateTeamsRequest
 import dev.convocados.wear.data.api.WearApiClient
-import dev.convocados.wear.data.api.isTransientOfflineFailure
+import dev.convocados.wear.data.api.isRetryableLater
 import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
 import dev.convocados.wear.data.local.dao.WearGameDao
@@ -62,6 +62,10 @@ class WearTeamRepository @Inject constructor(
         teamOnePlayerIds: List<String>,
         teamTwoPlayerIds: List<String>,
     ): Result<Unit> {
+        // A player added offline has a local id the server does not know yet;
+        // send the server-known ids only, or the roster update 400s.
+        val serverOneIds = teamOnePlayerIds.filterNot { it.startsWith(WearPlayerEntity.LOCAL_PREFIX) }
+        val serverTwoIds = teamTwoPlayerIds.filterNot { it.startsWith(WearPlayerEntity.LOCAL_PREFIX) }
         val currentPlayerSnapshot = playerDao.observePlayers(eventId).first()
         val updatedPlayers = currentPlayerSnapshot.map { player ->
             when {
@@ -75,7 +79,7 @@ class WearTeamRepository @Inject constructor(
         playerDao.refreshPlayers(eventId, updatedPlayers)
 
         return try {
-            client.updateTeams(eventId, UpdateTeamsRequest(teamOnePlayerIds, teamTwoPlayerIds))
+            client.updateTeams(eventId, UpdateTeamsRequest(serverOneIds, serverTwoIds))
             refreshTeams(eventId)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -84,8 +88,8 @@ class WearTeamRepository @Inject constructor(
             pendingRosterChangeDao.insert(
                 PendingRosterChangeEntity(
                     eventId = eventId,
-                    teamOnePlayerIds = json.encodeToString(ListSerializer(String.serializer()), teamOnePlayerIds),
-                    teamTwoPlayerIds = json.encodeToString(ListSerializer(String.serializer()), teamTwoPlayerIds),
+                    teamOnePlayerIds = json.encodeToString(ListSerializer(String.serializer()), serverOneIds),
+                    teamTwoPlayerIds = json.encodeToString(ListSerializer(String.serializer()), serverTwoIds),
                 )
             )
             Result.failure(e)
@@ -108,7 +112,7 @@ class WearTeamRepository @Inject constructor(
             refreshTeams(eventId)
             Result.success(AddPlayerOutcome.ADDED)
         } catch (e: Exception) {
-            if (e.isTransientOfflineFailure()) {
+            if (e.isRetryableLater()) {
                 val queued = runCatching {
                     pendingActionDao.insert(
                         PendingActionEntity(
@@ -116,6 +120,19 @@ class WearTeamRepository @Inject constructor(
                             eventId = eventId,
                             playerName = name,
                             idempotencyKey = idempotencyKey,
+                        ),
+                    )
+                    // Echo the add on the roster the organizer actually reads,
+                    // marked by its local id until the replay replaces it.
+                    playerDao.insertAll(
+                        listOf(
+                            WearPlayerEntity(
+                                id = WearPlayerEntity.LOCAL_PREFIX + idempotencyKey,
+                                eventId = eventId,
+                                name = name,
+                                order = Int.MAX_VALUE,
+                                teamAssignment = "unassigned",
+                            ),
                         ),
                     )
                 }
@@ -150,16 +167,14 @@ class WearTeamRepository @Inject constructor(
                 refreshTeams(action.eventId)
                 synced++
             } catch (e: Exception) {
-                val code = (e as? dev.convocados.wear.data.api.ApiException)?.code
-                if (code == 401 || code == 403) {
-                    // Auth state (a stale refresh token also surfaces as 403):
-                    // keep the queued add for after sign-in.
+                if (e.isRetryableLater()) {
+                    // Offline, a server hiccup or an expired session: keep the
+                    // add. A rejected refresh is typed, so it cannot be
+                    // mistaken for the game-ending business 403.
                     pendingActionDao.incrementRetry(action.id)
-                } else if (!e.isTransientOfflineFailure()) {
+                } else {
                     pendingActionDao.deleteById(action.id)
                     refreshTeams(action.eventId)
-                } else {
-                    pendingActionDao.incrementRetry(action.id)
                 }
                 Log.w("WearTeamRepo", "Add player replay failed for ${action.eventId}", e)
             }

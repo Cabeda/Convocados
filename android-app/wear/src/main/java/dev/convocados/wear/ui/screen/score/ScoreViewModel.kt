@@ -49,6 +49,8 @@ data class ScoreUiState(
     val isLoading: Boolean = true,
     val isStarting: Boolean = false,
     val isOfflineQueued: Boolean = false,
+    /** The game was started offline (#1343); the server has no history yet. */
+    val isLocalStart: Boolean = false,
     val kickoffEpochMs: Long? = null,
     val nextAlarmAtMs: Long? = null,
     val error: String? = null,
@@ -145,6 +147,7 @@ class ScoreViewModel @Inject constructor(
                         alarmFractions = alarmFractions,
                         nextAlarmFraction = nextAlarmFraction,
                         keepScreenOn = settings.keepScreenOn,
+                        isLocalStart = history?.id?.startsWith(WearHistoryEntity.LOCAL_START_PREFIX) == true,
                         isLoading = false,
                     )
                 }

@@ -3,7 +3,7 @@ package dev.convocados.wear.data.repository
 import android.util.Log
 import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.WearApiClient
-import dev.convocados.wear.data.api.isTransientOfflineFailure
+import dev.convocados.wear.data.api.isRetryableLater
 import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
@@ -143,7 +143,7 @@ class WearGameRepository @Inject constructor(
         refreshHistory(eventId)
         Result.success(Unit)
     } catch (e: Exception) {
-        if (e.isTransientOfflineFailure()) {
+        if (e.isRetryableLater()) {
             // Queue before seeding: a crash in between must not leave a
             // placeholder that nothing will ever adopt. A local write failure
             // is reported, never thrown out of this graceful path.
@@ -167,8 +167,8 @@ class WearGameRepository @Inject constructor(
     /**
      * Replay queued starts. The server create is idempotent per day, so a
      * replay is safe; the returned id replaces the local placeholder and any
-     * scores queued against it. A 4xx means the server has moved on (server
-     * wins): discard the action and re-fetch.
+     * scores queued against it. A business 4xx means the server has moved on
+     * (server wins): discard the action and re-fetch.
      */
     suspend fun syncPendingStarts(): Int {
         var synced = 0
@@ -181,19 +181,18 @@ class WearGameRepository @Inject constructor(
                 pendingActionDao.deleteById(action.id)
                 synced++
             } catch (e: ApiException) {
-                if (e.code == 401 || e.code == 403) {
-                    // Auth state, not a server business rule: a stale refresh
-                    // token also surfaces as 403. Keep the local game and its
-                    // scores so they survive a re-sign-in; discarding would
-                    // erase the night on the most likely reconnect path.
+                if (e.isRetryableLater()) {
+                    // Offline or a server hiccup: keep the local game and its
+                    // scores. A rejected refresh is a SessionExpiredException,
+                    // which the generic catch below also keeps — its 400 never
+                    // lands here as a business answer and erases the night.
                     pendingActionDao.incrementRetry(action.id)
-                } else if (e.code == 409 || !e.isTransientOfflineFailure()) {
-                    // Server wins: drop the local game and its scores, then re-fetch.
+                } else {
+                    // Server wins (404 gone, 403 no longer a member, 409): drop
+                    // the local game and its scores, then re-fetch.
                     discardLocalStart(action.eventId)
                     pendingActionDao.deleteById(action.id)
                     refreshHistory(action.eventId)
-                } else {
-                    pendingActionDao.incrementRetry(action.id)
                 }
                 Log.w("WearGameRepo", "Start replay rejected for ${action.eventId}", e)
             } catch (e: Exception) {

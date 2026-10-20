@@ -1,6 +1,7 @@
 package dev.convocados.wear.data.repository
 
 import dev.convocados.wear.data.api.ApiException
+import dev.convocados.wear.data.api.SessionExpiredException
 import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamPlayer
@@ -106,6 +107,35 @@ class WearTeamRepositoryTest {
     }
 
     @Test
+    fun `updateTeams never sends a locally-added player id`() = runTest {
+        val localId = WearPlayerEntity.LOCAL_PREFIX + "key"
+        val players = listOf(
+            WearPlayerEntity("p1", "e1", "Alice", 0, "unassigned"),
+            WearPlayerEntity(localId, "e1", "Bob", Int.MAX_VALUE, "unassigned"),
+        )
+        coEvery { playerDao.observePlayers("e1") } returns flowOf(players)
+        coEvery { client.updateTeams(any(), any()) } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2"),
+            maxPlayers = 10,
+        )
+        coEvery { client.getTeams("e1") } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2"),
+            maxPlayers = 10,
+        )
+
+        repository.updateTeams("e1", listOf("p1", localId), emptyList())
+
+        coVerify {
+            client.updateTeams(
+                "e1",
+                match { it.teamOnePlayerIds == listOf("p1") && it.teamTwoPlayerIds.isEmpty() },
+            )
+        }
+    }
+
+    @Test
     fun `updateTeams queues roster change on failure`() = runTest {
         val players = listOf(
             WearPlayerEntity("p1", "e1", "Alice", 0, "unassigned"),
@@ -150,6 +180,18 @@ class WearTeamRepositoryTest {
                         it.eventId == "e1" &&
                         it.playerName == "Alice" &&
                         it.idempotencyKey.isNotBlank()
+                },
+            )
+        }
+        // The roster must show the add immediately, under a local id.
+        coVerify {
+            playerDao.insertAll(
+                match { rows ->
+                    rows.single().let {
+                        it.name == "Alice" &&
+                            it.eventId == "e1" &&
+                            it.id.startsWith(WearPlayerEntity.LOCAL_PREFIX)
+                    }
                 },
             )
         }
@@ -198,32 +240,43 @@ class WearTeamRepositoryTest {
 
     @Test
     fun `syncPendingAddPlayers discards the queued add and refetches when the server wins`() = runTest {
-        val action = PendingActionEntity(
+        var action = PendingActionEntity(
             id = 8L,
             kind = PendingActionEntity.KIND_ADD_PLAYER,
             eventId = "e1",
             playerName = "Alice",
             idempotencyKey = "stored-key",
         )
-        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
-        coEvery { client.addPlayer(any(), any(), any()) } throws ApiException(409, "conflict")
-        coEvery { client.getTeams("e1") } returns TeamsResponse(
-            teamOne = TeamInfo(name = "Team 1"),
-            teamTwo = TeamInfo(name = "Team 2"),
-            maxPlayers = 10,
-        )
+        // 409 (open-pickup conflict) and 403 (game ended) are reachable
+        // business answers: the add cannot apply, so it is dropped.
+        var id = 8L
+        for (code in listOf(409, 403)) {
+            action = action.copy(id = id)
+            coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
+            coEvery { client.addPlayer(any(), any(), any()) } throws ApiException(code, "rejected")
+            coEvery { client.getTeams("e1") } returns TeamsResponse(
+                teamOne = TeamInfo(name = "Team 1"),
+                teamTwo = TeamInfo(name = "Team 2"),
+                maxPlayers = 10,
+            )
 
-        val synced = repository.syncPendingAddPlayers()
+            val synced = repository.syncPendingAddPlayers()
 
-        assertEquals(0, synced)
-        coVerify { pendingActionDao.deleteById(8L) }
-        coVerify { client.getTeams("e1") }
+            assertEquals(0, synced)
+            coVerify { pendingActionDao.deleteById(id) }
+            coVerify { client.getTeams("e1") }
+            id++
+        }
     }
 
     @Test
-    fun `syncPendingAddPlayers keeps the queued add when auth fails`() = runTest {
-        var id = 9L
-        for (code in listOf(401, 403)) {
+    fun `syncPendingAddPlayers keeps the queued add when the session expired`() = runTest {
+        var id = 11L
+        val errors = listOf<Exception>(
+            ApiException(401, "unauthorized"),
+            SessionExpiredException("Refresh rejected (400)"),
+        )
+        for (error in errors) {
             val action = PendingActionEntity(
                 id = id,
                 kind = PendingActionEntity.KIND_ADD_PLAYER,
@@ -232,7 +285,7 @@ class WearTeamRepositoryTest {
                 idempotencyKey = "stored-key",
             )
             coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
-            coEvery { client.addPlayer(any(), any(), any()) } throws ApiException(code, "auth")
+            coEvery { client.addPlayer(any(), any(), any()) } throws error
 
             val synced = repository.syncPendingAddPlayers()
 

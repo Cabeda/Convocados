@@ -26,24 +26,34 @@ class KnownPlayersStoreTest {
     @Test
     fun `save persists the list and load reads it back`() {
         val saved = slot<String>()
-        every { editor.putString("e1", capture(saved)) } returns editor
+        every { editor.putString("last", capture(saved)) } returns editor
 
         store.save("e1", listOf(KnownPlayer("Alice", gamesPlayed = 3)))
 
-        every { prefs.getString("e1", null) } returns saved.captured
+        every { prefs.getString("last", null) } returns saved.captured
         assertEquals(listOf(KnownPlayer("Alice", gamesPlayed = 3)), store.load("e1"))
     }
 
     @Test
+    fun `load ignores an entry cached for another event`() {
+        val saved = slot<String>()
+        every { editor.putString("last", capture(saved)) } returns editor
+        store.save("e1", listOf(KnownPlayer("Alice")))
+        every { prefs.getString("last", null) } returns saved.captured
+
+        assertTrue(store.load("e2").isEmpty())
+    }
+
+    @Test
     fun `load returns empty when nothing was cached`() {
-        every { prefs.getString("e1", null) } returns null
+        every { prefs.getString("last", null) } returns null
 
         assertTrue(store.load("e1").isEmpty())
     }
 
     @Test
     fun `load tolerates a corrupt cache instead of crashing`() {
-        every { prefs.getString("e1", null) } returns "{not json"
+        every { prefs.getString("last", null) } returns "{not json"
 
         assertTrue(store.load("e1").isEmpty())
     }

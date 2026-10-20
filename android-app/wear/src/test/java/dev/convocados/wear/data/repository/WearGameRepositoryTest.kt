@@ -6,6 +6,7 @@ import dev.convocados.wear.data.api.EventSummary
 import dev.convocados.wear.data.api.GameHistory
 import dev.convocados.wear.data.api.MyGamesResponse
 import dev.convocados.wear.data.api.PaginatedHistory
+import dev.convocados.wear.data.api.SessionExpiredException
 import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamsResponse
@@ -278,40 +279,50 @@ class WearGameRepositoryTest {
 
     @Test
     fun `syncPendingStarts discards the queued start and refetches when the server wins`() = runTest {
-        val action = PendingActionEntity(
-            id = 2L,
-            kind = PendingActionEntity.KIND_START_GAME,
-            eventId = "e1",
-            idempotencyKey = "key",
-        )
-        val local = WearHistoryEntity(
-            id = WearGameRepository.LOCAL_START_PREFIX + "e1",
-            eventId = "e1",
-            dateTime = "2025-01-01T10:00:00Z",
-            scoreOne = 0,
-            scoreTwo = 0,
-            teamOneName = "Red",
-            teamTwoName = "Blue",
-            editable = true,
-        )
-        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
-        coEvery { client.createWatchGameHistory("e1") } throws ApiException(409, "conflict")
-        coEvery { historyDao.getByEvent("e1") } returns listOf(local)
-        coEvery { client.get<PaginatedHistory>(any()) } returns PaginatedHistory(data = emptyList())
+        // 404 (event deleted) and 400 (invalid request) are the reachable
+        // business answers; neither is a reason to keep a local-only game.
+        var id = 2L
+        for (code in listOf(404, 400)) {
+            val action = PendingActionEntity(
+                id = id,
+                kind = PendingActionEntity.KIND_START_GAME,
+                eventId = "e1",
+                idempotencyKey = "key",
+            )
+            val local = WearHistoryEntity(
+                id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+                eventId = "e1",
+                dateTime = "2025-01-01T10:00:00Z",
+                scoreOne = 0,
+                scoreTwo = 0,
+                teamOneName = "Red",
+                teamTwoName = "Blue",
+                editable = true,
+            )
+            coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
+            coEvery { client.createWatchGameHistory("e1") } throws ApiException(code, "rejected")
+            coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+            coEvery { client.get<PaginatedHistory>(any()) } returns PaginatedHistory(data = emptyList())
 
-        val synced = repository.syncPendingStarts()
+            val synced = repository.syncPendingStarts()
 
-        assertEquals(0, synced)
-        coVerify { pendingActionDao.deleteById(2L) }
-        coVerify { pendingScoreDao.deleteByHistory("e1", WearGameRepository.LOCAL_START_PREFIX + "e1") }
-        coVerify { historyDao.deleteById(WearGameRepository.LOCAL_START_PREFIX + "e1") }
-        coVerify { client.get<PaginatedHistory>(any()) }
+            assertEquals(0, synced)
+            coVerify { pendingActionDao.deleteById(id) }
+            coVerify { pendingScoreDao.deleteByHistory("e1", WearGameRepository.LOCAL_START_PREFIX + "e1") }
+            coVerify { historyDao.deleteById(WearGameRepository.LOCAL_START_PREFIX + "e1") }
+            coVerify { client.get<PaginatedHistory>(any()) }
+            id++
+        }
     }
 
     @Test
-    fun `syncPendingStarts keeps the local game when auth fails`() = runTest {
-        var id = 3L
-        for (code in listOf(401, 403)) {
+    fun `syncPendingStarts keeps the local game when the session expired`() = runTest {
+        var id = 6L
+        val errors = listOf<Exception>(
+            ApiException(401, "unauthorized"),
+            SessionExpiredException("Refresh rejected (400)"),
+        )
+        for (error in errors) {
             val action = PendingActionEntity(
                 id = id,
                 kind = PendingActionEntity.KIND_START_GAME,
@@ -329,7 +340,7 @@ class WearGameRepositoryTest {
                 editable = true,
             )
             coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
-            coEvery { client.createWatchGameHistory("e1") } throws ApiException(code, "expired")
+            coEvery { client.createWatchGameHistory("e1") } throws error
             coEvery { historyDao.getByEvent("e1") } returns listOf(local)
 
             val synced = repository.syncPendingStarts()

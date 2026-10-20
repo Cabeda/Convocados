@@ -74,7 +74,16 @@ data class WearPlayerEntity(
     val name: String,
     val order: Int,
     val teamAssignment: String, // "teamOne" | "teamTwo" | "unassigned" | "bench"
-)
+) {
+    companion object {
+        /**
+         * A player added offline (#1343), shown on the Teams screen until the
+         * queued add replays. Never sent to the server: the next refresh
+         * replaces this row with the server's.
+         */
+        const val LOCAL_PREFIX = "local-player:"
+    }
+}
 
 /** Pending roster change queued for sync when online. */
 @Entity(tableName = "pending_roster_changes")
