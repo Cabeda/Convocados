@@ -3,10 +3,10 @@ package dev.convocados.wear.ui.screen.teams
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.convocados.wear.data.api.AddPlayerRequest
 import dev.convocados.wear.data.api.KnownPlayer
 import dev.convocados.wear.data.api.KnownPlayersResponse
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.repository.WearTeamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +24,7 @@ data class AddPlayerUiState(
 @HiltViewModel
 class AddPlayerViewModel @Inject constructor(
     private val client: WearApiClient,
+    private val repository: WearTeamRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddPlayerUiState())
@@ -45,12 +46,13 @@ class AddPlayerViewModel @Inject constructor(
         if (_uiState.value.adding != null) return
         viewModelScope.launch {
             _uiState.update { it.copy(adding = name, error = null) }
-            try {
-                client.post("/api/events/$eventId/players", AddPlayerRequest(name))
-                _uiState.update { it.copy(adding = null, known = it.known.filterNot { k -> k.name == name }) }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(adding = null, error = e.message ?: "Failed to add") }
-            }
+            repository.addPlayer(eventId, name)
+                .onSuccess {
+                    _uiState.update { it.copy(adding = null, known = it.known.filterNot { k -> k.name == name }) }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(adding = null, error = e.message ?: "Failed to add") }
+                }
         }
     }
 }

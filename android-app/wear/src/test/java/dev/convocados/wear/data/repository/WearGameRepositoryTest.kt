@@ -1,6 +1,7 @@
 package dev.convocados.wear.data.repository
 
 import app.cash.turbine.test
+import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.EventSummary
 import dev.convocados.wear.data.api.GameHistory
 import dev.convocados.wear.data.api.MyGamesResponse
@@ -8,12 +9,16 @@ import dev.convocados.wear.data.api.PaginatedHistory
 import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamsResponse
+import dev.convocados.wear.data.api.WatchGameResponse
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
+import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import io.mockk.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -30,13 +35,14 @@ class WearGameRepositoryTest {
     private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val historyDao = mockk<WearHistoryDao>(relaxed = true)
     private val pendingScoreDao = mockk<PendingScoreDao>(relaxed = true)
+    private val pendingActionDao = mockk<PendingActionDao>(relaxed = true)
     private val teamRepository = mockk<WearTeamRepository>(relaxUnitFun = true)
 
     private lateinit var repository: WearGameRepository
 
     @Before
     fun setup() {
-        repository = WearGameRepository(client, gameDao, historyDao, teamRepository, pendingScoreDao)
+        repository = WearGameRepository(client, gameDao, historyDao, teamRepository, pendingScoreDao, pendingActionDao)
     }
 
     @Test
@@ -195,6 +201,110 @@ class WearGameRepositoryTest {
         coEvery { gameDao.getGame("missing") } returns null
 
         assertNull(repository.getGame("missing"))
+    }
+
+    // --- #1343 offline queue: start game ---
+
+    @Test
+    fun `startGame accepts offline by seeding a local history and queueing the start`() = runTest {
+        coEvery { client.startWatchGame("e1") } throws Exception("Offline")
+        coEvery { gameDao.getGame("e1") } returns makeGame("e1")
+        coEvery { historyDao.getByEvent("e1") } returns emptyList()
+
+        val result = repository.startGame("e1")
+
+        assertTrue(result.isSuccess)
+        coVerify {
+            pendingActionDao.insert(
+                match { it.kind == PendingActionEntity.KIND_START_GAME && it.eventId == "e1" },
+            )
+        }
+        coVerify {
+            historyDao.insertAll(
+                match { rows ->
+                    rows.single().id == WearGameRepository.LOCAL_START_PREFIX + "e1" &&
+                        rows.single().eventId == "e1"
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `startGame does not queue a permanent server rejection`() = runTest {
+        coEvery { client.startWatchGame("e1") } throws ApiException(400, "Assign teams first")
+
+        val result = repository.startGame("e1")
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { pendingActionDao.insert(any()) }
+        coVerify(exactly = 0) { historyDao.insertAll(any()) }
+    }
+
+    @Test
+    fun `syncPendingStarts rekeys the local history and queued scores to the server id`() = runTest {
+        val action = PendingActionEntity(
+            id = 1L,
+            kind = PendingActionEntity.KIND_START_GAME,
+            eventId = "e1",
+            idempotencyKey = "key",
+        )
+        val local = WearHistoryEntity(
+            id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+            eventId = "e1",
+            dateTime = "2025-01-01T10:00:00Z",
+            scoreOne = 2,
+            scoreTwo = 1,
+            teamOneName = "Red",
+            teamTwoName = "Blue",
+            editable = true,
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
+        coEvery { client.createWatchGameHistory("e1") } returns WatchGameResponse(id = "h1", created = true)
+        coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+        coEvery { client.get<PaginatedHistory>(any()) } returns PaginatedHistory(
+            data = listOf(GameHistory(id = "h1", dateTime = "2025-01-01T10:00:00Z", teamOneName = "Red", teamTwoName = "Blue")),
+        )
+        coEvery { pendingScoreDao.getAll() } returns emptyList()
+
+        val synced = repository.syncPendingStarts()
+
+        assertEquals(1, synced)
+        coVerify { pendingScoreDao.rekeyHistory(WearGameRepository.LOCAL_START_PREFIX + "e1", "h1") }
+        coVerify { historyDao.insertAll(match { rows -> rows.any { it.id == "h1" } }) }
+        coVerify { historyDao.deleteById(WearGameRepository.LOCAL_START_PREFIX + "e1") }
+        coVerify { pendingActionDao.deleteById(1L) }
+    }
+
+    @Test
+    fun `syncPendingStarts discards the queued start and refetches when the server wins`() = runTest {
+        val action = PendingActionEntity(
+            id = 2L,
+            kind = PendingActionEntity.KIND_START_GAME,
+            eventId = "e1",
+            idempotencyKey = "key",
+        )
+        val local = WearHistoryEntity(
+            id = WearGameRepository.LOCAL_START_PREFIX + "e1",
+            eventId = "e1",
+            dateTime = "2025-01-01T10:00:00Z",
+            scoreOne = 0,
+            scoreTwo = 0,
+            teamOneName = "Red",
+            teamTwoName = "Blue",
+            editable = true,
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME) } returns listOf(action)
+        coEvery { client.createWatchGameHistory("e1") } throws ApiException(409, "conflict")
+        coEvery { historyDao.getByEvent("e1") } returns listOf(local)
+        coEvery { client.get<PaginatedHistory>(any()) } returns PaginatedHistory(data = emptyList())
+
+        val synced = repository.syncPendingStarts()
+
+        assertEquals(0, synced)
+        coVerify { pendingActionDao.deleteById(2L) }
+        coVerify { pendingScoreDao.deleteByHistory("e1", WearGameRepository.LOCAL_START_PREFIX + "e1") }
+        coVerify { historyDao.deleteById(WearGameRepository.LOCAL_START_PREFIX + "e1") }
+        coVerify { client.get<PaginatedHistory>(any()) }
     }
 
     private fun eventSummary(id: String) = EventSummary(

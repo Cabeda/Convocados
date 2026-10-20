@@ -1,12 +1,15 @@
 package dev.convocados.wear.data.repository
 
+import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamPlayer
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearPlayerDao
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
@@ -21,12 +24,13 @@ class WearTeamRepositoryTest {
     private val playerDao = mockk<WearPlayerDao>(relaxed = true)
     private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val pendingRosterChangeDao = mockk<PendingRosterChangeDao>(relaxed = true)
+    private val pendingActionDao = mockk<PendingActionDao>(relaxed = true)
 
     private lateinit var repository: WearTeamRepository
 
     @Before
     fun setup() {
-        repository = WearTeamRepository(client, playerDao, gameDao, pendingRosterChangeDao)
+        repository = WearTeamRepository(client, playerDao, gameDao, pendingRosterChangeDao, pendingActionDao)
     }
 
     @Test
@@ -111,5 +115,99 @@ class WearTeamRepositoryTest {
 
         assertTrue(result.isFailure)
         coVerify { pendingRosterChangeDao.insert(any()) }
+    }
+
+    // --- #1343 offline queue: add player ---
+
+    @Test
+    fun `addPlayer posts with an idempotency key and refreshes teams`() = runTest {
+        coEvery { client.addPlayer("e1", any(), any()) } just Runs
+        coEvery { client.getTeams("e1") } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2"),
+            maxPlayers = 10,
+        )
+
+        val result = repository.addPlayer("e1", "Alice")
+
+        assertTrue(result.isSuccess)
+        coVerify { client.addPlayer("e1", match { it.name == "Alice" }, match { it.isNotBlank() }) }
+    }
+
+    @Test
+    fun `addPlayer queues a pending action when the network is unavailable`() = runTest {
+        coEvery { client.addPlayer("e1", any(), any()) } throws Exception("Offline")
+
+        val result = repository.addPlayer("e1", "Alice")
+
+        assertTrue(result.isSuccess)
+        coVerify {
+            pendingActionDao.insert(
+                match {
+                    it.kind == PendingActionEntity.KIND_ADD_PLAYER &&
+                        it.eventId == "e1" &&
+                        it.playerName == "Alice" &&
+                        it.idempotencyKey.isNotBlank()
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `addPlayer does not queue a permanent server rejection`() = runTest {
+        coEvery { client.addPlayer("e1", any(), any()) } throws ApiException(403, "Game ended")
+
+        val result = repository.addPlayer("e1", "Alice")
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { pendingActionDao.insert(any()) }
+    }
+
+    @Test
+    fun `syncPendingAddPlayers replays with the stored idempotency key and deletes on success`() = runTest {
+        val action = PendingActionEntity(
+            id = 7L,
+            kind = PendingActionEntity.KIND_ADD_PLAYER,
+            eventId = "e1",
+            playerName = "Alice",
+            idempotencyKey = "stored-key",
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
+        coEvery { client.addPlayer(any(), any(), any()) } just Runs
+        coEvery { client.getTeams("e1") } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1"),
+            teamTwo = TeamInfo(name = "Team 2"),
+            maxPlayers = 10,
+        )
+
+        val synced = repository.syncPendingAddPlayers()
+
+        assertEquals(1, synced)
+        coVerify { client.addPlayer("e1", match { it.name == "Alice" }, "stored-key") }
+        coVerify { pendingActionDao.deleteById(7L) }
+    }
+
+    @Test
+    fun `syncPendingAddPlayers discards the queued add and refetches when the server wins`() = runTest {
+        val action = PendingActionEntity(
+            id = 8L,
+            kind = PendingActionEntity.KIND_ADD_PLAYER,
+            eventId = "e1",
+            playerName = "Alice",
+            idempotencyKey = "stored-key",
+        )
+        coEvery { pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER) } returns listOf(action)
+        coEvery { client.addPlayer(any(), any(), any()) } throws ApiException(409, "conflict")
+        coEvery { client.getTeams("e1") } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1"),
+            teamTwo = TeamInfo(name = "Team 2"),
+            maxPlayers = 10,
+        )
+
+        val synced = repository.syncPendingAddPlayers()
+
+        assertEquals(0, synced)
+        coVerify { pendingActionDao.deleteById(8L) }
+        coVerify { client.getTeams("e1") }
     }
 }

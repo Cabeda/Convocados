@@ -10,6 +10,7 @@ import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
+import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,6 +76,14 @@ class WearScoreRepository @Inject constructor(
             baselineCaptured = queuedBaseline?.baselineCaptured ?: (base != null),
         )
         historyDao.updateScore(historyId, scoreOne, scoreTwo, scoreSetsJson)
+
+        // A game started offline has no server history yet (#1343). Queue the
+        // edit against the local row; syncPendingStarts re-keys it once the
+        // server creates the history, instead of PATCHing an id that 404s.
+        if (historyId.startsWith(WearHistoryEntity.LOCAL_START_PREFIX)) {
+            replacePendingScore(pending)
+            return Result.failure(OfflineStartPendingException())
+        }
 
         // A newer foreground edit must not overwrite a phone edit that arrived
         // after the original offline baseline was captured. Verify the remote
@@ -182,6 +191,14 @@ class WearScoreRepository @Inject constructor(
         "The score changed on another device while this edit was pending",
     )
 
+    /**
+     * A score edit written against a locally-started history. It is queued, not
+     * failed; the UI treats it as an offline-queued edit until the start syncs.
+     */
+    private class OfflineStartPendingException : Exception(
+        "Queued until the offline-started game syncs",
+    )
+
     /** Attempt every pending score once. Stops auto-retrying past the cap (items
      *  stay queued and surfaced, never silently dropped). A server value that
      *  changed since our base is a concurrent phone edit — left queued rather
@@ -195,6 +212,9 @@ class WearScoreRepository @Inject constructor(
         var synced = 0
         for (score in pending) {
             if (score.retryCount >= MAX_ATTEMPTS) continue
+            // Leave edits against a not-yet-synced offline start for the next
+            // run; syncPendingStarts re-keys them to the server history id.
+            if (score.historyId.startsWith(WearHistoryEntity.LOCAL_START_PREFIX)) continue
             try {
                 val server = client.getGameHistory(historyPath(score.eventId, score.historyId))
                 val scoreRedacted = server.isRedactedFor(score)

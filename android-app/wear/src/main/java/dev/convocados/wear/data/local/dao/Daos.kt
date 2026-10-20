@@ -1,6 +1,7 @@
 package dev.convocados.wear.data.local.dao
 
 import androidx.room.*
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.PendingRosterChangeEntity
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -78,6 +79,9 @@ interface WearHistoryDao {
 
     @Query("UPDATE wear_history SET scoreOne = :scoreOne, scoreTwo = :scoreTwo, scoreSetsJson = :scoreSetsJson WHERE id = :historyId")
     suspend fun updateScore(historyId: String, scoreOne: Int?, scoreTwo: Int?, scoreSetsJson: String? = null)
+
+    @Query("DELETE FROM wear_history WHERE id = :historyId")
+    suspend fun deleteById(historyId: String)
 }
 
 @Dao
@@ -106,6 +110,9 @@ interface PendingScoreDao {
 
     @Query("UPDATE pending_scores SET retryCount = retryCount + 1 WHERE id = :id")
     suspend fun incrementRetry(id: Long)
+
+    @Query("UPDATE pending_scores SET historyId = :toHistoryId WHERE historyId = :fromHistoryId")
+    suspend fun rekeyHistory(fromHistoryId: String, toHistoryId: String)
 
     @Query("DELETE FROM pending_scores WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -151,5 +158,29 @@ interface PendingRosterChangeDao {
     suspend fun incrementRetry(id: Long)
 
     @Query("DELETE FROM pending_roster_changes WHERE id = :id")
+    suspend fun deleteById(id: Long)
+}
+
+@Dao
+interface PendingActionDao {
+    @Query("SELECT * FROM pending_actions ORDER BY createdAt ASC")
+    suspend fun getAll(): List<PendingActionEntity>
+
+    @Query("SELECT COUNT(*) FROM pending_actions")
+    fun observeCount(): Flow<Int>
+
+    @Query("SELECT * FROM pending_actions WHERE kind = :kind ORDER BY createdAt ASC")
+    suspend fun getByKind(kind: String): List<PendingActionEntity>
+
+    @Query("SELECT * FROM pending_actions WHERE kind = :kind AND eventId = :eventId")
+    suspend fun getByKindAndEvent(kind: String, eventId: String): List<PendingActionEntity>
+
+    @Insert
+    suspend fun insert(action: PendingActionEntity)
+
+    @Query("UPDATE pending_actions SET retryCount = retryCount + 1 WHERE id = :id")
+    suspend fun incrementRetry(id: Long)
+
+    @Query("DELETE FROM pending_actions WHERE id = :id")
     suspend fun deleteById(id: Long)
 }

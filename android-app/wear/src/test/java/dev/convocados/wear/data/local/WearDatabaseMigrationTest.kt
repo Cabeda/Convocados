@@ -25,4 +25,24 @@ class WearDatabaseMigrationTest {
 
         verify(exactly = 1) { db.execSQL("ALTER TABLE `pending_scores` ADD COLUMN `baselineCaptured` INTEGER NOT NULL DEFAULT 0") }
     }
+
+    @Test
+    fun `v7 to v8 creates the pending actions queue without dropping existing queues`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+
+        WearDatabase.MIGRATION_7_8.migrate(db)
+
+        verify(exactly = 1) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `pending_actions` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`kind` TEXT NOT NULL, " +
+                    "`eventId` TEXT NOT NULL, " +
+                    "`playerName` TEXT, " +
+                    "`idempotencyKey` TEXT NOT NULL, " +
+                    "`createdAt` INTEGER NOT NULL, " +
+                    "`retryCount` INTEGER NOT NULL)",
+            )
+        }
+    }
 }

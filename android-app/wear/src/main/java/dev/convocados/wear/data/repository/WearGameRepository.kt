@@ -1,10 +1,14 @@
 package dev.convocados.wear.data.repository
 
 import android.util.Log
+import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.api.isTransientOfflineFailure
+import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearTeamRepository
@@ -16,6 +20,8 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.time.Instant
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,6 +32,7 @@ class WearGameRepository @Inject constructor(
     private val historyDao: WearHistoryDao,
     private val teamRepository: WearTeamRepository,
     private val pendingScoreDao: PendingScoreDao,
+    private val pendingActionDao: PendingActionDao,
 ) {
     /** Observable list of all cached games, sorted by dateTime. */
     fun observeGames(): Flow<List<WearGameEntity>> = gameDao.getAllGames()
@@ -86,7 +93,11 @@ class WearGameRepository @Inject constructor(
             .associateBy { it.historyId }
         val remoteHistory = history.data.map { it.toHistoryEntity(eventId) }
         val remoteIds = remoteHistory.mapTo(mutableSetOf()) { it.id }
-        val mergedHistory = (remoteHistory + cached.filter { it.id !in remoteIds && it.id in pendingByHistory })
+        // A locally-started game has no server row yet; keep its placeholder
+        // across a refresh until syncPendingStarts re-keys it (#1343).
+        val mergedHistory = (remoteHistory + cached.filter {
+            it.id !in remoteIds && (it.id in pendingByHistory || it.id.startsWith(LOCAL_START_PREFIX))
+        })
             .map { local ->
                 pendingByHistory[local.id]?.let { pending ->
                     local.copy(
@@ -118,14 +129,114 @@ class WearGameRepository @Inject constructor(
     /**
      * Start score tracking for an event (creates today's history record if
      * teams are assigned), then refresh the local history cache.
+     *
+     * Offline-first (#1343): when the watch has no network, the start is
+     * accepted locally — a placeholder history lets scoring continue — and the
+     * create is queued for [syncPendingStarts]. A permanent rejection still
+     * fails so the UI can explain it.
      */
     suspend fun startGame(eventId: String): Result<Unit> = try {
         client.startWatchGame(eventId)
         refreshHistory(eventId)
         Result.success(Unit)
     } catch (e: Exception) {
-        Log.w("WearGameRepo", "Failed to start game $eventId", e)
-        Result.failure(e)
+        if (e.isTransientOfflineFailure()) {
+            seedLocalHistory(eventId)
+            enqueueStart(eventId)
+            Log.w("WearGameRepo", "Start for $eventId queued offline", e)
+            Result.success(Unit)
+        } else {
+            Log.w("WearGameRepo", "Failed to start game $eventId", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Replay queued starts. The server create is idempotent per day, so a
+     * replay is safe; the returned id replaces the local placeholder and any
+     * scores queued against it. A 4xx means the server has moved on (server
+     * wins): discard the action and re-fetch.
+     */
+    suspend fun syncPendingStarts(): Int {
+        var synced = 0
+        // No retry cap: the create is idempotent and the placeholder must not be
+        // abandoned locally; a non-transient answer removes the action below.
+        for (action in pendingActionDao.getByKind(PendingActionEntity.KIND_START_GAME)) {
+            try {
+                val created = client.createWatchGameHistory(action.eventId)
+                adoptServerHistory(action.eventId, created.id)
+                pendingActionDao.deleteById(action.id)
+                synced++
+            } catch (e: ApiException) {
+                if (e.code == 409 || !e.isTransientOfflineFailure()) {
+                    // Server wins: drop the local game and its scores, then re-fetch.
+                    discardLocalStart(action.eventId)
+                    pendingActionDao.deleteById(action.id)
+                    refreshHistory(action.eventId)
+                } else {
+                    pendingActionDao.incrementRetry(action.id)
+                }
+                Log.w("WearGameRepo", "Start replay rejected for ${action.eventId}", e)
+            } catch (e: Exception) {
+                pendingActionDao.incrementRetry(action.id)
+                Log.w("WearGameRepo", "Start replay failed for ${action.eventId}", e)
+            }
+        }
+        return synced
+    }
+
+    private suspend fun enqueueStart(eventId: String) {
+        if (pendingActionDao.getByKindAndEvent(PendingActionEntity.KIND_START_GAME, eventId).isNotEmpty()) return
+        pendingActionDao.insert(
+            PendingActionEntity(
+                kind = PendingActionEntity.KIND_START_GAME,
+                eventId = eventId,
+                idempotencyKey = UUID.randomUUID().toString(),
+            ),
+        )
+    }
+
+    private suspend fun seedLocalHistory(eventId: String) {
+        val localId = LOCAL_START_PREFIX + eventId
+        if (historyDao.getByEvent(eventId).any { it.id == localId }) return
+        val game = gameDao.getGame(eventId)
+        historyDao.insertAll(
+            listOf(
+                WearHistoryEntity(
+                    id = localId,
+                    eventId = eventId,
+                    // Now sorts the placeholder ahead of older history; the game
+                    // window bounds it, so it stays inside today.
+                    dateTime = Instant.now().toString(),
+                    scoreOne = 0,
+                    scoreTwo = 0,
+                    teamOneName = game?.teamOneName ?: "Team 1",
+                    teamTwoName = game?.teamTwoName ?: "Team 2",
+                    editable = true,
+                ),
+            ),
+        )
+    }
+
+    private suspend fun adoptServerHistory(eventId: String, serverId: String) {
+        historyDao.getByEvent(eventId)
+            .filter { it.id.startsWith(LOCAL_START_PREFIX) }
+            .forEach { local ->
+                historyDao.insertAll(listOf(local.copy(id = serverId)))
+                pendingScoreDao.rekeyHistory(local.id, serverId)
+                historyDao.deleteById(local.id)
+            }
+        refreshHistory(eventId)
+    }
+
+    /** Server wins: the queued start will never apply, so its local game and scores go. */
+    private suspend fun discardLocalStart(eventId: String) {
+        historyDao.getByEvent(eventId)
+            .filter { it.id.startsWith(LOCAL_START_PREFIX) }
+            .forEach { local ->
+                pendingScoreDao.deleteByHistory(eventId, local.id)
+                historyDao.deleteById(local.id)
+            }
     }
 
     /** Get a cached game by ID. */
@@ -162,4 +273,9 @@ class WearGameRepository @Inject constructor(
             // the column would wipe offline-queued scores on upgrade.
             editable = true,
         )
+
+    companion object {
+        /** Prefix for a locally-started history that has no server id yet. */
+        const val LOCAL_START_PREFIX = WearHistoryEntity.LOCAL_START_PREFIX
+    }
 }

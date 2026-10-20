@@ -1,19 +1,24 @@
 package dev.convocados.wear.data.repository
 
 import android.util.Log
+import dev.convocados.wear.data.api.AddPlayerRequest
 import dev.convocados.wear.data.api.TeamPlayer
 import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.api.UpdateTeamsRequest
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.api.isTransientOfflineFailure
+import dev.convocados.wear.data.local.dao.PendingActionDao
 import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearPlayerDao
+import dev.convocados.wear.data.local.entity.PendingActionEntity
 import dev.convocados.wear.data.local.entity.PendingRosterChangeEntity
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +28,7 @@ class WearTeamRepository @Inject constructor(
     private val playerDao: WearPlayerDao,
     private val gameDao: WearGameDao,
     private val pendingRosterChangeDao: PendingRosterChangeDao,
+    private val pendingActionDao: PendingActionDao,
 ) {
     fun observePlayers(eventId: String): Flow<List<WearPlayerEntity>> =
         playerDao.observePlayers(eventId)
@@ -81,6 +87,65 @@ class WearTeamRepository @Inject constructor(
             )
             Result.failure(e)
         }
+    }
+
+    /**
+     * Add a player to the event roster. Offline-first (#1343): a transient
+     * failure queues the add with a stable idempotency key, so the reconnect
+     * replay cannot create a duplicate. Permanent rejections surface.
+     */
+    suspend fun addPlayer(eventId: String, name: String): Result<Unit> {
+        val idempotencyKey = UUID.randomUUID().toString()
+        return try {
+            client.addPlayer(eventId, AddPlayerRequest(name), idempotencyKey)
+            refreshTeams(eventId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (e.isTransientOfflineFailure()) {
+                pendingActionDao.insert(
+                    PendingActionEntity(
+                        kind = PendingActionEntity.KIND_ADD_PLAYER,
+                        eventId = eventId,
+                        playerName = name,
+                        idempotencyKey = idempotencyKey,
+                    ),
+                )
+                Log.w("WearTeamRepo", "Add player for $eventId queued offline", e)
+                Result.success(Unit)
+            } else {
+                Log.w("WearTeamRepo", "Failed to add player to $eventId", e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    /** Replay queued adds. Server wins on a 4xx: discard the action and re-fetch. */
+    suspend fun syncPendingAddPlayers(): Int {
+        var synced = 0
+        // No retry cap: the add carries a stable idempotency key, so replay is
+        // safe until a non-transient answer removes it.
+        for (action in pendingActionDao.getByKind(PendingActionEntity.KIND_ADD_PLAYER)) {
+            val name = action.playerName
+            if (name == null) {
+                pendingActionDao.deleteById(action.id)
+                continue
+            }
+            try {
+                client.addPlayer(action.eventId, AddPlayerRequest(name), action.idempotencyKey)
+                pendingActionDao.deleteById(action.id)
+                refreshTeams(action.eventId)
+                synced++
+            } catch (e: Exception) {
+                if (!e.isTransientOfflineFailure()) {
+                    pendingActionDao.deleteById(action.id)
+                    refreshTeams(action.eventId)
+                } else {
+                    pendingActionDao.incrementRetry(action.id)
+                }
+                Log.w("WearTeamRepo", "Add player replay failed for ${action.eventId}", e)
+            }
+        }
+        return synced
     }
 
     suspend fun syncPendingRosterChanges(): Int {

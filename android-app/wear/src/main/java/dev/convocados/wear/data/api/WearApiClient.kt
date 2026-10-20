@@ -65,12 +65,14 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
         path: String,
         body: Any? = null,
         retry: Boolean = true,
+        idempotencyKey: String? = null,
     ): HttpResponse {
         val tokens = tokenStore.getTokens() ?: throw ApiException(401, "Not authenticated")
 
         var response = client.request("$baseUrl$path") {
             this.method = method
             header("Authorization", "Bearer ${tokens.accessToken}")
+            if (idempotencyKey != null) header("Idempotency-Key", idempotencyKey)
             if (body != null) setBody(body)
         }
 
@@ -80,6 +82,7 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
             response = client.request("$baseUrl$path") {
                 this.method = method
                 header("Authorization", "Bearer ${newTokens.accessToken}")
+                if (idempotencyKey != null) header("Idempotency-Key", idempotencyKey)
                 if (body != null) setBody(body)
             }
         }
@@ -142,6 +145,15 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 
     suspend fun post(path: String, body: Any? = null) {
         authenticatedRequest(HttpMethod.Post, path, body)
+    }
+
+    /** POST with a stable idempotency key so an offline replay cannot duplicate the write. */
+    suspend fun postIdempotent(path: String, body: Any?, idempotencyKey: String) {
+        authenticatedRequest(HttpMethod.Post, path, body, idempotencyKey = idempotencyKey)
+    }
+
+    suspend fun addPlayer(eventId: String, request: AddPlayerRequest, idempotencyKey: String) {
+        postIdempotent("/api/events/$eventId/players", request, idempotencyKey)
     }
 
     suspend inline fun <reified T> postForResult(path: String, body: Any? = null): T =
@@ -290,6 +302,16 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 }
 
 class ApiException(val code: Int, message: String) : Exception(message)
+
+/**
+ * A failure worth queueing and replaying on reconnect (#1343). Network errors,
+ * timeouts and server-side 5xx/429 are transient; a 4xx we caused (bad input,
+ * forbidden, conflict) will fail the same way forever and must surface instead.
+ */
+internal fun Throwable.isTransientOfflineFailure(): Boolean = when (this) {
+    is ApiException -> code == 0 || code == 408 || code == 429 || code >= 500
+    else -> true
+}
 
 private val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
     override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
