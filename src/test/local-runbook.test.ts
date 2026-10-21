@@ -53,35 +53,37 @@ describe("the local runbook", () => {
     // temp directory — but it is the repo's script, by absolute path.
     const script = join(root, "scripts/with-env.sh");
 
-    const withCaller = execFileSync("sh", [script, "sh", "-c", "echo $DATABASE_URL"], {
+    // `env` prints the environment the command was given. It is a constant
+    // command, so nothing is interpolated into a shell line.
+    const withCaller = execFileSync("sh", [script, "env"], {
       cwd: dir,
       encoding: "utf8",
       env: { ...process.env, DATABASE_URL: "file:./caller.db" },
     });
-    expect(withCaller.trim()).toBe("file:./caller.db");
+    expect(withCaller).toContain("DATABASE_URL=file:./caller.db");
 
-    const withoutCaller = execFileSync("sh", [script, "sh", "-c", "echo $DATABASE_URL"], {
+    const withoutCaller = execFileSync("sh", [script, "env"], {
       cwd: dir,
       encoding: "utf8",
       env: { ...process.env, DATABASE_URL: "" },
     });
-    expect(withoutCaller.trim()).toBe("file:./from-env.db");
+    expect(withoutCaller).toContain("DATABASE_URL=file:./from-env.db");
   });
 
   it("survives a .env line that fails", () => {
-    // A developer's .env may run a command that fails (a missing tool, an unset
-    // variable in a substitution). Sourcing it under `set -e` would abort the
+    // A developer's .env may run a command that fails (a missing tool, a
+    // substitution that errors). Sourcing it under `set -e` would abort the
     // command the caller asked for.
     const dir = mkdtempSync(join(tmpdir(), "with-env-"));
     writeFileSync(join(dir, ".env"), "TOOL=$(exit 1)\nDATABASE_URL=file:./from-env.db\n");
     const script = join(root, "scripts/with-env.sh");
 
-    const output = execFileSync("sh", [script, "sh", "-c", "echo $DATABASE_URL"], {
+    const output = execFileSync("sh", [script, "env"], {
       cwd: dir,
       encoding: "utf8",
       env: { ...process.env, DATABASE_URL: "" },
     });
-    expect(output.trim()).toBe("file:./from-env.db");
+    expect(output).toContain("DATABASE_URL=file:./from-env.db");
   });
 
   it("is what the package scripts run", () => {
