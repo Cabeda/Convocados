@@ -544,31 +544,15 @@ jobs:
     if: always()
     needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear, dex-ledger, pr-links-issue]
     steps:
-      # A red "CI" that does not say *which* job went red sends whoever is
-      # reading it hunting through twenty green rows to find the one that is
-      # not — the gate's whole job is to name the blocker, so name it.
+      # The gate's logic lives in scripts/ci-gate.sh so src/test/ci-gate.test.ts
+      # can exercise it: a red "CI" that does not say *which* job went red sends
+      # whoever is reading it hunting through twenty green rows to find the one
+      # that is not — the gate's whole job is to name the blocker, so name it.
+      # The job needs the checkout for that: the gate used to be inline shell,
+      # which is why it had no working tree.
+      - uses: actions/checkout@v7
       - name: Check results
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: |
-          failed="$(jq -r 'to_entries[] | select(.value.result == "failure") | .key' <<<"$NEEDS")"
-          if [ -n "$failed" ]; then
-            echo "Required job(s) failed:"
-            printf '  %s\n' $failed
-            exit 1
-          fi
-          cancelled="$(jq -r 'to_entries[] | select(.value.result == "cancelled") | .key' <<<"$NEEDS")"
-          if [ -n "$cancelled" ]; then
-            echo "Required job(s) were cancelled:"
-            printf '  %s\n' $cancelled
-            exit 1
-          fi
-          # On main the Android jobs are mandatory, so a skip is a silent hole
-          # rather than an optimisation — fail loudly instead of going green.
-          if [[ "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}" == "true" ]]; then
-            if [[ "${{ needs.android.result }}" == "skipped" || "${{ needs['android-wear'].result }}" == "skipped" ]]; then
-              echo "Android Build / Wear OS Build were skipped on main — main must compile"
-              exit 1
-            fi
-          fi
-          echo "All required jobs passed"
+          CI_GATE_ON_MAIN: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: echo "$NEEDS" | sh scripts/ci-gate.sh
