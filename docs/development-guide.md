@@ -57,7 +57,7 @@ Two commands behave differently than they look. The scripts are pinned by
 `src/test/local-runbook.test.ts`: it runs the e2e script with and without a `--` and
 requires a listing of the named file, and it requires the env loader to keep the caller's
 `DATABASE_URL` and to survive a `.env` line that fails. The `package.json` wiring is pinned
-too, so reverting it brings the e2e bug back green.
+too, so reverting the wiring brings the e2e bug back and this test goes red.
 
 **E2E.** The browser build has to match the Playwright version:
 

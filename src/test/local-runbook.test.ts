@@ -86,7 +86,7 @@ describe("the local runbook", () => {
 
   it("is what the package scripts run", () => {
     // The scripts above are only reachable if package.json points at them:
-    // reverting the wiring would bring both bugs back, green.
+    // reverting the wiring would bring the e2e bug back, and this test red.
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
