@@ -2,7 +2,9 @@
 
 `AGENTS.md` carries the mission, the gates, and the conventions a linter or a config already
 enforces. This file carries the rest: the standards a **reviewer** enforces that no tool
-can, reached because Code Style points here during review — not during implementation.
+can, reached because Code Style points here during review — and, for the Wear layout
+sections, while authoring, because they decide how the layout is written rather than whether
+it is right.
 
 Each section names the failure it replaces. Where a check could ever be mechanical, the
 standard says so and names the check; the rest is judgement, which is why it lives here.
