@@ -548,6 +548,9 @@ jobs:
       # can exercise it: a red "CI" that does not say *which* job went red sends
       # whoever is reading it hunting through twenty green rows to find the one
       # that is not — the gate's whole job is to name the blocker, so name it.
+      # The job needs the checkout for that: the gate used to be inline shell,
+      # which is why it had no working tree.
+      - uses: actions/checkout@v7
       - name: Check results
         env:
           NEEDS: ${{ toJSON(needs) }}
