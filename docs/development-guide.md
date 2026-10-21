@@ -51,6 +51,27 @@ Scripts live in `package.json` (`pnpm <script>`); this file does not copy the li
 copy goes stale. The common ones: `pnpm dev`, `pnpm test`, `pnpm typecheck`, `pnpm lint`,
 `pnpm db:generate`, `pnpm db:migrate`, `pnpm db:studio`.
 
+## Local runbook
+
+Two commands behave differently than they look, and both are pinned by `src/test/local-runbook.test.ts`.
+
+**E2E.** The browser build has to match the Playwright version:
+
+```bash
+pnpm exec playwright install chromium     # the installed build drifts from the expected one
+pnpm test:e2e e2e/notifications.spec.ts -g "Skill Rating"    # one spec, one test
+```
+
+**The seed.** `pnpm db:seed` loads `./.env` for its defaults, and a `DATABASE_URL` you name wins over it:
+
+```bash
+DATABASE_URL="file:./seed.db" pnpm prisma migrate deploy
+DATABASE_URL="file:./seed.db" pnpm db:seed
+```
+
+A throwaway database is the point: the local `prisma/dev.db` drifts behind the migrations, and
+the seed then fails on a column that does not exist.
+
 ## Dev Server Management (for AI agents)
 
 ### Worktree bootstrap
