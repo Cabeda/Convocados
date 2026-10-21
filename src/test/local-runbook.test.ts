@@ -30,9 +30,13 @@ describe("the local runbook", () => {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
-      // The file filter is what matters, not how many tests the file holds —
-      // a spec that gains a test must not break the unit suite. Playwright
-      // prints the path relative to its testDir.
+      // "Listing … in 1 file" is what tells a *listing* from a *run*: with the
+      // `--` left in, the flags become file filters and the whole suite runs.
+      // The file count is what matters, not the test count — a spec that gains a
+      // test must not break the unit suite.
+      expect(output, `pnpm test:e2e ${args.join(" ")} must list the named file`).toMatch(
+        /Total: \d+ tests? in 1 file/,
+      );
       expect(output, `pnpm test:e2e ${args.join(" ")} must run the named file`).toContain(
         "health.spec.ts",
       );
@@ -62,6 +66,22 @@ describe("the local runbook", () => {
       env: { ...process.env, DATABASE_URL: "" },
     });
     expect(withoutCaller.trim()).toBe("file:./from-env.db");
+  });
+
+  it("survives a .env line that fails", () => {
+    // A developer's .env may run a command that fails (a missing tool, an unset
+    // variable in a substitution). Sourcing it under `set -e` would abort the
+    // command the caller asked for.
+    const dir = mkdtempSync(join(tmpdir(), "with-env-"));
+    writeFileSync(join(dir, ".env"), "TOOL=$(exit 1)\nDATABASE_URL=file:./from-env.db\n");
+    const script = join(root, "scripts/with-env.sh");
+
+    const output = execFileSync("sh", [script, "sh", "-c", "echo $DATABASE_URL"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: "" },
+    });
+    expect(output.trim()).toBe("file:./from-env.db");
   });
 
   it("is what the package scripts run", () => {
