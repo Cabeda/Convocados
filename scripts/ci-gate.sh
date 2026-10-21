@@ -16,14 +16,14 @@ set -eu
 needs="$(cat)"
 on_main="${CI_GATE_ON_MAIN:-false}"
 
-failed="$(jq -r 'to_entries[] | select(.value.result == "failure") | .key' <<<"$needs")"
+failed="$(printf '%s' "$needs" | jq -r 'to_entries[] | select(.value.result == "failure") | .key')"
 if [ -n "$failed" ]; then
   echo "Required job(s) failed:"
   printf '  %s\n' $failed
   exit 1
 fi
 
-cancelled="$(jq -r 'to_entries[] | select(.value.result == "cancelled") | .key' <<<"$needs")"
+cancelled="$(printf '%s' "$needs" | jq -r 'to_entries[] | select(.value.result == "cancelled") | .key')"
 if [ -n "$cancelled" ]; then
   echo "Required job(s) were cancelled:"
   printf '  %s\n' $cancelled
@@ -38,7 +38,7 @@ fi
 # On main the Android jobs are mandatory, so a skip is a silent hole rather
 # than an optimisation — fail loudly instead of going green.
 if [ "$on_main" = "true" ]; then
-  skipped_android="$(jq -r 'to_entries[] | select(.key == "android" or .key == "android-wear") | select(.value.result == "skipped") | .key' <<<"$needs")"
+  skipped_android="$(printf '%s' "$needs" | jq -r 'to_entries[] | select(.key == "android" or .key == "android-wear") | select(.value.result == "skipped") | .key')"
   if [ -n "$skipped_android" ]; then
     echo "Android Build / Wear OS Build were skipped on main — main must compile"
     exit 1
