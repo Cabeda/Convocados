@@ -26,8 +26,10 @@ dex sync               # Push tasks to GitHub Issues
   ownership table and the machine exception live in
   [`docs/development-guide.md`](./development-guide.md); reach for it when a task's
   GitHub state does not match the ledger.
-- `dex` reads the **working tree**: never `git stash` or `git checkout --` the `.dex/`
-  directory while working, or the task list silently disappears
+- `dex` reads the **working tree**, so the ledger belongs there: keep `.dex/tasks.jsonl` in
+  the working tree while you work — commit it, or stash it and pop it before the next `dex`
+  command. A task that lives only in a stash is invisible to `dex`, and
+  `node scripts/dex-dedupe.mjs --check` names the stash that holds it.
 - `.gitattributes` unions `.dex/tasks.jsonl` on merge, so integration branches do not
   conflict on the ledger. The union splices lines silently, and task records are mutable
   (`completed`, `updated_at` are rewritten in place), so if both sides edited the same
