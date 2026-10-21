@@ -18,6 +18,20 @@ _Avoid_: Occurrence, match (match = one played Game's scoreline), session
 The ordered list of players on an Event's current Game — active spots first, bench past `maxPlayers`.
 _Avoid_: List, squad, players table
 
+**Position**:
+GK/DEF/MID/FWD on a roster row — a player's own preference, optional, and the input the rotation suggestion reads.
+_Avoid_: Role, slot, place, formation
+
+### Season
+
+**Crew**:
+A team inside a Season — the group that plays together across the season's games.
+_Avoid_: Team, squad, group, roster (the roster is the Event's)
+
+**Captain**:
+The one person responsible for a Crew: they propose its player changes and run its operations — and only their own.
+_Avoid_: Role, admin, president, coach, organizer (the organizer is the Event's owner)
+
 ### Notifications
 
 **Reminder Timings**:
