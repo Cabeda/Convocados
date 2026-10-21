@@ -212,9 +212,10 @@ in the repo. Read the blocker before reaching for an override:
 dismissal takes minutes to reach the ruleset evaluation, so give it time instead of
 re-trying.
 
-A `RepositoryRole: Admin` bypass (`bypass_mode: always`) lets the owner override. It is the
-exception, not the merge path: the override disables every other rule in the set, including
-the required checks, so a merge taken that way ships untested.
+A `RepositoryRole: Admin` bypass (`bypass_mode: pull_request`) lets the owner merge a pull
+request they authored without the required checks. It is the exception, not the merge path: a
+green PR merges on its own, and a merge taken through the bypass ships untested. Nothing
+else bypasses the rules — a direct push to `main` must pass the same checks.
 
 > **Fixed 2026-10-16.** The ruleset also carried `code_quality: { severity: "errors" }` while
 > the repo had no Code Quality analysis at all, so *no* PR was ever mergeable without that
@@ -229,6 +230,12 @@ the required checks, so a merge taken that way ships untested.
 > is off, so the required checks are enforced again. Verify it the same way: merge a green PR
 > **without** `--admin`. The mechanics live in
 > [`docs/development-guide.md`](docs/development-guide.md) → *Merging*.
+
+> **Fixed 2026-10-21 (bypass).** The admin bypass was `bypass_mode: always`: an admin merge
+> skipped the required checks with it, and a direct push to `main` went through unchecked. It
+> is now `bypass_mode: pull_request` — an admin may merge a pull request they authored, and
+> nothing else bypasses the rules (#1222). The residual is deliberate and is the line above:
+> a merge taken through the bypass ships untested, so do not take it.
 
 Consequence worth internalising: **merging a Change deploys it.** `release.yml` fires on
 CI green against `main` and then bumps the version, tags, releases, deploys Fly, publishes
