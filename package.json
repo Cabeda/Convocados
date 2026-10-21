@@ -39,8 +39,8 @@
     "sync:feature-parity-docs": "tsx scripts/generate-feature-parity-docs.ts",
     "check:feature-parity": "tsx scripts/generate-feature-parity-docs.ts --check",
     "db:seed:settlement": "sh scripts/with-env.sh tsx prisma/seed-settlement-demo.ts",
-    "db:backfill:merged-identity": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/backfill-merged-player-identity.ts'",
-    "db:repair:participant-order": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/repair-game-participant-order.ts \"$@\"' --"
+    "db:backfill:merged-identity": "sh scripts/with-env.sh tsx scripts/backfill-merged-player-identity.ts",
+    "db:repair:participant-order": "sh scripts/with-env.sh tsx scripts/repair-game-participant-order.ts"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.7",

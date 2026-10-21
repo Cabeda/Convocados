@@ -12,7 +12,7 @@
  * Both are the kind of thing that costs an afternoon, so both are pinned here.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -20,17 +20,25 @@ import { describe, expect, it } from "vitest";
 const root = process.cwd();
 
 describe("the local runbook", () => {
-  it("runs the one test the caller named, separator or not", () => {
-    for (const args of [["--list", "e2e/health.spec.ts"], ["--", "--list", "e2e/health.spec.ts"]]) {
+  it("runs the one file the caller named, separator or not", () => {
+    for (const args of [
+      ["--list", "--reporter=list", "e2e/health.spec.ts"],
+      ["--", "--list", "--reporter=list", "e2e/health.spec.ts"],
+    ]) {
       const output = execFileSync("sh", ["scripts/e2e.sh", ...args], {
         cwd: root,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
-      expect(
-        output,
-        `pnpm test:e2e ${args.join(" ")} must run the named test, not the whole suite`,
-      ).toContain("Total: 1 test in 1 file");
+      // The file filter is what matters, not how many tests the file holds —
+      // a spec that gains a test must not break the unit suite. Playwright
+      // prints the path relative to its testDir.
+      expect(output, `pnpm test:e2e ${args.join(" ")} must run the named file`).toContain(
+        "health.spec.ts",
+      );
+      expect(output, `pnpm test:e2e ${args.join(" ")} must not run the whole suite`).not.toContain(
+        "notifications.spec.ts",
+      );
     }
   });
 
@@ -54,5 +62,20 @@ describe("the local runbook", () => {
       env: { ...process.env, DATABASE_URL: "" },
     });
     expect(withoutCaller.trim()).toBe("file:./from-env.db");
+  });
+
+  it("is what the package scripts run", () => {
+    // The scripts above are only reachable if package.json points at them:
+    // reverting the wiring would bring both bugs back, green.
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(pkg.scripts["test:e2e"]).toContain("scripts/e2e.sh");
+    for (const [name, command] of Object.entries(pkg.scripts)) {
+      // The scripts that read the database are the ones that source .env.
+      if (!/^db:(seed|repair|backfill)/.test(name)) continue;
+      expect(command, `${name} must run through scripts/with-env.sh`).toContain("scripts/with-env.sh");
+    }
   });
 });

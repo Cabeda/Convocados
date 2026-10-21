@@ -53,7 +53,8 @@ copy goes stale. The common ones: `pnpm dev`, `pnpm test`, `pnpm typecheck`, `pn
 
 ## Local runbook
 
-Two commands behave differently than they look, and both are pinned by `src/test/local-runbook.test.ts`.
+Two commands behave differently than they look. The scripts *and* the `package.json` wiring are
+pinned by `src/test/local-runbook.test.ts`, so reverting either brings the bug back green.
 
 **E2E.** The browser build has to match the Playwright version:
 
