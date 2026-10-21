@@ -15,6 +15,14 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+// The goldens are an output of the test task, so declaring them makes Gradle
+// notice when they no longer match the last run. Without this the inputs can
+// match an earlier run whose output has since been overwritten — a stale golden
+// compared against a stale render is a green gate on a change it never saw.
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    outputs.dir(layout.projectDirectory.dir("src/test/screenshots"))
+}
+
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
