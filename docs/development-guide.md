@@ -3,6 +3,48 @@
 Reference material reached from [`AGENTS.md`](../AGENTS.md). Everything here is needed only
 by some tasks, so it lives outside the always-loaded agent context and behind a pointer.
 
+## Merging
+
+`AGENTS.md` → *Merge Authority* says which rules guard `main`. This is the mechanics.
+
+**Read the blocker before overriding it.** The rulesets are enumerable:
+
+```bash
+gh api repos/:owner/:repo/rules/branches/main          # the rules that guard main
+gh api repos/:owner/:repo/code-scanning/alerts?state=open   # what the code_scanning rule reads
+```
+
+The `code_scanning` rule reads the **base branch's** open alerts, so an alert left on `main`
+blocks every merge in the repo — including PRs that touch none of its files. Fix the code, or
+dismiss the alert with a written justification:
+
+```bash
+gh api -X PATCH repos/:owner/:repo/code-scanning/alerts/<n> \
+  -f state=dismissed -f dismissed_reason="false positive" \
+  -f dismissed_comment="<why the rule does not apply here>"
+```
+
+A dismissal reaches the ruleset evaluation in **minutes**, not seconds. Wait for it; do not
+re-dismiss and do not reach for the admin override, which disables the required checks with it.
+
+**Read CI from the head SHA's run.** A push cancels the previous run's jobs, so the superseded
+run reports a red `CI` ("Required job(s) were cancelled") while the current run is still
+going. That red belongs to a commit that is no longer the head. `gh pr checks <n>` shows the
+latest run per check name; the head SHA's run is the one that decides.
+
+**Why a branch goes "behind".** Every merge to `main` triggers `release.yml`, which pushes a
+`[skip ci]` version bump onto `main`. A PR opened before that bump is one commit behind, and
+a ruleset with a strict status-check policy refuses it ("the head branch is not up to date
+with the base branch"). Merge `main` into the branch and let the checks run again — the bump
+touches nothing else.
+
+**Merging.** `gh pr merge <n> --merge` is the path; it asks the server and reports the
+blocker. The owner can also merge through the API, which returns the same answer:
+
+```bash
+gh api -X PUT repos/:owner/:repo/pulls/<n>/merge -f merge_method=merge -f sha=<head sha>
+```
+
 ## Commands
 
 Scripts live in `package.json` (`pnpm <script>`); this file does not copy the list, because a

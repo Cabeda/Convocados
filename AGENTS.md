@@ -143,23 +143,28 @@ docs: update AGENTS.md
 3. Implement feature
 4. Ensure all tests pass (`pnpm test`)
 5. Run type checking (`pnpm typecheck`)
-6. Write the PR body with the **`pr` skill when the session has it** (invoke the skill; it
+6. Read CI from the **head SHA's** run. A push cancels the previous run's jobs, so the
+   superseded run reports a red `CI` ("Required job(s) were cancelled") while the current one
+   is still running — that red belongs to a commit that is no longer the head, not to your
+   Change. `gh pr checks <n>` shows the latest run per check; the head SHA's run is the one
+   that decides.
+7. Write the PR body with the **`pr` skill when the session has it** (invoke the skill; it
    supplies the Summary / Evidence / Merge Danger template). Read the diff first so the
    Summary carries the smallest view that makes the change legible.
-7. **A UI change shows before and after.** Any diff that changes what a user sees — web
+8. **A UI change shows before and after.** Any diff that changes what a user sees — web
    screens or the Android apps (`:app`, `:wear`) — embeds a **before/after screenshot pair**
    in the PR body's Evidence. Host the images on a `pr-assets/<pr-number>-<slug>` branch so
    they stay out of the Change's diff, and reference them by raw URL. An after-only
    screenshot does not prove the change; the reviewer needs the pair.
-8. Before `gh pr create`, run `pnpm check:pr-body <body.md>` against the body file. It is
+9. Before `gh pr create`, run `pnpm check:pr-body <body.md>` against the body file. It is
    the same script the `PR Links Issue` job runs, reached from the command line, and it is
    the only place the rule is checkable in time: CI sees the body after the PR exists, so a
    failure there always costs a second trip. It passes only on a closing keyword
    (`Closes #<n>`, `Fixes #<n>`, `Resolves #<n>`), which is what makes GitHub close the
    linked issue on merge and what stops the next agent reading a solved bug as live work. A
    PR that closes nothing passes with `pnpm check:pr-body <body.md> --no-issue`.
-9. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
-10. **Before merging**, always run the full test suite (`pnpm test`) and type checking (`pnpm typecheck`) to ensure the build will succeed in CI/CD
+10. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
+11. **Before merging**, always run the full test suite (`pnpm test`) and type checking (`pnpm typecheck`) to ensure the build will succeed in CI/CD
 
 **CRITICAL: ALL changes MUST go through PRs.** Never push directly to `main`. This includes:
 - Bug fixes (even one-liners)
@@ -183,22 +188,47 @@ Never `git push origin main` directly. Always:
 ### Merge Authority
 
 `.github/CODEOWNERS` is `* @Cabeda`, so GitHub requests Cabeda's review on every Change. What
-**stops a machine from merging** is not that request — the `main` ruleset sets
+**stops a machine from merging** is not that request — the rulesets set
 `required_approving_review_count: 0` and `require_code_owner_review: false` — but the factory
 App's own permissions: `convocados-factory[bot]` holds no approve, merge, or workflow-edit
 right, so a green Change it authored still cannot be merged by it. Review is the process; the
 App's permission is the mechanism. Do not conflate them.
 
-The ruleset does enforce `CI` and `Analyze (javascript-typescript)`, and blocks deletion and
-non-fast-forward pushes to `main`. A `RepositoryRole: Admin` bypass (`bypass_mode: always`)
-lets the owner override — which is how a human merges their own PR, since GitHub never lets a
-PR author satisfy their own review requirement.
+**A green PR merges on its own.** Three rulesets guard `main`, and each one speaks to a
+different failure:
+
+| Ruleset | What it enforces |
+|---|---|
+| `main` (13717171) | `CI` and `Analyze (javascript-typescript)` green on the head, no deletion, no force-push, and **no open CodeQL security alert at high or higher** |
+| `main-2` (20842995) | the same `CI` check, not required to run on the latest `main` |
+| `main: only the owner and the release deploy key may write` (24234683) | only the owner and the release deploy key may write to `main` |
+
+The `code_scanning` rule is the one that bites. It reads the **base branch's** open alerts, so
+a single high-severity alert left on `main` — from a file no PR touched — blocks every merge
+in the repo. Read the blocker before reaching for an override:
+`gh api repos/:owner/:repo/rules/branches/main` names the rules, and
+`gh api repos/:owner/:repo/code-scanning/alerts?state=open` names the alerts. Close the cause
+— fix the code, or dismiss the alert with a written justification — and the merge unblocks. A
+dismissal takes minutes to reach the ruleset evaluation, so give it time instead of
+re-trying.
+
+A `RepositoryRole: Admin` bypass (`bypass_mode: always`) lets the owner override. It is the
+exception, not the merge path: the override disables every other rule in the set, including
+the required checks, so a merge taken that way ships untested.
 
 > **Fixed 2026-10-16.** The ruleset also carried `code_quality: { severity: "errors" }` while
 > the repo had no Code Quality analysis at all, so *no* PR was ever mergeable without that
 > admin override — and the override disables every other rule in the set, including the
 > required checks. Protection looked present and was in fact always bypassed. The rule is
 > removed; verify a green PR merges with no `--admin` if you change this block.
+
+> **Fixed 2026-10-21.** The same hole one rule over: `code_scanning` with
+> `security_alerts_threshold: high_or_higher` and ten pre-existing alerts on `main` — so no PR
+> could merge without the override, for exactly the reason above. The alerts are closed (eight
+> dismissed with a justification, two fixed in code) and `main-2`'s strict status-check policy
+> is off, so the required checks are enforced again. Verify it the same way: merge a green PR
+> **without** `--admin`. The mechanics live in
+> [`docs/development-guide.md`](docs/development-guide.md) → *Merging*.
 
 Consequence worth internalising: **merging a Change deploys it.** `release.yml` fires on
 CI green against `main` and then bumps the version, tags, releases, deploys Fly, publishes
@@ -272,9 +302,9 @@ beforeEach(async () => {
 
 ## Code Style
 
-Judgement-call standards that a review enforces but no linter can (round-vs-square layouts
-on Wear, test-scaffolding extraction, fixture placement) live in
-[`CODING_STANDARDS.md`](CODING_STANDARDS.md) — read it during review, not implementation.
+**Wear layout?** Read [`CODING_STANDARDS.md`](CODING_STANDARDS.md) → *Wear OS: round vs square*
+and *Wear UI: verify on round **and** square* — they are authoring rules, not review-only
+ones. The rest of that file (test-scaffolding extraction, fixture placement) is review-time.
 
 ### TypeScript
 - Strict mode enabled
