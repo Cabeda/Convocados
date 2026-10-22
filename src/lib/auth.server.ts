@@ -171,6 +171,15 @@ export const auth = betterAuth({
       // invalid_scope, and one that registered with the default could never
       // authorize anything else.
       clientRegistrationAllowedScopes: OAUTH_SCOPES,
+      // RFC 8707: Claude sends `resource=<MCP URL>` on /authorize. The provider
+      // only accepts a resource that has its own row, and rejects the request
+      // with `invalid_target` before consent otherwise — so registration
+      // succeeded, no consent or token was ever created, and the connector
+      // reported a bare auth failure.
+      resources: [`${baseUrl}/api/mcp`],
+      // New clients are linked to every resource they may request; with the
+      // per-client check on by default, an unlinked client is refused.
+      clientRegistrationDefaultResources: [`${baseUrl}/api/mcp`],
       storeClientSecret: "hashed",
       cachedTrustedClients: new Set(
         process.env.TRUSTED_OAUTH_CLIENT_ID ? [process.env.TRUSTED_OAUTH_CLIENT_ID] : [],

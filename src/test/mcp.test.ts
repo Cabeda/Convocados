@@ -225,7 +225,27 @@ describe("POST /api/mcp — stateless transport", () => {
     const challenge = res.headers.get("WWW-Authenticate") ?? "";
     expect(challenge).toMatch(/Bearer/);
     expect(challenge).toMatch(/resource_metadata=/);
-    expect(challenge).toMatch(/scope="read:events"/);
+    // The advertised scope is the connector's whole capability set: one tool's
+    // scope would mint a token that can read but not write.
+    expect(challenge).toMatch(/scope="[^"]*\bread:events\b/);
+    expect(challenge).toMatch(/\bcreate:events\b/);
+  });
+
+  it("tools/call without the needed scope returns 403 with a step-up challenge", async () => {
+    mockAuth.mockResolvedValue({ userId: "mcp-user-2", scopes: ["read:events"], authMethod: "oauth", clientId: "c2" });
+    const req = makeRequest({
+      jsonrpc: "2.0", id: 3, method: "tools/call",
+      params: { name: "convocados_create_event", arguments: { title: "Game", location: "Pitch", dateTime: new Date().toISOString(), maxPlayers: 10 } },
+    });
+    const res = await POST(ctx(req));
+    expect(res.status).toBe(403);
+    const challenge = res.headers.get("WWW-Authenticate") ?? "";
+    // Without `error="insufficient_scope"` Claude treats the 403 as terminal —
+    // no re-authorization prompt, and the connector looks broken.
+    expect(challenge).toContain('error="insufficient_scope"');
+    // Every scope still needed, not just the missing one.
+    expect(challenge).toMatch(/scope="[^"]*\bread:events\b/);
+    expect(challenge).toMatch(/\bcreate:events\b/);
   });
 
   it("anonymous tools/call can fetch a link-accessible event", async () => {

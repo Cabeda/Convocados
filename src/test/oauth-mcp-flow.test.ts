@@ -152,6 +152,10 @@ describe("MCP connector flow — register, sign in, consent, token, tool call", 
     const state = randomBytes(8).toString("hex");
 
     // ── Step 2: no session → the sign-in page, carrying the request ──────
+    // `resource` is what an MCP client sends per RFC 8707. Without a matching
+    // oauthResource row the authorization server rejects the request with
+    // invalid_target *before* consent, which looks exactly like a broken
+    // connector: registration succeeds, no consent or token is ever stored.
     const authorizeUrl =
       `${BASE}/api/auth/oauth2/authorize?` +
       new URLSearchParams({
@@ -162,6 +166,7 @@ describe("MCP connector flow — register, sign in, consent, token, tool call", 
         state,
         code_challenge: challenge,
         code_challenge_method: "S256",
+        resource: `${BASE}/api/mcp`,
       }).toString();
 
     const anonymous = await authFetch(authorizeUrl, { headers: { Origin: BASE } });
@@ -217,6 +222,10 @@ describe("MCP connector flow — register, sign in, consent, token, tool call", 
     const token: any = await tokenRes.json();
     expect(token.access_token).toBeTruthy();
     expect(token.scope).toContain("read:events");
+    // A resource-scoped token is a JWT, not an `oauthAccessToken` row — the
+    // MCP handler verifies it against the JWKS, so a tampered token must fail.
+    expect(String(token.access_token).split(".")).toHaveLength(3);
+    expect(await prisma.oauthAccessToken.count({ where: { clientId } })).toBe(0);
 
     // ── Step 7: the tool runs as the user who signed in ──────────────────
     const mcpRes = await mcpHandler({
@@ -237,5 +246,53 @@ describe("MCP connector flow — register, sign in, consent, token, tool call", 
     const games = JSON.parse(mcpBody.result.content[0].text);
     expect(games.owned).toEqual([]);
     expect(games.admin).toEqual([]);
+
+    // Scope escalation by editing the payload must not pass: the signature
+    // covers the claims, so the tampered token is rejected outright.
+    const [head, body, sig] = String(token.access_token).split(".");
+    const claims = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    claims.scope = claims.scope.replace("read:events", "manage:payments");
+    const forged = `${head}.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.${sig}`;
+    const forgedRes = await mcpHandler({
+      request: new Request(`${BASE}/api/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${forged}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name: "convocados_list_my_games", arguments: {} },
+        }),
+      }),
+    } as any);
+    expect(forgedRes.status).toBe(401);
+  });
+
+  it("accepts the MCP endpoint as a resource and refuses an unregistered one", async () => {
+    const clientId = await registerClient("openid read:events");
+    const { challenge } = generatePKCE();
+    const authorize = (resource: string) =>
+      authFetch(
+        `${BASE}/api/auth/oauth2/authorize?` +
+          new URLSearchParams({
+            response_type: "code",
+            client_id: clientId,
+            redirect_uri: REDIRECT_URI,
+            scope: "openid read:events",
+            state: randomBytes(4).toString("hex"),
+            code_challenge: challenge,
+            code_challenge_method: "S256",
+            resource,
+          }).toString(),
+        { headers: { Origin: BASE } },
+      );
+
+    // The endpoint Claude names must be a known resource, or the flow dies
+    // with `invalid_target` before the user ever sees a consent screen.
+    const ok = await authorize(`${BASE}/api/mcp`);
+    expect(await redirectUrl(ok)).toContain("/auth/signin?");
+
+    const unknown = await authorize(`${BASE}/api/not-ours`);
+    expect(await redirectUrl(unknown)).toContain("error=invalid_target");
   });
 });

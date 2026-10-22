@@ -69,3 +69,15 @@ export function protectedResourceMetadataUrl(baseUrl: string): string {
 export function wwwAuthenticate(baseUrl: string, scope: string): string {
   return `Bearer resource_metadata="${protectedResourceMetadataUrl(baseUrl)}", scope="${scope}"`;
 }
+
+/**
+ * RFC 6750 step-up challenge for a token that lacks a scope.
+ *
+ * The `scope` parameter must name every scope the caller still needs, not only
+ * the missing one: Claude does not carry scopes from an earlier step-up into
+ * the next authorization request. A 403 without this header is a terminal
+ * error in Claude, so the connector never offers to re-authorize.
+ */
+export function insufficientScopeChallenge(scopes: string[]): string {
+  return `Bearer error="insufficient_scope", scope="${scopes.join(" ")}"`;
+}
