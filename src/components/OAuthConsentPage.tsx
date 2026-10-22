@@ -50,7 +50,6 @@ export default function OAuthConsentPage() {
 
   // Parse query params
   const params = new URLSearchParams(window.location.search);
-  const consentCode = params.get("consent_code") ?? "";
   const clientId = params.get("client_id") ?? "";
   const scopeStr = params.get("scope") ?? "openid";
   const scopes = scopeStr.split(" ").filter(Boolean);
@@ -58,10 +57,10 @@ export default function OAuthConsentPage() {
   // Fetch client info on mount
   useEffect(() => {
     if (!clientId) return;
-    fetch(`/api/auth/oauth2/client/${clientId}`, { credentials: "include" })
+    fetch(`/api/auth/oauth2/public-client?client_id=${encodeURIComponent(clientId)}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data) setClientInfo({ name: data.name ?? clientId, icon: data.icon ?? null });
+        if (data) setClientInfo({ name: data.client_name ?? clientId, icon: data.logo_uri ?? null });
         else setClientInfo({ name: clientId, icon: null });
       })
       .catch(() => setClientInfo({ name: clientId, icon: null }));
@@ -71,22 +70,27 @@ export default function OAuthConsentPage() {
     setLoading(true);
     setError(null);
     try {
+      // The signed authorization request, exactly as the AS sent it. The
+      // consent endpoint reads it back from the body — without it there is no
+      // request to consent to, and the approval fails.
+      const oauthQuery = window.location.search.replace(/^\?/, "");
       const res = await fetch("/api/auth/oauth2/consent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ accept, consent_code: consentCode }),
+        body: JSON.stringify({ accept, oauth_query: oauthQuery }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.message ?? body.error ?? "Consent request failed");
+        setError(body.error_description ?? body.message ?? body.error ?? "Consent request failed");
         setLoading(false);
         return;
       }
       const data = await res.json();
-      if (data.redirectURI) {
-        // eslint-disable-next-line react-hooks/immutability -- intentional redirect after consent
-        window.location.href = data.redirectURI;
+      // The AS answers with the URL the browser must continue to: the client's
+      // redirect URI carrying the authorization code.
+      if (data.url) {
+        window.location.href = data.url;
       }
     } catch {
       setError("Network error. Please try again.");

@@ -6,6 +6,7 @@ import { SignInForm } from "./SignInForm";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { sanitizeCallbackUrl } from "~/lib/safeRedirect";
+import { oauthAuthorizeResumePath } from "~/lib/oauthAuthorizeResume";
 
 export default function SignInPage() {
   const t = useT();
@@ -21,14 +22,21 @@ export default function SignInPage() {
 
   const hasCallbackURL = typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("callbackURL");
 
-  if (typeof window !== "undefined" && !hasCallbackURL) {
+  // An OAuth authorization request (better-auth sends the user here with the
+  // signed request) has to be handed back to the authorization endpoint after
+  // sign-in. Falling through to the dashboard loses the request: no code is
+  // ever issued and the client reports "Authentication failed".
+  const oauthResume =
+    typeof window !== "undefined" ? oauthAuthorizeResumePath(window.location.search) : null;
+
+  if (typeof window !== "undefined" && !hasCallbackURL && !oauthResume) {
     // ADR-0012: missing callbackURL means the user landed on /auth/signin without
     // a deep-link entry point — they'll be redirected to /dashboard after signin.
     console.warn("[SignInPage] no callbackURL on /auth/signin — post-login destination will fall back to /dashboard");
   }
 
   // Compute the safe post-login destination
-  const postLoginURL = callbackURL === "/" ? "/dashboard" : callbackURL;
+  const postLoginURL = oauthResume ?? (callbackURL === "/" ? "/dashboard" : callbackURL);
 
   // Redirect already-authenticated users
   React.useEffect(() => {
@@ -51,8 +59,10 @@ export default function SignInPage() {
 
               {/* ADR-0012 + #506: when the user lands on /auth/signin without a
                   callbackURL (no deep-link entry point, stale bookmark, etc.)
-                  surface the common destinations explicitly so they can pick. */}
-              {!hasCallbackURL && (
+                  surface the common destinations explicitly so they can pick.
+                  An OAuth request is a destination too — it is resumed, not
+                  offered as a choice. */}
+              {!hasCallbackURL && !oauthResume && (
                 <Box
                   data-testid="post-login-fallback"
                   sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 2 }}

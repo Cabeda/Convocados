@@ -107,6 +107,27 @@ describe("SignInPage — warn log when callbackURL is missing", () => {
   });
 });
 
+describe("SignInPage — an OAuth authorization request is resumed, not dropped", () => {
+  // better-auth sends the user here with the signed authorization request.
+  // Falling through to the dashboard loses it: no code is ever issued and the
+  // client (Claude.ai, ChatGPT) reports "Authentication failed".
+  const OAUTH_QUERY =
+    "response_type=code&client_id=abc&redirect_uri=https%3A%2F%2Fclaude.ai%2Fapi%2Fmcp%2Fauth_callback&scope=openid&sig=deadbeef";
+
+  it("returns to the authorization endpoint after sign-in", () => {
+    renderAtUrl(`/auth/signin?${OAUTH_QUERY}`);
+    const href = screen.getByRole("link", { name: /signUp/ }).getAttribute("href") ?? "";
+    expect(href).toContain(encodeURIComponent("/api/auth/oauth2/authorize?"));
+    expect(href).toContain("client_id%3Dabc");
+    expect(href).not.toContain("callbackURL=%2Fdashboard");
+  });
+
+  it("does not offer the destination fallback during an OAuth request", () => {
+    renderAtUrl(`/auth/signin?${OAUTH_QUERY}`);
+    expect(screen.queryByTestId("post-login-fallback")).toBeNull();
+  });
+});
+
 describe("SignInPage — Google sign-in forwards callbackURL", () => {
   it("calls signIn.social with the callbackURL from the URL", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
