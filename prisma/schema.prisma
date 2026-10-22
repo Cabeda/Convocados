@@ -1277,7 +1277,10 @@ model OauthConsent {
   resources               String?
   requestedUserInfoClaims String?
   scopes                  String
-  consentGiven            Boolean
+  /// better-auth 1.7 does not write this column — it creates a consent row
+  /// only once the user has accepted. A required column it never fills made
+  /// every consent write fail, and with it the whole OAuth flow.
+  consentGiven            Boolean  @default(true)
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 

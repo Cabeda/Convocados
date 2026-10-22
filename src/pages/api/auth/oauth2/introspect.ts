@@ -7,6 +7,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
+import { parseStoredScopes } from "~/lib/scopes";
 
 export const POST: APIRoute = async ({ request }) => {
   const limited = await rateLimitResponse(request, "oauth_token");
@@ -39,7 +40,7 @@ export const POST: APIRoute = async ({ request }) => {
     const active = accessToken.expiresAt ? accessToken.expiresAt > new Date() : true;
     return Response.json({
       active,
-      scope: accessToken.scopes,
+      scope: parseStoredScopes(accessToken.scopes).join(" "),
       client_id: accessToken.clientId,
       sub: accessToken.userId ?? undefined,
       token_type: "access_token",
@@ -56,7 +57,7 @@ export const POST: APIRoute = async ({ request }) => {
     const active = refreshToken.expiresAt ? refreshToken.expiresAt > new Date() : true;
     return Response.json({
       active: active && !refreshToken.revoked,
-      scope: refreshToken.scopes,
+      scope: parseStoredScopes(refreshToken.scopes).join(" "),
       client_id: refreshToken.clientId,
       sub: refreshToken.userId,
       token_type: "refresh_token",

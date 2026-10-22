@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { auth, ensureAuthKeysHealthy } from "./auth.server";
 import { authenticateApiKey } from "./apiKey.server";
 import { prisma } from "./db.server";
+import { parseStoredScopes } from "./scopes";
 
 /** Hash a token the same way better-auth stores them (SHA-256 → base64url) */
 function hashToken(token: string): string {
@@ -69,7 +70,7 @@ export async function authenticateRequest(
     if (oauthToken && oauthToken.userId && (!oauthToken.expiresAt || oauthToken.expiresAt > new Date())) {
       return {
         userId: oauthToken.userId,
-        scopes: (oauthToken.scopes ?? "").split(" ").filter(Boolean),
+        scopes: parseStoredScopes(oauthToken.scopes),
         authMethod: "oauth",
         clientId: oauthToken.clientId,
       };

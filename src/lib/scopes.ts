@@ -61,6 +61,29 @@ export function hasScope(scopes: string | string[], required: string): boolean {
   return list.includes(required);
 }
 
+/**
+ * Read the scopes off a stored OAuth token or consent row.
+ *
+ * better-auth types these fields as `string[]`, but the Prisma adapter stores
+ * arrays as JSON (SQLite has no array column) — so a token minted through the
+ * consent path holds `["read:events"]` while one minted for a trusted client
+ * holds a plain space-separated string. Both are in the database, so accept
+ * both.
+ */
+export function parseStoredScopes(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch {
+      // not JSON after all — fall through to the space-separated form
+    }
+  }
+  return trimmed.split(/\s+/).filter(Boolean);
+}
+
 /** Check if a scope string contains all required scopes */
 export function hasAllScopes(scopes: string | string[], required: string[]): boolean {
   return required.every((s) => hasScope(scopes, s));
