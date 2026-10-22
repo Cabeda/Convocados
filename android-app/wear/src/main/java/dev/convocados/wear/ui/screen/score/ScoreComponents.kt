@@ -103,12 +103,13 @@ internal fun teamScoreTileShape(isRound: Boolean, isLeft: Boolean): Shape {
 internal const val LARGE_FONT_SCALE = 1.5f
 
 /**
- * The shortest display the tennis editors keep the sets won on at a large
- * font scale.
+ * The shortest display that keeps the full tennis screen at a large font
+ * scale.
  *
  * Below this the score needs the room: on a 227dp round display at 2x the
- * tiles are left about 77dp and a tile needs about 132dp. Both editors read
- * this constant, so the two screens cannot drift apart on it.
+ * tiles are left about 77dp and a tile needs about 132dp, so the sets won, the
+ * header and both action rows step aside (#1463). Both editors read this
+ * constant, so the two screens cannot drift apart on it.
  */
 internal const val MIN_DISPLAY_DP_FOR_SET_HISTORY = 320
 

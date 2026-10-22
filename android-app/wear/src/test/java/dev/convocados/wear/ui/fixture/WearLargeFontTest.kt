@@ -10,12 +10,18 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.convocados.wear.ui.screen.quick.QuickScoreContent
 import dev.convocados.wear.ui.screen.score.ScoreFixtureContent
 import dev.convocados.wear.ui.screen.score.ScoreUiState
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -85,14 +91,55 @@ class WearLargeFontTest {
         assertStatusAboveClock(expectedStatus = "Will sync")
     }
 
-    // A 227dp round display is in the repo's matrix — the 1× goldens cover it
-    // — but the tennis screen does not fit on one at 2x: the tile needs about
-    // 132dp and the display leaves about 77dp. The golden records that
-    // degradation, which #1463 tracks; the test asserts on 320dp, the
-    // smallest display the app ships on.
+    // A 227dp round display has no room for the full tennis screen at 2x: the
+    // tiles need about 132dp and the display leaves about 77dp. The screen
+    // gives up everything but the score and the clock (#1463): the offline
+    // status joins the clock band, the header and both action rows are not
+    // drawn, and the Finish moves to the top button the football screen
+    // already uses there. With no row left the sharing gestures take over.
     @Test
     @Config(qualifiers = "w227dp-h227dp-round")
-    fun tennisSmallRound() = shot2x("small_round_tennis_2x") { tennis() }
+    fun tennisSmallRound() {
+        shot2x("small_round_tennis_2x") { tennis() }
+        assertStatusAboveClock(expectedStatus = "Will sync")
+        for (label in listOf("Set 2", "Next", "Tie", "Teams")) assertNoText(label)
+        // The clock never ends the game (#1360), so the Finish stays reachable
+        // even where both rows are gone.
+        assertText("Finish")
+        // The band and the top button are overlays: neither may reach the
+        // score, the only thing this screen is for.
+        assertScoreClearOfChrome()
+    }
+
+    /** The gestures are the only way to reach the actions at 227dp/2x. */
+    @Test
+    @Config(qualifiers = "w227dp-h227dp-round")
+    fun tennisSmallRoundSwipes() {
+        val calls = mutableListOf<String>()
+        render2x {
+            tennis(
+                onNextSet = { calls += "next" },
+                onToggleTiebreak = { calls += "tiebreak" },
+                onTeams = { calls += "teams" },
+                onUndo = { calls += "undo" },
+            )
+        }
+        composeRule.onRoot().performTouchInput { swipeLeft() }
+        composeRule.onRoot().performTouchInput { swipeRight() }
+        composeRule.onRoot().performTouchInput { swipeUp() }
+        composeRule.onRoot().performTouchInput { swipeDown() }
+        assertEquals(listOf("next", "tiebreak", "teams", "undo"), calls)
+    }
+
+    /** The smallest display the app ships on keeps the full screen at 2x. */
+    @Test
+    @Config(qualifiers = "w320dp-h320dp-round")
+    fun tennisSmallestSupportedRoundKeepsFullScreen() {
+        render2x { tennis() }
+        assertText("Set 2")
+        assertText("Teams")
+        assertText("End")
+    }
 
     // The smallest display the app ships on: the score and every action label
     // must be readable at 2x.
@@ -182,14 +229,59 @@ class WearLargeFontTest {
         onToggleTiebreak = {},
     )
 
-    private fun shot2x(name: String, content: @Composable () -> Unit) {
+    private fun render2x(content: @Composable () -> Unit) {
         composeRule.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
                 ConvocadosWearTheme(content = content)
             }
         }
+    }
+
+    private fun shot2x(name: String, content: @Composable () -> Unit) {
+        render2x(content)
         composeRule.onRoot().captureRoboImage("src/test/screenshots/shapes/$name.png")
+    }
+
+    /** Proves the 227dp/2x concession did not leak into the full screen. */
+    private fun assertText(label: String) {
+        assertNotNull(
+            "\"$label\" not rendered",
+            composeRule.onAllNodes(hasText(label), useUnmergedTree = true)
+                .fetchSemanticsNodes().firstOrNull(),
+        )
+    }
+
+    private fun assertNoText(label: String) {
+        assertTrue(
+            "\"$label\" is drawn where the score needs the room",
+            composeRule.onAllNodes(hasText(label), useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+    }
+
+    /**
+     * The clock band and the top Finish are overlays on full-bleed tiles, so
+     * on a short display they can reach the score. They must not (#1463).
+     */
+    private fun assertScoreClearOfChrome() {
+        val score = composeRule.onAllNodes(hasContentDescription("40"), useUnmergedTree = true)
+            .fetchSemanticsNodes().firstOrNull()
+        assertNotNull("score not rendered", score)
+        val status = composeRule.onAllNodes(hasText("Will sync"), useUnmergedTree = true)
+            .fetchSemanticsNodes().firstOrNull()
+        assertNotNull("offline status not rendered", status)
+        val finish = composeRule.onAllNodes(hasText("Finish"))
+            .fetchSemanticsNodes().firstOrNull()
+        assertNotNull("Finish not rendered", finish)
+        assertTrue(
+            "score ${score!!.boundsInRoot} runs into the bottom band ${status!!.boundsInRoot}",
+            score.boundsInRoot.bottom <= status.boundsInRoot.top + 1f,
+        )
+        assertTrue(
+            "score ${score.boundsInRoot} runs under the Finish ${finish!!.boundsInRoot}",
+            score.boundsInRoot.top >= finish.boundsInRoot.bottom - 1f,
+        )
     }
 
     /**
@@ -242,13 +334,21 @@ class WearLargeFontTest {
         )
 
     @Composable
-    private fun tennis() = ScoreFixtureContent(
+    private fun tennis(
+        onNextSet: () -> Unit = {},
+        onToggleTiebreak: () -> Unit = {},
+        onTeams: () -> Unit = {},
+        onUndo: () -> Unit = {},
+    ) = ScoreFixtureContent(
         state = WearFixtures.tennisScore,
         now = WearFixtures.now,
         onIncrementOne = {},
         onIncrementTwo = {},
         onDecrementOne = {},
         onDecrementTwo = {},
-        onUndo = {},
+        onNextSet = onNextSet,
+        onToggleTiebreak = onToggleTiebreak,
+        onTeams = onTeams,
+        onUndo = onUndo,
     )
 }

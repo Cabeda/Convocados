@@ -4,6 +4,7 @@ import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -342,28 +344,54 @@ internal fun TennisScoreEditor(
     // The sets won are the only place the match history appears on the watch,
     // so the history only steps aside where the score needs the room: on a
     // 227dp round display at 2x the tiles are left about 77dp and a tile needs
-    // about 132dp.
-    val showHistory = !largeFont || LocalConfiguration.current.screenHeightDp >= MIN_DISPLAY_DP_FOR_SET_HISTORY
+    // about 132dp (#1463). There the screen drops its header and both action
+    // rows and the tiles take the whole display, exactly as they do on the
+    // football screen; the offline status joins the clock band.
+    val compact = largeFont && LocalConfiguration.current.screenHeightDp < MIN_DISPLAY_DP_FOR_SET_HISTORY
+    val showHistory = !compact
     val history = state.scoreSets.joinToString(" · ") { set ->
         if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
     }.ifEmpty { "New set" }
     Box(
         Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                // Same gestures as the football editor: swipe up opens Teams,
-                // swipe down undoes the last score edit.
+            .pointerInput(compact) {
                 val threshold = 64.dp.toPx()
-                var dragY = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { dragY = 0f },
-                    onDragEnd = {
-                        when {
-                            dragY < -threshold -> onTeams()
-                            dragY > threshold -> onUndo()
-                        }
-                    },
-                ) { _, dy -> dragY += dy }
+                if (compact) {
+                    // The tight layout has no action row: swipe up opens Teams,
+                    // down undoes the last score edit (as everywhere), left
+                    // advances the set and right toggles the tiebreak.
+                    var drag = Offset.Zero
+                    detectDragGestures(
+                        onDragStart = { drag = Offset.Zero },
+                        onDragEnd = {
+                            if (kotlin.math.abs(drag.x) > kotlin.math.abs(drag.y)) {
+                                when {
+                                    drag.x < -threshold && state.scoreSets.size < 5 -> onNextSet()
+                                    drag.x > threshold -> onToggleTiebreak()
+                                }
+                            } else {
+                                when {
+                                    drag.y < -threshold -> onTeams()
+                                    drag.y > threshold -> onUndo()
+                                }
+                            }
+                        },
+                    ) { _, delta -> drag += delta }
+                } else {
+                    // Same gestures as the football editor: swipe up opens
+                    // Teams, swipe down undoes the last score edit.
+                    var dragY = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { dragY = 0f },
+                        onDragEnd = {
+                            when {
+                                dragY < -threshold -> onTeams()
+                                dragY > threshold -> onUndo()
+                            }
+                        },
+                    ) { _, dy -> dragY += dy }
+                }
             },
     ) {
         Column(
@@ -374,8 +402,12 @@ internal fun TennisScoreEditor(
                 end = 4.dp,
                 // The extra top reserve at a large font scale keeps the
                 // header inside the bezel, where the circle is still narrow.
-                top = if (largeFont && LocalConfiguration.current.isScreenRound) 12.dp else 4.dp,
-                bottom = 22.dp,
+                // The tight layout has no header, so the tiles start at the
+                // top edge with the Finish over them.
+                top = if (compact) 0.dp else if (largeFont && LocalConfiguration.current.isScreenRound) 12.dp else 4.dp,
+                // At 227dp/2x there is no row to keep clear: the band draws
+                // over the tiles, whose content stays clear of it.
+                bottom = if (compact) 0.dp else 22.dp,
             ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -401,14 +433,18 @@ internal fun TennisScoreEditor(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Text(
-                "${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (state.isOfflineQueued || state.isLocalStart) {
+            if (!compact) {
+                Text(
+                    "${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // At 227dp/2x the offline status moves into the clock band below,
+            // where the live-score screen has drawn it since #1462.
+            if (!compact && (state.isOfflineQueued || state.isLocalStart)) {
                 Text(
                     text = offlineStatusText(state.signInRequired),
                     style = MaterialTheme.typography.labelSmall,
@@ -455,45 +491,62 @@ internal fun TennisScoreEditor(
             // Expressive ButtonGroups (connected buttons with animated width)
             // instead of loose CompactButtons: two rows of two fit narrow round
             // screens at default font size.
-            val setSource = remember { MutableInteractionSource() }
-            val tiebreakSource = remember { MutableInteractionSource() }
-            val teamsSource = remember { MutableInteractionSource() }
-            val finishSource = remember { MutableInteractionSource() }
-            ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
-                Button(
-                    onClick = onNextSet,
-                    enabled = state.scoreSets.size < 5,
-                    modifier = Modifier.animateWidth(setSource),
-                    interactionSource = setSource,
-                ) { TennisActionLabel(stringResource(R.string.next_set), stringResource(R.string.next_short)) }
-                Button(
-                    onClick = onToggleTiebreak,
-                    modifier = Modifier.animateWidth(tiebreakSource),
-                    interactionSource = tiebreakSource,
-                ) {
-                    TennisActionLabel(
-                        text = stringResource(if (state.isTiebreakScoring) R.string.games else R.string.tiebreak),
-                        short = stringResource(if (state.isTiebreakScoring) R.string.games else R.string.tiebreak_short),
-                    )
+            //
+            // At 227dp at a large font there is no row at all (#1463): the
+            // tiles take the display, Teams becomes the swipe up, Undo the
+            // swipe down, and the Finish moves to the top button the football
+            // screen already draws there. Two labels do not fit one row at 2x
+            // beside a third button, and a row costs the score its height.
+            if (!compact) {
+                val setSource = remember { MutableInteractionSource() }
+                val tiebreakSource = remember { MutableInteractionSource() }
+                val teamsSource = remember { MutableInteractionSource() }
+                val finishSource = remember { MutableInteractionSource() }
+                ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
+                    Button(
+                        onClick = onNextSet,
+                        enabled = state.scoreSets.size < 5,
+                        modifier = Modifier.animateWidth(setSource),
+                        interactionSource = setSource,
+                    ) { TennisActionLabel(stringResource(R.string.next_set), stringResource(R.string.next_short)) }
+                    Button(
+                        onClick = onToggleTiebreak,
+                        modifier = Modifier.animateWidth(tiebreakSource),
+                        interactionSource = tiebreakSource,
+                    ) {
+                        TennisActionLabel(
+                            text = stringResource(if (state.isTiebreakScoring) R.string.games else R.string.tiebreak),
+                            short = stringResource(if (state.isTiebreakScoring) R.string.games else R.string.tiebreak_short),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
+                    Button(
+                        onClick = onTeams,
+                        modifier = Modifier.animateWidth(teamsSource),
+                        interactionSource = teamsSource,
+                    ) { TennisActionLabel(stringResource(R.string.teams_title)) }
+                    // The Finish is always there: the clock never ends the game
+                    // (#1360), so the organizer closes it whenever they want.
+                    Button(
+                        onClick = onFinish,
+                        modifier = Modifier.animateWidth(finishSource),
+                        interactionSource = finishSource,
+                    ) { TennisActionLabel(stringResource(R.string.finish_game), stringResource(R.string.end_short)) }
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
-                Button(
-                    onClick = onTeams,
-                    modifier = Modifier.animateWidth(teamsSource),
-                    interactionSource = teamsSource,
-                ) { TennisActionLabel(stringResource(R.string.teams_title)) }
-                // The Finish is always there: the clock never ends the game
-                // (#1360), so the organizer closes it whenever they want.
-                Button(
-                    onClick = onFinish,
-                    modifier = Modifier.animateWidth(finishSource),
-                    interactionSource = finishSource,
-                ) { TennisActionLabel(stringResource(R.string.finish_game), stringResource(R.string.end_short)) }
-            }
         }
-        ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride, showTopStatus = false, showOfflineStatus = false)
+        ScoreTimeOverlay(
+            state = state,
+            onFinish = onFinish,
+            nowOverride = nowOverride,
+            // Only the tight layout moves the Finish to the top and folds the
+            // offline status into the clock band; every bigger display keeps
+            // both in their own place.
+            showTopStatus = compact,
+            showOfflineStatus = compact,
+        )
     }
 }
 
