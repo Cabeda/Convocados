@@ -109,7 +109,7 @@ class WearLargeFontTest {
                 ).fetchSemanticsNodes().firstOrNull(),
             )
         }
-        for (label in listOf("Next", "Tie", "Undo", "Teams")) {
+        for (label in listOf("Next", "Tie", "Teams", "End")) {
             assertNotNull(
                 "action label $label not rendered",
                 composeRule.onAllNodes(

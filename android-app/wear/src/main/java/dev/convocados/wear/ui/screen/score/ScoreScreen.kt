@@ -70,7 +70,6 @@ fun ScoreScreen(
     val view = LocalView.current
     val scorePhase = gameScorePhase(
         dateTime = state.game?.dateTime,
-        sport = state.game?.sport ?: "futsal",
         kickoffEpochMs = state.kickoffEpochMs,
     )
 
@@ -81,7 +80,7 @@ fun ScoreScreen(
 
     // Play policy: a live scoring session must surface an Ongoing Activity.
     RememberOngoingActivity(
-        enabled = shouldShowLiveGameOngoing(isScoring = state.history != null, phase = scorePhase),
+        enabled = shouldShowLiveGameOngoing(isScoring = state.history != null),
         title = state.game?.title ?: stringResource(R.string.ongoing_score_title),
         text = ongoingScoreText(state.teamOneName, state.scoreOne, state.teamTwoName, state.scoreTwo),
         launch = OngoingLaunch(eventId = eventId),
@@ -103,17 +102,16 @@ fun ScoreScreen(
                     state.isLoading -> {
                         CircularProgressIndicator()
                     }
-                    // Gate by game phase so a game that hasn't started (or has
-                    // finished) never shows a dead "Start scoring" button. We
-                    // explain why and offer a useful alternative instead.
+                    // Gate by game phase so a game that hasn't started never
+                    // shows a dead "Start scoring" button. We explain why and
+                    // offer a useful alternative instead. A running game is
+                    // never locked by the clock (#1360): the organizer closes
+                    // it with the Finish action.
                     scorePhase == GameScorePhase.NOT_STARTED -> {
                         OffWindowGameContent(
                             state = state,
                             onTeams = onTeams,
                         )
-                    }
-                    scorePhase == GameScorePhase.ENDED -> {
-                        EndedGameContent(state = state)
                     }
                     state.history == null -> {
                         Column(
@@ -324,65 +322,6 @@ private fun OffWindowGameContent(
 }
 
 @Composable
-private fun EndedGameContent(state: ScoreUiState) {
-    val hasStructuredScore = state.isTennisScoring && state.scoreSets.isNotEmpty()
-    val hasScore = if (hasStructuredScore) hasCompletedMatch(state.scoreSets) else state.hasFinalScore
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(16.dp),
-    ) {
-        Text(
-            text = state.game?.title ?: stringResource(R.string.score_title),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.game_ended),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (hasScore) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.game_ended_result, state.scoreOne, state.scoreTwo),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        } else if (hasStructuredScore) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = state.scoreSets.joinToString(" · ") { set ->
-                    if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-        } else {
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = stringResource(R.string.game_ended_no_score),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-@Composable
 internal fun TennisScoreEditor(
     state: ScoreUiState,
     onIncrementOne: () -> Unit,
@@ -399,9 +338,6 @@ internal fun TennisScoreEditor(
     val currentSet = state.scoreSets.lastOrNull()
     val currentGame = currentSet?.tennisGameScore() ?: dev.convocados.wear.data.api.TennisGameScore()
     val now = nowOverride ?: Instant.now()
-    val kickoffMs = state.kickoffEpochMs
-    val gameOver = kickoffMs != null && state.game != null &&
-        now.toEpochMilli() >= kickoffMs + sportDurationMinutes(state.game.sport) * 60_000L
     val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
     // The sets won are the only place the match history appears on the watch,
     // so the history only steps aside where the score needs the room: on a
@@ -411,7 +347,25 @@ internal fun TennisScoreEditor(
     val history = state.scoreSets.joinToString(" · ") { set ->
         if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
     }.ifEmpty { "New set" }
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                // Same gestures as the football editor: swipe up opens Teams,
+                // swipe down undoes the last score edit.
+                val threshold = 64.dp.toPx()
+                var dragY = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { dragY = 0f },
+                    onDragEnd = {
+                        when {
+                            dragY < -threshold -> onTeams()
+                            dragY > threshold -> onUndo()
+                        }
+                    },
+                ) { _, dy -> dragY += dy }
+            },
+    ) {
         Column(
             // Bottom reserve keeps the two action rows clear of the
             // GameClock pill overlay (BottomCenter) on short round screens.
@@ -503,23 +457,15 @@ internal fun TennisScoreEditor(
             // screens at default font size.
             val setSource = remember { MutableInteractionSource() }
             val tiebreakSource = remember { MutableInteractionSource() }
-            val undoSource = remember { MutableInteractionSource() }
             val teamsSource = remember { MutableInteractionSource() }
+            val finishSource = remember { MutableInteractionSource() }
             ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
-                if (gameOver) {
-                    Button(
-                        onClick = onFinish,
-                        modifier = Modifier.animateWidth(setSource),
-                        interactionSource = setSource,
-                    ) { TennisActionLabel(stringResource(R.string.finish_game), stringResource(R.string.end_short)) }
-                } else {
-                    Button(
-                        onClick = onNextSet,
-                        enabled = state.scoreSets.size < 5,
-                        modifier = Modifier.animateWidth(setSource),
-                        interactionSource = setSource,
-                    ) { TennisActionLabel(stringResource(R.string.next_set), stringResource(R.string.next_short)) }
-                }
+                Button(
+                    onClick = onNextSet,
+                    enabled = state.scoreSets.size < 5,
+                    modifier = Modifier.animateWidth(setSource),
+                    interactionSource = setSource,
+                ) { TennisActionLabel(stringResource(R.string.next_set), stringResource(R.string.next_short)) }
                 Button(
                     onClick = onToggleTiebreak,
                     modifier = Modifier.animateWidth(tiebreakSource),
@@ -534,15 +480,17 @@ internal fun TennisScoreEditor(
             Spacer(modifier = Modifier.height(4.dp))
             ButtonGroup(Modifier.fillMaxWidth().roundListInset()) {
                 Button(
-                    onClick = onUndo,
-                    modifier = Modifier.animateWidth(undoSource),
-                    interactionSource = undoSource,
-                ) { TennisActionLabel(stringResource(R.string.undo)) }
-                Button(
                     onClick = onTeams,
                     modifier = Modifier.animateWidth(teamsSource),
                     interactionSource = teamsSource,
                 ) { TennisActionLabel(stringResource(R.string.teams_title)) }
+                // The Finish is always there: the clock never ends the game
+                // (#1360), so the organizer closes it whenever they want.
+                Button(
+                    onClick = onFinish,
+                    modifier = Modifier.animateWidth(finishSource),
+                    interactionSource = finishSource,
+                ) { TennisActionLabel(stringResource(R.string.finish_game), stringResource(R.string.end_short)) }
             }
         }
         ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride, showTopStatus = false, showOfflineStatus = false)
@@ -663,36 +611,40 @@ internal fun ScoreTimeOverlay(
             }
         }
 
-        // Once the game window elapses, offer to finish (persist + return).
-        val kickoffMs = state.kickoffEpochMs
-        val gameOver = kickoffMs != null && state.game != null &&
-            now.toEpochMilli() >= kickoffMs + sportDurationMinutes(state.game.sport) * 60_000L
-
         if (showTopStatus) {
-            if (gameOver) {
-                CompactButton(
-                    onClick = onFinish,
-                    // Clears the 12-o'clock progress marker on round screens.
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp),
-                ) {
+            // The Finish is always available: the clock never ends a game
+            // (#1360), so the organizer closes it whenever they want. The
+            // teams hint stays under it so the swipe that opens the roster
+            // is still discoverable.
+            Column(
+                // Clears the 12-o'clock progress marker on round screens.
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                CompactButton(onClick = onFinish) {
                     Text(stringResource(R.string.finish_game))
                 }
-            } else {
-                // Pill background (same treatment as GameClock) so the hint stays
-                // legible where the edge-progress marker crosses 12 o'clock.
-                Text(
-                    text = stringResource(R.string.teams_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 20.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .padding(horizontal = 10.dp, vertical = 2.dp),
-                )
+                // The hint is a nicety: under the Finish button it would sit on
+                // the team names. It only shows where the display has room for
+                // both the button and the hint.
+                val showTeamsHint = LocalConfiguration.current.screenWidthDp >= 320 &&
+                    LocalDensity.current.fontScale < LARGE_FONT_SCALE
+                if (showTeamsHint) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // Pill background (same treatment as GameClock) so the hint stays
+                    // legible where the edge-progress marker crosses 12 o'clock.
+                    Text(
+                        text = stringResource(R.string.teams_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .padding(horizontal = 10.dp, vertical = 2.dp),
+                    )
+                }
             }
         }
 

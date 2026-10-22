@@ -15,15 +15,19 @@ import androidx.wear.ongoing.OngoingActivity
 import androidx.wear.ongoing.Status
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.WearActivity
-import dev.convocados.wear.util.GameScorePhase
 
 /** One-line summary shown on the watch face and in the ongoing notification. */
 internal fun ongoingScoreText(teamOne: String, scoreOne: Int, teamTwo: String, scoreTwo: Int): String =
     "$teamOne $scoreOne – $scoreTwo $teamTwo"
 
-/** A live server-backed game is ongoing once scoring has started and before it ends. */
-internal fun shouldShowLiveGameOngoing(isScoring: Boolean, phase: GameScorePhase): Boolean =
-    isScoring && phase != GameScorePhase.ENDED
+/**
+ * A live server-backed game is ongoing while the watch is scoring it.
+ *
+ * The clock does not end a game (#1360): the live score stays up until the
+ * organizer closes the game with the Finish action, which stops the ongoing
+ * activity.
+ */
+internal fun shouldShowLiveGameOngoing(isScoring: Boolean): Boolean = isScoring
 
 /** A quick game is ongoing from its kickoff until its duration elapses. */
 internal fun shouldShowQuickGameOngoing(kickoffMs: Long?, durationMinutes: Int, nowMs: Long): Boolean {

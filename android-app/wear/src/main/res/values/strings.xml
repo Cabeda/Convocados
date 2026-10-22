@@ -45,9 +45,6 @@
     <string name="team_default_2">Team 2</string>
     <string name="game_starts_in">Starts in %1$s</string>
     <string name="game_get_ready">Set up teams or check players while you wait</string>
-    <string name="game_ended">Game over</string>
-    <string name="game_ended_result">Final score %1$d – %2$d</string>
-    <string name="game_ended_no_score">No score was recorded</string>
     <string name="open_teams">Open teams</string>
     <string name="view_game">View game</string>
 
@@ -62,7 +59,6 @@
     <string name="tiebreak">Tiebreak</string>
     <string name="games">Games</string>
     <string name="next_set">Next set</string>
-    <string name="undo">Undo</string>
     <!-- Short forms for a large font scale: a label that does not fit the
          button is cut, not scaled. -->
     <string name="next_short">Next</string>
