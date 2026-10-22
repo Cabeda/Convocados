@@ -28,6 +28,7 @@ export interface DiscoverableEventSummary {
   url: string;
   title: string;
   location: string;
+  city: string | null;
   latitude: number | null;
   longitude: number | null;
   sport: string;
@@ -81,6 +82,7 @@ export function mapDiscoverableEvent(e: DiscoverableEventRow): DiscoverableEvent
     url: `/events/${e.id}`,
     title: e.title,
     location: e.location,
+    city: e.city,
     latitude: e.latitude,
     longitude: e.longitude,
     sport: e.sport,

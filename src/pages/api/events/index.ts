@@ -11,6 +11,7 @@ import { scheduleEventReminders } from "../../../lib/scheduler.server";
 import { fireWebhooks } from "../../../lib/webhook.server";
 import { validateWebhookUrl } from "../../../lib/webhookUrl";
 import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
+import { inferCity, normalizeCity } from "../../../lib/city";
 
 export const POST: APIRoute = async ({ request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -31,6 +32,11 @@ export const POST: APIRoute = async ({ request }) => {
   const body = await request.json();
   const title = String(body.title ?? "").trim().slice(0, 100);
   const location = String(body.location ?? "").trim().slice(0, 200);
+  // #1445: an explicit city wins (the form pre-fills the guess and lets the
+  // organizer override it); an absent one is guessed from the stored location,
+  // which the geocoder may have replaced with a canonical name.
+  const cityGiven = body.city !== undefined;
+  const cityRaw = String(body.city ?? "").trim().slice(0, 80);
   const dateTimeRaw = String(body.dateTime ?? "");
   const timezoneRaw = String(body.timezone ?? "UTC").trim().slice(0, 100);
   const teamOneName = String(body.teamOneName ?? "Ninjas").trim().slice(0, 50) || "Ninjas";
@@ -124,6 +130,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   // Maps links resolve to a friendly place name — display it instead of the raw URL
   const storedLocation = geo?.name ?? location;
+  const city = cityGiven ? normalizeCity(cityRaw) : inferCity(storedLocation);
 
   // Event + first Game + optional webhook subscription land atomically — a
   // half-created event that no subscription knows about would silently miss
@@ -133,6 +140,7 @@ export const POST: APIRoute = async ({ request }) => {
       data: {
         title, location: storedLocation, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
         durationMinutes,
+        city: city || null,
         latitude: geo?.latitude ?? null,
         longitude: geo?.longitude ?? null,
         ownerId: session?.user?.id ?? null,

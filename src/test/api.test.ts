@@ -103,6 +103,37 @@ describe("POST /api/events", () => {
     expect(res.status).toBe(200);
   });
 
+  it("stores the city the form sends, normalised (#1445)", async () => {
+    const res = await createEvent(ctx({}, {
+      title: "City Given", location: "Pitch B, wherever", dateTime: future, city: "  LISBOA ",
+    }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.city).toBe("Lisboa");
+  });
+
+  it("guesses the city from the location when none is sent (#1445)", async () => {
+    vi.mocked(resolveLocation).mockResolvedValueOnce(null as any);
+    const res = await createEvent(ctx({}, {
+      title: "Guessed City", location: "Campo Maior, lisboa", dateTime: future,
+    }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.city).toBe("Lisboa");
+  });
+
+  it("stores no city when the organizer clears the field (#1445)", async () => {
+    const res = await createEvent(ctx({}, {
+      title: "No City", location: "Campo Maior, Lisboa", dateTime: future, city: "",
+    }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.city).toBeNull();
+  });
+
   it("returns 400 when dateTime is missing", async () => {
     const res = await createEvent(ctx({}, { title: "X", location: "Y" }));
     expect(res.status).toBe(400);
@@ -1247,6 +1278,29 @@ describe("GET /api/events/public", () => {
     const body = await res.json();
     expect(body.data).toHaveLength(1);
     expect(body.data[0].title).toBe("Public Game");
+  });
+
+  it("exposes the city, and still lists an event that has none (#1445)", async () => {
+    await prisma.event.create({
+      data: {
+        title: "With City", location: "Pitch A, Lisboa", city: "Lisboa",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true,
+      },
+    });
+    await prisma.event.create({
+      data: {
+        title: "Without City", location: "Somewhere",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true,
+      },
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    const byTitle = Object.fromEntries(body.data.map((e: any) => [e.title, e]));
+    expect(byTitle["With City"].city).toBe("Lisboa");
+    expect(byTitle["Without City"]).toBeDefined();
+    expect(byTitle["Without City"].city).toBeNull();
   });
 
   it("includes sport field in response", async () => {
