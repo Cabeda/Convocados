@@ -155,11 +155,22 @@ export const auth = betterAuth({
       loginPage: "/auth/signin",
       consentPage: "/oauth/consent",
       allowDynamicClientRegistration: true,
+      // MCP connector backends (Claude.ai, ChatGPT) register server-side, with
+      // no session and no token — requiring one killed the whole OAuth flow
+      // ("Authentication failed") before the user reached the login page.
+      allowUnauthenticatedClientRegistration: true,
       accessTokenExpiresIn: 3600, // 1 hour
       refreshTokenExpiresIn: 15552000, // 180 days
       codeExpiresIn: 600, // 10 minutes
       scopes: OAUTH_SCOPES,
       clientRegistrationDefaultScopes: ["openid"],
+      // A registered client may only request scopes from this set, and the
+      // client's registered scopes bound what it can ask for at /authorize.
+      // Left unset, registration accepted `openid` only — so an MCP client
+      // asking for `read:events`/`create:events` was rejected with
+      // invalid_scope, and one that registered with the default could never
+      // authorize anything else.
+      clientRegistrationAllowedScopes: OAUTH_SCOPES,
       storeClientSecret: "hashed",
       cachedTrustedClients: new Set(
         process.env.TRUSTED_OAUTH_CLIENT_ID ? [process.env.TRUSTED_OAUTH_CLIENT_ID] : [],
