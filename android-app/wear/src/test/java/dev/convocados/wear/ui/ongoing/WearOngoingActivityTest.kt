@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import androidx.wear.ongoing.OngoingActivity
 import dev.convocados.wear.ui.WearActivity
-import dev.convocados.wear.util.GameScorePhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -30,10 +29,9 @@ class WearOngoingActivityTest {
     }
 
     @Test
-    fun `live game is ongoing only after start and before end`() {
-        assertFalse(shouldShowLiveGameOngoing(isScoring = false, phase = GameScorePhase.SCORABLE))
-        assertTrue(shouldShowLiveGameOngoing(isScoring = true, phase = GameScorePhase.SCORABLE))
-        assertFalse(shouldShowLiveGameOngoing(isScoring = true, phase = GameScorePhase.ENDED))
+    fun `live game is ongoing while the watch is scoring it`() {
+        assertFalse(shouldShowLiveGameOngoing(isScoring = false))
+        assertTrue(shouldShowLiveGameOngoing(isScoring = true))
     }
 
     @Test

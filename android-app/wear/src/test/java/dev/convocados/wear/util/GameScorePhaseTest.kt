@@ -15,7 +15,7 @@ class GameScorePhaseTest {
     @Test
     fun `far-future game is NOT_STARTED`() {
         // 2h away — more than the 1h pre-start window
-        assertEquals(GameScorePhase.NOT_STARTED, gameScorePhase(iso(mins(120)), "futsal", now))
+        assertEquals(GameScorePhase.NOT_STARTED, gameScorePhase(iso(mins(120)), now))
     }
 
     @Test
@@ -24,7 +24,6 @@ class GameScorePhaseTest {
             GameScorePhase.SCORABLE,
             gameScorePhase(
                 dateTime = iso(mins(120)),
-                sport = "futsal",
                 now = now,
                 kickoffEpochMs = now.toEpochMilli(),
             ),
@@ -33,41 +32,30 @@ class GameScorePhaseTest {
 
     @Test
     fun `game within 1h before start is SCORABLE`() {
-        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(30)), "futsal", now))
+        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(30)), now))
     }
 
     @Test
     fun `game right now is SCORABLE`() {
-        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(0)), "futsal", now))
+        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(0)), now))
     }
 
     @Test
-    fun `game in progress but inside duration is SCORABLE`() {
-        // futsal = 60min window; 30min in -> inside -> scorable
-        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(-30)), "futsal", now))
+    fun `game in progress is SCORABLE`() {
+        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(-30)), now))
     }
 
     @Test
-    fun `game still scorable at the very end of its window`() {
-        // 59min elapsed of a 60min game -> not yet ended (minutesUntil -59 > -60)
-        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(-59)), "futsal", now))
+    fun `game past its window is still SCORABLE`() {
+        // #1360: the clock never ends a game. The organizer closes it with the
+        // Finish action, so a match that runs over can still be scored.
+        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(-61)), now))
+        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(-300)), now))
     }
 
     @Test
-    fun `game after its window is ENDED`() {
-        // 61min elapsed of a 60min game -> ended
-        assertEquals(GameScorePhase.ENDED, gameScorePhase(iso(mins(-61)), "futsal", now))
-    }
-
-    @Test
-    fun `longer sport window keeps game scorable for basketball`() {
-        // basketball = 48min; 47min in -> inside
-        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(-47)), "basketball", now))
-    }
-
-    @Test
-    fun `missing or unparseable dateTime is ENDED`() {
-        assertEquals(GameScorePhase.ENDED, gameScorePhase(null, "futsal", now))
-        assertEquals(GameScorePhase.ENDED, gameScorePhase("not-a-date", "futsal", now))
+    fun `missing or unparseable dateTime is SCORABLE`() {
+        assertEquals(GameScorePhase.SCORABLE, gameScorePhase(null, now))
+        assertEquals(GameScorePhase.SCORABLE, gameScorePhase("not-a-date", now))
     }
 }
