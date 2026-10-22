@@ -21,14 +21,51 @@ let repo = "";
 let workdir = "";
 let script = "";
 
-function git(args: string[], cwd = workdir): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+/**
+ * Git commands in the throwaway repo must not see the real repository.
+ *
+ * The suite also runs from inside git hooks (the pre-push hook runs the whole
+ * suite), and a hook's environment carries GIT_DIR — pointing at the real
+ * repository. Without scrubbing it, `git init` and `git config` here rewrite
+ * the *real* repository's config: `core.bare` becomes true (which breaks
+ * `git rev-parse --show-toplevel`, and with it the pre-push hook itself) and
+ * the commit identity is replaced by the throwaway one.
+ */
+function gitEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_OBJECT_DIRECTORY;
+  delete env.GIT_COMMON_DIR;
+  return env;
 }
+
+function git(args: string[], cwd = workdir): string {
+  return execFileSync("git", args, { cwd, env: gitEnv(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
+
+/** The real repository's local config, to prove the throwaway never touches it. */
+function realRepoConfig(): string {
+  try {
+    return execFileSync("git", ["config", "--local", "--list"], {
+      cwd: process.cwd(),
+      env: gitEnv(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    return "";
+  }
+}
+
+const realRepoConfigBefore = realRepoConfig();
 
 function runDedupe(cwd = workdir): { status: number; output: string } {
   try {
     const output = execFileSync("node", [script], {
       cwd,
+      env: gitEnv(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -65,6 +102,14 @@ afterEach(() => {
 });
 
 describe("the dex ledger in the working tree", () => {
+  it("leaves the real repository's git config alone", () => {
+    // Regression: the suite runs from inside git hooks, where GIT_DIR points
+    // at the real repository. Unscrubbed, the throwaway repo's `git init` and
+    // `git config` rewrote the real config — `core.bare` became true and the
+    // commit identity was replaced, which then broke the pre-push hook.
+    expect(realRepoConfig()).toBe(realRepoConfigBefore);
+  });
+
   it("passes when the ledger is there", () => {
     const { status, output } = runDedupe();
     expect(status).toBe(0);
