@@ -371,7 +371,10 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [build]
-    timeout-minutes: 10
+    # `playwright install-deps` runs apt-get on every run and is not cached;
+    # a slow Ubuntu mirror spent 9m30s of a 10m budget and had the job killed
+    # mid-install (run 39802793041).
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v7

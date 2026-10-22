@@ -6,9 +6,9 @@ module.exports = {
         "DATABASE_URL=file:./ci-test.db BETTER_AUTH_SECRET=ci-test-secret BETTER_AUTH_URL=http://localhost:3000 HOST=0.0.0.0 PORT=3000 node dist/server/entry.mjs",
       startServerReadyPattern: "Server listening on",
       startServerReadyTimeout: 30000,
-      // Fast mode: LHCI_FAST=1 => 1 run × 1 URL for sub-60s CI.
-      // Full mode (nightly/manual): 3 runs × 3 URLs for low flake.
-      // Absolute max speed needs 1 URL; 1 run saves ~80s vs 3×3 (122s→~18s).
+      // Fast mode: LHCI_FAST=1 => 1 URL × 3 runs. Full mode: 3 URLs × 3 runs.
+      // Never 1 run: a single trace is the whole score, and TBT jitter alone
+      // moved main from 0.75 to 0.70 (run 39802793041) with the same code.
       url: process.env.LHCI_FAST
         ? ["http://localhost:3000/"]
         : [
@@ -16,7 +16,7 @@ module.exports = {
             "http://localhost:3000/public",
             "http://localhost:3000/auth/signin",
           ],
-      numberOfRuns: process.env.LHCI_FAST ? 1 : 3,
+      numberOfRuns: 3,
       settings: {
         preset: "desktop",
         maxWaitForLoad: process.env.LHCI_FAST ? 30000 : 45000,
