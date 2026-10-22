@@ -110,6 +110,10 @@ model Event {
   id             String                @id @default(cuid())
   title          String
   location       String
+  // The city the public listing filters by (#1445). Guessed from `location` on
+  // the event form and overridable there; null when nothing could be guessed,
+  // which only means the event is not findable by city.
+  city           String?
   latitude       Float?
   longitude      Float?
   dateTime       DateTime

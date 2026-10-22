@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import SportsIcon from "@mui/icons-material/Sports";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
+import LocationCityIcon from "@mui/icons-material/LocationCity";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import PeopleIcon from "@mui/icons-material/People";
 import GridViewIcon from "@mui/icons-material/GridView";
@@ -21,12 +22,14 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale, type Locale, type TFunction } from "~/lib/i18n";
 import { getSportPreset } from "~/lib/sports";
+import { normalizeCity } from "~/lib/city";
 import { formatDateInTz } from "~/lib/timezones";
 
 interface PublicEvent {
   id: string;
   title: string;
   location: string;
+  city: string | null;
   latitude: number | null;
   longitude: number | null;
   sport: string;
@@ -128,6 +131,14 @@ function CardView({ events, locale, t }: {
               </Box>
 
               <Stack spacing={0.5}>
+                {ev.city && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <LocationCityIcon fontSize="small" color="action" />
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {ev.city}
+                    </Typography>
+                  </Box>
+                )}
                 {ev.location && (
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     <LocationOnIcon fontSize="small" color="action" />
@@ -402,11 +413,12 @@ export default function PublicGamesPage() {
 
   // Read initial state from URL params
   const getInitialParams = useCallback(() => {
-    if (typeof window === "undefined") return { view: "cards" as ViewMode, sport: "", hasSpots: false };
+    if (typeof window === "undefined") return { view: "cards" as ViewMode, sport: "", city: "", hasSpots: false };
     const params = new URLSearchParams(window.location.search);
     return {
       view: (params.get("view") as ViewMode) || "cards",
       sport: params.get("sport") || "",
+      city: normalizeCity(params.get("city") || ""),
       hasSpots: params.get("hasSpots") === "true",
     };
   }, []);
@@ -414,6 +426,7 @@ export default function PublicGamesPage() {
   const initial = getInitialParams();
   const [viewMode, setViewMode] = useState<ViewMode>(initial.view);
   const [filterSport, setFilterSport] = useState(initial.sport);
+  const [filterCity, setFilterCity] = useState(initial.city);
   const [filterHasSpots, setFilterHasSpots] = useState(initial.hasSpots);
   const [filterType, setFilterType] = useState<"" | "recurring" | "oneoff">("");
 
@@ -423,12 +436,13 @@ export default function PublicGamesPage() {
     const params = new URLSearchParams();
     if (viewMode !== "cards") params.set("view", viewMode);
     if (filterSport) params.set("sport", filterSport);
+    if (filterCity) params.set("city", filterCity);
     if (filterHasSpots) params.set("hasSpots", "true");
     if (filterType) params.set("type", filterType);
     const qs = params.toString();
     const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [viewMode, filterSport, filterHasSpots, filterType]);
+  }, [viewMode, filterSport, filterCity, filterHasSpots, filterType]);
 
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -469,16 +483,24 @@ export default function PublicGamesPage() {
     return ids.map((id) => getSportPreset(id));
   }, [events]);
 
+  // Cities the loaded events can be narrowed to; an event without one has no
+  // entry here and is only reachable through the unfiltered listing (#1445).
+  const availableCities = useMemo(() => {
+    const cities = events.map((e) => e.city).filter((c): c is string => Boolean(c));
+    return [...new Set(cities)].sort((a, b) => a.localeCompare(b));
+  }, [events]);
+
   // Apply filters
   const filtered = useMemo(() => {
     return events.filter((ev) => {
       if (filterSport && ev.sport !== filterSport) return false;
+      if (filterCity && normalizeCity(ev.city ?? "") !== filterCity) return false;
       if (filterHasSpots && ev.spotsLeft === 0) return false;
       if (filterType === "recurring" && !ev.isRecurring) return false;
       if (filterType === "oneoff" && ev.isRecurring) return false;
       return true;
     });
-  }, [events, filterSport, filterHasSpots, filterType]);
+  }, [events, filterSport, filterCity, filterHasSpots, filterType]);
 
   return (
     <ThemeModeProvider>
@@ -512,6 +534,19 @@ export default function PublicGamesPage() {
                       <MenuItem value="">{t("allSports")}</MenuItem>
                       {availableSports.map((s) => (
                         <MenuItem key={s.id} value={s.id}>{t(s.labelKey as Parameters<typeof t>[0])}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" sx={{ minWidth: 160 }}>
+                    <InputLabel>{t("filterCity")}</InputLabel>
+                    <Select
+                      value={filterCity}
+                      label={t("filterCity")}
+                      onChange={(e) => setFilterCity(e.target.value)}
+                    >
+                      <MenuItem value="">{t("allCities")}</MenuItem>
+                      {availableCities.map((city) => (
+                        <MenuItem key={city} value={city}>{city}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
@@ -578,7 +613,7 @@ export default function PublicGamesPage() {
             {!isLoading && events.length > 0 && filtered.length === 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
                 <Typography variant="body1" color="text.secondary">
-                  {t("noMatchingGames")}
+                  {filterCity ? t("noMatchingGamesInCity", { city: filterCity }) : t("noMatchingGames")}
                 </Typography>
               </Paper>
             )}

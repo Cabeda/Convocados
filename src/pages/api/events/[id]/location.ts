@@ -4,6 +4,7 @@ import { resolveLocation, type GeoResult } from "../../../../lib/geocode";
 
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { inferCity, normalizeCity } from "../../../../lib/city";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -29,11 +30,17 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   // Maps links resolve to a friendly place name — display it instead of the raw URL
   const storedLocation = geo?.name ?? location;
+  // #1445: the city follows the location it was guessed from, unless the caller
+  // sends its own (an omitted field means "guess again").
+  const city = body.city === undefined
+    ? inferCity(storedLocation)
+    : normalizeCity(String(body.city ?? "").trim().slice(0, 80));
 
   await prisma.event.update({
     where: { id: params.id },
     data: {
       location: storedLocation,
+      city: city || null,
       latitude: geo?.latitude ?? null,
       longitude: geo?.longitude ?? null,
     },
@@ -42,6 +49,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   return Response.json({
     location: storedLocation,
+    city: city || null,
     latitude: geo?.latitude ?? null,
     longitude: geo?.longitude ?? null,
     geocoded: geo !== null,

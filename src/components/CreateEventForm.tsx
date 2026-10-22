@@ -1,5 +1,5 @@
 /* eslint-disable @eslint-react/purity -- React Compiler hint, not a bug. Date objects during render are common and necessary for time-based UI (countdown, past detection, etc.) */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Select, MenuItem, FormControl, InputLabel,
   Grid, Alert, Divider, Chip, Accordion, AccordionSummary, AccordionDetails,
@@ -20,6 +20,7 @@ import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
 import { isPlaytomicSport } from "~/lib/playtomic";
+import { inferCity } from "~/lib/city";
 import { getRandomTitle, type TitleLocale } from "~/lib/randomTitles";
 import { COMMON_TIMEZONES, detectTimezone, fromDateTimeLocalValue, dateFormatTag } from "~/lib/timezones";
 
@@ -77,6 +78,10 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState("");
+  // #1445: the city is guessed from the location so discovery by city needs no
+  // new field to fill in; typing in the field overrides the guess for good.
+  const [city, setCity] = useState("");
+  const [cityEdited, setCityEdited] = useState(false);
   const [locationCoord, setLocationCoord] = useState<{ lat: number; lon: number } | undefined>();
   const [courtFinderOpen, setCourtFinderOpen] = useState(false);
   const [dateTime, setDateTime] = useState(nextHour);
@@ -86,6 +91,10 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
     setSport(newSport);
     setMaxPlayers(String(getDefaultMaxPlayers(newSport)));
   };
+
+  useEffect(() => {
+    if (!cityEdited) setCity(inferCity(location));
+  }, [location, cityEdited]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -129,6 +138,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
     const body = {
       title: fd.get("title"),
       location: location || "",
+      city,
       dateTime: fromDateTimeLocalValue(dateTime, timezone),
       timezone,
       teamOneName: fd.get("teamOneName"),
@@ -188,6 +198,15 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
         coordinate={locationCoord}
         label={t("locationOptional")}
         placeholder={t("locationPlaceholder")}
+      />
+
+      <TextField
+        fullWidth
+        size="small"
+        label={t("cityOptional")}
+        helperText={t("cityHelper")}
+        value={city}
+        onChange={(e) => { setCity(e.target.value); setCityEdited(true); }}
       />
 
       {isPlaytomicSport(sport) && (

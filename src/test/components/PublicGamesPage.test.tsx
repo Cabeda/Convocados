@@ -175,6 +175,64 @@ describe("PublicGamesPage", () => {
     });
   });
 
+  it("shows the city on the card when the event has one (#1445)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ ...mockEvents[0], city: "Lisboa" }],
+        nextCursor: null,
+        hasMore: false,
+      }),
+    });
+
+    renderWithTheme(<PublicGamesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Lisboa")).toBeInTheDocument();
+    });
+  });
+
+  it("filters by city (#1445)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          { ...mockEvents[0], city: "Lisboa" },
+          { ...mockEvents[1], city: "Porto" },
+        ],
+        nextCursor: null,
+        hasMore: false,
+      }),
+    });
+
+    window.history.replaceState(null, "", `${window.location.pathname}?city=lisboa`);
+
+    renderWithTheme(<PublicGamesPage />);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Basketball Night")).not.toBeInTheDocument();
+      expect(screen.getByText("Sunday Football")).toBeInTheDocument();
+    });
+  });
+
+  it("says so when the city filter matches nothing (#1445)", async () => {
+    window.history.replaceState(null, "", `${window.location.pathname}?city=lisboa`);
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ ...mockEvents[1], city: "Porto" }],
+        nextCursor: null,
+        hasMore: false,
+      }),
+    });
+
+    renderWithTheme(<PublicGamesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No games match your filters in Lisboa/i)).toBeInTheDocument();
+    });
+  });
+
   it("shows an adoptable Open Pickup badge with a claim button", async () => {
     const pickup = {
       ...mockEvents[0],
