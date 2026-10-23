@@ -24,7 +24,9 @@ export interface ResourceTokenClaims {
 }
 
 const BASE = (process.env.BETTER_AUTH_URL ?? "http://localhost:4321").replace(/\/$/, "");
-const ISSUER = `${BASE}/api/auth`;
+// The issuer the `jwt` plugin signs with, and the one our AS metadata publishes
+// (`/.well-known/oauth-authorization-server`). Claude checks these match.
+const ISSUER = BASE;
 const AUDIENCE = `${BASE}/api/mcp`;
 
 const KEY_TTL_MS = 5 * 60 * 1000;
