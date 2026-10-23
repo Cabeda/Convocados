@@ -1,0 +1,153 @@
+---
+export const prerender = true;
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Privacy Policy — Convocados"
+  description="What Convocados collects, why, who processes it, how long it is kept, and how to export or delete it."
+>
+  <article class="legal">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: 23 October 2026</p>
+
+    <p>
+      Convocados is a game-organising app run by José Cabeda ("we", "us"). This page
+      covers the website, the Android apps and the MCP server at
+      <code>https://convocados.cabeda.dev/api/mcp</code>. It explains what we collect,
+      why, who processes it, how long we keep it, and how to get it back or delete it.
+    </p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><strong>Account:</strong> your name, email address, a password hash if you sign in
+        with email, or your Google account identifier if you sign in with Google, plus a
+        profile image when your provider supplies one.</li>
+      <li><strong>Games and play:</strong> the games you create or join, rosters, RSVPs,
+        teams, scores, Elo ratings, and the costs and payment records you or an organiser
+        enter. Some of this is about other people — an organiser adds players by name.</li>
+      <li><strong>Notifications:</strong> push subscription details when you enable push,
+        your notification preferences, and the email address we send reminders to.</li>
+      <li><strong>Technical:</strong> a session cookie that keeps you signed in, your IP
+        address used in memory for rate limiting, and any API keys or calendar feed tokens
+        you create.</li>
+      <li><strong>Assistant access:</strong> if you connect an AI assistant over MCP, an
+        OAuth token scoped to the permissions you approve, and a record of that approval.</li>
+    </ul>
+    <p>
+      We do not run third-party analytics or advertising trackers, and we do not sell
+      personal data.
+    </p>
+
+    <h2>Why we use it</h2>
+    <ul>
+      <li>To run the app: sign you in, show your games, keep rosters, scores and ratings
+        correct, and send the notifications you asked for.</li>
+      <li>To keep it safe and working: rate limiting, abuse prevention, and a log of
+        changes to games so a mistake can be traced.</li>
+    </ul>
+
+    <h2>Who processes it</h2>
+    <ul>
+      <li><strong>Fly.io</strong> — hosting and the disk the database lives on.</li>
+      <li><strong>Cloudflare R2</strong> — encrypted database backups.</li>
+      <li><strong>Resend</strong> — transactional email: sign-in links, invites, reminders.</li>
+      <li><strong>Google</strong> — sign-in, only if you choose it.</li>
+      <li><strong>Browser push services and Firebase Cloud Messaging</strong> — push
+        notifications, only if you enable them.</li>
+      <li><strong>Playtomic</strong> — court availability, only when you use Court Finder.</li>
+      <li><strong>The assistant you connect</strong> (for example Anthropic's Claude) —
+        receives the result of each tool it calls, under that provider's own terms.</li>
+    </ul>
+    <p>
+      Each of these processes data on our behalf, except Google and the assistant
+      provider, which you also have your own agreement with.
+    </p>
+
+    <h2>How long we keep it</h2>
+    <p>
+      Your account and the games attached to it are kept while your account exists. Backups
+      roll over on a short cycle after a deletion. Rate-limit counters are discarded within
+      minutes.
+    </p>
+
+    <h2>Exporting and deleting</h2>
+    <ul>
+      <li><strong>Export:</strong> <code>GET /api/me/export</code> returns a JSON copy of
+        your account and the games you take part in.</li>
+      <li><strong>Delete:</strong> in the app, Profile → Delete account, or
+        <code>DELETE /api/me/account</code>. This removes your user record, sign-in
+        accounts, sessions, API keys and calendar tokens, and detaches your player entries
+        and ratings.</li>
+    </ul>
+    <p>
+      What stays: games, rosters, scores and ratings belong to the group you played with, so
+      deleting your account does not erase the other players' history. Your entries are
+      detached from your account, but the player name your group knows you by remains in
+      that history. Games you owned are kept, without an owner, so the group can still play
+      them.
+    </p>
+
+    <h2>Cookies</h2>
+    <p>
+      One first-party session cookie keeps you signed in. There are no advertising or
+      cross-site tracking cookies.
+    </p>
+
+    <h2>Children</h2>
+    <p>Convocados is not intended for anyone under 16.</p>
+
+    <h2>Changes</h2>
+    <p>
+      When this policy changes we update this page and the date at the top. Material changes
+      are announced in the app.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions or a request about your data: <a href="mailto:cabeda@proton.me">cabeda@proton.me</a>.
+      See also <a href="/docs/mcp">the MCP server documentation</a>.
+    </p>
+  </article>
+</BaseLayout>
+
+<style>
+  .legal {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.65;
+    color-scheme: light dark;
+  }
+  .legal h1 {
+    font-size: 1.9rem;
+    margin: 0 0 4px;
+  }
+  .legal h2 {
+    font-size: 1.15rem;
+    margin: 32px 0 8px;
+  }
+  .legal .updated {
+    opacity: 0.65;
+    font-size: 0.9rem;
+    margin-top: 0;
+  }
+  .legal ul {
+    padding-left: 22px;
+  }
+  .legal li {
+    margin: 6px 0;
+  }
+  .legal code {
+    font-size: 0.9em;
+  }
+  @media (prefers-color-scheme: dark) {
+    .legal {
+      color: #e6e6e6;
+    }
+    .legal a {
+      color: #7fc7a4;
+    }
+  }
+</style>
