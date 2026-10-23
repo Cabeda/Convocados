@@ -81,8 +81,10 @@ function renderList(overrides: Partial<Parameters<typeof PlayerList>[0]> = {}) {
   return { props, ...render(<PlayerList {...props} />) };
 }
 
+/** The name field — the add row also has a position select (#1448). */
 function typeInInput(value: string) {
-  const input = screen.getByRole("combobox") as HTMLInputElement;
+  const input = document.querySelector('input[name="player-name"]') as HTMLInputElement;
+  if (!input) throw new Error("player-name input not found");
   fireEvent.change(input, { target: { value } });
   return input;
 }

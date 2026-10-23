@@ -646,7 +646,7 @@ export function PlayerList({
                   kind: "single",
                   name: trimmed,
                   email: isEmailLike(trimmed) ? trimmed : undefined,
-                  position: playerPosition || undefined,
+                  ...(playerPosition ? { position: playerPosition } : {}),
                   source: "input",
                 });
               } else {

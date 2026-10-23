@@ -117,7 +117,7 @@ describe("PlayerList — confirmation dialog trigger", () => {
       ?? buttons.find((b) => b.querySelector('[data-testid="PersonAddIcon"]') !== null);
     if (!addButton) throw new Error("+ IconButton not found");
     fireEvent.click(addButton);
-    expect(baseProps.onAddPlayer).toHaveBeenCalledWith("FallbackName");
+    expect(baseProps.onAddPlayer).toHaveBeenCalledWith("FallbackName", undefined, undefined);
   });
 });
 
