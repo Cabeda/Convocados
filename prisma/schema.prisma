@@ -405,6 +405,10 @@ model EventPlayer {
   name          String
   userId        String?
   rating        Float    @default(1000)
+  // Optional player preference — GK | DEF | MID | FWD, or null (#1448).
+  // A power-user field: nothing enforces a formation, and the rotation
+  // suggestion degrades to "no suggestion" when rows carry none.
+  position      String?
   // OpenSkill posterior behind `rating` (see src/lib/skill.ts).
   ratingMu      Float?
   ratingSigma   Float?

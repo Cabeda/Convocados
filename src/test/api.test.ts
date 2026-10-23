@@ -22,7 +22,7 @@ vi.mock("~/lib/geocode", () => ({
 import { POST as createEvent } from "~/pages/api/events/index";
 import { resolveLocation } from "~/lib/geocode";
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
-import { POST as addPlayer, DELETE as deletePlayer } from "~/pages/api/events/[id]/players";
+import { POST as addPlayer, DELETE as deletePlayer, PATCH as setPosition } from "~/pages/api/events/[id]/players";
 import { POST as randomize } from "~/pages/api/events/[id]/randomize";
 import { PUT as saveTeams } from "~/pages/api/events/[id]/teams";
 import { PUT as saveTeamNames } from "~/pages/api/events/[id]/team-names";
@@ -459,6 +459,72 @@ describe("GET /api/events/[id]", () => {
 });
 
 // ─── POST /api/events/[id]/players ──────────────────────────────────────────
+
+/** An event with a current game, which is what makes the modern roster exist. */
+async function seedEventWithGame(): Promise<string> {
+  const id = await seedEvent();
+  const game = await prisma.game.create({
+    data: { eventId: id, dateTime: new Date(Date.now() + 86400_000), status: "upcoming" },
+  });
+  await prisma.event.update({ where: { id }, data: { currentGameId: game.id } });
+  return id;
+}
+
+describe("player position preference (#1448)", () => {
+  it("stores the position sent when adding a player", async () => {
+    const id = await seedEventWithGame();
+    const res = await addPlayer(ctx({ id }, { name: "Keeper", position: "GK" }));
+    expect(res.status).toBe(200);
+
+    const row = await prisma.eventPlayer.findFirst({ where: { eventId: id, name: "Keeper" } });
+    expect(row?.position).toBe("GK");
+  });
+
+  it("stores no position when none is sent", async () => {
+    const id = await seedEventWithGame();
+    await addPlayer(ctx({ id }, { name: "Plain" }));
+
+    const row = await prisma.eventPlayer.findFirst({ where: { eventId: id, name: "Plain" } });
+    expect(row?.position).toBeNull();
+  });
+
+  it("refuses free text as a position", async () => {
+    const id = await seedEventWithGame();
+    const res = await addPlayer(ctx({ id }, { name: "Nope", position: "midfield" }));
+    expect(res.status).toBe(400);
+    expect(await prisma.eventPlayer.findFirst({ where: { eventId: id, name: "Nope" } })).toBeNull();
+  });
+
+  it("changes and clears the position on an existing row", async () => {
+    const id = await seedEventWithGame();
+    await addPlayer(ctx({ id }, { name: "Striker", position: "DEF" }));
+
+    const changed = await setPosition(putCtx({ id }, { name: "Striker", position: "FWD" }));
+    expect(changed.status).toBe(200);
+    expect((await prisma.eventPlayer.findFirst({ where: { eventId: id, name: "Striker" } }))?.position).toBe("FWD");
+
+    const cleared = await setPosition(putCtx({ id }, { name: "Striker", position: null }));
+    expect(cleared.status).toBe(200);
+    expect((await prisma.eventPlayer.findFirst({ where: { eventId: id, name: "Striker" } }))?.position).toBeNull();
+  });
+
+  it("returns 400 for an unknown position and 404 for an unknown player", async () => {
+    const id = await seedEventWithGame();
+    await addPlayer(ctx({ id }, { name: "Real" }));
+
+    expect((await setPosition(putCtx({ id }, { name: "Real", position: "GK " }))).status).toBe(400);
+    expect((await setPosition(putCtx({ id }, { name: "Ghost", position: "GK" }))).status).toBe(404);
+  });
+
+  it("serves the position on the roster payload", async () => {
+    const id = await seedEventWithGame();
+    await addPlayer(ctx({ id }, { name: "Shown", position: "MID" }));
+
+    const body = await (await getEvent(ctx({ id }))).json();
+    const row = (body.players as Array<{ name: string; position: string | null }>).find((p) => p.name === "Shown");
+    expect(row?.position).toBe("MID");
+  });
+});
 
 describe("POST /api/events/[id]/players", () => {
   it("adds a player", async () => {

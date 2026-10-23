@@ -167,6 +167,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       return {
         id: gp.eventPlayer.id,
         name: gp.eventPlayer.name,
+        position: gp.eventPlayer.position,
         order: gp.order,
         eventId: gp.eventPlayer.eventId,
         userId,
