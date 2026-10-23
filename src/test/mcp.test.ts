@@ -53,6 +53,36 @@ describe("POST /api/mcp — stateless transport", () => {
     expect(Array.isArray(body.result.tools)).toBe(true);
   });
 
+  it("every listed tool carries a title and the directory's hints", async () => {
+    // The Claude directory flags submissions whose tools lack a title or an
+    // annotation, so a new tool without them must fail here, not in review.
+    const req = makeRequest({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} });
+    const tools: any[] = (await (await POST(ctx(req))).json()).result.tools;
+
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.title, `${tool.name} title`).toBeTruthy();
+      expect(tool.description, `${tool.name} description`).toBeTruthy();
+      if (tool.annotations?.readOnlyHint === true) {
+        expect(tool.annotations.destructiveHint, `${tool.name} read tool must not be destructive`).toBeUndefined();
+      } else {
+        expect(tool.annotations?.readOnlyHint, `${tool.name} readOnlyHint`).toBe(false);
+        expect(typeof tool.annotations?.destructiveHint, `${tool.name} destructiveHint`).toBe("boolean");
+      }
+    }
+    // Additive stays non-destructive; removing or overwriting is not.
+    const byName = new Map(tools.map((t) => [t.name, t]));
+    expect((byName.get("convocados_list_my_games") as any).annotations).toEqual({ readOnlyHint: true });
+    expect((byName.get("convocados_cancel_event") as any).annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: true,
+    });
+    expect((byName.get("convocados_create_event") as any).annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: false,
+    });
+  });
+
   it("rejects an unknown protocol version header", async () => {
     const req = makeRequest(
       { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
