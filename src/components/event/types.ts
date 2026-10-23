@@ -7,6 +7,8 @@ export interface Player {
   image?: string | null;
   /** ADR 0025: ISO timestamp when the player opted out of invites for this event. */
   invitationOptOutAt?: string | null;
+  /** Optional preference: GK | DEF | MID | FWD, or null (#1448). */
+  position?: string | null;
 }
 
 export interface TeamMember {

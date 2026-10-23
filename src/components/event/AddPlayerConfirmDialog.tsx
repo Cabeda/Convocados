@@ -13,7 +13,7 @@ import { useT } from "~/lib/useT";
  * caller to dispatch the actual `addPlayer` / invite call on confirm.
  */
 export type AddPlayerIntent =
-  | { kind: "single"; name: string; email?: string; userId?: string; source: "chip" | "dropdown" | "input" };
+  | { kind: "single"; name: string; email?: string; userId?: string; position?: string; source: "chip" | "dropdown" | "input" };
 
 export interface AddPlayerConfirmDialogProps {
   intent: AddPlayerIntent | null;

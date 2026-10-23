@@ -584,6 +584,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     linkToAccount: boolean,
     email: string | undefined,
     idempotencyKey: string,
+    position?: string,
   ) => {
     if (addInFlightRef.current) {
       setSnackbar(t("addPlayerInFlight", { name: addInFlightRef.current.name }));
@@ -613,7 +614,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
           "X-Client-Id": clientIdRef.current,
           "Idempotency-Key": idempotencyKey,
         },
-        body: JSON.stringify({ name: trimmed, linkToAccount, ...(email ? { email: email.trim() } : {}) }),
+        body: JSON.stringify({
+          name: trimmed,
+          linkToAccount,
+          ...(email ? { email: email.trim() } : {}),
+          ...(position ? { position } : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -642,9 +648,27 @@ export default function EventPage({ eventId }: { eventId: string }) {
    * (self-initiated) and by the Enter/IconButton paths in PlayerList
    * (typing is itself a deliberate action).
    */
-  const addPlayer = async (name: string, linkToAccount = false, email?: string) => {
+  const addPlayer = async (name: string, linkToAccount = false, email?: string, position?: string) => {
     const idempotencyKey = crypto.randomUUID();
-    await performAdd(name, linkToAccount, email, idempotencyKey);
+    await performAdd(name, linkToAccount, email, idempotencyKey, position);
+  };
+
+  /** #1448: set or clear one roster row's position. */
+  const setPlayerPosition = async (name: string, position: string | null) => {
+    const res = await fetch(`/api/events/${eventId}/players`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
+      body: JSON.stringify({ name, position }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      setSnackbar(body?.error ?? t("somethingWentWrong"));
+      return;
+    }
+    setEvent((current) => current && {
+      ...current,
+      players: current.players.map((p) => (p.name === name ? { ...p, position } : p)),
+    });
   };
 
   /**
@@ -739,7 +763,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
           }
           if (res.status === 404 && typeof json.error === "string" && json.error.includes("No registered user")) {
             const idempotencyKey = crypto.randomUUID();
-            await performAdd(intent.name, false, intent.email, idempotencyKey);
+            await performAdd(intent.name, false, intent.email, idempotencyKey, intent.position);
             return;
           }
           setPlayerError(json.error ?? t("somethingWentWrong"));
@@ -757,7 +781,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       return;
     }
     const idempotencyKey = crypto.randomUUID();
-    await performAdd(intent.name, false, intent.email, idempotencyKey);
+    await performAdd(intent.name, false, intent.email, idempotencyKey, intent.position);
   };
 
   // Routes the Quick Join pill click: opens the payment-nudge dialog when the user
@@ -1330,7 +1354,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
               availableSuggestions={availableSuggestions}
               playerError={playerError}
               onPlayerErrorChange={setPlayerError}
-              onAddPlayer={(name, email) => addPlayer(name, false, email)}
+              onAddPlayer={(name, email, position) => addPlayer(name, false, email, position)}
+              onSetPosition={setPlayerPosition}
               onRequestAdd={requestAddPlayer}
               onRemovePlayer={removePlayer}
               onReorderPlayers={reorderPlayers}
