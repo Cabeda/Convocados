@@ -150,7 +150,11 @@ export const auth = betterAuth({
         await sendMagicLinkEmail(email, url);
       },
     }),
-    jwt(),
+    // Pin the issuer to the address our AS metadata is published under. Left
+    // to default it is `<base>/api/auth`, which never matches
+    // `/.well-known/oauth-authorization-server` — and Claude refuses a
+    // connector whose `iss` differs from the metadata issuer it read.
+    jwt({ jwt: { issuer: baseUrl } }),
     oauthProvider({
       loginPage: "/auth/signin",
       consentPage: "/oauth/consent",
