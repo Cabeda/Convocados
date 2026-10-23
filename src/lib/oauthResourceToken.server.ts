@@ -89,9 +89,8 @@ export async function verifyResourceAccessToken(
   if (!payload.sub) return null;
 
   const keys = await publicKeys();
-  const candidates = header.kid && keys.has(header.kid)
-    ? [keys.get(header.kid)!]
-    : [...keys.values()];
+  const keyed = header.kid ? keys.get(header.kid) : undefined;
+  const candidates = keyed ? [keyed] : [...keys.values()];
 
   const signed = Buffer.from(`${parts[0]}.${parts[1]}`);
   const signature = Buffer.from(parts[2], "base64url");
