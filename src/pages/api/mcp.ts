@@ -11,10 +11,22 @@ import {
   isSupportedVersion,
   negotiateHandshakeVersion,
   wwwAuthenticate,
+  insufficientScopeChallenge,
 } from "../../lib/mcp/protocol";
 
 /** Explicit empty context for tools that allow anonymous callers. */
 const ANONYMOUS_CTX: AuthContext = { userId: "", scopes: [], authMethod: "oauth" };
+
+/**
+ * Every scope the tool surface can need, advertised on the 401.
+ *
+ * Claude derives its authorization request from this challenge (or from the
+ * protected-resource metadata when absent), so naming one tool's scope means a
+ * token that can read but not write, and every write then needs a step-up round
+ * trip. One consent for the connector's real capability set is honest here:
+ * these are exactly the scopes the tools use.
+ */
+const MCP_SCOPES = [...new Set(TOOLS.map((t) => t.scope))].join(" ");
 
 function jsonRpcError(
   id: unknown,
@@ -182,11 +194,16 @@ export const POST: APIRoute = async ({ request }) => {
     }
     if (requiresAuth && !authCtx) {
       return jsonRpcError(id, -32001, "Unauthorized: missing or invalid Bearer token", undefined, 401, {
-        "WWW-Authenticate": wwwAuthenticate(originOf(request), tool.scope),
+        "WWW-Authenticate": wwwAuthenticate(originOf(request), MCP_SCOPES),
       });
     }
     if (authCtx && !requireScope(authCtx, tool.scope)) {
-      return jsonRpcError(id, -32001, `Forbidden: missing scope ${tool.scope}`, undefined, 403);
+      // Ask for a re-authorization covering what the token already has plus the
+      // missing scope; a bare 403 is a terminal error in Claude (no step-up).
+      const needed = [...new Set([...authCtx.scopes, tool.scope])].filter((s) => s !== "*");
+      return jsonRpcError(id, -32001, `Forbidden: missing scope ${tool.scope}`, undefined, 403, {
+        "WWW-Authenticate": insufficientScopeChallenge(needed),
+      });
     }
 
     try {

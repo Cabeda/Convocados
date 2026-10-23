@@ -3,6 +3,7 @@ import { auth, ensureAuthKeysHealthy } from "./auth.server";
 import { authenticateApiKey } from "./apiKey.server";
 import { prisma } from "./db.server";
 import { parseStoredScopes } from "./scopes";
+import { verifyResourceAccessToken } from "./oauthResourceToken.server";
 
 /** Hash a token the same way better-auth stores them (SHA-256 → base64url) */
 function hashToken(token: string): string {
@@ -73,6 +74,16 @@ export async function authenticateRequest(
         scopes: parseStoredScopes(oauthToken.scopes),
         authMethod: "oauth",
         clientId: oauthToken.clientId,
+      };
+    }
+    // A resource-scoped token is a JWT with no database row (see the module doc).
+    const claims = await verifyResourceAccessToken(token);
+    if (claims) {
+      return {
+        userId: claims.userId,
+        scopes: claims.scopes,
+        authMethod: "oauth",
+        clientId: claims.clientId,
       };
     }
     // Token not found or expired — don't fall through to session

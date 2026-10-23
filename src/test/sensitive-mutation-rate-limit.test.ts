@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 // The limiter runs before authentication, so a burst of unauthenticated calls
-// exercises the throttle without needing a session.
-vi.mock("~/lib/db.server", () => ({ prisma: {} }));
+// exercises the throttle without needing a session. Do not stub
+// `~/lib/db.server` down to `{ prisma: {} }`: the OAuth provider seeds its
+// resource rows when the plugin initialises, and an empty client throws
+// "Model oauthResource does not exist in the database" at import time.
 
 const { POST: createApiKey } = await import("~/pages/api/me/api-keys");
 
