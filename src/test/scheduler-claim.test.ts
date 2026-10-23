@@ -174,6 +174,24 @@ describe("processJob — backoff", () => {
     expect(await getDueJobs()).toHaveLength(0);
   });
 
+  it("counts only dead-letters inside the window, so a resolved corpse ages out (#1347)", async () => {
+    const user = await seedUser("user-window");
+    const event = await seedEvent(user.id, new Date(Date.now() + 25 * 3600_000), "evt-window");
+    const now = new Date();
+    const old = new Date(now.getTime() - 3 * 24 * 3600_000); // remediated days ago
+
+    await prisma.scheduledJob.create({
+      data: { type: "reminder", eventId: event.id, runAt: old, failedAt: old, lastError: "resolved" },
+    });
+    const fresh = await prisma.scheduledJob.create({
+      data: { type: "reminder", eventId: event.id, runAt: now, failedAt: now, lastError: "live" },
+    });
+
+    expect(await countFailedJobs(now)).toBe(1);
+    // The row is still there to diagnose — only the counter stops carrying it.
+    expect(await prisma.scheduledJob.findUnique({ where: { id: fresh.id } })).not.toBeNull();
+  });
+
   it("exhausted retries dead-letter the job and report it", async () => {
     const user = await seedUser("user-dead");
     const event = await seedEvent(user.id, new Date(Date.now() + 25 * 3600_000), "evt-dead");

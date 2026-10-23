@@ -131,9 +131,22 @@ export async function claimJob(jobId: string) {
   return prisma.scheduledJob.findFirst({ where: { id: jobId, claimedBy: token } });
 }
 
-/** Dead-lettered jobs (retry exhausted) — surfaced via /api/health. */
-export async function countFailedJobs(): Promise<number> {
-  return prisma.scheduledJob.count({ where: { failedAt: { not: null } } });
+/**
+ * How far back the health counter looks.
+ *
+ * A dead-letter is a record of an escalated failure: it stays in the table so
+ * `/api/health` can still show its diagnosis, but once the cause is fixed it
+ * must stop reading as "something is broken now". Before this window the count
+ * only ever grew — it sat at 7 for months after the backfills behind them were
+ * remediated, which trained everyone to ignore the number (#1347). A failure
+ * that keeps recurring keeps counting, every day it recurs.
+ */
+export const FAILED_JOB_WINDOW_HOURS = 24;
+
+/** Dead-lettered jobs inside the window — surfaced via /api/health. */
+export async function countFailedJobs(now: Date = new Date()): Promise<number> {
+  const since = new Date(now.getTime() - FAILED_JOB_WINDOW_HOURS * 3_600_000);
+  return prisma.scheduledJob.count({ where: { failedAt: { gte: since } } });
 }
 
 /**
