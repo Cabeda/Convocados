@@ -1,12 +1,16 @@
 package dev.convocados.wear.ui.screen.quick
 
+import dev.convocados.wear.data.alarm.AlarmFire
 import dev.convocados.wear.data.alarm.GameAlarmScheduler
 import dev.convocados.wear.data.api.displayTennisPoint
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.data.local.QuickGameState
 import dev.convocados.wear.data.local.QuickGameStore
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -25,6 +29,28 @@ class QuickScoreViewModelTest {
         }
         val scheduler = mockk<GameAlarmScheduler>(relaxed = true)
         return QuickScoreViewModel(store, scheduler) to state
+    }
+
+    @Test
+    fun `resuming a live game schedules only the alarms still ahead (#1316)`() {
+        val kickoff = System.currentTimeMillis() - 55 * 60_000L
+        val state = MutableStateFlow(QuickGameState(kickoffEpochMs = kickoff, durationMinutes = 60, alarmIntervalMinutes = 10))
+        val store = mockk<QuickGameStore>()
+        every { store.state } returns state
+        every { store.update(any()) } answers {
+            @Suppress("UNCHECKED_CAST")
+            val transform = invocation.args[0] as (QuickGameState) -> QuickGameState
+            state.value = transform(state.value)
+        }
+        val fires = slot<List<AlarmFire>>()
+        val scheduler = mockk<GameAlarmScheduler>(relaxed = true)
+        every { scheduler.reschedule(any(), capture(fires)) } just Runs
+
+        // Resuming at minute 55 used to hand the scheduler the five elapsed
+        // fires as past-dated, so every tile tap buzzed five times at once.
+        QuickScoreViewModel(store, scheduler).continueGame()
+
+        assertEquals(listOf(kickoff + 60 * 60_000L), fires.captured.map { it.triggerAtMs })
     }
 
     @Test
