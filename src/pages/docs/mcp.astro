@@ -36,6 +36,25 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     A <code>401</code> carries a <code>WWW-Authenticate</code> challenge pointing at the metadata.
   </p>
 
+  <h2>Connect it to Claude</h2>
+  <ol>
+    <li>In Claude, open <strong>Customize → Connectors</strong> and choose
+      <strong>Add custom connector</strong>.</li>
+    <li>Name it <em>Convocados</em> and paste the URL
+      <code>https://convocados.cabeda.dev/api/mcp</code>.</li>
+    <li>Click <strong>Add</strong>, then <strong>Connect</strong>. A Convocados consent
+      screen opens: <strong>sign in with the Convocados account you want the assistant to
+      act as</strong> — not your Claude account — and approve the scopes you are shown.</li>
+    <li>Back in a chat, ask something like <em>"list my Convocados games"</em>. Write tools
+      only work for games you own or administer.</li>
+  </ol>
+  <p>
+    Claude asks for the scopes the connector can use, so the consent screen lists them all
+    at once: reading games, history, ratings and your profile, and the write actions. You can
+    remove access at any time by deleting the connector in Claude; see the
+    <a href="/privacy">privacy policy</a> for what the connector can reach.
+  </p>
+
   <h2>Connect it to ChatGPT (developer mode)</h2>
   <ol>
     <li>Use ChatGPT on the web with a Plus, Pro, Business, Enterprise, or Education plan. Business/Edu admins may need to enable developer mode for the workspace first.</li>
