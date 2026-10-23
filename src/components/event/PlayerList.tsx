@@ -147,6 +147,8 @@ interface Props {
   onAddPlayer: (name: string, email?: string, position?: string) => Promise<void>;
   /** Set or clear one row's position (#1448). */
   onSetPosition?: (name: string, position: string | null) => Promise<void>;
+  /** Show the position controls (#1448). Off by default, matching the event setting. */
+  positionsEnabled?: boolean;
   /** Trigger the confirmation dialog. Used by single-tap paths (chip, dropdown). */
   onRequestAdd?: (intent: AddPlayerIntent) => void;
   onRemovePlayer: (playerId: string) => Promise<void>;
@@ -218,7 +220,7 @@ interface Props {
 export function PlayerList({
   players, maxPlayers, isOwner, hasTeams,
   availableSuggestions, playerError, onPlayerErrorChange,
-  onAddPlayer, onSetPosition, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
+  onAddPlayer, onSetPosition, positionsEnabled = false, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
   onRandomize, onConfirmReRandomize, onConfirmEarlyRandomize, isRandomizing = false, canRemovePlayer,
   currentUserId: _currentUserId,
   myRsvpStatus: _myRsvpStatus,
@@ -617,6 +619,7 @@ export function PlayerList({
             noOptionsText={t("noSuggestions")}
           />
 
+          {positionsEnabled && (
           <TextField
             select
             size="small"
@@ -632,6 +635,7 @@ export function PlayerList({
             <MenuItem value="MID">{t("positionMid")}</MenuItem>
             <MenuItem value="FWD">{t("positionFwd")}</MenuItem>
           </TextField>
+          )}
 
           <IconButton
             color="primary"
@@ -770,7 +774,7 @@ export function PlayerList({
                       </span>
                     </Tooltip>
                   )}
-                  {isOwner && onSetPosition ? (
+                  {positionsEnabled && (isOwner && onSetPosition ? (
                     <TextField
                       select
                       size="small"
@@ -788,7 +792,7 @@ export function PlayerList({
                     </TextField>
                   ) : player.position ? (
                     <Chip size="small" variant="outlined" label={t(POSITION_LABEL_KEYS[player.position] ?? "positionNone")} sx={{ mr: 1 }} />
-                  ) : null}
+                  ) : null)}
                    <ListItemText
                      primary={player.userId ? (
                        <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>

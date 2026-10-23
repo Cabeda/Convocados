@@ -43,6 +43,7 @@ export interface EventData {
   hideEloInTeams: boolean;
   showCompetitiveData: boolean;
   splitCostsEnabled: boolean;
+  positionsEnabled: boolean;
   mvpEnabled: boolean;
   mvpEloEnabled: boolean;
   sport: string;

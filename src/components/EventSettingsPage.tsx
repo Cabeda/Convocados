@@ -88,6 +88,7 @@ interface EventSettings {
   rankDecayEnabled: boolean;
   inactiveRankBehavior: string;
   splitCostsEnabled: boolean;
+  positionsEnabled: boolean;
   mvpEnabled: boolean;
   mvpEloEnabled: boolean;
   sport: string;
@@ -305,6 +306,11 @@ export default function EventSettingsPage({ eventId }: Props) {
   const handleToggleSplitCosts = (v: boolean) => {
     setEvent((e) => e ? { ...e, splitCostsEnabled: v } : e);
     updateSetting("split-costs", { splitCostsEnabled: v });
+  };
+
+  const handleTogglePositions = (v: boolean) => {
+    setEvent((e) => e ? { ...e, positionsEnabled: v } : e);
+    updateSetting("positions-enabled", { positionsEnabled: v });
   };
 
   const handleToggleMvpEnabled = (v: boolean) => {
@@ -735,6 +741,12 @@ export default function EventSettingsPage({ eventId }: Props) {
                   {t("mvpEloEnabled")}
                 </Typography>
               }
+            />
+          </Tooltip>
+          <Tooltip describeChild title={t("positionsEnabledTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={event.positionsEnabled ?? false} onChange={(e) => handleTogglePositions(e.target.checked)} disabled={!canEdit} />}
+              label={<Typography variant="body2">{t("positionsEnabled")}</Typography>}
             />
           </Tooltip>
         </Stack>

@@ -30,6 +30,7 @@ const baseEvent: EventData = {
   hideEloInTeams: true,
   showCompetitiveData: true,
   splitCostsEnabled: true,
+  positionsEnabled: false,
   mvpEnabled: true,
   mvpEloEnabled: false,
   sport: "football-5v5",
