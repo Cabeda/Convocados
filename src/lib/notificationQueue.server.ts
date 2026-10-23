@@ -187,6 +187,47 @@ export function drainNotificationQueue(): Promise<number> {
  * moved to dead-letter state (failedAt set). Dead-letter jobs older than
  * DEAD_LETTER_TTL_DAYS are pruned on each run.
  */
+/**
+ * SQLITE_BUSY / "database is locked": another writer held the lock longer than
+ * the busy timeout. It says nothing about the rows, only about timing.
+ */
+function isBusyError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /SQLITE_BUSY|database is locked/i.test(message);
+}
+
+/**
+ * Claim up to BATCH_SIZE pending jobs in one transaction.
+ *
+ * Returns null instead of throwing when the lock was busy (#1346): the rows are
+ * still pending, so the next drain — every enqueue schedules one, and the cron
+ * runs on a timer — picks them up. A throw here propagated into whichever job
+ * triggered the drain and dead-lettered it.
+ */
+async function claimBatchOrNull() {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const pending = await tx.notificationJob.findMany({
+        where: { processedAt: null, failedAt: null },
+        orderBy: { createdAt: "asc" },
+        take: BATCH_SIZE,
+        select: { id: true },
+      });
+      if (pending.length === 0) return [];
+      const ids = pending.map((j) => j.id);
+      await tx.notificationJob.updateMany({
+        where: { id: { in: ids } },
+        data: { processedAt: new Date() },
+      });
+      return tx.notificationJob.findMany({ where: { id: { in: ids } } });
+    });
+  } catch (err) {
+    if (!isBusyError(err)) throw err;
+    log.info({ err }, "Notification claim hit SQLITE_BUSY; leaving the batch to the next drain");
+    return null;
+  }
+}
+
 async function _doDrain(): Promise<number> {
   // Lazy import to avoid circular dependency
   const { sendPushToEvent } = await import("./push.server");
@@ -203,22 +244,14 @@ async function _doDrain(): Promise<number> {
   while (true) {
     // Atomically claim a batch inside a transaction.
     // NOTE(postgres #236): swap this block for SELECT FOR UPDATE SKIP LOCKED.
-    const jobs = await prisma.$transaction(async (tx) => {
-      const pending = await tx.notificationJob.findMany({
-        where: { processedAt: null, failedAt: null },
-        orderBy: { createdAt: "asc" },
-        take: BATCH_SIZE,
-        select: { id: true },
-      });
-      if (pending.length === 0) return [];
-      const ids = pending.map((j) => j.id);
-      await tx.notificationJob.updateMany({
-        where: { id: { in: ids } },
-        data: { processedAt: new Date() },
-      });
-      return tx.notificationJob.findMany({ where: { id: { in: ids } } });
-    });
+    const jobs = await claimBatchOrNull();
 
+    // A busy database means another writer held the lock past the busy
+    // timeout. Nothing was claimed, nothing is lost: the rows are still
+    // pending, and the next drain takes them. Throwing here instead failed the
+    // *caller's* job — a reminder dead-lettered because a concurrent drain was
+    // writing (#1346). Ending the pass is the whole recovery.
+    if (jobs === null) return totalProcessed;
     if (jobs.length === 0) break;
 
     const { grouped, individual } = groupPlayerActivityJobs(jobs);
