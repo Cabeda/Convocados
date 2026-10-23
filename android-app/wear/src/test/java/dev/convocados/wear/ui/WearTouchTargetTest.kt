@@ -25,6 +25,7 @@ import dev.convocados.wear.ui.screen.mvp.MvpVotingScreen
 import dev.convocados.wear.ui.screen.mvp.MvpVotingUiState
 import dev.convocados.wear.ui.screen.mvp.MvpVotingViewModel
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
+import dev.convocados.wear.ui.screen.score.ScoreFixtureContent
 import dev.convocados.wear.ui.screen.quick.SaveQuickGameContent
 import dev.convocados.wear.ui.screen.settings.GameSettingsUiState
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
@@ -159,6 +160,45 @@ class WearTouchTargetTest {
     fun `round add player touch targets are at least 48dp`() {
         renderAddPlayer()
         assertAllTouchTargetsMeetMinimum("round add player")
+    }
+
+    // ── score screen ────────────────────────────────────────────────────
+    // The Finish control is one of the two ways a game ends (#1360), and it
+    // sat at 32dp under a fingertip until #1361. Asserted on all three shapes
+    // because the top padding that clears the progress marker is round
+    // reasoning, and the square branch is where such a fix goes quiet.
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-round")
+    fun `round score finish touch target is at least 48dp`() {
+        renderScore()
+        assertAllTouchTargetsMeetMinimum("round score")
+    }
+
+    @Test
+    @Config(qualifiers = "w390dp-h390dp-notround")
+    fun `square score finish touch target is at least 48dp`() {
+        renderScore()
+        assertAllTouchTargetsMeetMinimum("square score")
+    }
+
+    @Test
+    @Config(qualifiers = "w227dp-h227dp-round")
+    fun `small round score finish touch target is at least 48dp`() {
+        renderScore()
+        assertAllTouchTargetsMeetMinimum("small round score")
+    }
+
+    private fun renderScore() {
+        composeRule.setContent {
+            ConvocadosWearTheme {
+                ScoreFixtureContent(
+                    state = WearFixtures.liveScore,
+                    now = WearFixtures.now,
+                )
+            }
+        }
+        composeRule.waitForIdle()
     }
 
     // ── assertions ──────────────────────────────────────────────────────
