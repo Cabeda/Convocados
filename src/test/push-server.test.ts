@@ -239,6 +239,71 @@ describe("sendPushToUser (FCM app tokens)", () => {
       else process.env.FCM_SERVICE_ACCOUNT_JSON = prev;
     }
   });
+  it("never sends an ios token to FCM, so a failed send cannot delete it (#1482)", async () => {
+    const prev = process.env.FCM_SERVICE_ACCOUNT_JSON;
+    const createSignMock = vi.fn(() => ({ update: vi.fn(), sign: vi.fn(() => "sig") }));
+    vi.doMock("crypto", async () => ({
+      ...(await import("crypto")),
+      createSign: createSignMock,
+    }));
+    process.env.FCM_SERVICE_ACCOUNT_JSON = JSON.stringify({
+      project_id: "test-project",
+      client_email: "sa@test.iam.gserviceaccount.com",
+      private_key: "fake-key",
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const user = await seedUser("u-fcm-ios");
+      await prisma.appPushToken.create({ data: { userId: user.id, token: "apns-token", platform: "ios" } });
+
+      await sendPushToUser(user.id, "Title", "Body", "/url");
+
+      // No FCM call at all: an APNs token is not FCM's to reject (ADR 0054).
+      expect(fetchMock).not.toHaveBeenCalled();
+      const kept = await prisma.appPushToken.findMany({ where: { userId: user.id } });
+      expect(kept.map((t) => t.token)).toEqual(["apns-token"]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.doUnmock("crypto");
+      if (prev === undefined) delete process.env.FCM_SERVICE_ACCOUNT_JSON;
+      else process.env.FCM_SERVICE_ACCOUNT_JSON = prev;
+    }
+  });
+
+  it("keeps the token when FCM fails for a reason that is not a rejection (#1482)", async () => {
+    const prev = process.env.FCM_SERVICE_ACCOUNT_JSON;
+    const createSignMock = vi.fn(() => ({ update: vi.fn(), sign: vi.fn(() => "sig") }));
+    vi.doMock("crypto", async () => ({
+      ...(await import("crypto")),
+      createSign: createSignMock,
+    }));
+    process.env.FCM_SERVICE_ACCOUNT_JSON = JSON.stringify({
+      project_id: "test-project",
+      client_email: "sa@test.iam.gserviceaccount.com",
+      private_key: "fake-key",
+    });
+    // A 500 (or FCM's own backend error) says nothing about the token.
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: "tok", expires_in: 3600 }) })
+      .mockResolvedValueOnce({ ok: false, status: 500, text: async () => "INTERNAL" });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const user = await seedUser("u-fcm-500");
+      await prisma.appPushToken.create({ data: { userId: user.id, token: "fcm-flaky", platform: "android" } });
+
+      await sendPushToUser(user.id, "Title", "Body", "/url");
+
+      const kept = await prisma.appPushToken.findMany({ where: { userId: user.id } });
+      expect(kept.map((t) => t.token)).toEqual(["fcm-flaky"]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.doUnmock("crypto");
+      if (prev === undefined) delete process.env.FCM_SERVICE_ACCOUNT_JSON;
+      else process.env.FCM_SERVICE_ACCOUNT_JSON = prev;
+    }
+  });
+
   it("sends FCM app pushes to event followers when a service account is configured", async () => {
     const prev = process.env.FCM_SERVICE_ACCOUNT_JSON;
     const createSignMock = vi.fn(() => ({ update: vi.fn(), sign: vi.fn(() => "sig") }));
