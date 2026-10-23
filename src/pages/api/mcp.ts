@@ -158,8 +158,14 @@ export const POST: APIRoute = async ({ request }) => {
   if (isToolsList) {
     const tools = TOOLS.map((t) => ({
       name: t.name,
+      title: t.title,
       description: t.description,
       inputSchema: t.inputSchema,
+      // Directory requirement: a read tool declares readOnlyHint, a write tool
+      // declares destructiveHint. Reviewers reject listings without them.
+      annotations: t.readOnly
+        ? { readOnlyHint: true }
+        : { readOnlyHint: false, destructiveHint: t.destructive === true },
     }));
     return jsonRpcResult(id, {
       tools,

@@ -790,6 +790,7 @@ async function claimPlayer(args: Record<string, unknown>, ctx: AuthContext) {
 export const WRITE_TOOLS: ToolDef[] = [
   {
     name: "convocados_add_player",
+    title: "Add player to game",
     description: "Add a player to a Game's active roster (by name, email or userId). Actor must own or admin the event.",
     inputSchema: {
       type: "object",
@@ -806,6 +807,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_remove_player",
+    title: "Remove player from game",
+    destructive: true,
     description: "Remove a player from a Game (soft-archive, triggers leave side-effects). Provide playerId or name. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
@@ -821,6 +824,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_randomize_teams",
+    title: "Randomize teams",
+    destructive: true,
     description: "Generate/randomize teams for a Game from its active players, overwriting any existing assignment. Set balanced=true to use ELO balancing. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
@@ -835,6 +840,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_update_payment",
+    title: "Update player payment",
     description: "Update a player's payment status (pending|sent|paid) for a Game. paid writes the wallet ledger credit. Actor must own or admin the event, unless marking their own payment as sent.",
     inputSchema: {
       type: "object",
@@ -851,6 +857,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_set_score",
+    title: "Set game score",
+    destructive: true,
     description: "Set the final score (scoreOne, scoreTwo) on the latest GameHistory for an Event. Triggers ELO processing. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
@@ -866,6 +874,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_create_event",
+    title: "Create game",
     description: "Create a new Game (Event) owned by the caller with its first Game instance. Location is stored as text (no geocoding).",
     inputSchema: {
       type: "object",
@@ -891,6 +900,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_update_event",
+    title: "Update game settings",
+    destructive: true,
     description: "Update Event settings (title, location, dateTime, timezone, sport, maxPlayers, isPublic). Only provided fields change. Actor must own or admin the event.",
     inputSchema: {
       type: "object",
@@ -911,6 +922,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_cancel_event",
+    title: "Cancel game",
+    destructive: true,
     description: "Cancel the current Game of an Event (reverses payments, snapshots history, advances recurring events). Actor must own or admin the event.",
     inputSchema: {
       type: "object",
@@ -922,6 +935,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_rsvp",
+    title: "Set my RSVP",
     description: "Set YOUR RSVP for a Game to yes, no, or maybe. Self-service for any authenticated user.",
     inputSchema: {
       type: "object",
@@ -938,6 +952,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_follow_event",
+    title: "Follow game",
     description:
       "Follow a Game you do not play in, to get event-change and recruitment notifications. Self-service; playing in a Game already implies following it.",
     inputSchema: {
@@ -950,6 +965,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_unfollow_event",
+    title: "Unfollow game",
+    destructive: true,
     description:
       "Stop following a Game. Self-service; valid while you still hold a roster slot, which you then merely stop being notified about.",
     inputSchema: {
@@ -962,6 +979,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_leave_event",
+    title: "Leave game",
+    destructive: true,
     description:
       "Leave a Game YOU are a player in: archives your roster slot, declines your RSVP and unfollows you. Self-service; cannot remove any other player.",
     inputSchema: {
@@ -974,6 +993,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_set_no_show",
+    title: "Mark player no-show",
     description:
       "Mark or unmark a player as a no-show for one specific game, which updates their attendance and no-show streak. Actor must own or admin the event.",
     inputSchema: {
@@ -991,6 +1011,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_set_teams",
+    title: "Assign teams",
+    destructive: true,
     description:
       "Assign players to teams for a Game. Provide teamOnePlayerIds and teamTwoPlayerIds as arrays of player IDs. Actor must own or admin the event.",
     inputSchema: {
@@ -1015,6 +1037,8 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_set_cost",
+    title: "Set game costs",
+    destructive: true,
     description:
       "Set or update the cost for a Game. Recalculates per-player payment shares. Scope 'this_game' overrides only the current game; 'all_future' (default) updates the template. Actor must own or admin the event.",
     inputSchema: {
@@ -1038,6 +1062,7 @@ export const WRITE_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_claim_player",
+    title: "Claim player profile",
     description:
       "Claim an anonymous player slot and link it to your account. Self-service; renames the player across teams, ratings, and history.",
     inputSchema: {

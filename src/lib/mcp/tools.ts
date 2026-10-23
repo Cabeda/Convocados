@@ -7,9 +7,19 @@ import { WRITE_TOOLS } from "./writeTools";
 
 export interface ToolDef {
   name: string;
+  /**
+   * Human label, required by the Claude directory: every listed tool must carry
+   * a `title` plus the applicable `readOnlyHint`/`destructiveHint`, and the
+   * submission portal flags tools that lack them.
+   */
+  title: string;
   description: string;
   inputSchema: Record<string, unknown>;
   scope: string;
+  /** Read tools never touch state; set when the registry is assembled. */
+  readOnly?: boolean;
+  /** Write tools only: true when the call overwrites or removes existing data. */
+  destructive?: boolean;
   /**
    * When true (default), `tools/call` requires a valid OAuth token. Set false
    * for tools that anonymous callers may use (read-only public data).
@@ -147,6 +157,7 @@ async function whoami(_args: Record<string, unknown>, ctx: AuthContext) {
 const READ_TOOLS: ToolDef[] = [
   {
     name: "convocados_get_balance",
+    title: "Get game balance",
     description: "Get outstanding balance and payment summary for a Game (Event). Requires eventId.",
     inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:events",
@@ -154,6 +165,7 @@ const READ_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_get_game",
+    title: "Get game details",
     description: "Get Game (Event) details by ID: title, location, dateTime, sport, players, spots left. Anonymous; a password-locked event returns { locked: true }.",
     inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:events",
@@ -162,6 +174,7 @@ const READ_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_list_public_events",
+    title: "List public games",
     description: "List public (discoverable) Games looking for players. Anonymous; no arguments required.",
     inputSchema: { type: "object", properties: { limit: { type: "number", description: "Max results (1-50, default 20)" } }, additionalProperties: false },
     scope: "read:events",
@@ -170,6 +183,7 @@ const READ_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_get_history",
+    title: "Get game history",
     description: "Get game history for an Event (past Games). Requires eventId.",
     inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:history",
@@ -177,6 +191,7 @@ const READ_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_get_ratings",
+    title: "Get player ratings",
     description: "Get ELO ratings for an Event. Requires eventId.",
     inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:ratings",
@@ -184,6 +199,7 @@ const READ_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_list_my_games",
+    title: "List my games",
     description: "List authenticated user's Games (owned, admin, followed). No arguments.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     scope: "read:events",
@@ -191,6 +207,7 @@ const READ_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_list_players",
+    title: "List game players",
     description: "List players for a Game (Event). Requires eventId.",
     inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:events",
@@ -198,6 +215,7 @@ const READ_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_whoami",
+    title: "Check signed-in account",
     description:
       "Return the account this MCP token acts as, plus the scopes it was granted. Self-service read-only; call it first when a write tool behaves unexpectedly, to confirm which user it ran as.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
@@ -206,4 +224,7 @@ const READ_TOOLS: ToolDef[] = [
   },
 ];
 
-export const TOOLS: ToolDef[] = [...READ_TOOLS, ...WRITE_TOOLS].sort((a, b) => a.name.localeCompare(b.name));
+export const TOOLS: ToolDef[] = [
+  ...READ_TOOLS.map((t) => ({ ...t, readOnly: true as const })),
+  ...WRITE_TOOLS.map((t) => ({ ...t, readOnly: false as const })),
+].sort((a, b) => a.name.localeCompare(b.name));
