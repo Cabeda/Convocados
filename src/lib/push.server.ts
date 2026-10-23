@@ -14,6 +14,12 @@ const PUSH_CONCURRENCY = 20;
 
 /** FCM HTTP v1 API endpoint */
 const FCM_API_URL = "https://fcm.googleapis.com/v1/projects/{projectId}/messages:send";
+/**
+ * The platforms this sender can address. Only Android: there is no APNs sender
+ * (ADR 0054), so an `ios` token must never be handed to FCM — FCM rejects it,
+ * and the rejection used to delete the row (#1482).
+ */
+const FCM_PLATFORMS = ["android"];
 
 let initialized = false;
 let _webpush: typeof webpush | null = null;
@@ -140,8 +146,14 @@ async function sendFcmMessage(token: string, title: string, body: string, data?:
 
     if (!res.ok) {
       const errBody = await res.text();
-      // Token is invalid/expired — remove it
-      if (res.status === 404 || res.status === 400 || errBody.includes("UNREGISTERED")) {
+      // Only a token FCM has positively rejected is dead (#1482). A 400 or a
+      // 500 usually means our payload or FCM's backend, and the token is fine —
+      // deleting on those destroyed live tokens, including every `ios` one.
+      const rejected =
+        res.status === 404 ||
+        errBody.includes("UNREGISTERED") ||
+        errBody.includes("INVALID_ARGUMENT");
+      if (rejected) {
         log.info({ token: token.slice(0, 30) }, "Removing invalid FCM token");
         await prisma.appPushToken.deleteMany({ where: { token } }).catch(() => {});
       } else {
@@ -201,7 +213,7 @@ async function sendAppPushToUser(
   url: string,
   extras?: Record<string, string>,
 ): Promise<void> {
-  const tokens = await prisma.appPushToken.findMany({ where: { userId } });
+  const tokens = await prisma.appPushToken.findMany({ where: { userId, platform: { in: FCM_PLATFORMS } } });
   if (tokens.length === 0) return;
 
   const fcmMessages = tokens.map((t) => ({ token: t.token, title, body, data: { url, ...(extras ?? {}) } }));
@@ -228,7 +240,7 @@ async function sendAppPushToEventUsers(
   if (userIds.length === 0) return;
 
   const tokens = await prisma.appPushToken.findMany({
-    where: { userId: { in: userIds } },
+    where: { userId: { in: userIds }, platform: { in: FCM_PLATFORMS } },
   });
   if (tokens.length === 0) return;
 
