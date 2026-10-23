@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.alarm.AlarmFire
+import dev.convocados.wear.data.alarm.AlarmType
+import dev.convocados.wear.data.alarm.GameAlarm
+import dev.convocados.wear.data.alarm.computeAlarmTimes
 import dev.convocados.wear.data.alarm.GameAlarmScheduler
 import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.api.TennisTeam
@@ -188,16 +191,19 @@ class QuickScoreViewModel @Inject constructor(
             alarmScheduler.cancelAll(QUICK_EVENT_ID)
             return
         }
-        val endMs = kickoffMs + durationMinutes * 60_000L
-        val fires = mutableListOf<AlarmFire>()
-        val nowMs = System.currentTimeMillis()
-        var k = 1
-        while (true) {
-            val t = kickoffMs + k.toLong() * intervalMinutes * 60_000L
-            if (t > endMs) break
-            if (t > nowMs) fires += AlarmFire(t, pulses = 2)
-            k++
-        }
+        // One implementation of "when does an alarm fire", shared with the
+        // event settings screen: a hand-rolled loop here drifted once and
+        // re-fired every elapsed alarm on resume (#1316). `computeAlarmTimes`
+        // floors on `nowMs`, so resuming at minute 55 of a 60-minute game
+        // registers only the fires still ahead.
+        val fires: List<AlarmFire> = computeAlarmTimes(
+            kickoffMs = kickoffMs,
+            alarms = listOf(
+                GameAlarm(QUICK_ALARM_ID, AlarmType.RECURRING, minute = intervalMinutes, pulses = 2),
+            ),
+            durationMinutes = durationMinutes,
+            nowMs = System.currentTimeMillis(),
+        )
         alarmScheduler.reschedule(QUICK_EVENT_ID, fires)
     }
 
@@ -205,6 +211,9 @@ class QuickScoreViewModel @Inject constructor(
     // may still be live after the user leaves. Alarms are only cancelled on
     // endGame() (or they naturally stop at the game end).
 }
+
+/** The single recurring alarm the quick game keeps in the scheduler. */
+private const val QUICK_ALARM_ID = "quick-recurring"
 
 private fun normalizeSport(sport: String): String = when (sport.lowercase()) {
     QUICK_SPORT_TENNIS -> QUICK_SPORT_TENNIS
