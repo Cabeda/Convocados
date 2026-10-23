@@ -24,4 +24,17 @@ describe("well-known MCP metadata", () => {
     expect(body.token_endpoint).toMatch(/oauth2\/token/);
     expect(body.code_challenge_methods_supported).toContain("S256");
   });
+
+  it("publishes one issuer: PRM authorization_servers, metadata issuer and iss agree (#1501)", async () => {
+    const prmReq = new Request("http://localhost:4321/.well-known/oauth-protected-resource");
+    const prm: any = await (await ProtectedGET({ request: prmReq, url: new URL(prmReq.url) } as any)).json();
+
+    const mdReq = new Request("http://localhost:4321/.well-known/oauth-authorization-server");
+    const md: any = await (await AuthServerGET({ request: mdReq, url: new URL(mdReq.url) } as any)).json();
+
+    expect(prm.authorization_servers[0]).toBe(md.issuer);
+    // The issuer is an origin, not an origin plus the auth handler's path:
+    // a path-suffixed issuer is what Claude.ai refused to trust.
+    expect(new URL(md.issuer).pathname).toBe("/");
+  });
 });

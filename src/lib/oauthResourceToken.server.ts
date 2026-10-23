@@ -24,7 +24,11 @@ export interface ResourceTokenClaims {
 }
 
 const BASE = (process.env.BETTER_AUTH_URL ?? "http://localhost:4321").replace(/\/$/, "");
-const ISSUER = `${BASE}/api/auth`;
+// The issuer is the origin, not the auth handler's path: the metadata at
+// /.well-known/oauth-authorization-server publishes the origin, and the jwt
+// plugin is configured to sign with it (#1501). A verifier that kept the old
+// `/api/auth` suffix would reject every token this server mints.
+const ISSUER = BASE;
 const AUDIENCE = `${BASE}/api/mcp`;
 
 const KEY_TTL_MS = 5 * 60 * 1000;

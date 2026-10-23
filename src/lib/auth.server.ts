@@ -150,7 +150,12 @@ export const auth = betterAuth({
         await sendMagicLinkEmail(email, url);
       },
     }),
-    jwt(),
+    // One issuer everywhere (#1501). The oauth-provider plugin derives the
+    // issuer from this plugin's option, else from its own baseURL, which ends
+    // in `/api/auth`. That path-suffixed issuer disagreed with the metadata we
+    // publish at `/.well-known/oauth-authorization-server` (no path), and
+    // Claude.ai refused the connector on the mismatch.
+    jwt({ jwt: { issuer: baseUrl } }),
     oauthProvider({
       loginPage: "/auth/signin",
       consentPage: "/oauth/consent",

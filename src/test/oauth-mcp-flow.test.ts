@@ -201,6 +201,9 @@ describe("MCP connector flow — register, sign in, consent, token, tool call", 
     const code = new URL(codeRedirect).searchParams.get("code");
     expect(code).toBeTruthy();
     expect(new URL(codeRedirect).searchParams.get("state")).toBe(state);
+    // RFC 9207: the authorization response names the issuer, and it must be the
+    // issuer the metadata publishes — no `/api/auth` suffix (#1501).
+    expect(new URL(codeRedirect).searchParams.get("iss")).toBe(BASE);
 
     // Consent is remembered for this user and client.
     const consent = await prisma.oauthConsent.findFirst({ where: { clientId, userId: testUserId } });
