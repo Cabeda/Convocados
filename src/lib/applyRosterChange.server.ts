@@ -29,6 +29,7 @@ import { isSystemUserId } from "./payerIdentity.server";
 import { enqueuePushSetupHintSafe } from "./pushSetupHint";
 import { getRosterCapacity } from "./roster.server";
 import { acceptPendingAccountInviteForDirectJoin } from "./invite.server";
+import { readPosition } from "./positions";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
 import { movePlayerToEndOfList, rejoinPlayerToCurrentGame } from "./rosterChange.server";
 import { finishRosterAdd } from "./teamFormation.server";
@@ -50,7 +51,7 @@ export type ApplyRosterChangeInput = {
   session: ApplyRosterChangeSession;
   /** Webhook/notification actor: session user id, x-client-id, or undefined. */
   senderClientId?: string;
-  body: { name?: unknown; linkToAccount?: unknown; email?: unknown };
+  body: { name?: unknown; linkToAccount?: unknown; email?: unknown; position?: unknown };
   /** Event pre-fetched by the route (post 404/pickup/ended guards). */
   event: PrismaEvent;
 };
@@ -228,6 +229,12 @@ async function notifyPlayerJoined(input: {
 export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<ApplyRosterChangeResult> {
   const { eventId, origin, session, senderClientId, event } = input;
   const { name, linkToAccount, email } = input.body;
+  // #1448: a position is optional and free-form input is refused — free text
+  // here would make the rotation suggestion's input meaningless.
+  const parsedPosition = readPosition(input.body.position);
+  if (!parsedPosition.ok) {
+    return { status: 400, body: { error: "Unknown position. Use GK, DEF, MID or FWD." } };
+  }
 
   // ADR 0016: the authoritative roster is the current game's GameParticipant
   // rows, NOT the legacy Player rows (which accumulate across recurring
@@ -558,7 +565,12 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   if (event.currentGameId) {
     const eventPlayer = await upsertEventPlayerForRoster(
       eventId,
-      { name: trimmed, userId: linkedUserId, user: linkedUserId ? { id: linkedUserId, name: trimmed } : null },
+      {
+        name: trimmed,
+        userId: linkedUserId,
+        user: linkedUserId ? { id: linkedUserId, name: trimmed } : null,
+        position: parsedPosition.position,
+      },
     );
     // Account-linked identities reuse the existing EventPlayer even when the
     // display name changed ("Cabeda" vs "José Cabeda") — team placement is

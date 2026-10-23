@@ -23,6 +23,11 @@ export type RosterTarget = {
   userId: string | null;
   /** The User row when userId is set, otherwise null. */
   user: { id: string; name: string } | null;
+  /**
+   * Optional position preference (#1448). `undefined` leaves whatever the row
+   * already carries; `null` clears it; a value sets it.
+   */
+  position?: string | null;
 };
 
 export type ResolveTargetInput = {
@@ -133,9 +138,10 @@ export async function upsertEventPlayerForRoster(
 
   const ep = await client.eventPlayer.upsert({
     where: { eventId_name: { eventId, name: target.name } },
-    create: { eventId, name: target.name, userId: target.userId },
+    create: { eventId, name: target.name, userId: target.userId, position: target.position ?? null },
     update: {
       ...(target.userId ? { userId: target.userId } : {}),
+      ...(target.position !== undefined ? { position: target.position } : {}),
       invitationOptOutAt: null,
     },
   });

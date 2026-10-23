@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   Paper, Typography, Box, Stack, Chip, Button, Alert,
   IconButton, Tooltip, InputAdornment, TextField, Autocomplete,
-  List, ListItem, ListItemText, Collapse,
+  List, ListItem, ListItemText, Collapse, MenuItem,
   alpha, useTheme, LinearProgress, useMediaQuery, CircularProgress,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -73,6 +73,14 @@ function useNow(intervalMs = 30_000): number {
   return now;
 }
 
+/** The i18n key for each stored position value (#1448). */
+const POSITION_LABEL_KEYS: Record<string, "positionGk" | "positionDef" | "positionMid" | "positionFwd"> = {
+  GK: "positionGk",
+  DEF: "positionDef",
+  MID: "positionMid",
+  FWD: "positionFwd",
+};
+
 export interface InviteChannelFlags {
   email: boolean;
   webPush: boolean;
@@ -136,7 +144,9 @@ interface Props {
   availableSuggestions: PlayerSuggestion[];
   playerError: string | null;
   onPlayerErrorChange: (error: string | null) => void;
-  onAddPlayer: (name: string, email?: string) => Promise<void>;
+  onAddPlayer: (name: string, email?: string, position?: string) => Promise<void>;
+  /** Set or clear one row's position (#1448). */
+  onSetPosition?: (name: string, position: string | null) => Promise<void>;
   /** Trigger the confirmation dialog. Used by single-tap paths (chip, dropdown). */
   onRequestAdd?: (intent: AddPlayerIntent) => void;
   onRemovePlayer: (playerId: string) => Promise<void>;
@@ -208,7 +218,7 @@ interface Props {
 export function PlayerList({
   players, maxPlayers, isOwner, hasTeams,
   availableSuggestions, playerError, onPlayerErrorChange,
-  onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
+  onAddPlayer, onSetPosition, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
   onRandomize, onConfirmReRandomize, onConfirmEarlyRandomize, isRandomizing = false, canRemovePlayer,
   currentUserId: _currentUserId,
   myRsvpStatus: _myRsvpStatus,
@@ -233,6 +243,8 @@ export function PlayerList({
   const t = useT();
   const theme = useTheme();
   const [playerInput, setPlayerInput] = useState("");
+  // #1448: the add row carries the same optional preference the API stores.
+  const [playerPosition, setPlayerPosition] = useState("");
   const [showAllPills, setShowAllPills] = useState(false);
   const [declinedOpen, setDeclinedOpen] = useState(false);
   // Ticking clock for invite resend cooldowns (ADR 0025 follow-up).
@@ -605,6 +617,22 @@ export function PlayerList({
             noOptionsText={t("noSuggestions")}
           />
 
+          <TextField
+            select
+            size="small"
+            label={t("positionLabel")}
+            value={playerPosition}
+            onChange={(e) => setPlayerPosition(e.target.value)}
+            sx={{ minWidth: 104, alignSelf: "stretch" }}
+            slotProps={{ inputLabel: { shrink: true } }}
+          >
+            <MenuItem value="">{t("positionNone")}</MenuItem>
+            <MenuItem value="GK">{t("positionGk")}</MenuItem>
+            <MenuItem value="DEF">{t("positionDef")}</MenuItem>
+            <MenuItem value="MID">{t("positionMid")}</MenuItem>
+            <MenuItem value="FWD">{t("positionFwd")}</MenuItem>
+          </TextField>
+
           <IconButton
             color="primary"
             data-testid="add-player-submit"
@@ -618,12 +646,14 @@ export function PlayerList({
                   kind: "single",
                   name: trimmed,
                   email: isEmailLike(trimmed) ? trimmed : undefined,
+                  ...(playerPosition ? { position: playerPosition } : {}),
                   source: "input",
                 });
               } else {
-                onAddPlayer(trimmed);
+                onAddPlayer(trimmed, undefined, playerPosition || undefined);
               }
               setPlayerInput("");
+              setPlayerPosition("");
             }}
             sx={{ alignSelf: "stretch", borderRadius: 1, border: 1, borderColor: "divider", px: 1.5 }}
           >
@@ -740,6 +770,25 @@ export function PlayerList({
                       </span>
                     </Tooltip>
                   )}
+                  {isOwner && onSetPosition ? (
+                    <TextField
+                      select
+                      size="small"
+                      variant="standard"
+                      value={player.position ?? ""}
+                      onChange={(e) => void onSetPosition(player.name, e.target.value || null)}
+                      sx={{ minWidth: 76, mr: 1 }}
+                      slotProps={{ htmlInput: { "aria-label": `${t("positionLabel")}: ${player.name}` } }}
+                    >
+                      <MenuItem value="">{t("positionNone")}</MenuItem>
+                      <MenuItem value="GK">{t("positionGk")}</MenuItem>
+                      <MenuItem value="DEF">{t("positionDef")}</MenuItem>
+                      <MenuItem value="MID">{t("positionMid")}</MenuItem>
+                      <MenuItem value="FWD">{t("positionFwd")}</MenuItem>
+                    </TextField>
+                  ) : player.position ? (
+                    <Chip size="small" variant="outlined" label={t(POSITION_LABEL_KEYS[player.position] ?? "positionNone")} sx={{ mr: 1 }} />
+                  ) : null}
                    <ListItemText
                      primary={player.userId ? (
                        <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>

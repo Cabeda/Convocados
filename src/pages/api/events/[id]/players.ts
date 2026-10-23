@@ -6,6 +6,7 @@ import { isGameEnded } from "../../../../lib/gameStatus";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { activeRosterEventPlayerById } from "../../../../lib/rosterChange.server";
 import { applyRosterChange, resetInviteRateLimitStores } from "../../../../lib/applyRosterChange.server";
+import { readPosition } from "../../../../lib/positions";
 import {
   IDEMPOTENCY_HEADER,
   getCachedResponse,
@@ -64,12 +65,12 @@ export const POST: APIRoute = async ({ params, request }) => {
     );
   }
 
-  const { name, linkToAccount, email } = await request.json();
+  const { name, linkToAccount, email, position } = await request.json();
 
   // Idempotency replay check: if the same key + same body was already processed,
   // return the cached 2xx response. Mismatched body returns 422.
   if (idemKey && idemCacheKey) {
-    const bodyHash = hashPayload({ name, linkToAccount, email } as Record<string, unknown>);
+    const bodyHash = hashPayload({ name, linkToAccount, email, position } as Record<string, unknown>);
     const cached = getCachedResponse(idemCacheKey, bodyHash);
     if (cached) {
       return new Response(cached.body, {
@@ -90,18 +91,60 @@ export const POST: APIRoute = async ({ params, request }) => {
     origin,
     session,
     senderClientId,
-    body: { name, linkToAccount, email },
+    body: { name, linkToAccount, email, position },
     event,
   });
 
   // Cache the 2xx response for replay on retry with the same Idempotency-Key.
   if (idemKey && idemCacheKey && result.status >= 200 && result.status < 300) {
-    const bodyHash = hashPayload({ name, linkToAccount, email } as Record<string, unknown>);
+    const bodyHash = hashPayload({ name, linkToAccount, email, position } as Record<string, unknown>);
     const text = JSON.stringify(result.body);
     storeCachedResponse(idemCacheKey, bodyHash, result.status, text, "application/json");
   }
 
   return Response.json(result.body, { status: result.status });
+};
+
+/**
+ * PATCH /api/events/[id]/players — set or clear one roster row's position (#1448).
+ *
+ * Body: `{ name, position }` where `position` is GK | DEF | MID | FWD, or null/”” to
+ * clear. The row is resolved by name against the authoritative roster, the same way
+ * DELETE does; an unknown name is a 404 and an unknown position is a 400.
+ */
+export const PATCH: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
+
+  const eventId = params.id ?? "";
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true, ownerId: true } });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const session = await getSession(request);
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session ?? undefined, eventId);
+  if (!isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({} as Record<string, unknown>));
+  const name = String((body as Record<string, unknown>).name ?? "").trim();
+  if (!name) return Response.json({ error: "Player name is required." }, { status: 400 });
+
+  const parsed = readPosition((body as Record<string, unknown>).position);
+  if (!parsed.ok || parsed.position === undefined) {
+    return Response.json({ error: "Unknown position. Use GK, DEF, MID or FWD." }, { status: 400 });
+  }
+
+  const row = await prisma.eventPlayer.findFirst({ where: { eventId, name }, select: { id: true } });
+  if (!row) return Response.json({ error: "Player not found." }, { status: 404 });
+
+  const updated = await prisma.eventPlayer.update({
+    where: { id: row.id },
+    data: { position: parsed.position },
+    select: { id: true, name: true, position: true },
+  });
+
+  return Response.json({ ok: true, player: updated });
 };
 
 export const DELETE: APIRoute = async ({ params, request }) => {
