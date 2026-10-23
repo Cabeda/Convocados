@@ -666,15 +666,17 @@ internal fun ScoreTimeOverlay(
 
         if (showTopStatus) {
             // The Finish is always available: the clock never ends a game
-            // (#1360), so the organizer closes it whenever they want. The
-            // teams hint stays under it so the swipe that opens the roster
-            // is still discoverable.
+            // (#1360), so the organizer closes it whenever they want. A full
+            // Button (52dp) rather than the 32dp CompactButton it used to be:
+            // this is the one control that ends the game and it has to be
+            // hittable (#1361). The teams hint stays under it so the swipe
+            // that opens the roster is still discoverable.
             Column(
                 // Clears the 12-o'clock progress marker on round screens.
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                CompactButton(onClick = onFinish) {
+                Button(onClick = onFinish) {
                     Text(stringResource(R.string.finish_game))
                 }
                 // The hint is a nicety: under the Finish button it would sit on
