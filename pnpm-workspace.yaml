@@ -37,6 +37,9 @@ overrides:
   # Trailing-bytes DoS after a compressed body (GHSA-27r3-jxmh-p828).
   # Patched 2.4.0; reached through @lhci/cli -> express -> body-parser, dev-only.
   'body-parser@<2.4.0': '>=2.4.0'
+  # undici 8.x request-smuggling fix (GHSA-xjj6-f33q-929c), patched 8.12.2.
+  # Dev-only: reached through jsdom/vitest. Patch bump inside major 8.
+  'undici@<8.12.2': '>=8.12.2'
   # minimatch/glob ask for brace-expansion ^4 and ^2. An open-ended '>=5.0.7'
   # override let pnpm satisfy a ^2 request with 4.x, which is now the vulnerable
   # line (GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p: DoS via uncontrolled

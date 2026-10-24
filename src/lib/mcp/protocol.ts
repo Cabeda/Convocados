@@ -31,14 +31,25 @@ export const SUPPORTED_VERSIONS: readonly string[] = [
 
 export const SERVER_INFO = { name: "convocados", version: pkg.version };
 
+/**
+ * Only what we actually serve. Advertising `resources` here while
+ * `resources/list` answers -32601 makes a strict client treat the server as
+ * degraded — ChatGPT dropped every tool from the connector on the day we did.
+ */
 export const SERVER_CAPABILITIES = {
   tools: { listChanged: false },
-  resources: { listChanged: false },
 };
 
 export const SERVER_INSTRUCTIONS =
-  "Convocados organizes pickup sports games. Read tools work anonymously for " +
-  "public/link-accessible events; everything else requires OAuth 2.1. " +
+  "Convocados organizes pickup sports games. When the user asks to create, " +
+  "edit, cancel, fill, staff or score a game, call the matching convocados_* " +
+  "tool — do not tell them to do it in the app by hand. Pass dateTime as local " +
+  "wall-clock ISO 8601 (2026-10-29T20:00) together with the user's IANA " +
+  "timezone (Europe/Lisbon): without a timezone the time is stored as UTC and " +
+  "the game lands at the wrong hour. Ask for a missing title, date/time or " +
+  "location before calling. Most write tools only accept games the user owns " +
+  "or administers; RSVP, leaving a game and claiming a player are self-service. " +
+  "Read tools also work anonymously for public or link-accessible games. " +
   "Supports both the 2026-07-28 stateless lifecycle (server/discover) and the " +
   "initialize handshake.";
 
