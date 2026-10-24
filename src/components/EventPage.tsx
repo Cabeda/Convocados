@@ -1356,6 +1356,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onPlayerErrorChange={setPlayerError}
               onAddPlayer={(name, email, position) => addPlayer(name, false, email, position)}
               onSetPosition={setPlayerPosition}
+              positionsEnabled={event.positionsEnabled ?? false}
               onRequestAdd={requestAddPlayer}
               onRemovePlayer={removePlayer}
               onReorderPlayers={reorderPlayers}

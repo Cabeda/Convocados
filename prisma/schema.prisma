@@ -179,6 +179,10 @@ model Event {
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 
+  // Roster positions (#1448). Off by default: a group that does not use them
+  // is never asked for one.
+  positionsEnabled  Boolean @default(false)
+
   // Rating settings
   showCompetitiveData Boolean @default(true)  // top-level gate: hide rankings/scores/stats from players
   eloEnabled        Boolean @default(true)

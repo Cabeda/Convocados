@@ -60,6 +60,14 @@ beforeEach(() => {
 });
 
 describe("PlayerList — confirmation dialog trigger", () => {
+  it("hides position controls unless the event enables them", () => {
+    const positioned = [{ ...basePlayers[0], position: "GK" }];
+    const { rerender } = renderWithTheme(<PlayerList {...baseProps} players={positioned} />);
+    expect(screen.queryByText("Goalkeeper")).toBeNull();
+
+    rerender(<PlayerList {...baseProps} players={positioned} positionsEnabled />);
+    expect(screen.getByText("Goalkeeper")).toBeInTheDocument();
+  });
   it("does not render recent-players chips (deprecated)", async () => {
     renderWithTheme(<PlayerList {...baseProps} />);
     expect(screen.queryByText(/Recent players/)).toBeNull();
