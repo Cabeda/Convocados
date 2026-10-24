@@ -34,6 +34,9 @@ overrides:
   basic-ftp: '>=6.2.1'
   better-auth@<1.6.2: '>=1.6.2'
   body-parser@<1.20.6: '>=1.20.6'
+  # Trailing-bytes DoS after a compressed body (GHSA-27r3-jxmh-p828).
+  # Patched 2.4.0; reached through @lhci/cli -> express -> body-parser, dev-only.
+  'body-parser@<2.4.0': '>=2.4.0'
   # minimatch/glob ask for brace-expansion ^4 and ^2. An open-ended '>=5.0.7'
   # override let pnpm satisfy a ^2 request with 4.x, which is now the vulnerable
   # line (GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p: DoS via uncontrolled
@@ -109,3 +112,18 @@ auditConfig:
     # CVEs, reason or review date go missing.
     - GHSA-jmr9-qjv8-65gv
     - GHSA-7pqw-9j4j-h8q3
+    #
+    # zod <4.6.6 — memory exhaustion while validating oversized constrained
+    # collections (GHSA-mrhx-c7xc-m3w5). No fixed 3.x exists: the patch lands in
+    # 4.6.6 only, and the vulnerable copy is zod 3.25.76 reached through
+    # @lhci/cli -> lighthouse -> puppeteer-core -> chromium-bidi. Forcing 4.x
+    # into chromium-bidi is a breaking major for a devDependency, so the
+    # override is not an option and the exemption carries the decision.
+    #
+    # Exposure is dev-only: @lhci/cli is a devDependency and zod is imported by
+    # puppeteer's browser plumbing, never by the server runtime. The other 4.x
+    # copy (eslint-plugin-react-hooks) is unaffected by this entry.
+    #
+    # Reviewed by Cabeda on 2026-10-24; re-review by 2026-11-24, or sooner if a
+    # 3.x patch publishes.
+    - GHSA-mrhx-c7xc-m3w5

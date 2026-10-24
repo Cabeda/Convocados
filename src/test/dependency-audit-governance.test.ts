@@ -158,8 +158,11 @@ const snapshotsAt = read("pnpm-lock.yaml").lastIndexOf("\nsnapshots:");
 const graph = snapshotsAt === -1 ? "" : read("pnpm-lock.yaml").slice(snapshotsAt);
 
 /** The version pnpm resolved for a package, or null when it left the graph. */
+// A leaf snapshot has no dependency block, so pnpm writes `pkg@1.2.3: {}` —
+// without the empty-body suffix this missed every dependency-free package
+// (zod among them) and reported it as "left the graph".
 const resolvedVersion = (name: string) =>
-  new RegExp(`^ {2}'?${escapeRegExp(name)}@([^'\\n]*)'?:$`, "m").exec(graph)?.[1] ?? null;
+  new RegExp(`^ {2}'?${escapeRegExp(name)}@([^'\\n]*)'?:(?: \\{\\})?$`, "m").exec(graph)?.[1] ?? null;
 
 /** One package's snapshot block, so a scan for a dependency stays inside it. */
 const snapshotBlock = (name: string) => {
