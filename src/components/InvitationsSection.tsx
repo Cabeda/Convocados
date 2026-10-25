@@ -4,6 +4,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { useT } from "~/lib/useT";
+import { apiRequest } from "~/lib/api/client";
 import type { Locale } from "~/lib/i18n";
 import { formatDateInTz } from "~/lib/timezones";
 
@@ -64,12 +65,10 @@ export function InvitationsSection({ invitations, rosterAdds, locale = "en" }: P
     setBusyId(invitation.id);
     setError(null);
     try {
-      const res = await fetch(`/api/invite/${invitation.token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+      await apiRequest("POST /api/invite/{token}", {
+        params: { token: invitation.token },
+        body: { action },
       });
-      if (!res.ok) throw new Error("failed");
       setPending((prev) => prev.filter((i) => i.id !== invitation.id));
     } catch {
       setError(t("invitationsError"));

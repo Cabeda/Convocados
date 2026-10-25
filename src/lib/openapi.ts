@@ -1459,6 +1459,20 @@ export const openApiSpec = {
         responses: { "200": { description: "Unsubscribed" } },
       },
     },
+    "/api/push/subscribe": {
+      post: {
+        summary: "Register this browser's web push subscription for the caller",
+        tags: ["Push"],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["endpoint", "keys"], properties: { endpoint: { type: "string" }, keys: { type: "object", required: ["p256dh", "auth"], properties: { p256dh: { type: "string" }, auth: { type: "string" } } }, locale: { type: "string", description: "BCP-47 browser language" } } } } } },
+        responses: { "200": { description: "Subscription recorded" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Unregister a web push subscription for the caller",
+        tags: ["Push"],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["endpoint"], properties: { endpoint: { type: "string" } } } } } },
+        responses: { "200": { description: "Subscription removed" }, ...errorResponses },
+      },
+    },
     "/api/push/vapid-public-key": {
       get: {
         summary: "Get VAPID public key for push subscriptions",
@@ -1570,8 +1584,17 @@ export const openApiSpec = {
         summary: "Update own profile",
         tags: ["Users"],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" } } } } } },
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, publicStats: { type: "boolean" }, profileVisibility: { type: "string", enum: ["public", "participants", "private"] } } } } } },
         responses: { "200": { description: "Profile updated" }, ...errorResponses },
+      },
+    },
+
+    "/api/users/me/push-prompt-state": {
+      put: {
+        summary: "Record the push prompt's outcome for this account (default/granted/dismissed/denied)",
+        tags: ["Users"],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["state"], properties: { state: { type: "string", enum: ["default", "granted", "dismissed", "denied"] } } } } } },
+        responses: { "200": { description: "State recorded" }, ...errorResponses },
       },
     },
 
@@ -1642,6 +1665,14 @@ export const openApiSpec = {
         responses: { "200": { description: "Profile updated" }, "401": { description: "Unauthorized" } },
       },
     },
+    "/api/me/account": {
+      delete: {
+        summary: "Delete the authenticated user's account and its app data",
+        tags: ["Users"],
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { password: { type: "string" } } } } } },
+        responses: { "200": { description: "Account deleted" }, ...errorResponses },
+      },
+    },
     "/api/me/photo": {
       post: {
         summary: "Set the authenticated user's profile photo (base64 data URL)",
@@ -1680,6 +1711,18 @@ export const openApiSpec = {
       put: {
         summary: "Update notification preferences",
         tags: ["Users"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: Object.fromEntries(
+                  ["emailEnabled", "pushEnabled", "gameInviteEmail", "gameInvitePush", "gameReminderEmail", "gameReminderPush", "playerActivityPush", "eventDetailsPush", "postGamePush", "weeklySummaryEmail", "paymentReminderEmail", "paymentReminderPush", "invitesEnabled", "reminder24h", "reminder2h", "reminder1h"].map((name) => [name, { type: "boolean" }]),
+                ),
+              },
+            },
+          },
+        },
         responses: { "200": { description: "Preferences updated" }, ...errorResponses },
       },
     },
@@ -1782,6 +1825,23 @@ export const openApiSpec = {
         tags: ["OAuth"],
         security: anonymous,
         responses: { "200": { description: "OIDC metadata" } },
+      },
+    },
+    "/api/auth/oauth2/public-client": {
+      get: {
+        summary: "Public OAuth client metadata for the consent screen",
+        tags: ["OAuth"],
+        security: anonymous,
+        parameters: [{ name: "client_id", in: "query", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Client name and logo" }, "404": { description: "Unknown client" } },
+      },
+    },
+    "/api/auth/oauth2/consent": {
+      post: {
+        summary: "Approve or deny a signed authorization request",
+        tags: ["OAuth"],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["accept", "oauth_query"], properties: { accept: { type: "boolean" }, oauth_query: { type: "string", description: "The signed authorization request, exactly as the AS sent it" } } } } } },
+        responses: { "200": { description: "URL to continue to (the client's redirect carrying the code)" }, ...errorResponses },
       },
     },
     "/api/auth/oauth2/authorize": {
@@ -2024,7 +2084,7 @@ export const openApiSpec = {
         summary: "Respond to an invite (accept/decline)",
         tags: ["Invites"],
         parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
-        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["action"], properties: { action: { type: "string", enum: ["accept", "decline"] } } } } } },
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["action"], properties: { action: { type: "string", enum: ["accept", "decline"] }, asGuest: { type: "boolean", description: "Accept as the invited guest instead of the signed-in account" } } } } } },
         responses: { "200": { description: "Invite accepted or declined" } },
       },
     },

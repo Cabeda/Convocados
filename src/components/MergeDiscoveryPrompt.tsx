@@ -10,6 +10,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useSession } from "~/lib/auth.client";
+import { apiRequest } from "~/lib/api/client";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { dateFormatTag } from "~/lib/timezones";
@@ -46,9 +47,9 @@ export default function MergeDiscoveryPrompt() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/me/credentials/pending-merge", { credentials: "include" });
-      if (!res.ok) return;
-      const body = await res.json();
+      const body = (await apiRequest("GET /api/me/credentials/pending-merge", {
+        init: { credentials: "include" },
+      })) as { pendingMerge?: PendingMerge };
       if (body.pendingMerge) {
         setPending(body.pendingMerge);
         setOpen(true);
@@ -79,16 +80,10 @@ export default function MergeDiscoveryPrompt() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/me/credentials/merge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: true }),
-        credentials: "include",
+      await apiRequest("POST /api/me/credentials/merge", {
+        body: { confirm: true },
+        init: { credentials: "include" },
       });
-      if (!res.ok) {
-        setError(t("mergeError"));
-        return;
-      }
       setOpen(false);
       setPending(null);
       // Data ownership moved to this account; a reload shows the merged state.

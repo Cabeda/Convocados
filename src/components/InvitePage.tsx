@@ -5,6 +5,7 @@ import {
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import { useT } from "~/lib/useT";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface InviteData {
   valid: boolean;
@@ -42,9 +43,11 @@ export function InvitePage({ token }: { token: string }) {
   const [guestAccepted, setGuestAccepted] = useState(false);
 
   const load = () => {
-    fetch(`/api/invite/${token}`, { credentials: "include" })
-      .then((r) => r.json())
-      .then(setData)
+    apiRequest("GET /api/invite/{token}", {
+      params: { token },
+      init: { credentials: "include" },
+    })
+      .then((body) => setData(body as InviteData))
       .catch(() => setError(t("somethingWentWrong")))
       .finally(() => setLoading(false));
   };
@@ -56,18 +59,11 @@ export function InvitePage({ token }: { token: string }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/invite/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ action, ...(opts.asGuest ? { asGuest: true } : {}) }),
+      await apiRequest("POST /api/invite/{token}", {
+        params: { token },
+        body: { action, ...(opts.asGuest ? { asGuest: true } : {}) },
+        init: { credentials: "include" },
       });
-      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
-      if (!res.ok) {
-        setError(json.error ?? t("somethingWentWrong"));
-        setBusy(false);
-        return;
-      }
       if (action === "accept" && !data.authenticated) {
         // True anonymous visitor: same-browser memory of the accepted spot (ADR 0026).
         // A logged-in viewer joining "as guest" leaves no marker — this is their account's browser.
@@ -75,8 +71,9 @@ export function InvitePage({ token }: { token: string }) {
         setGuestAccepted(true);
       }
       setData({ ...data, status: action === "accept" ? "accepted" : "declined" });
-    } catch {
-      setError(t("somethingWentWrong"));
+    } catch (e) {
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error ?? t("somethingWentWrong"));
     }
     setBusy(false);
   };
@@ -88,20 +85,15 @@ export function InvitePage({ token }: { token: string }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/events/${data.game.id}/claim-player`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ playerId: data.claimPlayerId }),
+      await apiRequest("POST /api/events/{id}/claim-player", {
+        params: { id: data.game.id },
+        body: { playerId: data.claimPlayerId },
+        init: { credentials: "include" },
       });
-      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
-      if (!res.ok) {
-        setError(json.error ?? t("somethingWentWrong"));
-      } else {
-        setData({ ...data, claimPlayerId: null });
-      }
-    } catch {
-      setError(t("somethingWentWrong"));
+      setData({ ...data, claimPlayerId: null });
+    } catch (e) {
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error ?? t("somethingWentWrong"));
     }
     setBusy(false);
   };
