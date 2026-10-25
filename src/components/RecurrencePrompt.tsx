@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Paper, Typography, Button, Stack, Chip, Alert } from "@mui/material";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import { useT } from "~/lib/useT";
+import { apiRequest } from "~/lib/api/client";
 
 interface Props {
   eventId: string;
@@ -47,12 +48,10 @@ export function RecurrencePrompt({ eventId, isRecurring, complete }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/recurrence`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isRecurring: true, recurrenceFreq: "weekly", recurrenceInterval: 1 }),
+      await apiRequest("PUT /api/events/{id}/recurrence", {
+        params: { id: eventId },
+        body: { isRecurring: true, recurrenceFreq: "weekly", recurrenceInterval: 1 },
       });
-      if (!res.ok) throw new Error("failed");
       setDone(true);
     } catch {
       setError(t("recurrenceFailed"));

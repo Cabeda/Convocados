@@ -11,6 +11,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { useT } from "~/lib/useT";
 import { formatMoney, toCents } from "~/lib/money";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,19 +73,15 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
       });
 
       const { latitude, longitude } = pos.coords;
-      const res = await fetch(
-        `/api/playtomic/clubs?lat=${latitude}&lng=${longitude}&sport=${encodeURIComponent(sport)}`,
-      );
-      const data = await res.json();
-
-      if (!res.ok) {
-        setSearchError(data.error ?? t("somethingWentWrong"));
-      } else {
-        setClubs(data.clubs ?? []);
-      }
+      const data = (await apiRequest("GET /api/playtomic/clubs", {
+        query: { lat: latitude, lng: longitude, sport },
+      })) as { clubs?: Club[] };
+      setClubs(data.clubs ?? []);
     } catch (err) {
       if (err instanceof Error && 'code' in err && (err as { code: unknown }).code === 1) {
         setSearchError(t("playtomicLocationDenied"));
+      } else if (err instanceof ApiError) {
+        setSearchError(err.message);
       } else {
         setSearchError(t("playtomicSearchError"));
       }
@@ -108,18 +105,12 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
       setAvailError(null);
 
       try {
-        const res = await fetch(
-          `/api/playtomic/availability?tenantId=${tenantId}&date=${date}&sport=${encodeURIComponent(sport)}`,
-        );
-        const data = await res.json();
-
-        if (!res.ok) {
-          setAvailError(data.error ?? t("somethingWentWrong"));
-        } else {
-          setCourts((prev) => ({ ...prev, [tenantId]: data.courts ?? [] }));
-        }
-      } catch {
-        setAvailError(t("playtomicAvailabilityError"));
+        const data = (await apiRequest("GET /api/playtomic/availability", {
+          query: { tenantId, date, sport },
+        })) as { courts?: Court[] };
+        setCourts((prev) => ({ ...prev, [tenantId]: data.courts ?? [] }));
+      } catch (err) {
+        setAvailError(err instanceof ApiError ? err.message : t("playtomicAvailabilityError"));
       } finally {
         setAvailLoading(null);
       }

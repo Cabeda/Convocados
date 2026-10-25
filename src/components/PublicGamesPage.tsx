@@ -24,6 +24,7 @@ import { detectLocale, type Locale, type TFunction } from "~/lib/i18n";
 import { getSportPreset } from "~/lib/sports";
 import { normalizeCity } from "~/lib/city";
 import { formatDateInTz } from "~/lib/timezones";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface PublicEvent {
   id: string;
@@ -50,19 +51,14 @@ const isOpenPickup = (ev: PublicEvent): boolean => ev.source === "playtomic" && 
 async function adoptPickup(ev: PublicEvent, t: TFunction) {
   if (!window.confirm(t("claimPickupConfirm"))) return;
   try {
-    const res = await fetch(`/api/events/${ev.id}/adopt`, { method: "POST" });
-    if (res.status === 401) {
+    await apiRequest("POST /api/events/{id}/adopt", { params: { id: ev.id } });
+    window.location.href = `/events/${ev.id}`;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
       window.location.href = `/auth/signin?callbackURL=${encodeURIComponent(`/events/${ev.id}`)}`;
       return;
     }
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      alert(body?.error ?? t("claimPickupFailed"));
-      return;
-    }
-    window.location.href = `/events/${ev.id}`;
-  } catch {
-    alert(t("claimPickupFailed"));
+    alert(err instanceof ApiError ? err.message : t("claimPickupFailed"));
   }
 }
 
@@ -451,10 +447,9 @@ export default function PublicGamesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const fetchPage = useCallback(async (cursor?: string | null) => {
-    const params = new URLSearchParams();
-    if (cursor) params.set("cursor", cursor);
-    const res = await fetch(`/api/events/public?${params.toString()}`);
-    return (await res.json()) as PaginatedPublicEvents;
+    return (await apiRequest("GET /api/events/public", {
+      query: { cursor: cursor ?? undefined },
+    })) as PaginatedPublicEvents;
   }, []);
 
   useEffect(() => {

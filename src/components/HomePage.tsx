@@ -25,6 +25,7 @@ import CreateEventForm from "./CreateEventForm";
 import { InvitationsSection, type HomeInvitation, type HomeRosterAdd } from "./InvitationsSection";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
+import { apiRequest } from "~/lib/api/client";
 import { useCountdown } from "./event/useCountdown";
 import { getSportPreset } from "~/lib/sports";
 import { formatDateInTz } from "~/lib/timezones";
@@ -280,17 +281,13 @@ export default function HomePage() {
   const [createOpen, setCreateOpen] = useState(false);
 
   const fetchHome = useCallback(async () => {
-    const res = await fetch("/api/me/home");
-    if (!res.ok) throw new Error("home fetch failed");
-    return (await res.json()) as HomeData;
+    return (await apiRequest("GET /api/me/home")) as HomeData;
   }, []);
 
   const fetchGames = useCallback(async (oc?: string | null, fc?: string | null) => {
-    const params = new URLSearchParams();
-    if (oc) params.set("ownedCursor", oc);
-    if (fc) params.set("followedCursor", fc);
-    const res = await fetch(`/api/me/games?${params.toString()}`);
-    return (await res.json()) as DashboardData;
+    return (await apiRequest("GET /api/me/games", {
+      query: { ownedCursor: oc ?? undefined, followedCursor: fc ?? undefined },
+    })) as DashboardData;
   }, []);
 
   /** ADR 0025: fetch co-play invite suggestions for the 3 nearest upcoming
@@ -304,8 +301,9 @@ export default function HomePage() {
     if (managed.length === 0) return [];
     const results = await Promise.all(managed.map(async (game) => {
       try {
-        const res = await fetch(`/api/events/${game.id}/suggestions`);
-        const json = await res.json().catch(() => ({ suggestions: [] }));
+        const json = (await apiRequest("GET /api/events/{id}/suggestions", {
+          params: { id: game.id },
+        })) as { suggestions?: DashboardSuggestion[] };
         const suggestions = Array.isArray(json?.suggestions) ? json.suggestions : [];
         return { game, suggestions };
       } catch {
@@ -359,28 +357,18 @@ export default function HomePage() {
   }, [session?.user, fetchHome, fetchGames, fetchManagedSuggestions]);
 
   const handleUnfollow = async (eventId: string) => {
-    await fetch("/api/me/follows", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ eventId }),
-    });
+    await apiRequest("POST /api/me/follows", { body: { eventId } }).catch(() => undefined);
     setGames((prev) => (prev ? { ...prev, followed: prev.followed.filter((g) => g.id !== eventId) } : prev));
   };
 
   /** ADR 0025: one-tap invite from the suggestions panel. */
   const handleSuggestionInvite = async (eventId: string, userId: string) => {
     try {
-      const res = await fetch(`/api/events/${eventId}/invites`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      });
-      if (res.ok) {
-        setManagedSuggestions((prev) => prev.map((m) => ({
-          ...m,
-          suggestions: m.suggestions.filter((s) => s.userId !== userId),
-        })));
-      }
+      await apiRequest("POST /api/events/{id}/invites", { params: { id: eventId }, body: { userId } });
+      setManagedSuggestions((prev) => prev.map((m) => ({
+        ...m,
+        suggestions: m.suggestions.filter((s) => s.userId !== userId),
+      })));
     } catch { /* network blip — panel stays as-is */ }
   };
 

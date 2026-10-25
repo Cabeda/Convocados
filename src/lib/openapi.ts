@@ -85,13 +85,20 @@ export const openApiSpec = {
                 properties: {
                   title: { type: "string" },
                   location: { type: "string" },
+                  city: { type: "string" },
                   dateTime: { type: "string", format: "date-time" },
+                  timezone: { type: "string" },
                   maxPlayers: { type: "integer", default: 10 },
                   sport: { type: "string", default: "football-5v5" },
                   teamOneName: { type: "string", default: "Ninjas" },
                   teamTwoName: { type: "string", default: "Gunas" },
                   isRecurring: { type: "boolean" },
                   recurrenceRule: { type: "string" },
+                  recurrenceFreq: { type: ["string", "null"] },
+                  recurrenceInterval: { type: ["integer", "null"] },
+                  recurrenceByDay: { type: ["string", "null"] },
+                  latitude: { type: "number" },
+                  longitude: { type: "number" },
                 },
               },
             },
@@ -111,6 +118,7 @@ export const openApiSpec = {
         parameters: [
           { name: "sport", in: "query", schema: { type: "string" }, description: "Filter by sport" },
           { name: "hasSpots", in: "query", schema: { type: "boolean" }, description: "Only events with available spots" },
+          { name: "cursor", in: "query", schema: { type: "string" }, description: "Pagination cursor" },
         ],
         responses: { "200": { description: "List of upcoming public events" } },
       },
@@ -490,14 +498,32 @@ export const openApiSpec = {
         },
       },
       put: {
-        summary: "Set or update event cost",
+        summary: "Set event cost and payment details",
         tags: ["Payments"],
         parameters: [eventIdParam],
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", properties: { totalAmount: { type: "number" }, currency: { type: "string" }, scope: { type: "string", enum: ["this_game", "all_future"] }, paymentMethods: {}, monthlyEnabled: { type: "boolean" }, monthlyFee: { type: "number" }, monthlyGamesCovered: { type: "integer" }, dropInSurcharge: { type: "number" } }, required: ["totalAmount", "currency", "scope"] } } },
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["totalAmount"],
+                properties: {
+                  totalAmount: { type: "number" },
+                  currency: { type: "string" },
+                  scope: { type: "string", enum: ["this_game", "all_future"] },
+                  paymentDetails: { type: ["string", "null"] },
+                  paymentMethods: {},
+                  monthlyEnabled: { type: "boolean" },
+                  monthlyFeeCents: { type: ["integer", "null"] },
+                  monthlyGamesCovered: { type: ["integer", "null"] },
+                  dropInSurchargeCents: { type: ["integer", "null"] },
+                },
+              },
+            },
+          },
         },
-        responses: { "200": { description: "Event cost updated" }, ...errorResponses },
+        responses: { "200": { description: "Cost saved" }, ...errorResponses },
       },
     },
     "/api/events/{id}/cost/override": {
@@ -991,7 +1017,10 @@ export const openApiSpec = {
       get: {
         summary: "Get event activity log",
         tags: ["Events"],
-        parameters: [eventIdParam],
+        parameters: [
+          eventIdParam,
+          { name: "cursor", in: "query", schema: { type: "string" }, description: "Pagination cursor" },
+        ],
         responses: { "200": { description: "Paginated activity log" } },
       },
     },
@@ -1603,6 +1632,10 @@ export const openApiSpec = {
       get: {
         summary: "Get authenticated user's games",
         tags: ["Users"],
+        parameters: [
+          { name: "ownedCursor", in: "query", schema: { type: "string" }, description: "Pagination cursor for owned games" },
+          { name: "followedCursor", in: "query", schema: { type: "string" }, description: "Pagination cursor for followed games" },
+        ],
         responses: { "200": { description: "Owned and joined games" }, "401": { description: "Unauthorized" } },
       },
     },
@@ -1611,6 +1644,21 @@ export const openApiSpec = {
         summary: "Signed-in Home feed: next games (Up next) + a glimpse of joinable public games (Discover)",
         tags: ["Users"],
         responses: { "200": { description: "Up next + Discover" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/follows": {
+      post: {
+        summary: "Unfollow an event for the current user",
+        tags: ["Users"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { type: "object", required: ["eventId"], properties: { eventId: { type: "string" } } },
+            },
+          },
+        },
+        responses: { "200": { description: "Follow removed" }, ...errorResponses },
       },
     },
     "/api/me/app-open": {
@@ -1995,6 +2043,28 @@ export const openApiSpec = {
       post: {
         summary: "Create a court watch",
         tags: ["Court Finder"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["sport", "tenantId", "tenantName", "dayOfWeek", "startTime", "endTime"],
+                properties: {
+                  sport: { type: "string" },
+                  tenantId: { type: "string" },
+                  tenantName: { type: "string" },
+                  resourceId: { type: "string" },
+                  resourceName: { type: "string" },
+                  dayOfWeek: { type: "integer" },
+                  startTime: { type: "string" },
+                  endTime: { type: "string" },
+                  timezone: { type: "string" },
+                },
+              },
+            },
+          },
+        },
         responses: { "201": { description: "Watch created" }, ...errorResponses },
       },
     },
@@ -2010,8 +2080,84 @@ export const openApiSpec = {
       get: {
         summary: "Search court alternatives for an event",
         tags: ["Court Finder"],
-        parameters: [eventIdParam],
+        parameters: [
+          eventIdParam,
+          { name: "radius", in: "query", schema: { type: "number" }, description: "Search radius in km" },
+          { name: "startTime", in: "query", schema: { type: "string" } },
+          { name: "endTime", in: "query", schema: { type: "string" } },
+          { name: "indoor", in: "query", schema: { type: "boolean" } },
+          { name: "includeBooked", in: "query", schema: { type: "boolean" } },
+        ],
         responses: { "200": { description: "Court alternatives" }, ...errorResponses },
+      },
+      put: {
+        summary: "Enable or disable the court watch for an event",
+        tags: ["Court Finder"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["enabled"],
+                properties: {
+                  enabled: { type: "boolean" },
+                  radius: { type: "number" },
+                  indoor: { type: ["boolean", "null"] },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Court watch setting updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/switch-court": {
+      post: {
+        summary: "Move an event to a different court",
+        tags: ["Court Finder"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["location"],
+                properties: {
+                  location: { type: "string" },
+                  latitude: { type: "number" },
+                  longitude: { type: "number" },
+                  dateTime: { type: "string", format: "date-time" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Court switched" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/stakes-preview": {
+      post: {
+        summary: "Project the season stakes for the drawn lineups",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  teamOne: { type: "array", items: { type: "string" } },
+                  teamTwo: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Stakes preview" }, ...errorResponses },
       },
     },
     "/api/events/{id}/suggestions": {
@@ -2110,6 +2256,91 @@ export const openApiSpec = {
         responses: { "405": { description: "Use POST with Mcp-Method header" } },
       },
     },
+    // ── Admin ───────────────────────────────────────────────────────────
+    "/api/admin/check": {
+      get: {
+        summary: "Whether the caller is an admin",
+        tags: ["Admin"],
+        responses: { "200": { description: "Admin flag" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/admin/stats": {
+      get: {
+        summary: "Admin dashboard totals",
+        tags: ["Admin"],
+        responses: { "200": { description: "Dashboard stats" }, ...errorResponses },
+      },
+    },
+    "/api/admin/growth": {
+      get: {
+        summary: "Admin dashboard growth timeline",
+        tags: ["Admin"],
+        parameters: [{ name: "range", in: "query", schema: { type: "string" }, description: "30d, 1y or all" }],
+        responses: { "200": { description: "Growth points" }, ...errorResponses },
+      },
+    },
+    "/api/admin/usage": {
+      get: {
+        summary: "Admin dashboard usage summary and timeline",
+        tags: ["Admin"],
+        parameters: [{ name: "days", in: "query", schema: { type: "integer" }, description: "Window in days (7-90)" }],
+        responses: { "200": { description: "Usage summary and timeline" }, ...errorResponses },
+      },
+    },
+    "/api/admin/users": {
+      get: {
+        summary: "Admin user list (paginated, sortable, filterable)",
+        tags: ["Admin"],
+        parameters: [
+          { name: "page", in: "query", schema: { type: "integer" } },
+          { name: "pageSize", in: "query", schema: { type: "integer" } },
+          { name: "search", in: "query", schema: { type: "string" } },
+          { name: "sort", in: "query", schema: { type: "string" } },
+          { name: "order", in: "query", schema: { type: "string" } },
+          { name: "hasPushToken", in: "query", schema: { type: "string" } },
+          { name: "pushPlatform", in: "query", schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Users and total count" }, ...errorResponses },
+      },
+    },
+    "/api/admin/users/{id}": {
+      delete: {
+        summary: "Admin delete a user",
+        tags: ["Admin"],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "User deleted" }, ...errorResponses },
+      },
+    },
+
+    // ── Playtomic ───────────────────────────────────────────────────────
+    "/api/playtomic/clubs": {
+      get: {
+        summary: "Find nearby Playtomic clubs",
+        tags: ["Court Finder"],
+        parameters: [
+          { name: "lat", in: "query", schema: { type: "number" } },
+          { name: "lng", in: "query", schema: { type: "number" } },
+          { name: "sport", in: "query", schema: { type: "string" } },
+          { name: "radius", in: "query", schema: { type: "integer" } },
+          { name: "size", in: "query", schema: { type: "integer" } },
+        ],
+        responses: { "200": { description: "Clubs" }, ...errorResponses },
+      },
+    },
+    "/api/playtomic/availability": {
+      get: {
+        summary: "Playtomic court availability for a club on a date",
+        tags: ["Court Finder"],
+        parameters: [
+          { name: "tenantId", in: "query", schema: { type: "string" } },
+          { name: "date", in: "query", schema: { type: "string" } },
+          { name: "sport", in: "query", schema: { type: "string" } },
+          { name: "duration", in: "query", schema: { type: "integer" } },
+        ],
+        responses: { "200": { description: "Courts and slots" }, ...errorResponses },
+      },
+    },
+
     "/.well-known/oauth-protected-resource": {
       get: {
         summary: "OAuth protected resource metadata (RFC 9728) for MCP",

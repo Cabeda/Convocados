@@ -25,6 +25,7 @@ import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { dateFormatTag } from "~/lib/timezones";
 import { useSession } from "~/lib/auth.client";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface AdminStats {
   totalUsers: number;
@@ -224,48 +225,59 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (!session?.user) return;
-    fetch("/api/admin/stats")
-      .then((r) => {
-        if (r.status === 403) { setForbidden(true); setLoading(false); return null; }
-        return r.json();
+    apiRequest("GET /api/admin/stats")
+      .then((data) => {
+        setStats(data as AdminStats);
+        setLoading(false);
       })
-      .then((data) => { if (data) { setStats(data); setLoading(false); } });
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 403) {
+          setForbidden(true);
+          setLoading(false);
+        }
+      });
   }, [session?.user]);
 
   // Fetch growth timeline
   useEffect(() => {
     if (!session?.user || forbidden) return;
     setLoadingGrowth(true);
-    fetch(`/api/admin/growth?range=${growthRange}`)
-      .then((r) => r.ok ? r.json() : [])
-      .then((data) => { setGrowthData(data); setLoadingGrowth(false); })
-      .catch(() => setLoadingGrowth(false));
+    apiRequest("GET /api/admin/growth", { query: { range: growthRange } })
+      .then((data) => { setGrowthData(data as GrowthPoint[]); setLoadingGrowth(false); })
+      .catch(() => { setGrowthData([]); setLoadingGrowth(false); });
   }, [session?.user, forbidden, growthRange]);
 
   // Fetch usage metrics
   useEffect(() => {
     if (!session?.user || forbidden) return;
     setLoadingUsage(true);
-    fetch("/api/admin/usage?days=30")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) { setUsageSummary(data.summary); setUsageTimeline(data.timeline); } setLoadingUsage(false); })
+    apiRequest("GET /api/admin/usage", { query: { days: 30 } })
+      .then((data) => {
+        const usage = data as { summary: UsageSummary; timeline: UsagePoint[] };
+        setUsageSummary(usage.summary);
+        setUsageTimeline(usage.timeline);
+        setLoadingUsage(false);
+      })
       .catch(() => setLoadingUsage(false));
   }, [session?.user, forbidden]);
 
   const fetchUsers = useCallback(async (p: number, q: string) => {
     setLoadingUsers(true);
-    const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE) });
-    if (q) params.set("search", q);
-    if (sort !== "createdAt") params.set("sort", sort);
-    if (order !== "desc") params.set("order", order);
-    if (filterHasPushToken !== "all") params.set("hasPushToken", filterHasPushToken);
-    if (filterPushPlatform !== "all") params.set("pushPlatform", filterPushPlatform);
-    const r = await fetch(`/api/admin/users?${params}`);
-    if (r.ok) {
-      const data = await r.json();
+    try {
+      const data = (await apiRequest("GET /api/admin/users", {
+        query: {
+          page: p,
+          pageSize: PAGE_SIZE,
+          search: q || undefined,
+          sort: sort !== "createdAt" ? sort : undefined,
+          order: order !== "desc" ? order : undefined,
+          hasPushToken: filterHasPushToken !== "all" ? filterHasPushToken : undefined,
+          pushPlatform: filterPushPlatform !== "all" ? filterPushPlatform : undefined,
+        },
+      })) as { users: UserRow[]; total: number };
       setUsers(data.users);
       setUserTotal(data.total);
-    }
+    } catch { /* keep the current page on a failed load */ }
     setLoadingUsers(false);
   }, [sort, order, filterHasPushToken, filterPushPlatform]);
 
@@ -292,15 +304,15 @@ export default function AdminDashboardPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     setDeleteError(null);
-    const r = await fetch(`/api/admin/users/${deleteTarget.id}`, { method: "DELETE" });
-    if (r.ok) {
+    try {
+      await apiRequest("DELETE /api/admin/users/{id}", { params: { id: deleteTarget.id } });
       setDeleteTarget(null);
       fetchUsers(page, search);
       // Refresh stats so totalUsers count is up to date
-      fetch("/api/admin/stats")
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => { if (data) setStats(data); });
-    } else {
+      apiRequest("GET /api/admin/stats")
+        .then((data) => setStats(data as AdminStats))
+        .catch(() => undefined);
+    } catch {
       setDeleteError(t("adminDeleteUserError"));
     }
     setDeleting(false);

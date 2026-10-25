@@ -135,22 +135,25 @@ const suggestionPayload = (names: string[]) => ({
   })),
 });
 
+const ok = (body: unknown) =>
+  Promise.resolve({ ok: true, headers: { get: () => "application/json" }, json: async () => body });
+
 function buildFetch(home: unknown = homePayload) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url.startsWith("/api/me/home")) {
-      return Promise.resolve({ ok: true, json: async () => home });
+      return ok(home);
     }
     if (url.startsWith("/api/me/games")) {
-      return Promise.resolve({ ok: true, json: async () => gamesPayload });
+      return ok(gamesPayload);
     }
     const match = /^\/api\/events\/([^/]+)\/suggestions$/.exec(url);
     if (match) {
-      return Promise.resolve({ ok: true, json: async () => suggestionPayload(["Alice", "Bob"]) });
+      return ok(suggestionPayload(["Alice", "Bob"]));
     }
     if (url.includes("/invites") && init?.method === "POST") {
-      return Promise.resolve({ ok: true, json: async () => ({ ok: true }) });
+      return ok({ ok: true });
     }
-    return Promise.resolve({ ok: false, json: async () => ({}) });
+    return Promise.resolve({ ok: false, status: 500, headers: { get: () => "application/json" }, json: async () => ({}) });
   });
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   return fetchMock;
@@ -170,6 +173,14 @@ describe("HomePage — Up next + Discover (ADR 0041)", () => {
       expect(screen.getByText("Up next")).toBeInTheDocument();
       expect(screen.getAllByText("Sunday Football").length).toBeGreaterThan(0);
       expect(screen.getAllByText("Midweek Football").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("loads the home feed through the API client", async () => {
+    const fetchMock = buildFetch();
+    renderWithTheme(<HomePage />);
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/me/home", { method: "GET" });
     });
   });
 
