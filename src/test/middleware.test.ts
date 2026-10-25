@@ -74,6 +74,16 @@ describe("canonical host redirect", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
+  it("sends the security header map on the host redirect too", async () => {
+    const res = await run(
+      ctx("GET", "https://convocados.fly.dev/events/abc"),
+      async () => new Response("should not reach", { status: 200 }),
+    );
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Strict-Transport-Security")).toBeTruthy();
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
   it("does NOT redirect when already on the canonical host", async () => {
     const res = await run(
       ctx("GET", "https://convocados.cabeda.dev/events/abc"),
