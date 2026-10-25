@@ -74,6 +74,9 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      isPublic?: boolean;
+    };
   };
   "PUT /api/events/{id}/balanced": {
     params: {
@@ -84,25 +87,40 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      showCompetitiveData?: boolean;
+    };
   };
   "PUT /api/events/{id}/manual-rating": {
     params: {
       id: string;
+    };
+    body: {
+      allowManualRating?: boolean;
     };
   };
   "PUT /api/events/{id}/mvp-enabled": {
     params: {
       id: string;
     };
+    body: {
+      mvpEnabled?: boolean;
+    };
   };
   "PUT /api/events/{id}/mvp-elo-enabled": {
     params: {
       id: string;
     };
+    body: {
+      mvpEloEnabled?: boolean;
+    };
   };
   "PUT /api/events/{id}/duration": {
     params: {
       id: string;
+    };
+    body: {
+      durationMinutes?: number;
     };
   };
   "PUT /api/events/{id}/datetime": {
@@ -134,6 +152,16 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "POST /api/events/{id}/seasons": {
+    params: {
+      id: string;
+    };
+    body: {
+      name: string;
+      registrationOpensAt: string;
+      registrationClosesAt: string;
+    };
+  };
   "GET /api/events/{id}/seasons/{seasonId}/rank": {
     params: {
       id: string;
@@ -145,17 +173,30 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    query: {
+      crewInviteToken?: string;
+    };
   };
   "PATCH /api/events/{id}/seasons/{seasonId}": {
     params: {
       id: string;
       seasonId: string;
     };
+    body: {
+      action: "update" | "activate" | "complete" | "cancel" | "reopen";
+      name?: string;
+      registrationOpensAt?: string;
+      registrationClosesAt?: string;
+      reason?: string;
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/membership": {
     params: {
       id: string;
       seasonId: string;
+    };
+    body: {
+      eventPlayerId: string;
     };
   };
   "DELETE /api/events/{id}/seasons/{seasonId}/membership": {
@@ -169,12 +210,17 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      eventPlayerId: string;
+      crewId?: string;
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/memberships/bulk": {
     params: {
       id: string;
       seasonId: string;
     };
+    body: Record<string, unknown>;
   };
   "GET /api/events/{id}/seasons/{seasonId}/memberships/candidates": {
     params: {
@@ -200,6 +246,13 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      action?: "claim-invite" | "invite";
+      token?: string;
+      email?: string;
+      name?: string;
+      members?: { membershipId?: string; userId?: string }[];
+    };
   };
   "PATCH /api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}": {
     params: {
@@ -213,11 +266,17 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      crews: { name: string; membershipIds: string[] }[];
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/crews/recommend": {
     params: {
       id: string;
       seasonId: string;
+    };
+    body: {
+      crewCount: number;
     };
   };
   "DELETE /api/events/{id}/seasons/{seasonId}/crews/{crewId}": {
@@ -231,10 +290,24 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      hideEloInTeams?: boolean;
+    };
   };
   "PUT /api/events/{id}/split-costs": {
     params: {
       id: string;
+    };
+    body: {
+      splitCostsEnabled?: boolean;
+    };
+  };
+  "PUT /api/events/{id}/positions-enabled": {
+    params: {
+      id: string;
+    };
+    body: {
+      positionsEnabled?: boolean;
     };
   };
   "GET /api/events/{id}/cost": {
@@ -275,6 +348,12 @@ export interface ApiOperations {
   "PUT /api/events/{id}/follow": {
     params: {
       id: string;
+    };
+    body: {
+      mutePlayerActivity?: boolean | null;
+      muteReminders?: boolean | null;
+      mutePostGame?: boolean | null;
+      muteEventDetails?: boolean | null;
     };
   };
   "DELETE /api/events/{id}/follow": {
@@ -318,14 +397,76 @@ export interface ApiOperations {
       noShow?: boolean;
     };
   };
+  "GET /api/events/{id}/access": {
+    params: {
+      id: string;
+    };
+  };
   "PUT /api/events/{id}/access": {
     params: {
       id: string;
+    };
+    body: {
+      password?: string | null;
+    };
+  };
+  "GET /api/events/{id}/access/invites": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/access/invites": {
+    params: {
+      id: string;
+    };
+    body: {
+      email: string;
+    };
+  };
+  "DELETE /api/events/{id}/access/invites": {
+    params: {
+      id: string;
+    };
+    body: {
+      userId: string;
     };
   };
   "POST /api/events/{id}/access/verify": {
     params: {
       id: string;
+    };
+    body: {
+      password: string;
+    };
+  };
+  "GET /api/events/{id}/admins": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/admins": {
+    params: {
+      id: string;
+    };
+    body: {
+      userId?: string;
+      email?: string;
+    };
+  };
+  "DELETE /api/events/{id}/admins": {
+    params: {
+      id: string;
+    };
+    body: {
+      userId: string;
+    };
+  };
+  "GET /api/events/{id}/admins/candidates": {
+    params: {
+      id: string;
+    };
+    query: {
+      q?: string;
     };
   };
   "PUT /api/events/{id}/archive": {
@@ -346,6 +487,68 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "GET /api/events/{id}/priority": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/priority": {
+    params: {
+      id: string;
+    };
+    body: {
+      priorityEnabled?: boolean;
+      priorityThreshold?: number;
+      priorityWindow?: number;
+      priorityMaxPercent?: number;
+      priorityDeadlineHours?: number;
+      priorityMinGames?: number;
+    };
+  };
+  "DELETE /api/events/{id}/priority/{userId}": {
+    params: {
+      id: string;
+      userId: string;
+    };
+  };
+  "POST /api/events/{id}/priority/confirm": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/priority/decline": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/priority/opt-in": {
+    params: {
+      id: string;
+    };
+    body: Record<string, unknown>;
+  };
+  "PUT /api/events/{id}/priority/opt-out": {
+    params: {
+      id: string;
+    };
+    body: Record<string, unknown>;
+  };
+  "GET /api/events/{id}/notification-defaults": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/notification-defaults": {
+    params: {
+      id: string;
+    };
+    body: {
+      mutePlayerActivity?: boolean | null;
+      muteReminders?: boolean | null;
+      mutePostGame?: boolean | null;
+      muteEventDetails?: boolean | null;
+    };
+  };
   "GET /api/events/{id}/attendance": {
     params: {
       id: string;
@@ -359,6 +562,10 @@ export interface ApiOperations {
   "PUT /api/events/{id}/payments": {
     params: {
       id: string;
+    };
+    body: {
+      playerName?: string;
+      status?: "pending" | "sent" | "paid";
     };
   };
   "PUT /api/events/{id}/payments/bulk": {
@@ -617,6 +824,15 @@ export interface ApiOperations {
       playerId: string;
     };
   };
+  "POST /api/events/{id}/merge-player": {
+    params: {
+      id: string;
+    };
+    body: {
+      sourceName: string;
+      targetName: string;
+    };
+  };
   "POST /api/events/{id}/undo-remove": {
     params: {
       id: string;
@@ -803,7 +1019,7 @@ export interface ApiOperations {
     };
     body: {
       url: string;
-      secret?: string;
+      secret?: string | null;
       events?: string[];
     };
   };
@@ -813,10 +1029,17 @@ export interface ApiOperations {
       webhookId: string;
     };
     body: {
-      events: string[];
+      events?: string[];
+      disabled?: boolean;
     };
   };
   "DELETE /api/events/{id}/webhooks/{webhookId}": {
+    params: {
+      id: string;
+      webhookId: string;
+    };
+  };
+  "POST /api/events/{id}/webhooks/{webhookId}/test": {
     params: {
       id: string;
       webhookId: string;

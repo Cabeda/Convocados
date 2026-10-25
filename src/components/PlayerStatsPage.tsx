@@ -11,6 +11,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
+import { apiRequest } from "~/lib/api/client";
 
 interface EventStats {
   eventId: string;
@@ -101,12 +102,8 @@ export default function PlayerStatsPage() {
 
   useEffect(() => {
     if (!session?.user) return;
-    fetch("/api/me/stats")
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
-      .then((d) => { setData(d); setLoading(false); })
+    apiRequest("GET /api/me/stats")
+      .then((data) => { setData(data as StatsData); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, [session?.user]);
 

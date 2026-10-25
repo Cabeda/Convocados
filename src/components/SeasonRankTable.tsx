@@ -5,6 +5,7 @@ import {
 } from "@mui/material";
 import { TIER_COLORS, TIER_NAMES } from "~/lib/seasonRank";
 import { useT } from "~/lib/useT";
+import { apiRequest } from "~/lib/api/client";
 import { TierTransitionDialog } from "./TierTransitionDialog";
 
 interface RankPlayer {
@@ -43,10 +44,9 @@ export function SeasonRankTable({ eventId, seasonId, showTransition = true, stan
     setError(null);
     (async () => {
       try {
-        const res = await fetch(`/api/events/${eventId}/seasons/${seasonId}/rank`);
-        if (!alive) return;
-        if (!res || !res.ok) { setError("Season Rank is unavailable."); return; }
-        const json = await res.json() as RankPayload;
+        const json = (await apiRequest("GET /api/events/{id}/seasons/{seasonId}/rank", {
+          params: { id: eventId, seasonId },
+        })) as RankPayload;
         if (alive) setData(json);
       } catch {
         if (alive) setError("Season Rank is unavailable.");

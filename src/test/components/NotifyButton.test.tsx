@@ -22,7 +22,10 @@ function stubFetch(handlers: {
     const method = init?.method ?? "GET";
     if (method === "DELETE") return handlers.delete?.() ?? new Response("{}", { status: 200 });
     if (method === "POST") return handlers.post?.() ?? new Response("{}", { status: 200 });
-    return new Response(JSON.stringify(handlers.get ?? {}), { status: 200 });
+    return new Response(JSON.stringify(handlers.get ?? {}), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   });
 }
 

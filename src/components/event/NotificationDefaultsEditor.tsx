@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Stack, Switch, FormControlLabel, Typography, Snackbar, Box, alpha, useTheme } from "@mui/material";
 import { useT } from "~/lib/useT";
+import { ApiError, apiRequest } from "~/lib/api/client";
 
 interface Defaults {
   mutePlayerActivity?: boolean;
@@ -26,9 +27,8 @@ export function NotificationDefaultsEditor({ eventId, canEdit }: Props) {
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/events/${eventId}/notification-defaults`)
-      .then(r => r.json())
-      .then(d => setDefaults(d))
+    apiRequest("GET /api/events/{id}/notification-defaults", { params: { id: eventId } })
+      .then(d => setDefaults(d as Defaults))
       .catch(() => {});
   }, [eventId]);
 
@@ -40,16 +40,14 @@ export function NotificationDefaultsEditor({ eventId, canEdit }: Props) {
     setDefaults(updated);
 
     try {
-      const res = await fetch(`/api/events/${eventId}/notification-defaults`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: newValue }),
+      await apiRequest("PUT /api/events/{id}/notification-defaults", {
+        params: { id: eventId },
+        body: { [field]: newValue },
       });
-      if (res.ok) {
-        setSnackbar(t("notificationsSaved"));
-      }
-    } catch {
-      setSnackbar(t("notificationsSaveError"));
+      setSnackbar(t("notificationsSaved"));
+    } catch (err) {
+      // A rejected response was silent before; only a network failure reported.
+      if (!(err instanceof ApiError)) setSnackbar(t("notificationsSaveError"));
     }
   };
 
