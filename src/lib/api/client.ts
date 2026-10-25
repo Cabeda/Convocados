@@ -10,7 +10,10 @@ type QueryOf<Op extends ApiOperation> =
 type BodyOf<Op extends ApiOperation> =
   ApiOperations[Op] extends { body: infer B } ? { body: B } : { body?: never };
 
-export type ApiInput<Op extends ApiOperation> = InputOf<Op> & QueryOf<Op> & BodyOf<Op>;
+export type ApiInput<Op extends ApiOperation> = InputOf<Op> & QueryOf<Op> & BodyOf<Op> & {
+  /** The per-call request options that must survive the migration (abort, cookies). */
+  init?: Pick<RequestInit, "signal" | "credentials" | "keepalive">;
+};
 
 export class ApiError extends Error {
   readonly status: number;
@@ -41,10 +44,11 @@ export async function apiRequest<Op extends ApiOperation>(
   operation: Op,
   input?: ApiInput<Op>,
 ): Promise<unknown> {
-  const { params, query, body } = (input ?? {}) as {
+  const { params, query, body, init } = (input ?? {}) as {
     params?: Record<string, unknown>;
     query?: Record<string, string | number | boolean | undefined>;
     body?: unknown;
+    init?: Pick<RequestInit, "signal" | "credentials" | "keepalive">;
   };
 
   const search = new URLSearchParams();
@@ -57,6 +61,7 @@ export async function apiRequest<Op extends ApiOperation>(
 
   const response = await fetch(url, {
     method: operation.slice(0, operation.indexOf(" ")),
+    ...init,
     ...(hasBody
       ? { headers: { "Content-Type": APPLICATION_JSON }, body: JSON.stringify(body) }
       : {}),
