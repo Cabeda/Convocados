@@ -11,17 +11,20 @@ type BodyOf<Op extends ApiOperation> =
   ApiOperations[Op] extends { body: infer B } ? { body: B } : { body?: never };
 
 export type ApiInput<Op extends ApiOperation> = InputOf<Op> & QueryOf<Op> & BodyOf<Op> & {
-  /** The per-call request options that must survive the migration (abort, cookies). */
-  init?: Pick<RequestInit, "signal" | "credentials" | "keepalive">;
+  /** The per-call request options that must survive the migration (abort, cookies, headers). */
+  init?: Pick<RequestInit, "signal" | "credentials" | "keepalive" | "headers">;
 };
 
 export class ApiError extends Error {
   readonly status: number;
+  /** The parsed error body, for callers that branch on a field the message does not carry. */
+  readonly payload: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, payload?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.payload = payload;
   }
 }
 
@@ -48,7 +51,7 @@ export async function apiRequest<Op extends ApiOperation>(
     params?: Record<string, unknown>;
     query?: Record<string, string | number | boolean | undefined>;
     body?: unknown;
-    init?: Pick<RequestInit, "signal" | "credentials" | "keepalive">;
+    init?: Pick<RequestInit, "signal" | "credentials" | "keepalive" | "headers">;
   };
 
   const search = new URLSearchParams();
@@ -63,7 +66,10 @@ export async function apiRequest<Op extends ApiOperation>(
     method: operation.slice(0, operation.indexOf(" ")),
     ...init,
     ...(hasBody
-      ? { headers: { "Content-Type": APPLICATION_JSON }, body: JSON.stringify(body) }
+      ? {
+          headers: { ...init?.headers, "Content-Type": APPLICATION_JSON },
+          body: JSON.stringify(body),
+        }
       : {}),
   });
 
@@ -79,7 +85,7 @@ export async function apiRequest<Op extends ApiOperation>(
             .map((key) => (payload as Record<string, unknown>)[key])
             .find((value): value is string => typeof value === "string")
         : undefined;
-    throw new ApiError(message ?? `Request failed: ${response.status}`, response.status);
+    throw new ApiError(message ?? `Request failed: ${response.status}`, response.status, payload);
   }
 
   return payload;
