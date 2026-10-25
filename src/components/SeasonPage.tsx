@@ -18,7 +18,7 @@ import HelpCenterOutlinedIcon from "@mui/icons-material/HelpCenterOutlined";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { ApiError, apiRequest } from "~/lib/api/client";
+import { ApiError, apiErrorMessage, apiRequest } from "~/lib/api/client";
 import CrewProposalPanel from "./CrewProposalPanel";
 import { LeaderboardTables, type LeaderboardPayload } from "./LeaderboardTables";
 import { SeasonRankTable } from "./SeasonRankTable";
@@ -72,13 +72,6 @@ function toDateInput(value: string | null) {
   return value ? value.slice(0, 10) : "";
 }
 
-/** The client carries the route's `error`; fall back to the caller's copy when it has none. */
-function failure(reason: unknown, fallback: string) {
-  return reason instanceof ApiError && reason.message !== `Request failed: ${reason.status}`
-    ? reason.message
-    : fallback;
-}
-
 export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eventId: string; seasonId: string; crewInviteToken?: string }) {
   const t = useT();
   const inviteClaimAttemptedRef = useRef(false);
@@ -129,7 +122,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     } catch (requestError) {
       setError(requestError instanceof ApiError && requestError.status === 401
         ? t("seasonSignInRequired")
-        : failure(requestError, t("somethingWentWrong")));
+        : apiErrorMessage(requestError, t("somethingWentWrong")));
     } finally {
       setLoading(false);
     }
@@ -153,7 +146,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
         setError(t("somethingWentWrong"));
         return;
       }
-      if (requestError.status !== 401) setError(failure(requestError, t("somethingWentWrong")));
+      if (requestError.status !== 401) setError(apiErrorMessage(requestError, t("somethingWentWrong")));
       await load();
     });
     return () => controller.abort();
@@ -195,7 +188,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
         membershipIds: crew.membershipIds,
       })));
     } catch (requestError) {
-      setError(failure(requestError, t("somethingWentWrong")));
+      setError(apiErrorMessage(requestError, t("somethingWentWrong")));
     } finally {
       setBusy(null);
     }
@@ -214,7 +207,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       await load();
       setupDraftDirtyRef.current = false;
     } catch (requestError) {
-      setError(failure(requestError, t("seasonSetupError")));
+      setError(apiErrorMessage(requestError, t("seasonSetupError")));
     } finally {
       setBusy(null);
     }
@@ -247,7 +240,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       setClosesAt(toDateInput(updated.registrationClosesAt));
       setNotice(t("seasonDetailsSaved"));
     } catch (requestError) {
-      setError(failure(requestError, t("seasonDetailsError")));
+      setError(apiErrorMessage(requestError, t("seasonDetailsError")));
     } finally {
       setBusy(null);
     }
@@ -270,7 +263,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       setNotice(t("memberRemoved", { name: member.name }));
       await refreshMembers();
     } catch (requestError) {
-      setError(failure(requestError, t("seasonMembershipError")));
+      setError(apiErrorMessage(requestError, t("seasonMembershipError")));
     } finally {
       setBusy(null);
     }
@@ -293,7 +286,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       setNotice(t("crewDeleted", { name }));
       if (id) await refreshMembers();
     } catch (requestError) {
-      setError(failure(requestError, t("crewDeleteError")));
+      setError(apiErrorMessage(requestError, t("crewDeleteError")));
     } finally {
       setBusy(null);
     }
@@ -312,7 +305,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       setCancelReason("");
       await load();
     } catch (requestError) {
-      setError(failure(requestError, t("seasonCancelError")));
+      setError(apiErrorMessage(requestError, t("seasonCancelError")));
     } finally {
       setBusy(null);
     }
@@ -328,7 +321,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       });
       await load();
     } catch (requestError) {
-      setError(failure(requestError, t("seasonActivateError")));
+      setError(apiErrorMessage(requestError, t("seasonActivateError")));
     } finally {
       setBusy(null);
     }
@@ -348,8 +341,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       await load();
     } catch (requestError) {
       setError(action === "complete"
-        ? failure(requestError, t("seasonCompleteError"))
-        : failure(requestError, t("seasonReopenError")));
+        ? apiErrorMessage(requestError, t("seasonCompleteError"))
+        : apiErrorMessage(requestError, t("seasonReopenError")));
     } finally {
       setBusy(null);
     }
@@ -372,7 +365,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       }
       await load();
     } catch (requestError) {
-      setError(failure(requestError, t("seasonMembershipError")));
+      setError(apiErrorMessage(requestError, t("seasonMembershipError")));
     } finally {
       setBusy(null);
     }
@@ -416,7 +409,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       }
       await refreshMembers();
     } catch (requestError) {
-      setError(failure(requestError, t("seasonMembershipError")));
+      setError(apiErrorMessage(requestError, t("seasonMembershipError")));
     } finally {
       setBusy(null);
     }
@@ -455,7 +448,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
         : t("playerAddedUnassigned", { name: displayName }));
       await refreshMembers();
     } catch (requestError) {
-      setError(failure(requestError, t("seasonMembershipError")));
+      setError(apiErrorMessage(requestError, t("seasonMembershipError")));
     } finally {
       setBusy(null);
     }

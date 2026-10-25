@@ -27,7 +27,7 @@ import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { isGameEnded } from "~/lib/gameStatus";
 import { mergeSuggestionPills } from "~/lib/suggestionPills";
 import { useSession } from "~/lib/auth.client";
-import { apiRequest, ApiError } from "~/lib/api/client";
+import { apiRequest, ApiError, apiErrorMessage } from "~/lib/api/client";
 
 import {
   EventHeader,
@@ -66,11 +66,6 @@ function isHighIntentForPush(
   const date = typeof eventDateTime === "string" ? new Date(eventDateTime) : eventDateTime;
   const hoursUntil = (date.getTime() - Date.now()) / (60 * 60 * 1000);
   return hoursUntil > 0 && hoursUntil <= PUSH_PROMPT_HIGH_INTENT_HOURS;
-}
-
-/** The server's message from a failed `apiRequest`, or the page's localized fallback. */
-function apiErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof ApiError ? error.message : fallback;
 }
 
 export default function EventPage({ eventId }: { eventId: string }) {

@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { openApiSpec } from "../lib/openapi";
-import { apiFetch, apiRequest } from "../lib/api/client";
+import { apiErrorMessage, apiFetch, apiRequest } from "../lib/api/client";
 import { checkApiClient, renderApiClient } from "../lib/api/generate";
 
 const METHODS = new Set(["get", "post", "put", "patch", "delete"]);
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("generated API client", () => {
   it("emits an operation for every method and path in the description", () => {
@@ -67,6 +71,11 @@ describe("generated API client", () => {
     const fresh = renderApiClient(openApiSpec);
     expect(checkApiClient(fresh, openApiSpec)).toBeNull();
     expect(checkApiClient(`${fresh}\n// stale\n`, openApiSpec)).toContain("out of date");
+  });
+
+  it("the committed operation map is current with the description on disk", () => {
+    const committed = readFileSync(path.join(repoRoot, "src/lib/api/generated.ts"), "utf-8");
+    expect(checkApiClient(committed, openApiSpec)).toBeNull();
   });
 
   it("rejects a request body that drifts from the description at compile time", () => {
@@ -185,5 +194,37 @@ describe("apiRequest", () => {
       message: "Only the event owner can do this.",
       payload: { error: "Only the event owner can do this." },
     });
+  });
+});
+
+describe("apiErrorMessage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function failureFrom(body: string, status: number, contentType?: string) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(body, { status, headers: contentType ? { "Content-Type": contentType } : {} }),
+      ),
+    );
+    return apiRequest("GET /api/events/public").catch((reason: unknown) => reason);
+  }
+
+  it("shows the localized fallback when the body carried no message", async () => {
+    const reason = await failureFrom("Bad gateway", 502);
+
+    expect(apiErrorMessage(reason, "Algo salió mal")).toBe("Algo salió mal");
+  });
+
+  it("shows the server's message when the body carried one", async () => {
+    const reason = await failureFrom(
+      JSON.stringify({ error: "Solo el dueño puede hacer esto." }),
+      403,
+      "application/json",
+    );
+
+    expect(apiErrorMessage(reason, "Algo salió mal")).toBe("Solo el dueño puede hacer esto.");
   });
 });

@@ -56,7 +56,7 @@ export const POST: APIRoute = async ({ request }) => {
         // One delivery pipeline for every trigger. A disabled timing is
         // recorded as sent ("intentionally skipped") but emits nothing.
         const outcome = await deliverReminder(r.eventId, type);
-        if (outcome === "already-sent") continue;
+        if (outcome === "already-sent" || outcome === "archived") continue;
         if (outcome === "delivered") sent.push(`${r.eventId}:${type}`);
         remindersToMark.push({ eventId: r.eventId, type });
       } catch (err) {
@@ -129,7 +129,7 @@ export const POST: APIRoute = async ({ request }) => {
     for (const r of postGameReminders) {
       try {
         const outcome = await deliverReminder(r.eventId, "post-game");
-        if (outcome === "already-sent") continue;
+        if (outcome === "already-sent" || outcome === "archived") continue;
         postGameRemindersSent.push(r.eventId);
         postGameRemindersToMark.push(r.eventId);
       } catch (err) {

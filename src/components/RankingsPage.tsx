@@ -20,14 +20,7 @@ import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { deriveEventPermissions } from "~/lib/eventView";
 import { PasswordPrompt } from "./event/PasswordPrompt";
-import { ApiError, apiRequest } from "~/lib/api/client";
-
-/** The client carries the route's `error`; fall back to the caller's copy when it has none. */
-function failure(reason: unknown, fallback: string) {
-  return reason instanceof ApiError && reason.message !== `Request failed: ${reason.status}`
-    ? reason.message
-    : fallback;
-}
+import { ApiError, apiErrorMessage, apiRequest } from "~/lib/api/client";
 
 interface PlayerRating {
   name: string;
@@ -162,7 +155,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
       setNextCursor(rat.nextCursor);
       setHasMore(rat.hasMore);
     } catch (requestError) {
-      setSnack({ msg: failure(requestError, "Error"), severity: "error" });
+      setSnack({ msg: apiErrorMessage(requestError, "Error"), severity: "error" });
     }
     setRecalculating(false);
   };
@@ -208,7 +201,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
       ));
       setEditPlayer(null);
     } catch (requestError) {
-      setSnack({ msg: failure(requestError, "Error"), severity: "error" });
+      setSnack({ msg: apiErrorMessage(requestError, "Error"), severity: "error" });
     }
     setSaving(false);
   };
@@ -225,7 +218,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
       setClaimTarget(null);
       load();
     } catch (requestError) {
-      setSnack({ msg: failure(requestError, "Error"), severity: "error" });
+      setSnack({ msg: apiErrorMessage(requestError, "Error"), severity: "error" });
       setClaimTarget(null);
     }
     setClaiming(false);
@@ -249,7 +242,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
       setMergeTarget(null);
       load();
     } catch (requestError) {
-      setSnack({ msg: failure(requestError, "Error"), severity: "error" });
+      setSnack({ msg: apiErrorMessage(requestError, "Error"), severity: "error" });
     }
     setMerging(false);
   };

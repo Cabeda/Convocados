@@ -19,13 +19,21 @@ export class ApiError extends Error {
   readonly status: number;
   /** The parsed error body, for callers that branch on a field the message does not carry. */
   readonly payload: unknown;
+  /** The `error`/`message` string the body carried, when it carried one. */
+  readonly serverMessage?: string;
 
-  constructor(message: string, status: number, payload?: unknown) {
+  constructor(message: string, status: number, payload?: unknown, serverMessage?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.payload = payload;
+    this.serverMessage = serverMessage;
   }
+}
+
+/** The server's own message, or the caller's localized copy when the body carried none. */
+export function apiErrorMessage(reason: unknown, fallback: string): string {
+  return reason instanceof ApiError ? (reason.serverMessage ?? fallback) : fallback;
 }
 
 const APPLICATION_JSON = "application/json";
@@ -89,7 +97,12 @@ async function failure(response: Response): Promise<ApiError> {
           .map((key) => (payload as Record<string, unknown>)[key])
           .find((value): value is string => typeof value === "string")
       : undefined;
-  return new ApiError(message ?? `Request failed: ${response.status}`, response.status, payload);
+  return new ApiError(
+    message ?? `Request failed: ${response.status}`,
+    response.status,
+    payload,
+    message,
+  );
 }
 
 /** The raw response, for a caller that needs the bytes (a file download) rather than JSON. */
