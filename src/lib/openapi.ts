@@ -150,6 +150,7 @@ export const openApiSpec = {
         summary: "Update event sport",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { sport: { type: "string" } } } } } },
         responses: { "200": { description: "Sport updated" }, ...errorResponses },
       },
     },
