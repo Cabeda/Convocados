@@ -27,6 +27,7 @@ import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { isGameEnded } from "~/lib/gameStatus";
 import { mergeSuggestionPills } from "~/lib/suggestionPills";
 import { useSession } from "~/lib/auth.client";
+import { apiRequest } from "~/lib/api/client";
 
 import {
   EventHeader,
@@ -966,23 +967,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const handleSaveTitle = async (title: string) => {
     // Optimistic update
     setEvent((e) => e ? { ...e, title } : e);
-    const res = await fetch(`/api/events/${eventId}/title`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    if (!res.ok) fetchEvent(); // revert on error
-    else fetchEvent();
+    // The route's response is unused; a refetch is the recovery path on either outcome.
+    await apiRequest("PUT /api/events/{id}/title", { params: { id: eventId }, body: { title } })
+      .catch(() => undefined);
+    fetchEvent();
   };
 
   const handleSaveLocation = async (location: string) => {
-    const res = await fetch(`/api/events/${eventId}/location`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ location }),
-    });
-    const data = await res.json();
-    if (location && !data.geocoded) {
+    const data = (await apiRequest("PUT /api/events/{id}/location", {
+      params: { id: eventId },
+      body: { location },
+    }).catch(() => null)) as { geocoded?: boolean } | null;
+    if (location && !data?.geocoded) {
       setSnackbar(t("locationNotGeocoded"));
     }
     fetchEvent();
@@ -1000,11 +996,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
   };
 
   const handleSaveSport = async (sport: string) => {
-    await fetch(`/api/events/${eventId}/sport`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport }),
-    });
+    // The route's response is derived from the event; the refetch supplies it.
+    await apiRequest("PUT /api/events/{id}/sport", { params: { id: eventId }, body: { sport } })
+      .catch(() => undefined);
     fetchEvent();
   };
 
