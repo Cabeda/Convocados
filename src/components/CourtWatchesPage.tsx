@@ -9,6 +9,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
+import { apiRequest } from "~/lib/api/client";
 
 interface CourtWatch {
   id: string;
@@ -37,9 +38,7 @@ export default function CourtWatchesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/court-watches");
-      if (!res.ok) { setError(t("somethingWentWrong")); return; }
-      const data = await res.json();
+      const data = (await apiRequest("GET /api/court-watches")) as { watches?: CourtWatch[] };
       setWatches(data.watches ?? []);
     } catch {
       setError(t("somethingWentWrong"));
@@ -54,8 +53,10 @@ export default function CourtWatchesPage() {
   }, [sessionLoading, session, load]);
 
   const remove = useCallback(async (id: string) => {
-    const res = await fetch(`/api/court-watches/${id}`, { method: "DELETE" });
-    if (res.ok) setWatches((prev) => prev.filter((w) => w.id !== id));
+    try {
+      await apiRequest("DELETE /api/court-watches/{id}", { params: { id } });
+      setWatches((prev) => prev.filter((w) => w.id !== id));
+    } catch { /* the row stays until the next load */ }
   }, []);
 
   const weekdayLabel = (dow: number) => t(WEEKDAY_KEYS[dow] ?? "sunday");

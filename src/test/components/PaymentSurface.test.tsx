@@ -12,9 +12,9 @@ function mockFetch(routes: Record<string, unknown>) {
     const u = String(url);
     const body = routes[u];
     if (body === undefined) {
-      return Promise.resolve({ ok: false, status: 404, json: async () => ({ error: "not found" }) });
+      return Promise.resolve({ ok: false, status: 404, headers: { get: () => "application/json" }, json: async () => ({ error: "not found" }) });
     }
-    return Promise.resolve({ ok: true, status: 200, json: async () => body });
+    return Promise.resolve({ ok: true, status: 200, headers: { get: () => "application/json" }, json: async () => body });
   }));
 }
 

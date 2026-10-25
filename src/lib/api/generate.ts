@@ -15,6 +15,7 @@ interface Schema {
   required?: readonly string[];
   enum?: readonly (string | number | boolean)[];
   items?: Schema;
+  nullable?: boolean;
 }
 
 interface Parameter {
@@ -40,6 +41,11 @@ function propertyKey(name: string): string {
 function tsType(schema: Schema | undefined): string {
   if (!schema) return "unknown";
   if (schema.enum?.length) return schema.enum.map((value) => JSON.stringify(value)).join(" | ");
+  const base = baseType(schema);
+  return schema.nullable ? `${base} | null` : base;
+}
+
+function baseType(schema: Schema): string {
   switch (schema.type) {
     case "string":
       return "string";

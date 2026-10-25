@@ -12,19 +12,27 @@ export interface ApiOperations {
     body: {
       title: string;
       location?: string;
+      city?: string;
       dateTime: string;
+      timezone?: string;
       maxPlayers?: number;
       sport?: string;
       teamOneName?: string;
       teamTwoName?: string;
       isRecurring?: boolean;
       recurrenceRule?: string;
+      recurrenceFreq?: string | null;
+      recurrenceInterval?: number | null;
+      recurrenceByDay?: string | null;
+      latitude?: number;
+      longitude?: number;
     };
   };
   "GET /api/events/public": {
     query: {
       sport?: string;
       hasSpots?: boolean;
+      cursor?: string;
     };
   };
   "GET /api/events/{id}": {
@@ -239,6 +247,20 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "PUT /api/events/{id}/cost": {
+    params: {
+      id: string;
+    };
+    body: {
+      totalAmount: number;
+      currency?: string;
+      paymentDetails?: string | null;
+      monthlyEnabled?: boolean;
+      monthlyFeeCents?: number | null;
+      monthlyGamesCovered?: number | null;
+      dropInSurchargeCents?: number | null;
+    };
+  };
   "PUT /api/events/{id}/cost/override": {
     params: {
       id: string;
@@ -407,6 +429,9 @@ export interface ApiOperations {
   "GET /api/events/{id}/log": {
     params: {
       id: string;
+    };
+    query: {
+      cursor?: string;
     };
   };
   "POST /api/events/{id}/history/{historyId}/mvp-vote": {
@@ -653,8 +678,18 @@ export interface ApiOperations {
       name?: string;
     };
   };
-  "GET /api/me/games": Record<string, never>;
+  "GET /api/me/games": {
+    query: {
+      ownedCursor?: string;
+      followedCursor?: string;
+    };
+  };
   "GET /api/me/home": Record<string, never>;
+  "POST /api/me/follows": {
+    body: {
+      eventId: string;
+    };
+  };
   "POST /api/me/app-open": Record<string, never>;
   "GET /api/me/co-players": Record<string, never>;
   "GET /api/me/locations": Record<string, never>;
@@ -724,7 +759,19 @@ export interface ApiOperations {
   "POST /api/auth/oauth2/introspect": Record<string, never>;
   "POST /api/auth/oauth2/revoke": Record<string, never>;
   "GET /api/court-watches": Record<string, never>;
-  "POST /api/court-watches": Record<string, never>;
+  "POST /api/court-watches": {
+    body: {
+      sport: string;
+      tenantId: string;
+      tenantName: string;
+      resourceId?: string;
+      resourceName?: string;
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+      timezone?: string;
+    };
+  };
   "DELETE /api/court-watches/{id}": {
     params: {
       id: string;
@@ -733,6 +780,43 @@ export interface ApiOperations {
   "GET /api/events/{id}/court-alternatives": {
     params: {
       id: string;
+    };
+    query: {
+      radius?: number;
+      startTime?: string;
+      endTime?: string;
+      indoor?: boolean;
+      includeBooked?: boolean;
+    };
+  };
+  "PUT /api/events/{id}/court-alternatives": {
+    params: {
+      id: string;
+    };
+    body: {
+      enabled: boolean;
+      radius?: number;
+      indoor?: boolean | null;
+    };
+  };
+  "POST /api/events/{id}/switch-court": {
+    params: {
+      id: string;
+    };
+    body: {
+      location: string;
+      latitude?: number;
+      longitude?: number;
+      dateTime?: string;
+    };
+  };
+  "POST /api/events/{id}/stakes-preview": {
+    params: {
+      id: string;
+    };
+    body: {
+      teamOne?: string[];
+      teamTwo?: string[];
     };
   };
   "GET /api/events/{id}/suggestions": {
@@ -748,6 +832,9 @@ export interface ApiOperations {
   "POST /api/events/{id}/invites": {
     params: {
       id: string;
+    };
+    body: {
+      userId: string;
     };
   };
   "PATCH /api/events/{id}/invites": {
@@ -780,6 +867,51 @@ export interface ApiOperations {
       id?: unknown;
       method?: string;
       params?: Record<string, unknown>;
+    };
+  };
+  "GET /api/admin/check": Record<string, never>;
+  "GET /api/admin/stats": Record<string, never>;
+  "GET /api/admin/growth": {
+    query: {
+      range?: string;
+    };
+  };
+  "GET /api/admin/usage": {
+    query: {
+      days?: number;
+    };
+  };
+  "GET /api/admin/users": {
+    query: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      sort?: string;
+      order?: string;
+      hasPushToken?: string;
+      pushPlatform?: string;
+    };
+  };
+  "DELETE /api/admin/users/{id}": {
+    params: {
+      id: string;
+    };
+  };
+  "GET /api/playtomic/clubs": {
+    query: {
+      lat?: number;
+      lng?: number;
+      sport?: string;
+      radius?: number;
+      size?: number;
+    };
+  };
+  "GET /api/playtomic/availability": {
+    query: {
+      tenantId?: string;
+      date?: string;
+      sport?: string;
+      duration?: number;
     };
   };
   "GET /.well-known/oauth-protected-resource": Record<string, never>;
