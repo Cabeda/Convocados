@@ -12,6 +12,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
 import { WEBHOOK_EVENT_TYPES } from "~/lib/webhookEvents";
+import { ApiError, apiRequest } from "~/lib/api/client";
 
 // ponytail: an event name we don't know falls through as-is rather than
 // silently reading as "All events".
@@ -77,13 +78,10 @@ export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable
 
   const fetchWebhooks = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/webhooks`);
-      if (res.ok) {
-        const data = await res.json();
-        setWebhooks(data.webhooks ?? []);
-      } else {
-        setError(t("webhookAddError"));
-      }
+      const data = (await apiRequest("GET /api/events/{id}/webhooks", {
+        params: { id: eventId },
+      })) as { webhooks?: Webhook[] };
+      setWebhooks(data.webhooks ?? []);
     } catch {
       setError(t("webhookAddError"));
     }
@@ -106,21 +104,15 @@ export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/webhooks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim(), events, secret: secret.trim() || null }),
+      await apiRequest("POST /api/events/{id}/webhooks", {
+        params: { id: eventId },
+        body: { url: url.trim(), events, secret: secret.trim() || null },
       });
-      if (res.ok) {
-        setUrl(""); setSecret("");
-        setError(null);
-        await fetchWebhooks();
-      } else {
-        const data = await res.json().catch(() => ({ error: t("webhookAddError") }));
-        setError(data.error ?? t("webhookAddError"));
-      }
-    } catch {
-      setError(t("webhookAddError"));
+      setUrl(""); setSecret("");
+      setError(null);
+      await fetchWebhooks();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("webhookAddError"));
     } finally {
       setSaving(false);
     }
@@ -129,9 +121,12 @@ export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable
   const handleDelete = async (id: string) => {
     if (!window.confirm(t("webhookDeleteConfirm"))) return;
     try {
-      await fetch(`/api/events/${eventId}/webhooks/${id}`, { method: "DELETE" });
-    } catch {
-      setError(t("webhookAddError"));
+      await apiRequest("DELETE /api/events/{id}/webhooks/{webhookId}", {
+        params: { id: eventId, webhookId: id },
+      });
+    } catch (err) {
+      // A rejected response was silent before; only a failed request reported.
+      if (!(err instanceof ApiError)) setError(t("webhookAddError"));
     }
     await fetchWebhooks();
   };
@@ -139,10 +134,13 @@ export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable
   const handleTest = async (id: string) => {
     setTestResult((r) => ({ ...r, [id]: { id: "", eventType: "test", status: "pending", attempts: 0, error: null, deliveredAt: null, createdAt: "" } }));
     try {
-      const res = await fetch(`/api/events/${eventId}/webhooks/${id}/test`, { method: "POST" });
-      const data = await res.json();
-      if (data.delivery) setTestResult((r) => ({ ...r, [id]: data.delivery }));
-    } catch {
+      const data = (await apiRequest("POST /api/events/{id}/webhooks/{webhookId}/test", {
+        params: { id: eventId, webhookId: id },
+      })) as { delivery?: Delivery };
+      if (data.delivery) setTestResult((r) => ({ ...r, [id]: data.delivery! }));
+    } catch (err) {
+      // A rejected response carried no delivery before either; only a failed request did.
+      if (err instanceof ApiError) return;
       setTestResult((r) => ({ ...r, [id]: { ...r[id], status: "failed", error: "Network error" } }));
     }
   };
@@ -165,33 +163,27 @@ export function WebhookSettings({ eventId, disabled, canEdit, readOnly, editable
     if (!editing) return;
     setEditError(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/webhooks/${editing.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ events: editEvents }),
+      await apiRequest("PATCH /api/events/{id}/webhooks/{webhookId}", {
+        params: { id: eventId, webhookId: editing.id },
+        body: { events: editEvents },
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: t("webhookEditError") }));
-        setEditError(data.error ?? t("webhookEditError"));
-        return;
-      }
       setEditing(null);
       await fetchWebhooks();
-    } catch {
-      setEditError(t("webhookEditError"));
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : t("webhookEditError"));
     }
   };
 
   const handleReEnable = async (id: string) => {
     try {
-      const res = await fetch(`/api/events/${eventId}/webhooks/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ disabled: false }),
+      await apiRequest("PATCH /api/events/{id}/webhooks/{webhookId}", {
+        params: { id: eventId, webhookId: id },
+        body: { disabled: false },
       });
-      if (res.ok) await fetchWebhooks();
-    } catch {
-      setError(t("webhookAddError"));
+      await fetchWebhooks();
+    } catch (err) {
+      // A rejected response was silent before; only a failed request reported.
+      if (!(err instanceof ApiError)) setError(t("webhookAddError"));
     }
   };
 

@@ -6,6 +6,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { useT } from "~/lib/useT";
 import { DevicePushSection } from "~/components/DevicePushSection";
+import { apiRequest } from "~/lib/api/client";
 
 interface FollowOverrides {
   following: boolean;
@@ -40,9 +41,8 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    fetch(`/api/events/${eventId}/follow`)
-      .then((r) => r.json())
-      .then((d) => setState(d))
+    apiRequest("GET /api/events/{id}/follow", { params: { id: eventId } })
+      .then((d) => setState(d as FollowOverrides))
       .catch(() => {});
   }, [eventId, open]);
 
@@ -53,10 +53,9 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
     setState((prev) => prev ? { ...prev, [field]: newValue } : prev);
 
     try {
-      await fetch(`/api/events/${eventId}/follow`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: newValue }),
+      await apiRequest("PUT /api/events/{id}/follow", {
+        params: { id: eventId },
+        body: { [field]: newValue },
       });
     } catch { /* silent — local state is already updated */ }
   };
@@ -68,10 +67,9 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
     const newValue = !state.inviteOptedOut;
     setState((prev) => prev ? { ...prev, inviteOptedOut: newValue } : prev);
     try {
-      await fetch(`/api/events/${eventId}/invitation-opt-out`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ optOut: newValue }),
+      await apiRequest("POST /api/events/{id}/invitation-opt-out", {
+        params: { id: eventId },
+        body: { optOut: newValue },
       });
     } catch { /* silent — local state is already updated */ }
   };
