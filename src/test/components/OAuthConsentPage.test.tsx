@@ -35,16 +35,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   stubLocation();
   mockFetch.mockImplementation(async (url: string) => {
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     if (String(url).includes("/oauth2/public-client")) {
-      return {
-        ok: true,
-        json: async () => ({ client_id: "abc123", client_name: "Claude", logo_uri: null }),
-      };
+      return json({ client_id: "abc123", client_name: "Claude", logo_uri: null });
     }
-    return {
-      ok: true,
-      json: async () => ({ redirect: true, url: "https://claude.ai/api/mcp/auth_callback?code=the-code" }),
-    };
+    return json({ redirect: true, url: "https://claude.ai/api/mcp/auth_callback?code=the-code" });
   });
 });
 

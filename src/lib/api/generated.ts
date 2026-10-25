@@ -82,6 +82,9 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      isPublic?: boolean;
+    };
   };
   "PUT /api/events/{id}/balanced": {
     params: {
@@ -92,25 +95,40 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      showCompetitiveData?: boolean;
+    };
   };
   "PUT /api/events/{id}/manual-rating": {
     params: {
       id: string;
+    };
+    body: {
+      allowManualRating?: boolean;
     };
   };
   "PUT /api/events/{id}/mvp-enabled": {
     params: {
       id: string;
     };
+    body: {
+      mvpEnabled?: boolean;
+    };
   };
   "PUT /api/events/{id}/mvp-elo-enabled": {
     params: {
       id: string;
     };
+    body: {
+      mvpEloEnabled?: boolean;
+    };
   };
   "PUT /api/events/{id}/duration": {
     params: {
       id: string;
+    };
+    body: {
+      durationMinutes?: number;
     };
   };
   "PUT /api/events/{id}/datetime": {
@@ -142,6 +160,16 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "POST /api/events/{id}/seasons": {
+    params: {
+      id: string;
+    };
+    body: {
+      name: string;
+      registrationOpensAt: string;
+      registrationClosesAt: string;
+    };
+  };
   "GET /api/events/{id}/seasons/{seasonId}/rank": {
     params: {
       id: string;
@@ -153,17 +181,30 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    query: {
+      crewInviteToken?: string;
+    };
   };
   "PATCH /api/events/{id}/seasons/{seasonId}": {
     params: {
       id: string;
       seasonId: string;
     };
+    body: {
+      action: "update" | "activate" | "complete" | "cancel" | "reopen";
+      name?: string;
+      registrationOpensAt?: string;
+      registrationClosesAt?: string;
+      reason?: string;
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/membership": {
     params: {
       id: string;
       seasonId: string;
+    };
+    body: {
+      eventPlayerId: string;
     };
   };
   "DELETE /api/events/{id}/seasons/{seasonId}/membership": {
@@ -177,12 +218,17 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      eventPlayerId: string;
+      crewId?: string;
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/memberships/bulk": {
     params: {
       id: string;
       seasonId: string;
     };
+    body: Record<string, unknown>;
   };
   "GET /api/events/{id}/seasons/{seasonId}/memberships/candidates": {
     params: {
@@ -208,6 +254,13 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      action?: "claim-invite" | "invite";
+      token?: string;
+      email?: string;
+      name?: string;
+      members?: { membershipId?: string; userId?: string }[];
+    };
   };
   "PATCH /api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}": {
     params: {
@@ -221,11 +274,17 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      crews: { name: string; membershipIds: string[] }[];
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/crews/recommend": {
     params: {
       id: string;
       seasonId: string;
+    };
+    body: {
+      crewCount: number;
     };
   };
   "DELETE /api/events/{id}/seasons/{seasonId}/crews/{crewId}": {
@@ -239,10 +298,24 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      hideEloInTeams?: boolean;
+    };
   };
   "PUT /api/events/{id}/split-costs": {
     params: {
       id: string;
+    };
+    body: {
+      splitCostsEnabled?: boolean;
+    };
+  };
+  "PUT /api/events/{id}/positions-enabled": {
+    params: {
+      id: string;
+    };
+    body: {
+      positionsEnabled?: boolean;
     };
   };
   "GET /api/events/{id}/cost": {
@@ -257,7 +330,9 @@ export interface ApiOperations {
     body: {
       totalAmount: number;
       currency?: string;
+      scope?: "this_game" | "all_future";
       paymentDetails?: string | null;
+      paymentMethods?: unknown;
       monthlyEnabled?: boolean;
       monthlyFeeCents?: number | null;
       monthlyGamesCovered?: number | null;
@@ -282,6 +357,12 @@ export interface ApiOperations {
   "PUT /api/events/{id}/follow": {
     params: {
       id: string;
+    };
+    body: {
+      mutePlayerActivity?: boolean | null;
+      muteReminders?: boolean | null;
+      mutePostGame?: boolean | null;
+      muteEventDetails?: boolean | null;
     };
   };
   "DELETE /api/events/{id}/follow": {
@@ -325,14 +406,76 @@ export interface ApiOperations {
       noShow?: boolean;
     };
   };
+  "GET /api/events/{id}/access": {
+    params: {
+      id: string;
+    };
+  };
   "PUT /api/events/{id}/access": {
     params: {
       id: string;
+    };
+    body: {
+      password?: string | null;
+    };
+  };
+  "GET /api/events/{id}/access/invites": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/access/invites": {
+    params: {
+      id: string;
+    };
+    body: {
+      email: string;
+    };
+  };
+  "DELETE /api/events/{id}/access/invites": {
+    params: {
+      id: string;
+    };
+    body: {
+      userId: string;
     };
   };
   "POST /api/events/{id}/access/verify": {
     params: {
       id: string;
+    };
+    body: {
+      password: string;
+    };
+  };
+  "GET /api/events/{id}/admins": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/admins": {
+    params: {
+      id: string;
+    };
+    body: {
+      userId?: string;
+      email?: string;
+    };
+  };
+  "DELETE /api/events/{id}/admins": {
+    params: {
+      id: string;
+    };
+    body: {
+      userId: string;
+    };
+  };
+  "GET /api/events/{id}/admins/candidates": {
+    params: {
+      id: string;
+    };
+    query: {
+      q?: string;
     };
   };
   "PUT /api/events/{id}/archive": {
@@ -353,6 +496,68 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "GET /api/events/{id}/priority": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/priority": {
+    params: {
+      id: string;
+    };
+    body: {
+      priorityEnabled?: boolean;
+      priorityThreshold?: number;
+      priorityWindow?: number;
+      priorityMaxPercent?: number;
+      priorityDeadlineHours?: number;
+      priorityMinGames?: number;
+    };
+  };
+  "DELETE /api/events/{id}/priority/{userId}": {
+    params: {
+      id: string;
+      userId: string;
+    };
+  };
+  "POST /api/events/{id}/priority/confirm": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/priority/decline": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/priority/opt-in": {
+    params: {
+      id: string;
+    };
+    body: Record<string, unknown>;
+  };
+  "PUT /api/events/{id}/priority/opt-out": {
+    params: {
+      id: string;
+    };
+    body: Record<string, unknown>;
+  };
+  "GET /api/events/{id}/notification-defaults": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/notification-defaults": {
+    params: {
+      id: string;
+    };
+    body: {
+      mutePlayerActivity?: boolean | null;
+      muteReminders?: boolean | null;
+      mutePostGame?: boolean | null;
+      muteEventDetails?: boolean | null;
+    };
+  };
   "GET /api/events/{id}/attendance": {
     params: {
       id: string;
@@ -367,10 +572,25 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      playerName?: string;
+      status?: "pending" | "sent" | "paid";
+    };
   };
   "PUT /api/events/{id}/payments/bulk": {
     params: {
       id: string;
+    };
+  };
+  "PATCH /api/events/{id}/payments/config": {
+    params: {
+      id: string;
+    };
+    body: {
+      gameId?: string;
+      mode: "tracked" | "untracked";
+      payerEventPlayerId?: string;
+      payerExternalName?: string;
     };
   };
   "GET /api/events/{id}/payments/settlement": {
@@ -429,6 +649,35 @@ export interface ApiOperations {
       gameId: string;
     };
   };
+  "GET /api/events/{id}/settle": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/settle/extras": {
+    params: {
+      id: string;
+    };
+    body: {
+      amountCents: number;
+      label: string;
+    };
+  };
+  "POST /api/events/{id}/settle/subscriptions": {
+    params: {
+      id: string;
+    };
+    body: {
+      userId: string;
+      windowStart?: string;
+    };
+  };
+  "DELETE /api/events/{id}/settle/subscriptions/{subId}": {
+    params: {
+      id: string;
+      subId: string;
+    };
+  };
   "GET /api/events/{id}/balance": {
     params: {
       id: string;
@@ -447,6 +696,10 @@ export interface ApiOperations {
       id: string;
       historyId: string;
     };
+    body: {
+      votedForPlayerId?: string;
+      votedForName?: string;
+    };
   };
   "GET /api/events/{id}/history/{historyId}/mvp": {
     params: {
@@ -464,6 +717,18 @@ export interface ApiOperations {
     params: {
       id: string;
       historyId: string;
+    };
+    body: {
+      type: "goal" | "assist";
+      team?: "one" | "two";
+      minute?: unknown;
+      count?: number;
+      scorerEventPlayerId?: string;
+      scorerName?: string;
+      assistEventPlayerId?: string;
+      assistName?: unknown;
+      ownGoal?: boolean;
+      penalty?: boolean;
     };
   };
   "DELETE /api/events/{id}/history/{historyId}/match-events/{matchEventId}": {
@@ -567,6 +832,18 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      playerId: string;
+    };
+  };
+  "POST /api/events/{id}/merge-player": {
+    params: {
+      id: string;
+    };
+    body: {
+      sourceName: string;
+      targetName: string;
+    };
   };
   "POST /api/events/{id}/undo-remove": {
     params: {
@@ -614,6 +891,23 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    query: {
+      cursor?: string;
+    };
+  };
+  "POST /api/events/{id}/history": {
+    params: {
+      id: string;
+    };
+    body: {
+      dateTime: string;
+      teamOneName: string;
+      teamTwoName: string;
+      scoreOne?: number;
+      scoreTwo?: number;
+      scoreSets?: unknown;
+      teamsSnapshot: unknown;
+    };
   };
   "GET /api/events/{id}/history/{historyId}": {
     params: {
@@ -622,6 +916,29 @@ export interface ApiOperations {
     };
   };
   "PATCH /api/events/{id}/history/{historyId}": {
+    params: {
+      id: string;
+      historyId: string;
+    };
+    body: {
+      scoreOne?: unknown;
+      scoreTwo?: unknown;
+      scoreSets?: unknown;
+      status?: "played" | "cancelled" | "upcoming";
+      isFriendly?: boolean;
+      teamsSnapshot?: unknown;
+      paymentsSnapshot?: unknown;
+      costTotalAmount?: number;
+      costCurrency?: string;
+    };
+  };
+  "DELETE /api/events/{id}/history/{historyId}": {
+    params: {
+      id: string;
+      historyId: string;
+    };
+  };
+  "POST /api/events/{id}/history/{historyId}/approve-elo": {
     params: {
       id: string;
       historyId: string;
@@ -689,6 +1006,18 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "POST /api/push/subscribe": {
+    body: {
+      endpoint: string;
+      keys: { p256dh: string; auth: string };
+      locale?: string;
+    };
+  };
+  "DELETE /api/push/subscribe": {
+    body: {
+      endpoint: string;
+    };
+  };
   "GET /api/push/vapid-public-key": Record<string, never>;
   "POST /api/push/test": Record<string, never>;
   "GET /api/events/{id}/webhooks": {
@@ -702,7 +1031,7 @@ export interface ApiOperations {
     };
     body: {
       url: string;
-      secret?: string;
+      secret?: string | null;
       events?: string[];
     };
   };
@@ -712,10 +1041,17 @@ export interface ApiOperations {
       webhookId: string;
     };
     body: {
-      events: string[];
+      events?: string[];
+      disabled?: boolean;
     };
   };
   "DELETE /api/events/{id}/webhooks/{webhookId}": {
+    params: {
+      id: string;
+      webhookId: string;
+    };
+  };
+  "POST /api/events/{id}/webhooks/{webhookId}/test": {
     params: {
       id: string;
       webhookId: string;
@@ -732,6 +1068,13 @@ export interface ApiOperations {
     };
     body: {
       name?: string;
+      publicStats?: boolean;
+      profileVisibility?: "public" | "participants" | "private";
+    };
+  };
+  "PUT /api/users/me/push-prompt-state": {
+    body: {
+      state: "default" | "granted" | "dismissed" | "denied";
     };
   };
   "GET /api/me/games": {
@@ -759,6 +1102,11 @@ export interface ApiOperations {
   "GET /api/me/stats": Record<string, never>;
   "GET /api/me/profile": Record<string, never>;
   "PUT /api/me/profile": Record<string, never>;
+  "DELETE /api/me/account": {
+    body: {
+      password?: string;
+    };
+  };
   "POST /api/me/photo": {
     body: {
       image: string;
@@ -766,7 +1114,26 @@ export interface ApiOperations {
   };
   "DELETE /api/me/photo": Record<string, never>;
   "GET /api/me/notification-preferences": Record<string, never>;
-  "PUT /api/me/notification-preferences": Record<string, never>;
+  "PUT /api/me/notification-preferences": {
+    body: {
+      emailEnabled?: boolean;
+      pushEnabled?: boolean;
+      gameInviteEmail?: boolean;
+      gameInvitePush?: boolean;
+      gameReminderEmail?: boolean;
+      gameReminderPush?: boolean;
+      playerActivityPush?: boolean;
+      eventDetailsPush?: boolean;
+      postGamePush?: boolean;
+      weeklySummaryEmail?: boolean;
+      paymentReminderEmail?: boolean;
+      paymentReminderPush?: boolean;
+      invitesEnabled?: boolean;
+      reminder24h?: boolean;
+      reminder2h?: boolean;
+      reminder1h?: boolean;
+    };
+  };
   "POST /api/me/calendar-token": {
     body: {
       scope?: "user" | "event";
@@ -787,6 +1154,17 @@ export interface ApiOperations {
     };
   };
   "GET /.well-known/openid-configuration": Record<string, never>;
+  "GET /api/auth/oauth2/public-client": {
+    query: {
+      client_id: string;
+    };
+  };
+  "POST /api/auth/oauth2/consent": {
+    body: {
+      accept: boolean;
+      oauth_query: string;
+    };
+  };
   "GET /api/auth/oauth2/authorize": {
     query: {
       client_id: string;
@@ -920,6 +1298,10 @@ export interface ApiOperations {
   "POST /api/invite/{token}": {
     params: {
       token: string;
+    };
+    body: {
+      action: "accept" | "decline";
+      asGuest?: boolean;
     };
   };
   "GET /api/mcp": Record<string, never>;

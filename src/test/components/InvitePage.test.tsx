@@ -44,14 +44,16 @@ afterEach(() => {
 });
 
 function mockLookup(data: Record<string, unknown>) {
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   fetchMock.mockImplementation((url: string, init?: RequestInit) => {
     if (!init?.method || init.method === "GET") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
+      return Promise.resolve(json(data));
     }
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ ok: true, bench: false }),
-    });
+    return Promise.resolve(json({ ok: true, bench: false }));
   });
 }
 

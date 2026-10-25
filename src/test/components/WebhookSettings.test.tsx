@@ -33,23 +33,28 @@ function renderSettings() {
   return renderWithTheme(h(WebhookSettings, { eventId: "evt-1" }));
 }
 
+/** The typed client reads the response content type; these stubs answer JSON. */
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 describe("WebhookSettings", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
       if (url.includes("/webhooks") && (!init || init.method === "GET")) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            webhooks: [{
-              id: "wh-1",
-              url: "https://example.com/receive",
-              events: ["player_joined", "game_full"],
-              createdAt: "2026-01-01T00:00:00.000Z",
-            }],
-          }),
-        });
+        return Promise.resolve(json({
+          webhooks: [{
+            id: "wh-1",
+            url: "https://example.com/receive",
+            events: ["player_joined", "game_full"],
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }],
+        }));
       }
-      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+      return Promise.resolve(json({}, 400));
     }));
   });
 
@@ -65,7 +70,7 @@ describe("WebhookSettings", () => {
 
   it("shows empty state when no webhooks", async () => {
     vi.stubGlobal("fetch", vi.fn(() =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve({ webhooks: [] }) }),
+      Promise.resolve(json({ webhooks: [] })),
     ));
     renderSettings();
     await waitFor(() => {
@@ -86,9 +91,9 @@ describe("WebhookSettings", () => {
   it("registers a webhook via POST", async () => {
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
       if (init?.method === "POST") {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: "wh-2" }) });
+        return Promise.resolve(json({ id: "wh-2" }));
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ webhooks: [] }) });
+      return Promise.resolve(json({ webhooks: [] }));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -117,22 +122,16 @@ describe("WebhookSettings", () => {
   it("sends a test payload and shows status", async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url.includes("/test") && init?.method === "POST") {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            delivery: { id: "d-1", eventType: "test", status: "success", attempts: 1, error: null, deliveredAt: "2026-01-01T00:00:01.000Z", createdAt: "2026-01-01T00:00:00.000Z" },
-          }),
-        });
+        return Promise.resolve(json({
+          delivery: { id: "d-1", eventType: "test", status: "success", attempts: 1, error: null, deliveredAt: "2026-01-01T00:00:01.000Z", createdAt: "2026-01-01T00:00:00.000Z" },
+        }));
       }
       if (!init || init.method === "GET") {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            webhooks: [{ id: "wh-1", url: "https://example.com/receive", events: [], createdAt: "2026-01-01T00:00:00.000Z" }],
-          }),
-        });
+        return Promise.resolve(json({
+          webhooks: [{ id: "wh-1", url: "https://example.com/receive", events: [], createdAt: "2026-01-01T00:00:00.000Z" }],
+        }));
       }
-      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+      return Promise.resolve(json({}, 400));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -149,14 +148,11 @@ describe("WebhookSettings", () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
       if (init?.method === "DELETE") {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+        return Promise.resolve(json({ ok: true }));
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
-          webhooks: [{ id: "wh-1", url: "https://example.com/receive", events: [], createdAt: "2026-01-01T00:00:00.000Z" }],
-        }),
-      });
+      return Promise.resolve(json({
+        webhooks: [{ id: "wh-1", url: "https://example.com/receive", events: [], createdAt: "2026-01-01T00:00:00.000Z" }],
+      }));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -172,26 +168,20 @@ describe("WebhookSettings", () => {
   it("edits webhook events via PATCH", async () => {
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
       if (init?.method === "PATCH") {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            id: "wh-1",
-            url: "https://example.com/receive",
-            events: ["player_joined"],
-          }),
-        });
+        return Promise.resolve(json({
+          id: "wh-1",
+          url: "https://example.com/receive",
+          events: ["player_joined"],
+        }));
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
-          webhooks: [{
-            id: "wh-1",
-            url: "https://example.com/receive",
-            events: ["player_joined", "game_full"],
-            createdAt: "2026-01-01T00:00:00.000Z",
-          }],
-        }),
-      });
+      return Promise.resolve(json({
+        webhooks: [{
+          id: "wh-1",
+          url: "https://example.com/receive",
+          events: ["player_joined", "game_full"],
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }],
+      }));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -216,19 +206,16 @@ describe("WebhookSettings", () => {
   it("cancels edit without sending PATCH", async () => {
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
       if (!init || init.method === "GET") {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            webhooks: [{
-              id: "wh-1",
-              url: "https://example.com/receive",
-              events: ["player_joined", "game_full"],
-              createdAt: "2026-01-01T00:00:00.000Z",
-            }],
-          }),
-        });
+        return Promise.resolve(json({
+          webhooks: [{
+            id: "wh-1",
+            url: "https://example.com/receive",
+            events: ["player_joined", "game_full"],
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }],
+        }));
       }
-      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+      return Promise.resolve(json({}, 400));
     });
     vi.stubGlobal("fetch", fetchMock);
 

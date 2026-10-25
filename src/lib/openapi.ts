@@ -195,6 +195,7 @@ export const openApiSpec = {
         summary: "Toggle event public/private visibility",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { isPublic: { type: "boolean" } } } } } },
         responses: { "200": { description: "Visibility updated" }, ...errorResponses },
       },
     },
@@ -211,6 +212,7 @@ export const openApiSpec = {
         summary: "Toggle competitive data visibility",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { showCompetitiveData: { type: "boolean" } } } } } },
         responses: { "200": { description: "Competitive data visibility updated" }, ...errorResponses },
       },
     },
@@ -219,6 +221,7 @@ export const openApiSpec = {
         summary: "Toggle manual rating",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { allowManualRating: { type: "boolean" } } } } } },
         responses: { "200": { description: "Manual rating updated" }, ...errorResponses },
       },
     },
@@ -227,6 +230,7 @@ export const openApiSpec = {
         summary: "Toggle MVP voting",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { mvpEnabled: { type: "boolean" } } } } } },
         responses: { "200": { description: "MVP voting updated" }, ...errorResponses },
       },
     },
@@ -235,6 +239,7 @@ export const openApiSpec = {
         summary: "Toggle MVP ELO bonus",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { mvpEloEnabled: { type: "boolean" } } } } } },
         responses: { "200": { description: "MVP ELO updated" }, ...errorResponses },
       },
     },
@@ -243,6 +248,7 @@ export const openApiSpec = {
         summary: "Update game duration",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { durationMinutes: { type: "integer" } } } } } },
         responses: { "200": { description: "Duration updated" }, ...errorResponses },
       },
     },
@@ -297,6 +303,16 @@ export const openApiSpec = {
         parameters: [eventIdParam],
         responses: { "200": { description: "Seasons list" }, ...errorResponses },
       },
+      post: {
+        summary: "Create a Season",
+        tags: ["Seasons"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, registrationOpensAt: { type: "string" }, registrationClosesAt: { type: "string" } }, required: ["name", "registrationOpensAt", "registrationClosesAt"] } } },
+        },
+        responses: { "201": { description: "Season created" }, ...errorResponses },
+      },
     },
     "/api/events/{id}/seasons/{seasonId}/rank": {
       get: {
@@ -310,13 +326,17 @@ export const openApiSpec = {
       get: {
         summary: "Get a Season's detail (members, crews, standings)",
         tags: ["Seasons"],
-        parameters: [eventIdParam, seasonIdParam],
+        parameters: [eventIdParam, seasonIdParam, { name: "crewInviteToken", in: "query", schema: { type: "string" }, description: "Crew invite token" }],
         responses: { "200": { description: "Season detail" }, ...errorResponses },
       },
       patch: {
         summary: "Update, activate, complete, cancel, or reopen a Season",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { action: { type: "string", enum: ["update", "activate", "complete", "cancel", "reopen"] }, name: { type: "string" }, registrationOpensAt: { type: "string" }, registrationClosesAt: { type: "string" }, reason: { type: "string" } }, required: ["action"] } } },
+        },
         responses: { "200": { description: "Season updated" }, ...errorResponses },
       },
     },
@@ -325,6 +345,10 @@ export const openApiSpec = {
         summary: "Join a Season",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { eventPlayerId: { type: "string" } }, required: ["eventPlayerId"] } } },
+        },
         responses: { "200": { description: "Joined" }, ...errorResponses },
       },
       delete: {
@@ -339,6 +363,10 @@ export const openApiSpec = {
         summary: "Add a Season member (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { eventPlayerId: { type: "string" }, crewId: { type: "string" } }, required: ["eventPlayerId"] } } },
+        },
         responses: { "200": { description: "Member added" }, ...errorResponses },
       },
     },
@@ -347,6 +375,10 @@ export const openApiSpec = {
         summary: "Bulk-enroll recent players as Season members (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object" } } },
+        },
         responses: { "200": { description: "Members added" }, ...errorResponses },
       },
     },
@@ -377,6 +409,14 @@ export const openApiSpec = {
         summary: "Submit a Season Crew proposal",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { type: "object", properties: { action: { type: "string", enum: ["claim-invite", "invite"] }, token: { type: "string" }, email: { type: "string" }, name: { type: "string" }, members: { type: "array", items: { type: "object", properties: { membershipId: { type: "string" }, userId: { type: "string" } } } } } },
+            },
+          },
+        },
         responses: { "201": { description: "Proposal created" }, ...errorResponses },
       },
     },
@@ -393,6 +433,10 @@ export const openApiSpec = {
         summary: "Save Season Crews (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { crews: { type: "array", items: { type: "object", properties: { name: { type: "string" }, membershipIds: { type: "array", items: { type: "string" } } }, required: ["name", "membershipIds"] } } }, required: ["crews"] } } },
+        },
         responses: { "200": { description: "Crews saved" }, ...errorResponses },
       },
     },
@@ -401,6 +445,10 @@ export const openApiSpec = {
         summary: "Recommend balanced Season Crews (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { crewCount: { type: "number" } }, required: ["crewCount"] } } },
+        },
         responses: { "200": { description: "Crews recommended" }, ...errorResponses },
       },
     },
@@ -417,6 +465,7 @@ export const openApiSpec = {
         summary: "Toggle hiding ELO in team view",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { hideEloInTeams: { type: "boolean" } } } } } },
         responses: { "200": { description: "Hide ELO setting updated" }, ...errorResponses },
       },
     },
@@ -425,7 +474,17 @@ export const openApiSpec = {
         summary: "Toggle split costs for an event",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { splitCostsEnabled: { type: "boolean" } } } } } },
         responses: { "200": { description: "Split costs setting updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/positions-enabled": {
+      put: {
+        summary: "Toggle positions for an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { positionsEnabled: { type: "boolean" } } } } } },
+        responses: { "200": { description: "Positions setting updated" }, ...errorResponses },
       },
     },
     "/api/events/{id}/cost": {
@@ -452,7 +511,9 @@ export const openApiSpec = {
                 properties: {
                   totalAmount: { type: "number" },
                   currency: { type: "string" },
+                  scope: { type: "string", enum: ["this_game", "all_future"] },
                   paymentDetails: { type: ["string", "null"] },
+                  paymentMethods: {},
                   monthlyEnabled: { type: "boolean" },
                   monthlyFeeCents: { type: ["integer", "null"] },
                   monthlyGamesCovered: { type: ["integer", "null"] },
@@ -490,6 +551,22 @@ export const openApiSpec = {
         summary: "Update follow notification overrides",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  mutePlayerActivity: { type: ["boolean", "null"] },
+                  muteReminders: { type: ["boolean", "null"] },
+                  mutePostGame: { type: ["boolean", "null"] },
+                  muteEventDetails: { type: ["boolean", "null"] },
+                },
+              },
+            },
+          },
+        },
         responses: { "200": { description: "Follow updated" }, ...errorResponses },
       },
       delete: {
@@ -554,11 +631,40 @@ export const openApiSpec = {
       },
     },
     "/api/events/{id}/access": {
+      get: {
+        summary: "Get whether the event is password-protected",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Access state" }, ...errorResponses },
+      },
       put: {
         summary: "Set or remove event password",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { password: { type: ["string", "null"] } } } } } },
         responses: { "200": { description: "Access updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/access/invites": {
+      get: {
+        summary: "List email invites for a password-protected event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Invites" }, ...errorResponses },
+      },
+      post: {
+        summary: "Invite an email to a password-protected event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["email"], properties: { email: { type: "string" } } } } } },
+        responses: { "201": { description: "Invite created" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Remove an email invite",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["userId"], properties: { userId: { type: "string" } } } } } },
+        responses: { "200": { description: "Invite removed" }, ...errorResponses },
       },
     },
     "/api/events/{id}/access/verify": {
@@ -566,7 +672,38 @@ export const openApiSpec = {
         summary: "Verify event password",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["password"], properties: { password: { type: "string" } } } } } },
         responses: { "200": { description: "Password verified" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/admins": {
+      get: {
+        summary: "List event admins",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Admins" }, ...errorResponses },
+      },
+      post: {
+        summary: "Add an event admin by user ID or email",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { userId: { type: "string" }, email: { type: "string" } } } } } },
+        responses: { "201": { description: "Admin added" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Remove an event admin",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["userId"], properties: { userId: { type: "string" } } } } } },
+        responses: { "200": { description: "Admin removed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/admins/candidates": {
+      get: {
+        summary: "List admin candidates, optionally filtered by a search query",
+        tags: ["Events"],
+        parameters: [eventIdParam, { name: "q", in: "query", schema: { type: "string" }, description: "Name or email search" }],
+        responses: { "200": { description: "Admin candidates" }, ...errorResponses },
       },
     },
     "/api/events/{id}/archive": {
@@ -605,6 +742,110 @@ export const openApiSpec = {
         responses: { "200": { description: "Max players updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/priority": {
+      get: {
+        summary: "Get Priority settings, enrollments and eligible players",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Priority settings and enrollments" }, ...errorResponses },
+      },
+      put: {
+        summary: "Update Priority settings",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  priorityEnabled: { type: "boolean" },
+                  priorityThreshold: { type: "integer" },
+                  priorityWindow: { type: "integer" },
+                  priorityMaxPercent: { type: "integer" },
+                  priorityDeadlineHours: { type: "integer" },
+                  priorityMinGames: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Priority settings updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/priority/{userId}": {
+      delete: {
+        summary: "Remove a player from the Priority list",
+        tags: ["Events"],
+        parameters: [eventIdParam, { name: "userId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Player removed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/priority/confirm": {
+      post: {
+        summary: "Confirm Priority enrollment",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Enrollment confirmed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/priority/decline": {
+      post: {
+        summary: "Decline Priority enrollment",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Enrollment declined" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/priority/opt-in": {
+      put: {
+        summary: "Opt in to the Priority list",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
+        responses: { "200": { description: "Opted in" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/priority/opt-out": {
+      put: {
+        summary: "Opt out of the Priority list",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
+        responses: { "200": { description: "Opted out" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/notification-defaults": {
+      get: {
+        summary: "Get the event's notification defaults",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Notification defaults" }, ...errorResponses },
+      },
+      put: {
+        summary: "Update the event's notification defaults (null resets a field)",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  mutePlayerActivity: { type: ["boolean", "null"] },
+                  muteReminders: { type: ["boolean", "null"] },
+                  mutePostGame: { type: ["boolean", "null"] },
+                  muteEventDetails: { type: ["boolean", "null"] },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Notification defaults updated" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/attendance": {
       get: {
         summary: "Get attendance stats for an event",
@@ -624,6 +865,7 @@ export const openApiSpec = {
         summary: "Update a player's payment status",
         tags: ["Payments"],
         parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { playerName: { type: "string" }, status: { type: "string", enum: ["pending", "sent", "paid"] } } } } } },
         responses: { "200": { description: "Payment updated" }, ...errorResponses },
       },
     },
@@ -633,6 +875,18 @@ export const openApiSpec = {
         tags: ["Payments"],
         parameters: [eventIdParam],
         responses: { "200": { description: "All payments marked as paid" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/config": {
+      patch: {
+        summary: "Set a game's payment mode and payer",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, mode: { type: "string", enum: ["tracked", "untracked"] }, payerEventPlayerId: { type: "string" }, payerExternalName: { type: "string" } }, required: ["mode"] } } },
+        },
+        responses: { "200": { description: "Payment config saved" }, ...errorResponses },
       },
     },
     "/api/events/{id}/payments/settlement": {
@@ -711,6 +965,46 @@ export const openApiSpec = {
         responses: { "200": { description: "Check-in snoozed" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/settle": {
+      get: {
+        summary: "Get the Settle Up payload for the caller (own balance and activity, admin view for owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Settle Up payload" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/settle/extras": {
+      post: {
+        summary: "Declare a spend from the extras pot (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { amountCents: { type: "integer" }, label: { type: "string" } }, required: ["amountCents", "label"] } } },
+        },
+        responses: { "200": { description: "Spend declared" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/settle/subscriptions": {
+      post: {
+        summary: "Mark a user as subscribed for a calendar month (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { userId: { type: "string" }, windowStart: { type: "string" } }, required: ["userId"] } } },
+        },
+        responses: { "200": { description: "Subscription created" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/settle/subscriptions/{subId}": {
+      delete: {
+        summary: "Cancel an active subscription (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam, { name: "subId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Subscription cancelled" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/balance": {
       get: {
         summary: "Get outstanding balance and enforcement info for the caller",
@@ -735,6 +1029,10 @@ export const openApiSpec = {
         summary: "Cast MVP vote for a game",
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { votedForPlayerId: { type: "string" }, votedForName: { type: "string" } } } } },
+        },
         responses: { "200": { description: "Vote cast" }, ...errorResponses },
       },
     },
@@ -758,6 +1056,10 @@ export const openApiSpec = {
         description: "count records how many goals one entry stands for (\"X scored 3\" is a single row with count=3). Omit it for a single goal.",
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { type: { type: "string", enum: ["goal", "assist"] }, team: { type: "string", enum: ["one", "two"] }, minute: {}, count: { type: "integer" }, scorerEventPlayerId: { type: "string" }, scorerName: { type: "string" }, assistEventPlayerId: { type: "string" }, assistName: {}, ownGoal: { type: "boolean" }, penalty: { type: "boolean" } }, required: ["type"] } } },
+        },
         responses: { "201": { description: "Match event created" }, ...errorResponses },
       },
     },
@@ -921,7 +1223,23 @@ export const openApiSpec = {
         summary: "Claim an anonymous player as your account",
         tags: ["Players"],
         parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { playerId: { type: "string" } }, required: ["playerId"] } } },
+        },
         responses: { "200": { description: "Player claimed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/merge-player": {
+      post: {
+        summary: "Merge one anonymous player into another",
+        tags: ["Players"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { sourceName: { type: "string" }, targetName: { type: "string" } }, required: ["sourceName", "targetName"] } } },
+        },
+        responses: { "200": { description: "Players merged" }, ...errorResponses },
       },
     },
     "/api/events/{id}/undo-remove": {
@@ -1032,8 +1350,18 @@ export const openApiSpec = {
       get: {
         summary: "Get game history for an event",
         tags: ["History"],
-        parameters: [eventIdParam],
+        parameters: [eventIdParam, { name: "cursor", in: "query", required: false, schema: { type: "string" } }],
         responses: { "200": { description: "Game history entries" } },
+      },
+      post: {
+        summary: "Add a historical (backfilled) game to an event",
+        tags: ["History"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { dateTime: { type: "string" }, teamOneName: { type: "string" }, teamTwoName: { type: "string" }, scoreOne: { type: "integer" }, scoreTwo: { type: "integer" }, scoreSets: {}, teamsSnapshot: {} }, required: ["dateTime", "teamOneName", "teamTwoName", "teamsSnapshot"] } } },
+        },
+        responses: { "201": { description: "Historical game created" }, ...errorResponses },
       },
     },
     "/api/events/{id}/history/{historyId}": {
@@ -1047,7 +1375,25 @@ export const openApiSpec = {
         summary: "Update a history entry (score, status)",
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { scoreOne: {}, scoreTwo: {}, scoreSets: {}, status: { type: "string", enum: ["played", "cancelled", "upcoming"] }, isFriendly: { type: "boolean" }, teamsSnapshot: {}, paymentsSnapshot: {}, costTotalAmount: { type: "number" }, costCurrency: { type: "string" } } } } },
+        },
         responses: { "200": { description: "History entry updated" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Delete a history entry",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "History entry deleted" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/history/{historyId}/approve-elo": {
+      post: {
+        summary: "Approve ELO for a backfilled historical game",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "ELO approved" }, ...errorResponses },
       },
     },
 
@@ -1142,6 +1488,20 @@ export const openApiSpec = {
         responses: { "200": { description: "Unsubscribed" } },
       },
     },
+    "/api/push/subscribe": {
+      post: {
+        summary: "Register this browser's web push subscription for the caller",
+        tags: ["Push"],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["endpoint", "keys"], properties: { endpoint: { type: "string" }, keys: { type: "object", required: ["p256dh", "auth"], properties: { p256dh: { type: "string" }, auth: { type: "string" } } }, locale: { type: "string", description: "BCP-47 browser language" } } } } } },
+        responses: { "200": { description: "Subscription recorded" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Unregister a web push subscription for the caller",
+        tags: ["Push"],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["endpoint"], properties: { endpoint: { type: "string" } } } } } },
+        responses: { "200": { description: "Subscription removed" }, ...errorResponses },
+      },
+    },
     "/api/push/vapid-public-key": {
       get: {
         summary: "Get VAPID public key for push subscriptions",
@@ -1193,7 +1553,7 @@ export const openApiSpec = {
                 required: ["url"],
                 properties: {
                   url: { type: "string", format: "uri" },
-                  secret: { type: "string" },
+                  secret: { type: ["string", "null"] },
                   events: { type: "array", items: { type: "string" } },
                 },
               },
@@ -1214,9 +1574,9 @@ export const openApiSpec = {
             "application/json": {
               schema: {
                 type: "object",
-                required: ["events"],
                 properties: {
                   events: { type: "array", items: { type: "string" } },
+                  disabled: { type: "boolean" },
                 },
               },
             },
@@ -1229,6 +1589,14 @@ export const openApiSpec = {
         tags: ["Webhooks"],
         parameters: [eventIdParam, { name: "webhookId", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Webhook deleted" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/webhooks/{webhookId}/test": {
+      post: {
+        summary: "Send a test delivery to a webhook",
+        tags: ["Webhooks"],
+        parameters: [eventIdParam, { name: "webhookId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Test delivery created" }, ...errorResponses },
       },
     },
 
@@ -1245,8 +1613,17 @@ export const openApiSpec = {
         summary: "Update own profile",
         tags: ["Users"],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" } } } } } },
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, publicStats: { type: "boolean" }, profileVisibility: { type: "string", enum: ["public", "participants", "private"] } } } } } },
         responses: { "200": { description: "Profile updated" }, ...errorResponses },
+      },
+    },
+
+    "/api/users/me/push-prompt-state": {
+      put: {
+        summary: "Record the push prompt's outcome for this account (default/granted/dismissed/denied)",
+        tags: ["Users"],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["state"], properties: { state: { type: "string", enum: ["default", "granted", "dismissed", "denied"] } } } } } },
+        responses: { "200": { description: "State recorded" }, ...errorResponses },
       },
     },
 
@@ -1336,6 +1713,14 @@ export const openApiSpec = {
         responses: { "200": { description: "Profile updated" }, "401": { description: "Unauthorized" } },
       },
     },
+    "/api/me/account": {
+      delete: {
+        summary: "Delete the authenticated user's account and its app data",
+        tags: ["Users"],
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { password: { type: "string" } } } } } },
+        responses: { "200": { description: "Account deleted" }, ...errorResponses },
+      },
+    },
     "/api/me/photo": {
       post: {
         summary: "Set the authenticated user's profile photo (base64 data URL)",
@@ -1374,6 +1759,18 @@ export const openApiSpec = {
       put: {
         summary: "Update notification preferences",
         tags: ["Users"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: Object.fromEntries(
+                  ["emailEnabled", "pushEnabled", "gameInviteEmail", "gameInvitePush", "gameReminderEmail", "gameReminderPush", "playerActivityPush", "eventDetailsPush", "postGamePush", "weeklySummaryEmail", "paymentReminderEmail", "paymentReminderPush", "invitesEnabled", "reminder24h", "reminder2h", "reminder1h"].map((name) => [name, { type: "boolean" }]),
+                ),
+              },
+            },
+          },
+        },
         responses: { "200": { description: "Preferences updated" }, ...errorResponses },
       },
     },
@@ -1476,6 +1873,23 @@ export const openApiSpec = {
         tags: ["OAuth"],
         security: anonymous,
         responses: { "200": { description: "OIDC metadata" } },
+      },
+    },
+    "/api/auth/oauth2/public-client": {
+      get: {
+        summary: "Public OAuth client metadata for the consent screen",
+        tags: ["OAuth"],
+        security: anonymous,
+        parameters: [{ name: "client_id", in: "query", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Client name and logo" }, "404": { description: "Unknown client" } },
+      },
+    },
+    "/api/auth/oauth2/consent": {
+      post: {
+        summary: "Approve or deny a signed authorization request",
+        tags: ["OAuth"],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["accept", "oauth_query"], properties: { accept: { type: "boolean" }, oauth_query: { type: "string", description: "The signed authorization request, exactly as the AS sent it" } } } } } },
+        responses: { "200": { description: "URL to continue to (the client's redirect carrying the code)" }, ...errorResponses },
       },
     },
     "/api/auth/oauth2/authorize": {
@@ -1816,6 +2230,7 @@ export const openApiSpec = {
         summary: "Respond to an invite (accept/decline)",
         tags: ["Invites"],
         parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["action"], properties: { action: { type: "string", enum: ["accept", "decline"] }, asGuest: { type: "boolean", description: "Accept as the invited guest instead of the signed-in account" } } } } } },
         responses: { "200": { description: "Invite accepted or declined" } },
       },
     },

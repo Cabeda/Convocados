@@ -7,6 +7,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useT } from "~/lib/useT";
 import { DEFAULTS } from "~/lib/notificationPrefsDefaults";
 import { DevicePushSection } from "~/components/DevicePushSection";
+import { apiRequest } from "~/lib/api/client";
 
 type Prefs = typeof DEFAULTS;
 
@@ -18,12 +19,12 @@ export function NotificationSettingsSection() {
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/me/notification-preferences")
-      .then((r) => r.json())
-      .then((data) => {
+    apiRequest("GET /api/me/notification-preferences")
+      .then((body) => {
+        const data = body as Record<string, unknown>;
         const merged: Prefs = { ...DEFAULTS };
         for (const key of Object.keys(DEFAULTS) as (keyof Prefs)[]) {
-          if (typeof data[key] === "boolean") merged[key] = data[key];
+          if (typeof data[key] === "boolean") merged[key] = data[key] as boolean;
         }
         setPrefs(merged);
       })
@@ -37,17 +38,10 @@ export function NotificationSettingsSection() {
     setPrefs(updated);
     setSaving(true);
     try {
-      const res = await fetch("/api/me/notification-preferences", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: newValue }),
+      await apiRequest("PUT /api/me/notification-preferences", {
+        body: { [field]: newValue },
       });
-      if (!res.ok) {
-        setPrefs(prefs);
-        setSnackbar(t("notificationsSaveError"));
-      } else {
-        setSnackbar(t("notificationsSaved"));
-      }
+      setSnackbar(t("notificationsSaved"));
     } catch {
       setPrefs(prefs);
       setSnackbar(t("notificationsSaveError"));

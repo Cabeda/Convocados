@@ -44,10 +44,9 @@ const statsPayload = {
 };
 
 beforeEach(() => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => statsPayload,
-  }));
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(
+    new Response(JSON.stringify(statsPayload), { headers: { "Content-Type": "application/json" } }),
+  )));
 });
 
 afterEach(() => {

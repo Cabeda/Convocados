@@ -34,6 +34,9 @@ import { deriveEventPermissions } from "~/lib/eventView";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { WebhookSettings } from "./event/WebhookSettings";
+import { ApiError, apiRequest } from "~/lib/api/client";
+import type { ApiOperation } from "~/lib/api/client";
+import type { ApiOperations } from "~/lib/api/generated";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -105,6 +108,9 @@ interface AdminCandidate {
   source: "player" | "email" | "invite";
 }
 
+/** The event settings PUT endpoints this screen toggles. */
+type SettingOperation = Extract<ApiOperation, `PUT /api/events/{id}/${string}`>;
+
 // ── Section Card ──────────────────────────────────────────────────────────────
 
 function SectionCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
@@ -155,9 +161,10 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   const fetchEvent = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = (await apiRequest("GET /api/events/{id}", {
+        params: { id: eventId },
+      })) as (EventSettings & { id: string; locked?: boolean }) | null;
+      if (data) {
         if (data.locked) {
           setLockedEvent({ id: data.id, title: data.title });
           setEvent(null);
@@ -172,39 +179,33 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   const fetchPriority = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/priority`);
-      if (res.ok) {
-        const json = await res.json();
-        setPriorityData(json);
-        setLocalPriority(json.settings);
-      }
+      const json = (await apiRequest("GET /api/events/{id}/priority", {
+        params: { id: eventId },
+      })) as PriorityData;
+      setPriorityData(json);
+      setLocalPriority(json.settings);
     } catch { /* ignore */ }
   }, [eventId]);
 
   const fetchAccessInfo = useCallback(async () => {
     try {
-      const [accessRes, invitesRes, adminsRes] = await Promise.all([
-        fetch(`/api/events/${eventId}/access`),
-        fetch(`/api/events/${eventId}/access/invites`),
-        fetch(`/api/events/${eventId}/admins`),
+      const [access, invites, admins] = await Promise.all([
+        apiRequest("GET /api/events/{id}/access", { params: { id: eventId } }).catch(() => null),
+        apiRequest("GET /api/events/{id}/access/invites", { params: { id: eventId } }).catch(() => null),
+        apiRequest("GET /api/events/{id}/admins", { params: { id: eventId } }).catch(() => null),
       ]);
-      if (accessRes.ok) {
-        const data = await accessRes.json();
-        setHasPassword(data.hasPassword);
-      }
-      if (invitesRes.ok) {
-        setInvites(await invitesRes.json());
-      }
-      if (adminsRes.ok) {
-        setAdmins(await adminsRes.json());
-      }
+      if (access) setHasPassword((access as { hasPassword: boolean }).hasPassword);
+      if (invites) setInvites(invites as { id: string; userId: string; name: string; email: string }[]);
+      if (admins) setAdmins(admins as { id: string; userId: string; name: string; email: string }[]);
     } catch { /* ignore */ }
   }, [eventId]);
 
   const fetchAdminCandidates = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/admins/candidates`);
-      if (res.ok) setAdminCandidates(await res.json());
+      const data = (await apiRequest("GET /api/events/{id}/admins/candidates", {
+        params: { id: eventId },
+      })) as AdminCandidate[];
+      setAdminCandidates(data);
     } catch { /* ignore */ }
   }, [eventId]);
 
@@ -244,8 +245,11 @@ export default function EventSettingsPage({ eventId }: Props) {
     }
     adminSearchTimerRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/events/${eventId}/admins/candidates?q=${encodeURIComponent(adminSearchInput.trim())}`);
-        if (res.ok) setAdminCandidates(await res.json());
+        const data = (await apiRequest("GET /api/events/{id}/admins/candidates", {
+          params: { id: eventId },
+          query: { q: adminSearchInput.trim() },
+        })) as AdminCandidate[];
+        setAdminCandidates(data);
       } catch { /* ignore */ }
     }, 300);
     return () => { if (adminSearchTimerRef.current) clearTimeout(adminSearchTimerRef.current); };
@@ -253,84 +257,87 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const updateSetting = async (endpoint: string, body: Record<string, unknown>) => {
+  const updateSetting = async <Op extends SettingOperation>(
+    operation: Op,
+    body: ApiOperations[Op] extends { body: infer B } ? B : never,
+  ) => {
     setMessage(null);
-    const res = await fetch(`/api/events/${eventId}/${endpoint}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
+    try {
+      // The call sites type-check `body` against the operation they name; only the
+      // generic plumbing needs the cast, because TS cannot resolve the conditional here.
+      await apiRequest(operation, { params: { id: eventId }, body } as never);
       await fetchEvent();
       setMessage({ type: "success", text: t("prioritySettingsSaved") });
-    } else {
+    } catch {
       setMessage({ type: "error", text: t("prioritySettingsError") });
     }
   };
 
   const handleTogglePublic = (v: boolean) => {
     setEvent((e) => e ? { ...e, isPublic: v } : e);
-    updateSetting("visibility", { isPublic: v });
+    updateSetting("PUT /api/events/{id}/visibility", { isPublic: v });
   };
 
   const handleToggleShowCompetitiveData = (v: boolean) => {
     setEvent((e) => e ? { ...e, showCompetitiveData: v } : e);
-    updateSetting("show-competitive-data", { showCompetitiveData: v });
+    updateSetting("PUT /api/events/{id}/show-competitive-data", { showCompetitiveData: v });
   };
 
   const handleToggleManualRating = (v: boolean) => {
     setEvent((e) => e ? { ...e, allowManualRating: v } : e);
-    updateSetting("manual-rating", { allowManualRating: v });
+    updateSetting("PUT /api/events/{id}/manual-rating", { allowManualRating: v });
   };
 
   const handleToggleHideEloInTeams = (v: boolean) => {
     setEvent((e) => e ? { ...e, hideEloInTeams: v } : e);
-    updateSetting("hide-elo-in-teams", { hideEloInTeams: v });
+    updateSetting("PUT /api/events/{id}/hide-elo-in-teams", { hideEloInTeams: v });
   };
 
   const handleToggleCompetition = (v: boolean) => {
     setEvent((e) => e ? { ...e, eloEnabled: v, rankEnabled: v, balanced: v, ...(v ? {} : { hideEloInTeams: true, mvpEloEnabled: false }) } : e);
-    updateSetting("competition", { enabled: v });
+    updateSetting("PUT /api/events/{id}/competition", { enabled: v });
   };
 
   const handleToggleRankDecay = (v: boolean) => {
     setEvent((e) => e ? { ...e, rankDecayEnabled: v } : e);
-    updateSetting("competition", { rankDecayEnabled: v });
+    updateSetting("PUT /api/events/{id}/competition", { rankDecayEnabled: v });
   };
 
   const handleSetInactiveBehavior = (v: string) => {
     setEvent((e) => e ? { ...e, inactiveRankBehavior: v } : e);
-    updateSetting("competition", { inactiveRankBehavior: v });
+    updateSetting("PUT /api/events/{id}/competition", { inactiveRankBehavior: v as "freeze" | "reset" });
   };
 
   const handleToggleSplitCosts = (v: boolean) => {
     setEvent((e) => e ? { ...e, splitCostsEnabled: v } : e);
-    updateSetting("split-costs", { splitCostsEnabled: v });
+    updateSetting("PUT /api/events/{id}/split-costs", { splitCostsEnabled: v });
   };
 
   const handleTogglePositions = (v: boolean) => {
     setEvent((e) => e ? { ...e, positionsEnabled: v } : e);
-    updateSetting("positions-enabled", { positionsEnabled: v });
+    updateSetting("PUT /api/events/{id}/positions-enabled", { positionsEnabled: v });
   };
 
   const handleToggleMvpEnabled = (v: boolean) => {
     setEvent((e) => e ? { ...e, mvpEnabled: v } : e);
-    updateSetting("mvp-enabled", { mvpEnabled: v });
+    updateSetting("PUT /api/events/{id}/mvp-enabled", { mvpEnabled: v });
   };
 
   const handleToggleMvpEloEnabled = (v: boolean) => {
     setEvent((e) => e ? { ...e, mvpEloEnabled: v } : e);
-    updateSetting("mvp-elo-enabled", { mvpEloEnabled: v });
+    updateSetting("PUT /api/events/{id}/mvp-elo-enabled", { mvpEloEnabled: v });
   };
 
   const handleSportChange = (v: string) => {
     setEvent((e) => e ? { ...e, sport: v } : e);
-    updateSetting("sport", { sport: v });
+    updateSetting("PUT /api/events/{id}/sport", { sport: v });
   };
 
   const handleRelinquish = async () => {
-    const res = await fetch(`/api/events/${eventId}/claim`, { method: "DELETE" });
-    if (res.ok) await fetchEvent();
+    try {
+      await apiRequest("DELETE /api/events/{id}/claim", { params: { id: eventId } });
+      await fetchEvent();
+    } catch { /* a rejected relinquish leaves the current owner in place */ }
   };
 
   // Priority handlers
@@ -338,17 +345,9 @@ export default function EventSettingsPage({ eventId }: Props) {
     setSavingPriority(true);
     setMessage(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/priority`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        setMessage({ type: "success", text: t("prioritySettingsSaved") });
-        await fetchPriority();
-      } else {
-        setMessage({ type: "error", text: t("prioritySettingsError") });
-      }
+      await apiRequest("PUT /api/events/{id}/priority", { params: { id: eventId }, body: updates });
+      setMessage({ type: "success", text: t("prioritySettingsSaved") });
+      await fetchPriority();
     } catch {
       setMessage({ type: "error", text: t("prioritySettingsError") });
     }
@@ -361,44 +360,46 @@ export default function EventSettingsPage({ eventId }: Props) {
   };
 
   const handleRemovePlayer = async (targetUserId: string) => {
-    await fetch(`/api/events/${eventId}/priority/${targetUserId}`, { method: "DELETE" });
+    await apiRequest("DELETE /api/events/{id}/priority/{userId}", {
+      params: { id: eventId, userId: targetUserId },
+    }).catch(() => undefined);
     await fetchPriority();
   };
 
   const handleConfirm = async () => {
-    const res = await fetch(`/api/events/${eventId}/priority/confirm`, { method: "POST" });
-    if (res.ok) {
+    try {
+      await apiRequest("POST /api/events/{id}/priority/confirm", { params: { id: eventId } });
       setMessage({ type: "success", text: t("priorityConfirmed") });
       await fetchPriority();
-    }
+    } catch { /* a rejected confirm leaves the message and list unchanged */ }
   };
 
   const handleDecline = async () => {
-    const res = await fetch(`/api/events/${eventId}/priority/decline`, { method: "POST" });
-    if (res.ok) {
+    try {
+      await apiRequest("POST /api/events/{id}/priority/decline", { params: { id: eventId } });
       setMessage({ type: "success", text: t("priorityDeclinedMsg") });
       await fetchPriority();
-    }
+    } catch { /* a rejected decline leaves the message and list unchanged */ }
   };
 
   const handleOptOut = async () => {
-    const res = await fetch(`/api/events/${eventId}/priority/opt-out`, {
-      method: "PUT", headers: { "content-type": "application/json" }, body: "{}",
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("PUT /api/events/{id}/priority/opt-out", {
+        params: { id: eventId }, body: {},
+      });
       setMessage({ type: "success", text: t("priorityOptedOutMsg") });
       await fetchPriority();
-    }
+    } catch { /* a rejected opt-out leaves the message and list unchanged */ }
   };
 
   const handleOptIn = async () => {
-    const res = await fetch(`/api/events/${eventId}/priority/opt-in`, {
-      method: "PUT", headers: { "content-type": "application/json" }, body: "{}",
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("PUT /api/events/{id}/priority/opt-in", {
+        params: { id: eventId }, body: {},
+      });
       setMessage({ type: "success", text: t("priorityOptedInMsg") });
       await fetchPriority();
-    }
+    } catch { /* a rejected opt-in leaves the message and list unchanged */ }
   };
 
   // ── Access control handlers ───────────────────────────────────────────────
@@ -408,63 +409,57 @@ export default function EventSettingsPage({ eventId }: Props) {
       setMessage({ type: "error", text: t("passwordMinLength") });
       return;
     }
-    const res = await fetch(`/api/events/${eventId}/access`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: newPassword }),
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("PUT /api/events/{id}/access", {
+        params: { id: eventId },
+        body: { password: newPassword },
+      });
       setHasPassword(true);
       setNewPassword("");
       setMessage({ type: "success", text: t("passwordSet") });
-    } else {
+    } catch {
       setMessage({ type: "error", text: t("prioritySettingsError") });
     }
   };
 
   const handleRemovePassword = async () => {
-    const res = await fetch(`/api/events/${eventId}/access`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: null }),
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("PUT /api/events/{id}/access", {
+        params: { id: eventId },
+        body: { password: null },
+      });
       setHasPassword(false);
       setMessage({ type: "success", text: t("passwordRemoved") });
-    }
+    } catch { /* a rejected removal leaves the password in place */ }
   };
 
   const handleAddInvite = async () => {
     setInviteError(null);
     if (!inviteEmail.trim()) return;
-    const res = await fetch(`/api/events/${eventId}/access/invites`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail.trim() }),
-    });
-    if (res.ok) {
-      const invite = await res.json();
+    try {
+      const invite = (await apiRequest("POST /api/events/{id}/access/invites", {
+        params: { id: eventId },
+        body: { email: inviteEmail.trim() },
+      })) as { id: string; userId: string; name: string; email: string };
       setInvites((prev) => [...prev, invite]);
       setInviteEmail("");
       setMessage({ type: "success", text: t("inviteAdded") });
-    } else {
-      const data = await res.json();
-      if (res.status === 404) setInviteError(t("userNotFound"));
-      else if (res.status === 400) setInviteError(t("cannotInviteOwner"));
-      else setInviteError(data.error || t("prioritySettingsError"));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) setInviteError(t("userNotFound"));
+      else if (err instanceof ApiError && err.status === 400) setInviteError(t("cannotInviteOwner"));
+      else setInviteError(err instanceof Error ? err.message : t("prioritySettingsError"));
     }
   };
 
   const handleRemoveInvite = async (userId: string) => {
-    const res = await fetch(`/api/events/${eventId}/access/invites`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("DELETE /api/events/{id}/access/invites", {
+        params: { id: eventId },
+        body: { userId },
+      });
       setInvites((prev) => prev.filter((i) => i.userId !== userId));
       setMessage({ type: "success", text: t("inviteRemoved") });
-    }
+    } catch { /* a rejected removal leaves the invite in place */ }
   };
 
   // ── Admin handlers ────────────────────────────────────────────────────
@@ -480,52 +475,47 @@ export default function EventSettingsPage({ eventId }: Props) {
     const body = candidate.userId
       ? { userId: candidate.userId }
       : { email: candidate.email };
-    const res = await fetch(`/api/events/${eventId}/admins`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const admin = await res.json();
+    try {
+      const admin = (await apiRequest("POST /api/events/{id}/admins", {
+        params: { id: eventId },
+        body,
+      })) as { id: string; userId: string; name: string; email: string };
       setAdmins((prev) => [...prev, admin]);
       setAdminCandidates((prev) => prev.filter((c) => c.userId !== candidate.userId));
       setAdminSearchInput("");
       setMessage({ type: "success", text: t("adminAdded") });
-    } else {
-      const data = await res.json();
-      if (res.status === 404) setAdminError(t("userNotFound"));
-      else if (res.status === 400) setAdminError(t("cannotAddOwnerAsAdmin"));
-      else setAdminError(data.error || t("prioritySettingsError"));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) setAdminError(t("userNotFound"));
+      else if (err instanceof ApiError && err.status === 400) setAdminError(t("cannotAddOwnerAsAdmin"));
+      else setAdminError(err instanceof Error ? err.message : t("prioritySettingsError"));
     }
   };
 
   const handleRemoveAdmin = async (userId: string) => {
-    const res = await fetch(`/api/events/${eventId}/admins`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("DELETE /api/events/{id}/admins", {
+        params: { id: eventId },
+        body: { userId },
+      });
       setAdmins((prev) => prev.filter((a) => a.userId !== userId));
       // Re-fetch candidates so the removed admin appears with the correct source
       await fetchAdminCandidates();
       setMessage({ type: "success", text: t("adminRemoved") });
-    }
+    } catch { /* a rejected removal leaves the admin in place */ }
   };
 
   // ── Archive handler ───────────────────────────────────────────────────
 
   const handleArchiveToggle = async () => {
     const archive = !event?.archivedAt;
-    const res = await fetch(`/api/events/${eventId}/archive`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ archive }),
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("PUT /api/events/{id}/archive", {
+        params: { id: eventId },
+        body: { archive },
+      });
       await fetchEvent();
       setMessage({ type: "success", text: archive ? t("eventArchived") : t("eventUnarchived") });
-    } else {
+    } catch {
       setMessage({ type: "error", text: t("somethingWentWrong") });
     }
   };
@@ -635,14 +625,13 @@ export default function EventSettingsPage({ eventId }: Props) {
                   setMessage({ type: "error", text: t("gameDurationError") });
                   return;
                 }
-                const res = await fetch(`/api/events/${eventId}/duration`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ durationMinutes: val }),
-                });
-                if (res.ok) {
+                try {
+                  await apiRequest("PUT /api/events/{id}/duration", {
+                    params: { id: eventId },
+                    body: { durationMinutes: val },
+                  });
                   setMessage({ type: "success", text: t("gameDurationSaved") });
-                } else {
+                } catch {
                   setMessage({ type: "error", text: t("gameDurationError") });
                 }
               }}
