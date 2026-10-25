@@ -44,12 +44,15 @@ import { formatDateInTz } from "~/lib/timezones";
 import { isNameInPaymentsSnapshot, isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
 import { formatSetScore, hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scoring";
 import { formatMoney, toCents } from "~/lib/money";
+import { apiRequest, ApiError, type ApiInput } from "~/lib/api/client";
 import { PaymentConfigDialog, type PaymentConfigGame } from "./PaymentConfigDialog";
 import { playerInputPasswordManagerProps } from "./event/PlayerAutocomplete";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
   | { type: "create"; name: string };
+
+type HistoryPatch = NonNullable<ApiInput<"PATCH /api/events/{id}/history/{historyId}">["body"]>;
 
 export interface HistoryCardFullEntry {
   id: string;
@@ -449,8 +452,10 @@ export function HistoryCardFull({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/events/${eventId}/history/${entry.id}/mvp`);
-        if (res.ok && !cancelled) setMvpState(await res.json());
+        const body = (await apiRequest("GET /api/events/{id}/history/{historyId}/mvp", {
+          params: { id: eventId, historyId: entry.id },
+        }).catch(() => null)) as MvpSummary | null;
+        if (body && !cancelled) setMvpState(body);
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
@@ -478,16 +483,19 @@ export function HistoryCardFull({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const patch = useCallback(async (data: object) => {
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const json = await res.json();
-    if (!res.ok) { setError(json.error); return null; }
-    onUpdate(json);
-    return json;
+  const patch = useCallback(async (data: HistoryPatch) => {
+    try {
+      const updated = (await apiRequest("PATCH /api/events/{id}/history/{historyId}", {
+        params: { id: eventId, historyId: entry.id },
+        body: data,
+      })) as HistoryCardFullEntry;
+      onUpdate(updated);
+      return updated;
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error;
+      setError(error.message);
+      return null;
+    }
   }, [eventId, entry.id, onUpdate]);
 
   // ── Auto-save score ────────────────────────────────────────────────────────
@@ -555,36 +563,48 @@ export function HistoryCardFull({
   const handleToggleFriendly = async () => {
     setTogglingFriendly(true);
     setError(null);
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isFriendly: !entry.isFriendly }),
-    });
-    setTogglingFriendly(false);
-    if (!res.ok) { const j = await res.json(); setError(j.error); return; }
-    onUpdate(await res.json());
+    try {
+      onUpdate((await apiRequest("PATCH /api/events/{id}/history/{historyId}", {
+        params: { id: eventId, historyId: entry.id },
+        body: { isFriendly: !entry.isFriendly },
+      })) as HistoryCardFullEntry);
+    } catch (error) {
+      if (error instanceof ApiError) setError(error.message);
+      else throw error;
+    } finally {
+      setTogglingFriendly(false);
+    }
   };
 
   const handleApproveElo = async () => {
     setApprovingElo(true);
     setError(null);
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}/approve-elo`, { method: "POST" });
-    setApprovingElo(false);
-    if (!res.ok) { const j = await res.json(); setError(j.error); return; }
-    onUpdate(await res.json());
+    try {
+      onUpdate((await apiRequest("POST /api/events/{id}/history/{historyId}/approve-elo", {
+        params: { id: eventId, historyId: entry.id },
+      })) as HistoryCardFullEntry);
+    } catch (error) {
+      if (error instanceof ApiError) setError(error.message);
+      else throw error;
+    } finally {
+      setApprovingElo(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, { method: "DELETE" });
-    setDeleting(false);
-    setConfirmDelete(false);
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      setError(json.error ?? "Failed to delete.");
-      return;
+    try {
+      await apiRequest("DELETE /api/events/{id}/history/{historyId}", {
+        params: { id: eventId, historyId: entry.id },
+      });
+      onDelete(entry.id);
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error;
+      setError(error.message);
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
     }
-    onDelete(entry.id);
   };
 
   // ── ELO preview ────────────────────────────────────────────────────────────
@@ -695,15 +715,15 @@ export function HistoryCardFull({
       if (paymentSaveInFlight.current.has(playerName)) return;
       paymentSaveInFlight.current.add(playerName);
       try {
-        const res = await fetch(`/api/events/${eventId}/payments/settlement`, {
-          method: row.status === "paid" ? "DELETE" : "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gameId: config.gameId, eventPlayerId: row.eventPlayerId }),
-        });
-        if (!res.ok) {
-          setError(t("somethingWentWrong"));
-          return;
-        }
+        await apiRequest(
+          row.status === "paid"
+            ? "DELETE /api/events/{id}/payments/settlement"
+            : "PUT /api/events/{id}/payments/settlement",
+          {
+            params: { id: eventId },
+            body: { gameId: config.gameId, eventPlayerId: row.eventPlayerId },
+          },
+        );
         await onPaymentsConfigSaved?.();
       } catch {
         setError(t("somethingWentWrong"));
@@ -741,20 +761,18 @@ export function HistoryCardFull({
     if (!isAuthenticated || !mvpState?.isVotingOpen || votingFor) return;
     setVotingFor(targetParticipant.id);
     try {
-      const res = await fetch(`/api/events/${eventId}/history/${entry.id}/mvp-vote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ votedForPlayerId: targetParticipant.id, votedForName: targetParticipant.name }),
+      await apiRequest("POST /api/events/{id}/history/{historyId}/mvp-vote", {
+        params: { id: eventId, historyId: entry.id },
+        body: { votedForPlayerId: targetParticipant.id, votedForName: targetParticipant.name },
       });
-      if (res.ok) {
-        // Refresh mvp state
-        const mvpRes = await fetch(`/api/events/${eventId}/history/${entry.id}/mvp`);
-        if (mvpRes.ok) setMvpState(await mvpRes.json());
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "Vote failed");
-      }
-    } catch { /* ignore */ }
+      // Refresh mvp state
+      const mvp = (await apiRequest("GET /api/events/{id}/history/{historyId}/mvp", {
+        params: { id: eventId, historyId: entry.id },
+      }).catch(() => null)) as MvpSummary | null;
+      if (mvp) setMvpState(mvp);
+    } catch (error) {
+      if (error instanceof ApiError) setError(error.message);
+    }
     setVotingFor(null);
   };
 

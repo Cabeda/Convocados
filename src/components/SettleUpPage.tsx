@@ -13,6 +13,7 @@ import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { dateFormatTag } from "~/lib/timezones";
 import { formatMoney, toCents } from "~/lib/money";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface Props {
   eventId: string;
@@ -97,15 +98,12 @@ export function SettleUpPage({ eventId }: Props) {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/settle`);
-      if (!res.ok) {
-        if (res.status === 404) setError("Event not found.");
-        else setError(`Failed to load (${res.status}).`);
-        return;
-      }
-      setData(await res.json());
+      setData((await apiRequest("GET /api/events/{id}/settle", {
+        params: { id: eventId },
+      })) as SettlePayload);
     } catch (e) {
-      setError(String(e));
+      if (e instanceof ApiError) setError(e.status === 404 ? "Event not found." : `Failed to load (${e.status}).`);
+      else setError(String(e));
     } finally {
       setLoading(false);
     }
@@ -183,19 +181,16 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
     }
     setExtrasBusy(true);
     try {
-      const res = await fetch(`/api/events/${data.event.id}/settle/extras`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amountCents, label: extrasLabel.trim() }),
+      await apiRequest("POST /api/events/{id}/settle/extras", {
+        params: { id: data.event.id },
+        body: { amountCents, label: extrasLabel.trim() },
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setExtrasError(body.error ?? `Failed (${res.status}).`);
-        return;
-      }
       setExtrasLabel("");
       setExtrasAmount("");
       onChange();
+    } catch (e) {
+      if (!(e instanceof ApiError)) throw e;
+      setExtrasError(e.message);
     } finally {
       setExtrasBusy(false);
     }
@@ -205,11 +200,10 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
     if (!subUserId.trim()) return;
     setSubBusy(true);
     try {
-      await fetch(`/api/events/${data.event.id}/settle/subscriptions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId: subUserId.trim() }),
-      });
+      await apiRequest("POST /api/events/{id}/settle/subscriptions", {
+        params: { id: data.event.id },
+        body: { userId: subUserId.trim() },
+      }).catch(() => undefined);
       setSubUserId("");
       onChange();
     } finally {
@@ -218,7 +212,9 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
   };
 
   const cancelSub = async (id: string) => {
-    await fetch(`/api/events/${data.event.id}/settle/subscriptions/${id}`, { method: "DELETE" });
+    await apiRequest("DELETE /api/events/{id}/settle/subscriptions/{subId}", {
+      params: { id: data.event.id, subId: id },
+    }).catch(() => undefined);
     onChange();
   };
 

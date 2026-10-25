@@ -17,6 +17,7 @@ import {
 import { useEventCost, type EventCostData } from "~/lib/useEventCost";
 import { formatMoney, toCents } from "~/lib/money";
 import { perPlayerShare } from "~/lib/gameCost";
+import { apiRequest } from "~/lib/api/client";
 import { PaymentMethodsList } from "./PaymentMethodsList";
 
 const CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
@@ -113,22 +114,17 @@ function CostEditorDialog({
     setSaving(true);
     setLocalErr(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/cost`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await apiRequest("PUT /api/events/{id}/cost", {
+        params: { id: eventId },
+        body: {
           totalAmount,
           currency,
           scope,
           paymentMethods: methods.filter((m) => m.value.trim()).length > 0
             ? methods.filter((m) => m.value.trim())
             : null,
-        }),
+        },
       });
-      if (!res.ok) {
-        setLocalErr(t("paymentsFailed"));
-        return;
-      }
       await onSaved();
     } catch {
       setLocalErr(t("paymentsFailed"));
