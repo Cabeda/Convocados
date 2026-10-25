@@ -7,6 +7,9 @@ import SeasonListPage from "~/components/SeasonListPage";
 import CrewProposalPanel from "~/components/CrewProposalPanel";
 import { LeaderboardTables, type LeaderboardPayload } from "~/components/LeaderboardTables";
 
+// The typed client parses JSON by content type; a bare `new Response(body)` is text/plain.
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 const emptyProposalPanel = { canPropose: false, canReview: false, candidates: [], proposals: [] };
 
 beforeEach(() => {
@@ -30,9 +33,9 @@ describe("SeasonPage conditional states", () => {
     vi.mocked(fetch).mockImplementation((input) => {
       const url = String(input);
       if (url.includes("crew-proposals")) {
-        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
       }
-      return Promise.resolve(new Response(JSON.stringify({ error: "Boom" }), { status: 500 }));
+      return Promise.resolve(new Response(JSON.stringify({ error: "Boom" }), { status: 500, headers: JSON_HEADERS }));
     });
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
@@ -45,9 +48,9 @@ describe("SeasonPage conditional states", () => {
     vi.mocked(fetch).mockImplementation((input) => {
       const url = String(input);
       if (url.includes("crew-proposals")) {
-        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
       }
-      return Promise.resolve(new Response(JSON.stringify({}), { status: 401 }));
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 401, headers: JSON_HEADERS }));
     });
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
@@ -64,13 +67,13 @@ describe("SeasonListPage conditional states", () => {
   });
 
   it("surfaces a load failure", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: "Nope" }), { status: 500 }));
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: "Nope" }), { status: 500, headers: JSON_HEADERS }));
     renderWithTheme(<SeasonListPage eventId="event-1" />);
     expect(await screen.findByText("Nope")).toBeInTheDocument();
   });
 
   it("shows the locked notice without season data", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ locked: true }), { status: 200 }));
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ locked: true }), { status: 200, headers: JSON_HEADERS }));
     renderWithTheme(<SeasonListPage eventId="event-1" />);
     expect(await screen.findByText("This event is password-protected.")).toBeInTheDocument();
   });
@@ -78,7 +81,7 @@ describe("SeasonListPage conditional states", () => {
 
 describe("CrewProposalPanel conditional states", () => {
   it("renders nothing when the viewer has no proposal access", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(emptyProposalPanel), { status: 200 }));
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
     renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -87,7 +90,7 @@ describe("CrewProposalPanel conditional states", () => {
   });
 
   it("renders nothing when the proposals request is forbidden", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 }));
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: JSON_HEADERS }));
     renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
 
     await new Promise((resolve) => setTimeout(resolve, 0));

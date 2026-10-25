@@ -131,6 +131,16 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "POST /api/events/{id}/seasons": {
+    params: {
+      id: string;
+    };
+    body: {
+      name: string;
+      registrationOpensAt: string;
+      registrationClosesAt: string;
+    };
+  };
   "GET /api/events/{id}/seasons/{seasonId}/rank": {
     params: {
       id: string;
@@ -142,17 +152,30 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    query: {
+      crewInviteToken?: string;
+    };
   };
   "PATCH /api/events/{id}/seasons/{seasonId}": {
     params: {
       id: string;
       seasonId: string;
     };
+    body: {
+      action: "update" | "activate" | "complete" | "cancel" | "reopen";
+      name?: string;
+      registrationOpensAt?: string;
+      registrationClosesAt?: string;
+      reason?: string;
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/membership": {
     params: {
       id: string;
       seasonId: string;
+    };
+    body: {
+      eventPlayerId: string;
     };
   };
   "DELETE /api/events/{id}/seasons/{seasonId}/membership": {
@@ -166,12 +189,17 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      eventPlayerId: string;
+      crewId?: string;
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/memberships/bulk": {
     params: {
       id: string;
       seasonId: string;
     };
+    body: Record<string, unknown>;
   };
   "GET /api/events/{id}/seasons/{seasonId}/memberships/candidates": {
     params: {
@@ -197,6 +225,13 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      action?: "claim-invite" | "invite";
+      token?: string;
+      email?: string;
+      name?: string;
+      members?: { membershipId?: string; userId?: string }[];
+    };
   };
   "PATCH /api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}": {
     params: {
@@ -210,11 +245,17 @@ export interface ApiOperations {
       id: string;
       seasonId: string;
     };
+    body: {
+      crews: { name: string; membershipIds: string[] }[];
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/crews/recommend": {
     params: {
       id: string;
       seasonId: string;
+    };
+    body: {
+      crewCount: number;
     };
   };
   "DELETE /api/events/{id}/seasons/{seasonId}/crews/{crewId}": {
@@ -414,6 +455,10 @@ export interface ApiOperations {
       id: string;
       historyId: string;
     };
+    body: {
+      votedForPlayerId?: string;
+      votedForName?: string;
+    };
   };
   "GET /api/events/{id}/history/{historyId}/mvp": {
     params: {
@@ -507,6 +552,18 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      playerId: string;
+    };
+  };
+  "POST /api/events/{id}/merge-player": {
+    params: {
+      id: string;
+    };
+    body: {
+      sourceName: string;
+      targetName: string;
+    };
   };
   "POST /api/events/{id}/undo-remove": {
     params: {
@@ -553,6 +610,9 @@ export interface ApiOperations {
   "GET /api/events/{id}/ratings": {
     params: {
       id: string;
+    };
+    query: {
+      cursor?: string;
     };
   };
   "PATCH /api/events/{id}/ratings": {

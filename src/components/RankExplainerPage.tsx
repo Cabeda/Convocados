@@ -9,6 +9,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { apiRequest } from "~/lib/api/client";
 import { EXPECTED_CLAMP, RANK_POINT_SCALE, TIER_NAMES } from "~/lib/seasonRank";
 import type { RankOutcome } from "~/lib/rankExplainer";
 import { RankMathDemo } from "./rank/RankMathDemo";
@@ -68,10 +69,12 @@ export default function RankExplainerPage({ eventId }: { eventId: string }) {
     if (!seasonId || rankParam !== null) return;
     const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/events/${eventId}/seasons/${seasonId}/rank`, { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: RankApiPayload | null) => {
-        if (!data) return;
+    apiRequest("GET /api/events/{id}/seasons/{seasonId}/rank", {
+      params: { id: eventId, seasonId },
+      init: { signal: controller.signal },
+    })
+      .then((payload) => {
+        const data = payload as RankApiPayload;
         setViewer(data.players.find((p) => p.name === data.youName) ?? null);
       })
       .catch(() => { /* non-fatal: widgets fall back to defaults */ })

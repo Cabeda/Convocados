@@ -286,6 +286,16 @@ export const openApiSpec = {
         parameters: [eventIdParam],
         responses: { "200": { description: "Seasons list" }, ...errorResponses },
       },
+      post: {
+        summary: "Create a Season",
+        tags: ["Seasons"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, registrationOpensAt: { type: "string" }, registrationClosesAt: { type: "string" } }, required: ["name", "registrationOpensAt", "registrationClosesAt"] } } },
+        },
+        responses: { "201": { description: "Season created" }, ...errorResponses },
+      },
     },
     "/api/events/{id}/seasons/{seasonId}/rank": {
       get: {
@@ -299,13 +309,17 @@ export const openApiSpec = {
       get: {
         summary: "Get a Season's detail (members, crews, standings)",
         tags: ["Seasons"],
-        parameters: [eventIdParam, seasonIdParam],
+        parameters: [eventIdParam, seasonIdParam, { name: "crewInviteToken", in: "query", schema: { type: "string" }, description: "Crew invite token" }],
         responses: { "200": { description: "Season detail" }, ...errorResponses },
       },
       patch: {
         summary: "Update, activate, complete, cancel, or reopen a Season",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { action: { type: "string", enum: ["update", "activate", "complete", "cancel", "reopen"] }, name: { type: "string" }, registrationOpensAt: { type: "string" }, registrationClosesAt: { type: "string" }, reason: { type: "string" } }, required: ["action"] } } },
+        },
         responses: { "200": { description: "Season updated" }, ...errorResponses },
       },
     },
@@ -314,6 +328,10 @@ export const openApiSpec = {
         summary: "Join a Season",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { eventPlayerId: { type: "string" } }, required: ["eventPlayerId"] } } },
+        },
         responses: { "200": { description: "Joined" }, ...errorResponses },
       },
       delete: {
@@ -328,6 +346,10 @@ export const openApiSpec = {
         summary: "Add a Season member (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { eventPlayerId: { type: "string" }, crewId: { type: "string" } }, required: ["eventPlayerId"] } } },
+        },
         responses: { "200": { description: "Member added" }, ...errorResponses },
       },
     },
@@ -336,6 +358,10 @@ export const openApiSpec = {
         summary: "Bulk-enroll recent players as Season members (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object" } } },
+        },
         responses: { "200": { description: "Members added" }, ...errorResponses },
       },
     },
@@ -366,6 +392,14 @@ export const openApiSpec = {
         summary: "Submit a Season Crew proposal",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { type: "object", properties: { action: { type: "string", enum: ["claim-invite", "invite"] }, token: { type: "string" }, email: { type: "string" }, name: { type: "string" }, members: { type: "array", items: { type: "object", properties: { membershipId: { type: "string" }, userId: { type: "string" } } } } } },
+            },
+          },
+        },
         responses: { "201": { description: "Proposal created" }, ...errorResponses },
       },
     },
@@ -382,6 +416,10 @@ export const openApiSpec = {
         summary: "Save Season Crews (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { crews: { type: "array", items: { type: "object", properties: { name: { type: "string" }, membershipIds: { type: "array", items: { type: "string" } } }, required: ["name", "membershipIds"] } } }, required: ["crews"] } } },
+        },
         responses: { "200": { description: "Crews saved" }, ...errorResponses },
       },
     },
@@ -390,6 +428,10 @@ export const openApiSpec = {
         summary: "Recommend balanced Season Crews (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { crewCount: { type: "number" } }, required: ["crewCount"] } } },
+        },
         responses: { "200": { description: "Crews recommended" }, ...errorResponses },
       },
     },
@@ -689,6 +731,10 @@ export const openApiSpec = {
         summary: "Cast MVP vote for a game",
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { votedForPlayerId: { type: "string" }, votedForName: { type: "string" } } } } },
+        },
         responses: { "200": { description: "Vote cast" }, ...errorResponses },
       },
     },
@@ -841,7 +887,23 @@ export const openApiSpec = {
         summary: "Claim an anonymous player as your account",
         tags: ["Players"],
         parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { playerId: { type: "string" } }, required: ["playerId"] } } },
+        },
         responses: { "200": { description: "Player claimed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/merge-player": {
+      post: {
+        summary: "Merge one anonymous player into another",
+        tags: ["Players"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { sourceName: { type: "string" }, targetName: { type: "string" } }, required: ["sourceName", "targetName"] } } },
+        },
+        responses: { "200": { description: "Players merged" }, ...errorResponses },
       },
     },
     "/api/events/{id}/undo-remove": {
@@ -914,7 +976,7 @@ export const openApiSpec = {
       get: {
         summary: "Get player ELO ratings for an event",
         tags: ["Ratings"],
-        parameters: [eventIdParam],
+        parameters: [eventIdParam, { name: "cursor", in: "query", schema: { type: "string" }, description: "Pagination cursor" }],
         responses: { "200": { description: "Player ratings" } },
       },
       patch: {

@@ -18,6 +18,7 @@ import HelpCenterOutlinedIcon from "@mui/icons-material/HelpCenterOutlined";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { ApiError, apiRequest } from "~/lib/api/client";
 import CrewProposalPanel from "./CrewProposalPanel";
 import { LeaderboardTables, type LeaderboardPayload } from "./LeaderboardTables";
 import { SeasonRankTable } from "./SeasonRankTable";
@@ -71,6 +72,13 @@ function toDateInput(value: string | null) {
   return value ? value.slice(0, 10) : "";
 }
 
+/** The client carries the route's `error`; fall back to the caller's copy when it has none. */
+function failure(reason: unknown, fallback: string) {
+  return reason instanceof ApiError && reason.message !== `Request failed: ${reason.status}`
+    ? reason.message
+    : fallback;
+}
+
 export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eventId: string; seasonId: string; crewInviteToken?: string }) {
   const t = useT();
   const inviteClaimAttemptedRef = useRef(false);
@@ -99,14 +107,11 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const query = crewInviteToken ? `?crewInviteToken=${encodeURIComponent(crewInviteToken)}` : "";
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}${query}`);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(response.status === 401 ? t("seasonSignInRequired") : data.error ?? t("somethingWentWrong"));
-        return;
-      }
-      const nextSeason = data.season as SeasonPayload;
+      const data = (await apiRequest("GET /api/events/{id}/seasons/{seasonId}", {
+        params: { id: eventId, seasonId },
+        query: { crewInviteToken: crewInviteToken || undefined },
+      })) as { season: SeasonPayload };
+      const nextSeason = data.season;
       setSeason(nextSeason);
       setSeasonName(nextSeason.name);
       setOpensAt(toDateInput(nextSeason.registrationOpensAt));
@@ -121,8 +126,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
         setCrews(nextCrews);
         setCrewCount(Math.max(2, nextCrews.length || 2));
       }
-    } catch {
-      setError(t("somethingWentWrong"));
+    } catch (requestError) {
+      setError(requestError instanceof ApiError && requestError.status === 401
+        ? t("seasonSignInRequired")
+        : failure(requestError, t("somethingWentWrong")));
     } finally {
       setLoading(false);
     }
@@ -134,20 +141,20 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     if (!crewInviteToken || inviteClaimAttemptedRef.current) return;
     inviteClaimAttemptedRef.current = true;
     const controller = new AbortController();
-    void fetch(`/api/events/${eventId}/seasons/${seasonId}/crew-proposals`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "claim-invite", token: crewInviteToken }),
-      signal: controller.signal,
-    }).then(async (response) => {
-      if (!response.ok && response.status !== 401) {
-        const data = await response.json().catch(() => ({}));
-        setError(data.error ?? t("somethingWentWrong"));
-      }
+    void apiRequest("POST /api/events/{id}/seasons/{seasonId}/crew-proposals", {
+      params: { id: eventId, seasonId },
+      body: { action: "claim-invite", token: crewInviteToken },
+      init: { signal: controller.signal },
+    }).then(async () => {
       await load();
-    }).catch((claimError: unknown) => {
-      if (claimError instanceof DOMException && claimError.name === "AbortError") return;
-      setError(t("somethingWentWrong"));
+    }).catch(async (requestError: unknown) => {
+      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+      if (!(requestError instanceof ApiError)) {
+        setError(t("somethingWentWrong"));
+        return;
+      }
+      if (requestError.status !== 401) setError(failure(requestError, t("somethingWentWrong")));
+      await load();
     });
     return () => controller.abort();
   }, [crewInviteToken, eventId, load, seasonId, t]);
@@ -178,20 +185,17 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setBusy("recommend");
     setError(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/crews/recommend`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ crewCount }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("somethingWentWrong")); return; }
+      const data = (await apiRequest("POST /api/events/{id}/seasons/{seasonId}/crews/recommend", {
+        params: { id: eventId, seasonId },
+        body: { crewCount },
+      })) as { crews: Array<{ name: string; membershipIds: string[] }> };
       setupDraftDirtyRef.current = true;
-      setCrews(data.crews.map((crew: { name: string; membershipIds: string[] }) => ({
+      setCrews(data.crews.map((crew) => ({
         name: crew.name,
         membershipIds: crew.membershipIds,
       })));
-    } catch {
-      setError(t("somethingWentWrong"));
+    } catch (requestError) {
+      setError(failure(requestError, t("somethingWentWrong")));
     } finally {
       setBusy(null);
     }
@@ -202,18 +206,15 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setError(null);
     setSaved(false);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/crews`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ crews }),
+      await apiRequest("POST /api/events/{id}/seasons/{seasonId}/crews", {
+        params: { id: eventId, seasonId },
+        body: { crews },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("seasonSetupError")); return; }
       setSaved(true);
       await load();
       setupDraftDirtyRef.current = false;
-    } catch {
-      setError(t("seasonSetupError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("seasonSetupError")));
     } finally {
       setBusy(null);
     }
@@ -225,19 +226,16 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setSaved(false);
     setNotice(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = (await apiRequest("PATCH /api/events/{id}/seasons/{seasonId}", {
+        params: { id: eventId, seasonId },
+        body: {
           action: "update",
           name: seasonName,
           registrationOpensAt: opensAt,
           registrationClosesAt: closesAt,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("seasonDetailsError")); return; }
-      const updated = data.season as { name: string; registrationOpensAt: string; registrationClosesAt: string };
+        },
+      })) as { season: { name: string; registrationOpensAt: string; registrationClosesAt: string } };
+      const updated = data.season;
       setSeason((current) => current ? {
         ...current,
         name: updated.name,
@@ -248,8 +246,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       setOpensAt(toDateInput(updated.registrationOpensAt));
       setClosesAt(toDateInput(updated.registrationClosesAt));
       setNotice(t("seasonDetailsSaved"));
-    } catch {
-      setError(t("seasonDetailsError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("seasonDetailsError")));
     } finally {
       setBusy(null);
     }
@@ -260,11 +258,9 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/memberships/${member.membershipId}`, {
-        method: "DELETE",
+      await apiRequest("DELETE /api/events/{id}/seasons/{seasonId}/memberships/{membershipId}", {
+        params: { id: eventId, seasonId, membershipId: member.membershipId },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("seasonMembershipError")); return; }
       // Drop the member from every draft crew, then refresh participants.
       setCrews((current) => current.map((crew) => ({
         ...crew,
@@ -273,8 +269,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       setCandidates((current) => current.filter((entry) => entry.eventPlayerId !== member.eventPlayerId));
       setNotice(t("memberRemoved", { name: member.name }));
       await refreshMembers();
-    } catch {
-      setError(t("seasonMembershipError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("seasonMembershipError")));
     } finally {
       setBusy(null);
     }
@@ -288,16 +284,16 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setNotice(null);
     try {
       if (id) {
-        const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/crews/${id}`, { method: "DELETE" });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) { setError(data.error ?? t("crewDeleteError")); return; }
+        await apiRequest("DELETE /api/events/{id}/seasons/{seasonId}/crews/{crewId}", {
+          params: { id: eventId, seasonId, crewId: id },
+        });
       }
       setCrews((current) => current.filter((_, crewIndex) => crewIndex !== index));
       setPendingCrewDelete(null);
       setNotice(t("crewDeleted", { name }));
       if (id) await refreshMembers();
-    } catch {
-      setError(t("crewDeleteError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("crewDeleteError")));
     } finally {
       setBusy(null);
     }
@@ -308,18 +304,15 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "cancel", reason: cancelReason }),
+      await apiRequest("PATCH /api/events/{id}/seasons/{seasonId}", {
+        params: { id: eventId, seasonId },
+        body: { action: "cancel", reason: cancelReason },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("seasonCancelError")); return; }
       setCancelOpen(false);
       setCancelReason("");
       await load();
-    } catch {
-      setError(t("seasonCancelError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("seasonCancelError")));
     } finally {
       setBusy(null);
     }
@@ -329,16 +322,13 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setBusy("activate");
     setError(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "activate" }),
+      await apiRequest("PATCH /api/events/{id}/seasons/{seasonId}", {
+        params: { id: eventId, seasonId },
+        body: { action: "activate" },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("seasonActivateError")); return; }
       await load();
-    } catch {
-      setError(t("seasonActivateError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("seasonActivateError")));
     } finally {
       setBusy(null);
     }
@@ -349,21 +339,17 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+      await apiRequest("PATCH /api/events/{id}/seasons/{seasonId}", {
+        params: { id: eventId, seasonId },
+        body: { action },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(data.error ?? (action === "complete" ? t("seasonCompleteError") : t("seasonReopenError")));
-        return;
-      }
       setCompleteOpen(false);
       setReopenOpen(false);
       await load();
-    } catch {
-      setError(action === "complete" ? t("seasonCompleteError") : t("seasonReopenError"));
+    } catch (requestError) {
+      setError(action === "complete"
+        ? failure(requestError, t("seasonCompleteError"))
+        : failure(requestError, t("seasonReopenError")));
     } finally {
       setBusy(null);
     }
@@ -374,18 +360,19 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setBusy("membership");
     setError(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/membership`, {
-        method: join ? "POST" : "DELETE",
-        ...(join ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ eventPlayerId: season.viewerEventPlayerId }),
-        } : {}),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("seasonMembershipError")); return; }
+      if (join) {
+        await apiRequest("POST /api/events/{id}/seasons/{seasonId}/membership", {
+          params: { id: eventId, seasonId },
+          body: { eventPlayerId: season.viewerEventPlayerId },
+        });
+      } else {
+        await apiRequest("DELETE /api/events/{id}/seasons/{seasonId}/membership", {
+          params: { id: eventId, seasonId },
+        });
+      }
       await load();
-    } catch {
-      setError(t("seasonMembershipError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("seasonMembershipError")));
     } finally {
       setBusy(null);
     }
@@ -394,10 +381,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   // Refresh the participant list without touching unsaved Crew drafts.
   const refreshMembers = async () => {
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) return;
-      const nextSeason = data.season as SeasonPayload;
+      const data = (await apiRequest("GET /api/events/{id}/seasons/{seasonId}", {
+        params: { id: eventId, seasonId },
+      })) as { season: SeasonPayload };
+      const nextSeason = data.season;
       setSeason((current) => current ? { ...current, activeMembers: nextSeason.activeMembers } : nextSeason);
     } catch {
       // Non-fatal: the next load covers it.
@@ -409,13 +396,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/memberships/bulk`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("seasonMembershipError")); return; }
+      const data = (await apiRequest("POST /api/events/{id}/seasons/{seasonId}/memberships/bulk", {
+        params: { id: eventId, seasonId },
+        body: {},
+      })) as { added?: unknown; skipped?: unknown };
       const added = Array.isArray(data.added) ? data.added : [];
       const skipped = Array.isArray(data.skipped) ? data.skipped : [];
       if (added.length === 0 && skipped.length === 0) {
@@ -431,8 +415,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
         setNotice(parts.join(" "));
       }
       await refreshMembers();
-    } catch {
-      setError(t("seasonMembershipError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("seasonMembershipError")));
     } finally {
       setBusy(null);
     }
@@ -442,9 +426,9 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     if (candidatesLoadedRef.current) return;
     candidatesLoadedRef.current = true;
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/memberships/candidates`);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) return;
+      const data = (await apiRequest("GET /api/events/{id}/seasons/{seasonId}/memberships/candidates", {
+        params: { id: eventId, seasonId },
+      })) as { players?: unknown };
       setCandidates(Array.isArray(data.players) ? data.players : []);
     } catch {
       // Non-fatal: the autocomplete simply stays empty.
@@ -457,14 +441,11 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     setNotice(null);
     try {
       const draftCrew = crewIndex === null ? null : crews[crewIndex] ?? null;
-      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/memberships`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventPlayerId, crewId: draftCrew?.id ?? null }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(data.error ?? t("seasonMembershipError")); return; }
-      const membershipId = (data.membership as { id?: unknown } | undefined)?.id;
+      const data = (await apiRequest("POST /api/events/{id}/seasons/{seasonId}/memberships", {
+        params: { id: eventId, seasonId },
+        body: { eventPlayerId, ...(draftCrew?.id ? { crewId: draftCrew.id } : {}) },
+      })) as { membership?: { id?: unknown } };
+      const membershipId = data.membership?.id;
       const candidate = candidates.find((entry) => entry.eventPlayerId === eventPlayerId);
       const displayName = candidate?.name ?? "";
       setCandidates((current) => current.filter((entry) => entry.eventPlayerId !== eventPlayerId));
@@ -473,8 +454,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
         ? t("playerAddedToCrew", { name: displayName, crew: draftCrew.name })
         : t("playerAddedUnassigned", { name: displayName }));
       await refreshMembers();
-    } catch {
-      setError(t("seasonMembershipError"));
+    } catch (requestError) {
+      setError(failure(requestError, t("seasonMembershipError")));
     } finally {
       setBusy(null);
     }

@@ -4,6 +4,9 @@ import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import SeasonListPage from "~/components/SeasonListPage";
 
+// The typed client parses JSON by content type; a bare `new Response(body)` is text/plain.
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
 });
@@ -36,7 +39,7 @@ describe("SeasonListPage", () => {
         memberCount: 8,
         currentMembership: null,
       },
-    ] }), { status: 200 }));
+    ] }), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonListPage eventId="event-1" />);
 
@@ -55,7 +58,7 @@ describe("SeasonListPage", () => {
 
   it("does not reveal Season data when the Event is locked", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ locked: true, hasPassword: true }), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ locked: true, hasPassword: true }), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonListPage eventId="event-1" />);
 
@@ -65,7 +68,7 @@ describe("SeasonListPage", () => {
 
   it("shows the start-new-season control only to managers", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ seasons: [], canManage: false }), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ seasons: [], canManage: false }), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonListPage eventId="event-1" />);
 
@@ -75,7 +78,7 @@ describe("SeasonListPage", () => {
 
   it("lets a manager open the create-season form", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ seasons: [], canManage: true }), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ seasons: [], canManage: true }), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonListPage eventId="event-1" />);
 
