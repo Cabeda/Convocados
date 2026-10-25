@@ -6,7 +6,9 @@ import HistoryIcon from "@mui/icons-material/History";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { apiRequest, ApiError } from "~/lib/api/client";
 import { useSession } from "~/lib/auth.client";
+import type { EventData } from "./event/types";
 import { HistoryCardFull, type HistoryCardFullEntry } from "./HistoryCardFull";
 import { MatchEventsTimeline, type MatchEventDraft, type MatchEventSummary } from "./MatchEventsTimeline";
 import { deriveEventPermissions } from "~/lib/eventView";
@@ -49,18 +51,24 @@ export default function GameDetailPage({ eventId, historyId }: { eventId: string
   const isOwner = deriveEventPermissions(session?.user?.id ?? null, { ownerId, isPublic, isAdmin }).isOwner;
 
   const load = useCallback(async () => {
-    const [evRes, entryRes, costRes] = await Promise.all([
-      fetch(`/api/events/${eventId}`),
-      fetch(`/api/events/${eventId}/history/${historyId}`),
-      fetch(`/api/events/${eventId}/cost`).catch(() => null),
+    const [evBody, entryBody, costBody] = await Promise.all([
+      apiRequest("GET /api/events/{id}", { params: { id: eventId } }).catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }),
+      apiRequest("GET /api/events/{id}/history/{historyId}", { params: { id: eventId, historyId } }).catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }),
+      apiRequest("GET /api/events/{id}/cost", { params: { id: eventId } }).catch(() => null),
     ]);
-    if (evRes.status === 404 || entryRes.status === 404) {
+    if (!evBody || !entryBody) {
       setNotFound(true);
       setLoading(false);
       return;
     }
-    const ev = await evRes.json();
-    const detail = await entryRes.json();
+    const ev = evBody as EventData;
+    const detail = entryBody as HistoryCardFullEntry;
     setTitle(ev.title);
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
@@ -72,14 +80,16 @@ export default function GameDetailPage({ eventId, historyId }: { eventId: string
     setEventPlayers((ev.players ?? []).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
     setEntry(detail);
     setMatchEvents(detail.matchEvents ?? []);
-    if (costRes && costRes.ok) setCost(await costRes.json());
+    if (costBody) setCost(costBody as NonNullable<typeof cost>);
     setLoading(false);
 
     const currentPlayers = (ev.players ?? []).map((p: { name: string; image?: string | null }) => ({ name: p.name, gamesPlayed: -1, userId: null, image: p.image ?? null }));
     Promise.all([
-      fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
-      fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([kp, ratings]) => {
+      apiRequest("GET /api/events/{id}/known-players", { params: { id: eventId } }).catch(() => ({ players: [] })),
+      apiRequest("GET /api/events/{id}/ratings", { params: { id: eventId } }).catch(() => ({ data: [] })),
+    ]).then(([kpBody, ratingsBody]) => {
+      const kp = kpBody as { players: Array<{ name: string; gamesPlayed: number; userId?: string | null; image?: string | null }> };
+      const ratings = ratingsBody as { data: Array<{ name: string; rating: number; gamesPlayed: number }> };
       const allPlayersMap = new Map<string, { name: string; gamesPlayed: number; userId: string | null; image: string | null }>();
       currentPlayers.forEach((p: { name: string; gamesPlayed: number; userId: string | null; image: string | null }) => allPlayersMap.set(p.name.toLowerCase(), p));
       (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number; userId?: string | null; image?: string | null }) => {
@@ -97,51 +107,56 @@ export default function GameDetailPage({ eventId, historyId }: { eventId: string
   useEffect(() => { void load(); }, [load]);
 
   const refreshMatchEvents = useCallback(async () => {
-    const res = await fetch(`/api/events/${eventId}/history/${historyId}/match-events`);
-    if (res.ok) {
-      const body = await res.json();
-      setMatchEvents(body.events ?? []);
-    }
+    const body = (await apiRequest("GET /api/events/{id}/history/{historyId}/match-events", {
+      params: { id: eventId, historyId },
+    }).catch(() => null)) as { events?: MatchEventSummary[] } | null;
+    if (body) setMatchEvents(body.events ?? []);
+  }, [eventId, historyId]);
+
+  const reloadEntry = useCallback(async () => {
+    const updated = (await apiRequest("GET /api/events/{id}/history/{historyId}", {
+      params: { id: eventId, historyId },
+    }).catch(() => null)) as HistoryCardFullEntry | null;
+    if (updated) setEntry(updated);
   }, [eventId, historyId]);
 
   const handleAddGoal = useCallback(async (draft: MatchEventDraft) => {
     setMatchEventsSaving(true);
     setMatchEventsError(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/history/${historyId}/match-events`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "goal", ...draft }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? t("matchEventsAddError"));
+      try {
+        await apiRequest("POST /api/events/{id}/history/{historyId}/match-events", {
+          params: { id: eventId, historyId },
+          body: { type: "goal", ...draft, team: draft.team as "one" | "two" },
+        });
+      } catch (error) {
+        throw new Error(error instanceof ApiError ? error.message : t("matchEventsAddError"), { cause: error });
       }
       await refreshMatchEvents();
       // The goal changes the derived score, so pull the entry again too.
-      const entryRes = await fetch(`/api/events/${eventId}/history/${historyId}`);
-      if (entryRes.ok) setEntry(await entryRes.json());
+      await reloadEntry();
     } finally {
       setMatchEventsSaving(false);
     }
-  }, [eventId, historyId, refreshMatchEvents, t]);
+  }, [eventId, historyId, refreshMatchEvents, reloadEntry, t]);
 
   const handleRemoveGoal = useCallback(async (id: string) => {
     setMatchEventsSaving(true);
     setMatchEventsError(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/history/${historyId}/match-events/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? t("matchEventsAddError"));
+      try {
+        await apiRequest("DELETE /api/events/{id}/history/{historyId}/match-events/{matchEventId}", {
+          params: { id: eventId, historyId, matchEventId: id },
+        });
+      } catch (error) {
+        throw new Error(error instanceof ApiError ? error.message : t("matchEventsAddError"), { cause: error });
       }
       await refreshMatchEvents();
-      const entryRes = await fetch(`/api/events/${eventId}/history/${historyId}`);
-      if (entryRes.ok) setEntry(await entryRes.json());
+      await reloadEntry();
     } finally {
       setMatchEventsSaving(false);
     }
-  }, [eventId, historyId, refreshMatchEvents, t]);
+  }, [eventId, historyId, refreshMatchEvents, reloadEntry, t]);
 
   // Logging goals mirrors the API's rule: owner/admin, or a participant of
   // this game (on its teams or payment roll).

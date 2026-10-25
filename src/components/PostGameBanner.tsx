@@ -13,6 +13,7 @@ import HowToRegIcon from "@mui/icons-material/HowToReg";
 import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
 import { formatMoney, toCents } from "~/lib/money";
+import { apiRequest, ApiError } from "~/lib/api/client";
 import { MvpVotingCard } from "./MvpVotingCard";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { RecurrencePrompt } from "./RecurrencePrompt";
@@ -149,14 +150,13 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
 
   const fetchStatus = useCallback(async () => {
     try {
-      const statusRes = await fetch(`/api/events/${eventId}/post-game-status`);
-      if (statusRes.ok) {
-        const data = await statusRes.json();
-        setStatus(data);
-        onStatusChangeRef.current?.(data);
-        if (data.paymentsSnapshot && !paymentsDirty) {
-          setEditablePayments(data.paymentsSnapshot);
-        }
+      const data = (await apiRequest("GET /api/events/{id}/post-game-status", {
+        params: { id: eventId },
+      })) as PostGameStatus;
+      setStatus(data);
+      onStatusChangeRef.current?.(data);
+      if (data.paymentsSnapshot && !paymentsDirty) {
+        setEditablePayments(data.paymentsSnapshot);
       }
     } catch { /* ignore */ }
   }, [eventId, paymentsDirty]);
@@ -177,12 +177,15 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
     if (row.isPayer) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/payments/settlement`, {
-        method: row.status === "paid" ? "DELETE" : "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameId: status.gameConfig.gameId, eventPlayerId: row.eventPlayerId }),
-      });
-      if (!res.ok) setSaveError(t("somethingWentWrong"));
+      await apiRequest(
+        row.status === "paid"
+          ? "DELETE /api/events/{id}/payments/settlement"
+          : "PUT /api/events/{id}/payments/settlement",
+        {
+          params: { id: eventId },
+          body: { gameId: status.gameConfig.gameId, eventPlayerId: row.eventPlayerId },
+        },
+      );
     } catch {
       setSaveError(t("somethingWentWrong"));
     } finally {
@@ -240,18 +243,17 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/history/${status.latestHistoryId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentsSnapshot: editablePayments }),
+      await apiRequest("PATCH /api/events/{id}/history/{historyId}", {
+        params: { id: eventId, historyId: status.latestHistoryId },
+        body: { paymentsSnapshot: editablePayments },
       });
-      if (!res.ok) {
-        setSaveError(res.status === 403 ? t("postGamePaymentsLocked") : t("somethingWentWrong"));
-      } else {
-        setPaymentsDirty(false);
-        fetchStatus();
+      setPaymentsDirty(false);
+      fetchStatus();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setSaveError(error.status === 403 ? t("postGamePaymentsLocked") : t("somethingWentWrong"));
       }
-    } catch { /* ignore */ }
+    }
     setSaving(false);
   };
 

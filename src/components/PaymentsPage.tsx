@@ -7,6 +7,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
 import { formatMoney, formatShortDate, toCents } from "~/lib/money";
+import { apiRequest, ApiError } from "~/lib/api/client";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -73,22 +74,14 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/payments/settlement`);
-      if (res.status === 401) {
-        setError("signin");
-        setData(null);
-      } else if (res.status === 403) {
-        setError("forbidden");
-        setData(null);
-      } else if (!res.ok) {
-        setError("failed");
-        setData(null);
-      } else {
-        setData(await res.json());
-        setError(null);
-      }
-    } catch {
-      setError("failed");
+      setData((await apiRequest("GET /api/events/{id}/payments/settlement", {
+        params: { id: eventId },
+      })) as SettlementSummary);
+      setError(null);
+    } catch (error) {
+      setError(error instanceof ApiError && error.status === 401
+        ? "signin"
+        : error instanceof ApiError && error.status === 403 ? "forbidden" : "failed");
       setData(null);
     } finally {
       setLoading(false);
@@ -99,15 +92,10 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
     load();
   }, [load]);
 
-  const runAction = async (path: string, body: Record<string, unknown>, method: "PUT" | "POST" = "PUT") => {
+  const runAction = async (run: () => Promise<unknown>) => {
     setBusy(true);
     try {
-      const res = await fetch(path, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error();
+      await run();
       await load();
     } catch {
       setError("failed");
@@ -222,8 +210,14 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
                         disabled={busy}
                         onClick={() =>
                           isManager
-                            ? runAction(`/api/events/${eventId}/payments/settlement/bulk`, { gameId: g.gameId })
-                            : runAction(`/api/events/${eventId}/payments/payer-check-in/mark-all-paid`, { gameId: g.gameId }, "POST")
+                            ? runAction(() => apiRequest("PUT /api/events/{id}/payments/settlement/bulk", {
+                                params: { id: eventId },
+                                body: { gameId: g.gameId },
+                              }))
+                            : runAction(() => apiRequest("POST /api/events/{id}/payments/payer-check-in/mark-all-paid", {
+                                params: { id: eventId },
+                                body: { gameId: g.gameId },
+                              }))
                         }
                       >
                         {t("paymentsSettleAll")}
@@ -249,7 +243,10 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
                         <Button
                           size="small"
                           disabled={busy}
-                          onClick={() => runAction(`/api/events/${eventId}/payments/settlement`, { gameId: g.gameId, eventPlayerId: r.eventPlayerId })}
+                          onClick={() => runAction(() => apiRequest("PUT /api/events/{id}/payments/settlement", {
+                            params: { id: eventId },
+                            body: { gameId: g.gameId, eventPlayerId: r.eventPlayerId },
+                          }))}
                         >
                           {t("paymentsMarkPaid")}
                         </Button>
@@ -294,12 +291,10 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
                   if (!game) return;
                   setBusy(true);
                   try {
-                    const res = await fetch(`/api/events/${eventId}/payments/settlement/self-report`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ gameId: game.gameId, eventPlayerId: r.eventPlayerId }),
+                    await apiRequest("POST /api/events/{id}/payments/settlement/self-report", {
+                      params: { id: eventId },
+                      body: { gameId: game.gameId, eventPlayerId: r.eventPlayerId },
                     });
-                    if (!res.ok) throw new Error();
                     await load();
                   } catch {
                     setError("failed");
