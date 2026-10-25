@@ -22,12 +22,17 @@ afterEach(async () => {
 });
 
 /** Boots the real wrapper on an ephemeral port. */
-async function boot(handler = vi.fn((_req: http.IncomingMessage, res: http.ServerResponse) => {
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("handler");
-})) {
+async function boot({ useEnvDefault = false }: { useEnvDefault?: boolean } = {}) {
+  const handler = vi.fn((_req: http.IncomingMessage, res: http.ServerResponse) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("handler");
+  });
   const server = http.createServer(
-    createRequestHandler({ handler, securityHeaders: SECURITY_HEADERS, canonicalBaseUrl: CANONICAL }),
+    createRequestHandler({
+      handler,
+      securityHeaders: SECURITY_HEADERS,
+      ...(useEnvDefault ? {} : { canonicalBaseUrl: CANONICAL }),
+    }),
   );
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -101,7 +106,7 @@ describe("production request handler wiring", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("answers a mutation with 308 and the body drained", async () => {
+  it("answers a mutation with 308", async () => {
     const { port, handler } = await boot();
 
     const res = await request(port, "/api/events", { method: "POST", body: '{"title":"x"}' });
@@ -109,5 +114,21 @@ describe("production request handler wiring", () => {
     expect(res.status).toBe(308);
     expect(res.headers.location).toBe(`${CANONICAL}/api/events`);
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("engages BETTER_AUTH_URL through the factory when production omits the URL", async () => {
+    const previous = process.env.BETTER_AUTH_URL;
+    process.env.BETTER_AUTH_URL = CANONICAL;
+    try {
+      const { port } = await boot({ useEnvDefault: true });
+
+      const res = await request(port, "/");
+
+      expect(res.status).toBe(301);
+      expect(res.headers.location).toBe(`${CANONICAL}/`);
+    } finally {
+      if (previous === undefined) delete process.env.BETTER_AUTH_URL;
+      else process.env.BETTER_AUTH_URL = previous;
+    }
   });
 });
