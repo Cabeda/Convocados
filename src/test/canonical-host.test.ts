@@ -102,6 +102,17 @@ describe("canonicalHostRedirect", () => {
     ).toBeNull();
   });
 
+  it("still redirects OAuth discovery: it advertises the canonical issuer", () => {
+    // RFC 8414 §3.3: the fetched URL must match the issuer, so these may not
+    // answer 200 in place on the retired host.
+    expect(
+      canonicalHostRedirect(req({ url: "/.well-known/oauth-authorization-server" }), CANONICAL)?.status,
+    ).toBe(301);
+    expect(
+      canonicalHostRedirect(req({ url: "/.well-known/oauth-protected-resource" }), CANONICAL)?.status,
+    ).toBe(301);
+  });
+
   it("keeps the path on the canonical host even for a protocol-relative URL", () => {
     expect(canonicalHostRedirect(req({ url: "//evil.example/x" }), CANONICAL)?.location).toBe(
       "https://convocados.cabeda.dev/x",

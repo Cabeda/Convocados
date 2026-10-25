@@ -21,6 +21,15 @@
 /** @typedef {{ method?: string, url?: string, headers?: Record<string, string | string[] | undefined> }} RequestLike */
 
 /**
+ * App Links files that must be served in place on every host.
+ * @type {ReadonlySet<string>}
+ */
+const APP_LINK_PATHS = new Set([
+  "/.well-known/assetlinks.json",
+  "/.well-known/apple-app-site-association",
+]);
+
+/**
  * Hosts that must keep working locally without bouncing to production.
  * @param {string} host
  */
@@ -75,11 +84,13 @@ export function canonicalHostRedirect(req, canonicalBaseUrl = process.env.BETTER
   // Exempt the paths that must answer on the requested host:
   // - /api/health: Fly's HTTP check uses a non-public Host; a redirect fails
   //   the check and aborts the deploy.
-  // - /.well-known/*: Android and iOS require assetlinks.json and
-  //   apple-app-site-association to be served without redirects, and both hosts
-  //   sit in the same autoVerify intent filter (Android ≤11 fails them all when
-  //   one host does not verify).
-  if (pathname === "/api/health" || pathname.startsWith("/.well-known/")) return null;
+  // - The two App Links files: Android and iOS require them to be served
+  //   without redirects, and both hosts sit in the same autoVerify intent filter
+  //   (Android ≤11 fails them all when one host does not verify).
+  // Deliberately exact paths, not `/.well-known/*`: the OAuth discovery
+  // documents advertise a canonical `issuer`, so they must keep redirecting to
+  // the canonical host (RFC 8414 §3.3 matches the document to the issuer).
+  if (pathname === "/api/health" || APP_LINK_PATHS.has(pathname)) return null;
 
   // Redirect to the configured canonical origin. Fly terminates TLS, and the
   // canonical URL is the source of truth for the scheme — a spoofed
