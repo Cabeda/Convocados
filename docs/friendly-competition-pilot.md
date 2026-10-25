@@ -2,7 +2,6 @@
 
 Status: design interview in progress
 
-Pilot Event: [Ninjas da Areosa](https://convocados.fly.dev/events/cmmkfrx8b0000o2ixrix1yp2m)
 Tracking issue: [#875](https://github.com/Cabeda/Convocados/issues/875)
 
 ## Purpose

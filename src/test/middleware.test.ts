@@ -10,8 +10,8 @@ import { onRequest } from "~/middleware";
 type Handler = (ctx: unknown, next: () => Promise<Response>) => Promise<Response>;
 const run = onRequest as unknown as Handler;
 
-function ctx(method: string, urlStr: string) {
-  return { request: new Request(urlStr, { method }), url: new URL(urlStr) };
+function ctx(method: string, urlStr: string, extra: Record<string, unknown> = {}) {
+  return { request: new Request(urlStr, { method }), url: new URL(urlStr), ...extra };
 }
 
 describe("security middleware", () => {
@@ -58,6 +58,20 @@ describe("canonical host redirect", () => {
     );
     expect(res.status).toBe(301);
     expect(res.headers.get("location")).toBe("https://convocados.cabeda.dev/events/abc?x=1");
+  });
+
+  it("never lets the route cache store the host redirect", async () => {
+    const set = vi.fn();
+    const res = await run(
+      ctx("GET", "https://convocados.fly.dev/events/abc?x=1", { cache: { set } }),
+      async () => new Response("should not reach", { status: 200 }),
+    );
+    expect(res.status).toBe(301);
+    // The cache is keyed by path, not host: a cached redirect served back to the
+    // canonical host points at itself and loops (ERR_TOO_MANY_REDIRECTS).
+    expect(set).toHaveBeenCalledWith(false);
+    // And the browser must not heuristically cache the 301 either.
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
   it("does NOT redirect when already on the canonical host", async () => {
