@@ -72,7 +72,12 @@ function canonicalHostRedirect(request: Request, url: URL): Response | null {
   const proto = (request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")) || "https";
   const location = `${proto === "http" ? "https" : proto}://${canonicalHost}${url.pathname}${url.search}`;
   const status = request.method === "GET" || request.method === "HEAD" ? 301 : 308;
-  return new Response(null, { status, headers: { Location: location } });
+  // `no-store` keeps browsers from heuristically caching the 301. The route
+  // cache is handled by the caller, which opts out before returning.
+  return new Response(null, {
+    status,
+    headers: { Location: location, "Cache-Control": "no-store" },
+  });
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -85,7 +90,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // canonical host (BETTER_AUTH_URL) and the cookie lands on the wrong domain,
   // leaving the user on the main page logged out.
   const canonicalRedirect = canonicalHostRedirect(request, url);
-  if (canonicalRedirect) return canonicalRedirect;
+  if (canonicalRedirect) {
+    // A host redirect must never enter the route cache. The cache is keyed by
+    // path (not host), so a redirect stored from a convocados.fly.dev request is
+    // served back to convocados.cabeda.dev and points at itself — every event
+    // link opened on the old host loops with ERR_TOO_MANY_REDIRECTS.
+    context.cache?.set(false);
+    return canonicalRedirect;
+  }
 
   // Safe methods don't need CSRF protection
   if (SAFE_METHODS.has(request.method)) {
