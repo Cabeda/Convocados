@@ -97,6 +97,24 @@ describe("apiRequest", () => {
     });
   });
 
+  it("passes an abort signal and cookie credentials through to fetch", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await apiRequest("GET /api/events/public", {
+      init: { signal: controller.signal, credentials: "include" },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/public", {
+      method: "GET",
+      signal: controller.signal,
+      credentials: "include",
+    });
+  });
+
   it("throws the server message and status on a failed response", async () => {
     vi.stubGlobal(
       "fetch",
