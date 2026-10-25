@@ -11,10 +11,11 @@ function mockFetch(routes: Record<string, unknown>) {
   vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
     const u = String(url);
     const body = routes[u];
+    const headers = new Headers({ "Content-Type": "application/json" });
     if (body === undefined) {
-      return Promise.resolve({ ok: false, status: 404, json: async () => ({ error: "not found" }) });
+      return Promise.resolve({ ok: false, status: 404, headers, json: async () => ({ error: "not found" }) });
     }
-    return Promise.resolve({ ok: true, status: 200, json: async () => body });
+    return Promise.resolve({ ok: true, status: 200, headers, json: async () => body });
   }));
 }
 
@@ -63,6 +64,18 @@ describe("PaymentSurface", () => {
     renderWithTheme(<PaymentSurface eventId="e1" canEdit={false} isAuthenticated maxPlayers={10} />);
     await waitFor(() => expect(screen.getByText(/You owe 10.00€/)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /report sent/i })).toBeInTheDocument();
+  });
+
+  it("loads the settlement summary through the typed client", async () => {
+    mockFetch({
+      "/api/events/e1/cost": { totalAmount: 50, currency: "EUR", effectivePaymentMethods: null },
+      "/api/events/e1/payments/settlement": { people: [], viewerEventPlayerId: null, viewerRole: "player" },
+    });
+    renderWithTheme(<PaymentSurface eventId="e1" canEdit={false} isAuthenticated maxPlayers={10} />);
+    // The client always names the method; a hand-written `fetch(url)` sends no init.
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith("/api/events/e1/payments/settlement", { method: "GET" }),
+    );
   });
 
   it("renders nothing for anonymous users", () => {
