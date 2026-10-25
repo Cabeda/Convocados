@@ -7,14 +7,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { ApiError, apiRequest } from "~/lib/api/client";
-
-/** The client carries the route's `error`; fall back to the caller's copy when it has none. */
-function failure(reason: unknown, fallback: string) {
-  return reason instanceof ApiError && reason.message !== `Request failed: ${reason.status}`
-    ? reason.message
-    : fallback;
-}
+import { ApiError, apiErrorMessage, apiRequest } from "~/lib/api/client";
 
 interface SeasonSummary {
   id: string;
@@ -59,7 +52,7 @@ export default function SeasonListPage({ eventId }: { eventId: string }) {
       .catch((fetchError: unknown) => {
         if (controller.signal.aborted) return;
         setError(fetchError instanceof ApiError
-          ? failure(fetchError, t("somethingWentWrong"))
+          ? apiErrorMessage(fetchError, t("somethingWentWrong"))
           : fetchError instanceof Error ? fetchError.message : t("somethingWentWrong"));
       })
       .finally(() => {
@@ -91,7 +84,7 @@ export default function SeasonListPage({ eventId }: { eventId: string }) {
       setLoading(true);
       loadSeasons();
     } catch (requestError) {
-      setFormError(failure(requestError, t("somethingWentWrong")));
+      setFormError(apiErrorMessage(requestError, t("somethingWentWrong")));
     } finally {
       setCreating(false);
     }

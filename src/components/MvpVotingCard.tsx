@@ -8,14 +8,7 @@ import HowToRegIcon from "@mui/icons-material/HowToReg";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
-import { ApiError, apiRequest } from "~/lib/api/client";
-
-/** The client carries the route's `error`; fall back to the caller's copy when it has none. */
-function failure(reason: unknown, fallback: string) {
-  return reason instanceof ApiError && reason.message !== `Request failed: ${reason.status}`
-    ? reason.message
-    : fallback;
-}
+import { ApiError, apiErrorMessage, apiRequest } from "~/lib/api/client";
 
 interface MvpCandidate {
   playerId: string;
@@ -78,7 +71,7 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
       setSnack({
         msg: requestError instanceof ApiError && requestError.status === 400 && requestError.message.includes("yourself")
           ? t("mvpSelfVoteError")
-          : failure(requestError, "Error"),
+          : apiErrorMessage(requestError, "Error"),
         severity: "error",
       });
     }
