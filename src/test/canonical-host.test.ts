@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canonicalHostRedirect } from "../../scripts/canonical-host.mjs";
+import { canonicalHostRedirect } from "~/lib/canonicalHost.mjs";
 
 type Req = {
   method?: string;
@@ -18,7 +18,7 @@ function req(overrides: Req = {}): Req {
 
 const CANONICAL = "https://convocados.cabeda.dev";
 
-describe("canonicalHostRedirect (HTTP layer)", () => {
+describe("canonicalHostRedirect", () => {
   it("301s a GET on the retired host to the canonical host, preserving path + query", () => {
     expect(canonicalHostRedirect(req(), CANONICAL)).toEqual({
       status: 301,
@@ -60,13 +60,22 @@ describe("canonicalHostRedirect (HTTP layer)", () => {
     expect(r?.location).toBe("https://convocados.cabeda.dev/events/abc?x=1");
   });
 
-  it("never redirects localhost (dev) or the internal proxy address", () => {
-    expect(canonicalHostRedirect(req({ headers: { host: "localhost:4321" } }), "http://localhost:4321")).toBeNull();
+  it("splits a comma-separated x-forwarded-host and trims it", () => {
+    const r = canonicalHostRedirect(
+      req({ headers: { "x-forwarded-host": " convocados.fly.dev , internal" } }),
+      CANONICAL,
+    );
+    expect(r?.status).toBe(301);
+  });
+
+  it("never redirects localhost, 127.0.0.1 or [::1] (dev)", () => {
+    expect(canonicalHostRedirect(req({ headers: { host: "localhost:4321" } }), CANONICAL)).toBeNull();
     expect(canonicalHostRedirect(req({ headers: { host: "127.0.0.1:3000" } }), CANONICAL)).toBeNull();
+    expect(canonicalHostRedirect(req({ headers: { host: "[::1]:3000" } }), CANONICAL)).toBeNull();
   });
 
   it("does nothing when BETTER_AUTH_URL is missing or unparseable", () => {
-    expect(canonicalHostRedirect(req(), undefined)).toBeNull();
+    expect(canonicalHostRedirect(req(), "")).toBeNull();
     expect(canonicalHostRedirect(req(), "not a url")).toBeNull();
   });
 
@@ -75,9 +84,25 @@ describe("canonicalHostRedirect (HTTP layer)", () => {
     expect(canonicalHostRedirect(req({ url: "/api/health?full=1" }), CANONICAL)).toBeNull();
   });
 
+  it("serves .well-known files in place: Android/iOS forbid redirects there", () => {
+    expect(canonicalHostRedirect(req({ url: "/.well-known/assetlinks.json" }), CANONICAL)).toBeNull();
+    expect(
+      canonicalHostRedirect(req({ url: "/.well-known/apple-app-site-association" }), CANONICAL),
+    ).toBeNull();
+  });
+
   it("keeps the path on the canonical host even for a protocol-relative URL", () => {
     expect(canonicalHostRedirect(req({ url: "//evil.example/x" }), CANONICAL)?.location).toBe(
       "https://convocados.cabeda.dev/x",
     );
+  });
+
+  it("takes the scheme from the canonical URL, not a spoofed X-Forwarded-Proto", () => {
+    const r = canonicalHostRedirect(
+      req({ headers: { "x-forwarded-host": "convocados.fly.dev", "x-forwarded-proto": "javascript:" } }),
+      CANONICAL,
+    );
+    expect(r?.location.startsWith("https://")).toBe(true);
+    expect(canonicalHostRedirect(req(), "http://convocados.example")?.location.startsWith("http://")).toBe(true);
   });
 });

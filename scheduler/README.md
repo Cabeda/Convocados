@@ -40,6 +40,6 @@ npm run dev
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `APP_URL` | Yes | `https://convocados.fly.dev` | Web app base URL |
+| `APP_URL` | Yes | `https://convocados.cabeda.dev` | Web app base URL |
 | `SCHEDULER_SECRET` | Yes | — | Shared secret for internal API auth |
 | `POLL_INTERVAL_MS` | No | `10000` | Polling interval in milliseconds |

@@ -15,7 +15,7 @@
  * The same layer decides the canonical-host redirect: Astro middleware never
  * sees prerendered pages, static files or route-cache hits, so a request to the
  * retired `convocados.fly.dev` host could be answered with that host as its
- * origin. `canonical-host.mjs` redirects every request instead, before Astro.
+ * origin. `createRequestHandler` redirects every request instead, before Astro.
  *
  * The header map is emitted at build time by
  * `src/integrations/staticSecurityHeaders.ts`, which shares its source of truth
@@ -23,7 +23,7 @@
  */
 import fs from "node:fs";
 import http from "node:http";
-import { canonicalHostRedirect } from "./canonical-host.mjs";
+import { createRequestHandler } from "./server-handler.mjs";
 
 // Must be set before the Astro entry is imported, otherwise it starts its own
 // server and this wrapper never sees the requests.
@@ -41,31 +41,9 @@ const { handler } = await import(
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
-const server = http.createServer((req, res) => {
-  // Before Astro: prerendered pages, static files and cached responses never
-  // reach the middleware that does this redirect for dynamic routes.
-  const redirect = canonicalHostRedirect(req);
-  if (redirect) {
-    res.writeHead(redirect.status, {
-      Location: redirect.location,
-      "Cache-Control": redirect.cacheControl,
-    });
-    res.end();
-    return;
-  }
-
-  // Node routes both explicit res.writeHead() and the implicit header flush in
-  // res.end() through this method, so overriding it covers every response —
-  // static files, SSR pages and API routes alike.
-  const writeHead = res.writeHead.bind(res);
-  res.writeHead = (...args) => {
-    for (const [key, value] of Object.entries(securityHeaders)) {
-      if (!res.hasHeader(key)) res.setHeader(key, value);
-    }
-    return writeHead(...args);
-  };
-  handler(req, res);
-});
+const server = http.createServer(
+  createRequestHandler({ handler, securityHeaders }),
+);
 
 server.listen(port, host, () => {
   console.log(
