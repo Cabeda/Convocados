@@ -10,7 +10,7 @@ const METHODS = ["get", "post", "put", "patch", "delete"] as const;
 const HEADER = "// @generated — do not edit; run pnpm generate:api-client\n";
 
 interface Schema {
-  type?: string;
+  type?: string | readonly string[];
   properties?: Record<string, Schema>;
   required?: readonly string[];
   enum?: readonly (string | number | boolean)[];
@@ -40,6 +40,9 @@ function propertyKey(name: string): string {
 function tsType(schema: Schema | undefined): string {
   if (!schema) return "unknown";
   if (schema.enum?.length) return schema.enum.map((value) => JSON.stringify(value)).join(" | ");
+  if (Array.isArray(schema.type)) {
+    return schema.type.map((type) => tsType({ ...schema, type })).join(" | ");
+  }
   switch (schema.type) {
     case "string":
       return "string";
@@ -48,6 +51,8 @@ function tsType(schema: Schema | undefined): string {
       return "number";
     case "boolean":
       return "boolean";
+    case "null":
+      return "null";
     case "array":
       return `${tsType(schema.items)}[]`;
     case "object":

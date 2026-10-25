@@ -43,6 +43,25 @@ describe("generated API client", () => {
     expect(output).not.toContain("count?: string;");
   });
 
+  it("renders a nullable property from a type array", () => {
+    const output = renderApiClient({
+      paths: {
+        "/api/things": {
+          put: {
+            requestBody: {
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { note: { type: ["string", "null"] } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(output).toContain("note?: string | null;");
+  });
+
   it("fails the check mode when the committed output is stale", () => {
     const fresh = renderApiClient(openApiSpec);
     expect(checkApiClient(fresh, openApiSpec)).toBeNull();
