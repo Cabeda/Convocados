@@ -68,6 +68,17 @@ describe("canonicalHostRedirect", () => {
     expect(r?.status).toBe(301);
   });
 
+  it("takes the FIRST x-forwarded-host value, so a canonical host behind a proxy suffix never self-redirects", () => {
+    // Without the split this string never equals the canonical host, so the
+    // server would 301 a canonical URL to itself — the loop class #1531 fixed.
+    expect(
+      canonicalHostRedirect(
+        req({ headers: { "x-forwarded-host": "convocados.cabeda.dev, convocados.fly.dev" } }),
+        CANONICAL,
+      ),
+    ).toBeNull();
+  });
+
   it("never redirects localhost, 127.0.0.1 or [::1] (dev)", () => {
     expect(canonicalHostRedirect(req({ headers: { host: "localhost:4321" } }), CANONICAL)).toBeNull();
     expect(canonicalHostRedirect(req({ headers: { host: "127.0.0.1:3000" } }), CANONICAL)).toBeNull();
