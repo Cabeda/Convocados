@@ -1,4 +1,18 @@
+import pLimit from "p-limit";
 import { prisma } from "./db.server";
+import { createLogger } from "./logger.server";
+import { enqueueNotification } from "./notificationQueue.server";
+import { sendReminder } from "./email.server";
+import { getNotificationPrefs, wantsEmailReminder } from "./notificationPrefs.server";
+import { getRosterCapacity } from "./roster.server";
+import { fireWebhooks } from "./webhook.server";
+
+const log = createLogger("reminders");
+
+const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
+
+/** Max concurrent outbound reminder emails to avoid overwhelming the SMTP provider. */
+const EMAIL_CONCURRENCY = 10;
 
 const WINDOWS: Record<string, { minMs: number; maxMs: number }> = {
   "24h": { minMs: 22 * 3600_000, maxMs: 26 * 3600_000 },
@@ -102,9 +116,17 @@ export async function getPostGameReminders(): Promise<UpcomingReminder[]> {
     }));
 }
 
-/** Mark a reminder as sent so it won't fire again. */
+/**
+ * Record a reminder as sent so it won't fire again. Idempotent: a repeat send
+ * for the same `(eventId, type)` updates the row instead of throwing on the
+ * `@@unique([eventId, type])` key.
+ */
 export async function markReminderSent(eventId: string, type: string) {
-  await prisma.reminderLog.create({ data: { eventId, type } });
+  await prisma.reminderLog.upsert({
+    where: { eventId_type: { eventId, type } },
+    create: { eventId, type },
+    update: {},
+  });
 }
 
 /**
@@ -118,4 +140,111 @@ export function isReminderEnabled(
   type: "24h" | "2h" | "1h",
 ): boolean {
   return type === "24h" ? event.reminder24h : type === "2h" ? event.reminder2h : event.reminder1h;
+}
+
+export type GameReminderType = "24h" | "2h" | "1h";
+export type ReminderType = GameReminderType | "post-game";
+
+export type ReminderOutcome = "delivered" | "disabled" | "already-sent" | "archived";
+
+const REMINDER_KEYS = {
+  "24h": "notifyGameReminder24h",
+  "2h": "notifyGameReminder2h",
+  "1h": "notifyGameReminder1h",
+} as const;
+
+/**
+ * The one reminder delivery — the cron window scan and the scheduled job both
+ * call this, so push, email, webhook and the ReminderLog cannot drift apart.
+ *
+ * Remaining capacity is the Roster's answer (ADR 0016), read once and shared by
+ * the push and the email. An archived Event, a disabled Reminder Timing or an
+ * already-logged `(eventId, type)` delivers nothing, so a repeat trigger never
+ * sends a second email and never throws.
+ *
+ * The caller records the send with `markReminderSent` — the cron does it after
+ * the push queue is drained, the scheduler inline.
+ */
+export async function deliverReminder(eventId: string, type: ReminderType): Promise<ReminderOutcome> {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: { players: { include: { user: { select: { email: true } } } } },
+  });
+  // Archived events never notify — a job may still be queued from before the
+  // archive, and the window scans already exclude them.
+  if (!event || event.archivedAt) return "archived";
+
+  const alreadySent = await prisma.reminderLog.findUnique({
+    where: { eventId_type: { eventId: event.id, type } },
+    select: { id: true },
+  });
+  if (alreadySent) return "already-sent";
+
+  // Reminder Timings gate: a disabled timing emits nothing on any channel.
+  if (type !== "post-game" && !isReminderEnabled(event, type)) return "disabled";
+
+  const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
+
+  if (type === "post-game") {
+    await enqueueNotification(event.id, "post_game", {
+      title: event.title,
+      key: event.isRecurring ? "postGameNotificationRecurring" : "postGameNotification",
+      params: { title: event.title },
+      url: `/events/${event.id}?action=add-score`,
+      spotsLeft,
+    });
+    return "delivered";
+  }
+
+  await enqueueNotification(event.id, "reminder", {
+    title: event.title,
+    key: REMINDER_KEYS[type],
+    params: { title: event.title },
+    url: `/events/${event.id}?action=rsvp`,
+    spotsLeft,
+    reminderType: type,
+  });
+
+  // Fire reminder webhook (non-blocking) — lean domain facts, client renders
+  fireWebhooks(event.id, "reminder", {
+    reminderType: type,
+    gameId: event.currentGameId,
+    dateTime: event.dateTime.toISOString(),
+  }).catch(() => {});
+
+  // Batch-load prefs for all players with accounts in one query
+  const players = event.players.filter((p) => !p.archivedAt);
+  const userIds = players.map((p) => p.userId).filter(Boolean) as string[];
+  const prefsRows = userIds.length > 0
+    ? await prisma.notificationPreferences.findMany({ where: { userId: { in: userIds } } })
+    : [];
+  const prefsMap = new Map(prefsRows.map((p) => [p.userId, p]));
+
+  const emailLimit = pLimit(EMAIL_CONCURRENCY);
+  await Promise.allSettled(
+    players.map((player) =>
+      emailLimit(async () => {
+        if (!player.userId || !player.user?.email) return;
+        try {
+          const raw = prefsMap.get(player.userId);
+          const prefs = await getNotificationPrefs(player.userId);
+          // Use cached row if available, otherwise fall back to getNotificationPrefs
+          const effective = raw ? { ...prefs, ...raw } : prefs;
+          if (!wantsEmailReminder(effective, type)) return;
+          await sendReminder(player.user.email, {
+            eventTitle: event.title,
+            dateTime: event.dateTime.toISOString(),
+            location: event.location,
+            spotsLeft,
+            eventUrl: `${APP_URL}/events/${event.id}`,
+            reminderType: type,
+          });
+        } catch (err) {
+          log.error({ email: player.user.email, eventId: event.id, type, err }, "Failed to send email reminder");
+        }
+      }),
+    ),
+  );
+
+  return "delivered";
 }

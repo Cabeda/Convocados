@@ -10,12 +10,12 @@ const METHODS = ["get", "post", "put", "patch", "delete"] as const;
 const HEADER = "// @generated — do not edit; run pnpm generate:api-client\n";
 
 interface Schema {
-  type?: string;
+  /** OpenAPI 3.1 allows a union of types, e.g. `["string", "null"]`. */
+  type?: string | readonly string[];
   properties?: Record<string, Schema>;
   required?: readonly string[];
   enum?: readonly (string | number | boolean)[];
   items?: Schema;
-  nullable?: boolean;
 }
 
 interface Parameter {
@@ -41,11 +41,9 @@ function propertyKey(name: string): string {
 function tsType(schema: Schema | undefined): string {
   if (!schema) return "unknown";
   if (schema.enum?.length) return schema.enum.map((value) => JSON.stringify(value)).join(" | ");
-  const base = baseType(schema);
-  return schema.nullable ? `${base} | null` : base;
-}
-
-function baseType(schema: Schema): string {
+  if (Array.isArray(schema.type)) {
+    return schema.type.map((type) => tsType({ ...schema, type })).join(" | ");
+  }
   switch (schema.type) {
     case "string":
       return "string";
@@ -54,6 +52,8 @@ function baseType(schema: Schema): string {
       return "number";
     case "boolean":
       return "boolean";
+    case "null":
+      return "null";
     case "array":
       return `${tsType(schema.items)}[]`;
     case "object":
