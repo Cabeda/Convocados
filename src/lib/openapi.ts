@@ -425,6 +425,21 @@ export const openApiSpec = {
         summary: "Approve or reject a Season Crew proposal (admin)",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam, { name: "proposalId", in: "path" as const, required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["decision"],
+                properties: {
+                  decision: { type: "string", enum: ["approve", "reject"] },
+                  rejectionReason: { type: "string" },
+                },
+              },
+            },
+          },
+        },
         responses: { "200": { description: "Proposal reviewed" }, ...errorResponses },
       },
     },
@@ -1719,6 +1734,13 @@ export const openApiSpec = {
         tags: ["Users"],
         requestBody: { content: { "application/json": { schema: { type: "object", properties: { password: { type: "string" } } } } } },
         responses: { "200": { description: "Account deleted" }, ...errorResponses },
+      },
+    },
+    "/api/me/export": {
+      get: {
+        summary: "Download all personal data as a JSON file (GDPR Article 20)",
+        tags: ["Users"],
+        responses: { "200": { description: "Personal data export" }, "401": { description: "Unauthorized" } },
       },
     },
     "/api/me/photo": {

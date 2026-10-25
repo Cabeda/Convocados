@@ -4,6 +4,7 @@ import {
   Alert, Autocomplete, Button, Card, CardContent, Chip, Divider, Stack, TextField, Typography,
 } from "@mui/material";
 import { useT } from "~/lib/useT";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface Candidate {
   membershipId?: string;
@@ -61,24 +62,26 @@ export default function CrewProposalPanel({
   const [submitted, setSubmitted] = useState(false);
   const [invited, setInvited] = useState(false);
 
-  const endpoint = `/api/events/${eventId}/seasons/${seasonId}/crew-proposals`;
   const load = useCallback(async () => {
     try {
-      const response = await fetch(endpoint);
-      const nextData = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) return;
-        throw new Error(nextData.error ?? t("crewProposalError"));
+      let proposalData: ProposalResponse;
+      try {
+        proposalData = (await apiRequest(
+          "GET /api/events/{id}/seasons/{seasonId}/crew-proposals",
+          { params: { id: eventId, seasonId } },
+        )) as ProposalResponse;
+      } catch (loadError) {
+        // 401/403 means "no proposal to show", not an error to surface.
+        if (loadError instanceof ApiError && (loadError.status === 401 || loadError.status === 403)) return;
+        throw loadError instanceof ApiError ? new Error(loadError.message) : loadError;
       }
-      const proposalData = nextData as ProposalResponse;
       setData(proposalData);
       if (proposalData.proposerMembershipId) {
         const proposer = proposalData.candidates.find((candidate) => candidate.membershipId === proposalData.proposerMembershipId);
         if (proposer) setSelectedCandidates((current) => current.length > 0 ? current : [proposer]);
       }
       if (proposalData.canPropose) {
-        const coPlayersResponse = await fetch("/api/me/co-players");
-        const coPlayersData = await coPlayersResponse.json().catch(() => ({})) as { players?: Array<{ name: string; userId?: string | null; coPlayCount?: number }> };
+        const coPlayersData = (await apiRequest("GET /api/me/co-players").catch(() => ({}))) as { players?: Array<{ name: string; userId?: string | null; coPlayCount?: number }> };
         const coPlayerCandidates = (coPlayersData.players ?? [])
           .filter((candidate) => candidate.userId)
           .map((candidate) => ({ name: candidate.name, userId: candidate.userId, gamesPlayed: candidate.coPlayCount }));
@@ -87,7 +90,7 @@ export default function CrewProposalPanel({
     } catch (loadError: unknown) {
       setError(loadError instanceof Error ? loadError.message : t("crewProposalError"));
     }
-  }, [endpoint, t]);
+  }, [eventId, seasonId, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -122,13 +125,10 @@ export default function CrewProposalPanel({
     setInvited(false);
     setInvitedEmail("");
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "invite", email }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(result.error ?? t("crewProposalError")); return; }
+      const result = (await apiRequest(
+        "POST /api/events/{id}/seasons/{seasonId}/crew-proposals",
+        { params: { id: eventId, seasonId }, body: { action: "invite", email } },
+      )) as { candidate?: Candidate };
       if (result.candidate) {
         const candidate = result.candidate as Candidate;
         setExternalCandidates((current) => [...current, candidate]);
@@ -138,8 +138,8 @@ export default function CrewProposalPanel({
         setInvited(true);
       }
       setInviteEmail("");
-    } catch {
-      setError(t("crewProposalError"));
+    } catch (inviteError) {
+      setError(inviteError instanceof ApiError ? inviteError.message : t("crewProposalError"));
     } finally {
       setBusy(null);
     }
@@ -150,21 +150,21 @@ export default function CrewProposalPanel({
     setError(null);
     setSubmitted(false);
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          members: selectedCandidates.map(({ membershipId, userId }) => membershipId ? { membershipId } : { userId }),
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(result.error ?? t("crewProposalError")); return; }
+      const result = (await apiRequest(
+        "POST /api/events/{id}/seasons/{seasonId}/crew-proposals",
+        {
+          params: { id: eventId, seasonId },
+          body: {
+            name: name.trim(),
+            members: selectedCandidates.map(({ membershipId, userId }) => membershipId ? { membershipId } : { userId: userId ?? undefined }),
+          },
+        },
+      )) as { proposal: Proposal };
       setData((current) => current ? { ...current, proposals: [result.proposal, ...current.proposals] } : current);
       setName("");
       setSubmitted(true);
-    } catch {
-      setError(t("crewProposalError"));
+    } catch (submitError) {
+      setError(submitError instanceof ApiError ? submitError.message : t("crewProposalError"));
     } finally {
       setBusy(null);
     }
@@ -174,20 +174,20 @@ export default function CrewProposalPanel({
     setBusy(proposal.id);
     setError(null);
     try {
-      const response = await fetch(`${endpoint}/${proposal.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          decision,
-          rejectionReason: decision === "reject" ? rejectionReasons[proposal.id] ?? "" : undefined,
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(result.error ?? t("crewProposalError")); return; }
+      await apiRequest(
+        "PATCH /api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}",
+        {
+          params: { id: eventId, seasonId, proposalId: proposal.id },
+          body: {
+            decision,
+            rejectionReason: decision === "reject" ? rejectionReasons[proposal.id] ?? "" : undefined,
+          },
+        },
+      );
       await load();
       if (decision === "approve") await onCrewApproved?.();
-    } catch {
-      setError(t("crewProposalError"));
+    } catch (decideError) {
+      setError(decideError instanceof ApiError ? decideError.message : t("crewProposalError"));
     } finally {
       setBusy(null);
     }

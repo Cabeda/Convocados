@@ -94,7 +94,7 @@ describe("CrewProposalPanel conditional states", () => {
     renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/events/event-1/seasons/season-1/crew-proposals");
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/events/event-1/seasons/season-1/crew-proposals", { method: "GET" });
     expect(screen.queryByRole("heading", { name: "Propose a Crew" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Submit Crew proposal" })).not.toBeInTheDocument();
   });

@@ -43,10 +43,10 @@ export function buildApiPath(
   });
 }
 
-export async function apiRequest<Op extends ApiOperation>(
+async function send<Op extends ApiOperation>(
   operation: Op,
   input?: ApiInput<Op>,
-): Promise<unknown> {
+): Promise<Response> {
   const { params, query, body, init } = (input ?? {}) as {
     params?: Record<string, unknown>;
     query?: Record<string, string | number | boolean | undefined>;
@@ -62,7 +62,7 @@ export async function apiRequest<Op extends ApiOperation>(
   const url = buildApiPath(operation, params) + (queryString ? `?${queryString}` : "");
   const hasBody = body !== undefined;
 
-  const response = await fetch(url, {
+  return fetch(url, {
     method: operation.slice(0, operation.indexOf(" ")),
     ...init,
     ...(hasBody
@@ -72,21 +72,39 @@ export async function apiRequest<Op extends ApiOperation>(
         }
       : {}),
   });
+}
 
+async function readPayload(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
-  const payload = contentType.includes(APPLICATION_JSON)
-    ? ((await response.json().catch(() => undefined)) as unknown)
+  return contentType.includes(APPLICATION_JSON)
+    ? await response.json().catch(() => undefined)
     : await response.text();
+}
 
-  if (!response.ok) {
-    const message =
-      typeof payload === "object" && payload !== null
-        ? ["error", "message"]
-            .map((key) => (payload as Record<string, unknown>)[key])
-            .find((value): value is string => typeof value === "string")
-        : undefined;
-    throw new ApiError(message ?? `Request failed: ${response.status}`, response.status, payload);
-  }
+async function failure(response: Response): Promise<ApiError> {
+  const payload = await readPayload(response);
+  const message =
+    typeof payload === "object" && payload !== null
+      ? ["error", "message"]
+          .map((key) => (payload as Record<string, unknown>)[key])
+          .find((value): value is string => typeof value === "string")
+      : undefined;
+  return new ApiError(message ?? `Request failed: ${response.status}`, response.status, payload);
+}
 
-  return payload;
+/** The raw response, for a caller that needs the bytes (a file download) rather than JSON. */
+export async function apiFetch<Op extends ApiOperation>(
+  operation: Op,
+  input?: ApiInput<Op>,
+): Promise<Response> {
+  const response = await send(operation, input);
+  if (!response.ok) throw await failure(response);
+  return response;
+}
+
+export async function apiRequest<Op extends ApiOperation>(
+  operation: Op,
+  input?: ApiInput<Op>,
+): Promise<unknown> {
+  return readPayload(await apiFetch(operation, input));
 }

@@ -27,7 +27,7 @@ import { detectLocale } from "~/lib/i18n";
 import { dateFormatTag } from "~/lib/timezones";
 import { GameCard, type GameSummary } from "./GameCard";
 import { authClient } from "~/lib/auth.client";
-import { apiRequest, ApiError } from "~/lib/api/client";
+import { apiFetch, apiRequest, ApiError } from "~/lib/api/client";
 
 interface UserProfile {
   user: {
@@ -589,11 +589,7 @@ function ExportDataSection() {
     setError(null);
     setExporting(true);
     try {
-      const res = await fetch("/api/me/export");
-      if (!res.ok) {
-        setError(t("exportDataError"));
-        return;
-      }
+      const res = await apiFetch("GET /api/me/export");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

@@ -268,6 +268,10 @@ export interface ApiOperations {
       seasonId: string;
       proposalId: string;
     };
+    body: {
+      decision: "approve" | "reject";
+      rejectionReason?: string;
+    };
   };
   "POST /api/events/{id}/seasons/{seasonId}/crews": {
     params: {
@@ -1107,6 +1111,7 @@ export interface ApiOperations {
       password?: string;
     };
   };
+  "GET /api/me/export": Record<string, never>;
   "POST /api/me/photo": {
     body: {
       image: string;

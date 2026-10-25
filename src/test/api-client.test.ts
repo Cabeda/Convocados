@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { openApiSpec } from "../lib/openapi";
-import { apiRequest } from "../lib/api/client";
+import { apiFetch, apiRequest } from "../lib/api/client";
 import { checkApiClient, renderApiClient } from "../lib/api/generate";
 
 const METHODS = new Set(["get", "post", "put", "patch", "delete"]);
@@ -152,6 +152,19 @@ describe("apiRequest", () => {
       headers: { "Idempotency-Key": "k1", "Content-Type": "application/json" },
       body: JSON.stringify({ name: "Ana" }),
     });
+  });
+
+  it("returns the raw response for a caller that needs the bytes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response('{"ok":true}', { status: 200, headers: { "Content-Type": "application/json" } }),
+      ),
+    );
+
+    const response = await apiFetch("GET /api/me/export");
+
+    expect(await response.text()).toBe('{"ok":true}');
   });
 
   it("throws the server message and status on a failed response", async () => {
