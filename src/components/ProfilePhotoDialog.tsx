@@ -24,6 +24,7 @@ import {
   isAllowedPhotoMime,
 } from "~/lib/profilePhoto";
 import { cropImageToDataUrl, readFileAsDataUrl } from "~/lib/cropImage";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface ProfilePhotoDialogProps {
   open: boolean;
@@ -91,20 +92,11 @@ export default function ProfilePhotoDialog({
     setError(null);
     try {
       const image = await cropImageToDataUrl(src, area, rotation);
-      const res = await fetch("/api/me/photo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image }),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => null);
-        setError(json?.error || t("photoSaveError"));
-        return;
-      }
+      await apiRequest("POST /api/me/photo", { body: { image } });
       onSaved(image);
       onClose();
-    } catch {
-      setError(t("photoSaveError"));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("photoSaveError"));
     } finally {
       setSaving(false);
     }
@@ -114,11 +106,7 @@ export default function ProfilePhotoDialog({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/me/photo", { method: "DELETE" });
-      if (!res.ok) {
-        setError(t("photoSaveError"));
-        return;
-      }
+      await apiRequest("DELETE /api/me/photo");
       onSaved(null);
       onClose();
     } catch {

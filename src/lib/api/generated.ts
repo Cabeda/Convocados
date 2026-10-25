@@ -507,6 +507,9 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      playerId: string;
+    };
   };
   "POST /api/events/{id}/undo-remove": {
     params: {
@@ -608,6 +611,18 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "POST /api/push/subscribe": {
+    body: {
+      endpoint: string;
+      keys: { p256dh: string; auth: string };
+      locale?: string;
+    };
+  };
+  "DELETE /api/push/subscribe": {
+    body: {
+      endpoint: string;
+    };
+  };
   "GET /api/push/vapid-public-key": Record<string, never>;
   "POST /api/push/test": Record<string, never>;
   "GET /api/events/{id}/webhooks": {
@@ -651,6 +666,13 @@ export interface ApiOperations {
     };
     body: {
       name?: string;
+      publicStats?: boolean;
+      profileVisibility?: "public" | "participants" | "private";
+    };
+  };
+  "PUT /api/users/me/push-prompt-state": {
+    body: {
+      state: "default" | "granted" | "dismissed" | "denied";
     };
   };
   "GET /api/me/games": Record<string, never>;
@@ -668,6 +690,11 @@ export interface ApiOperations {
   "GET /api/me/stats": Record<string, never>;
   "GET /api/me/profile": Record<string, never>;
   "PUT /api/me/profile": Record<string, never>;
+  "DELETE /api/me/account": {
+    body: {
+      password?: string;
+    };
+  };
   "POST /api/me/photo": {
     body: {
       image: string;
@@ -675,7 +702,26 @@ export interface ApiOperations {
   };
   "DELETE /api/me/photo": Record<string, never>;
   "GET /api/me/notification-preferences": Record<string, never>;
-  "PUT /api/me/notification-preferences": Record<string, never>;
+  "PUT /api/me/notification-preferences": {
+    body: {
+      emailEnabled?: boolean;
+      pushEnabled?: boolean;
+      gameInviteEmail?: boolean;
+      gameInvitePush?: boolean;
+      gameReminderEmail?: boolean;
+      gameReminderPush?: boolean;
+      playerActivityPush?: boolean;
+      eventDetailsPush?: boolean;
+      postGamePush?: boolean;
+      weeklySummaryEmail?: boolean;
+      paymentReminderEmail?: boolean;
+      paymentReminderPush?: boolean;
+      invitesEnabled?: boolean;
+      reminder24h?: boolean;
+      reminder2h?: boolean;
+      reminder1h?: boolean;
+    };
+  };
   "POST /api/me/calendar-token": {
     body: {
       scope?: "user" | "event";
@@ -696,6 +742,17 @@ export interface ApiOperations {
     };
   };
   "GET /.well-known/openid-configuration": Record<string, never>;
+  "GET /api/auth/oauth2/public-client": {
+    query: {
+      client_id: string;
+    };
+  };
+  "POST /api/auth/oauth2/consent": {
+    body: {
+      accept: boolean;
+      oauth_query: string;
+    };
+  };
   "GET /api/auth/oauth2/authorize": {
     query: {
       client_id: string;
@@ -771,6 +828,10 @@ export interface ApiOperations {
   "POST /api/invite/{token}": {
     params: {
       token: string;
+    };
+    body: {
+      action: "accept" | "decline";
+      asGuest?: boolean;
     };
   };
   "GET /api/mcp": Record<string, never>;

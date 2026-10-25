@@ -6,6 +6,7 @@ import AddToHomeScreenIcon from "@mui/icons-material/AddToHomeScreen";
 import { useT } from "~/lib/useT";
 import { resolveIosHelpLink, isIos, isStandalone, installBannerDismissed } from "~/lib/pushPrompt";
 import { useBottomSlotClaim } from "~/lib/bottomSlot";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 const DISMISS_KEY = "push_prompt_dismissed_at";
 const COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days (tightened from 30d after #463)
@@ -91,23 +92,27 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
     try {
       const reg = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
-      const keyRes = await fetch("/api/push/vapid-public-key");
-      const { publicKey } = await keyRes.json();
+      const { publicKey } = (await apiRequest("GET /api/push/vapid-public-key")) as {
+        publicKey: string;
+      };
       const padding = "=".repeat((4 - (publicKey.length % 4)) % 4);
       const base64 = (publicKey + padding).replace(/-/g, "+").replace(/_/g, "/");
       const raw = window.atob(base64);
       const key = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; i++) key[i] = raw.charCodeAt(i);
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-      await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...sub.toJSON(), locale: navigator.language }),
+      const subscription = sub.toJSON() as {
+        endpoint: string;
+        keys: { p256dh: string; auth: string };
+      };
+      // The route's answer does not gate the flow; only a failed request does.
+      await apiRequest("POST /api/push/subscribe", {
+        body: { ...subscription, locale: navigator.language },
+      }).catch((e) => {
+        if (!(e instanceof ApiError)) throw e;
       });
-      await fetch("/api/users/me/push-prompt-state", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state: "granted" }),
+      await apiRequest("PUT /api/users/me/push-prompt-state", {
+        body: { state: "granted" },
       }).catch(() => {});
 
       setVisible(false);
@@ -117,8 +122,7 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
       // when the OS suppressed the notification.
       let result: { delivered: number; total: number } = { delivered: 0, total: 0 };
       try {
-        const r = await fetch("/api/push/test", { method: "POST" });
-        if (r.ok) result = await r.json();
+        result = (await apiRequest("POST /api/push/test")) as { delivered: number; total: number };
       } catch { /* network blip — non-fatal */ }
 
       if (onEnabled) onEnabled(result);
@@ -140,11 +144,7 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
 
   const handleDismiss = () => {
     localStorage.setItem(DISMISS_KEY, String(Date.now()));
-    fetch("/api/users/me/push-prompt-state", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state: "dismissed" }),
-    }).catch(() => {});
+    apiRequest("PUT /api/users/me/push-prompt-state", { body: { state: "dismissed" } }).catch(() => {});
     setVisible(false);
   };
 

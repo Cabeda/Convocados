@@ -50,18 +50,19 @@ vi.mock("~/lib/useT", () => ({
 import { LinkedCredentialsSection } from "~/components/LinkedCredentialsSection";
 import { authClient } from "~/lib/auth.client";
 
+function json(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 function credentialsResponse(credentials: unknown[]) {
-  return {
-    ok: true,
-    json: async () => ({ credentials }),
-  };
+  return json({ credentials });
 }
 
 function pendingMergeResponse(pending: unknown) {
-  return {
-    ok: true,
-    json: async () => ({ pendingMerge: pending }),
-  };
+  return json({ pendingMerge: pending });
 }
 
 beforeEach(() => {

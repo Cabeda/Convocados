@@ -28,6 +28,9 @@ const rosterAdd = {
 
 const fetchMock = vi.fn();
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
@@ -55,7 +58,7 @@ describe("InvitationsSection", () => {
   });
 
   it("accepts an invitation and removes the card", async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    fetchMock.mockResolvedValue(json({ ok: true }));
     renderWithTheme(<InvitationsSection invitations={[invitation]} rosterAdds={[]} />);
 
     fireEvent.click(screen.getByTestId("invite-accept-inv1"));
@@ -68,8 +71,25 @@ describe("InvitationsSection", () => {
     await waitFor(() => expect(screen.queryByTestId("invite-accept-inv1")).not.toBeInTheDocument());
   });
 
+  it("sends the invite response through the typed client", async () => {
+    fetchMock.mockResolvedValue(json({ ok: true }));
+    renderWithTheme(
+      <InvitationsSection invitations={[{ ...invitation, token: "tok 1" }]} rosterAdds={[]} />,
+    );
+
+    fireEvent.click(screen.getByTestId("invite-accept-inv1"));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("/api/invite/tok%201", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "accept" }),
+      }),
+    );
+  });
+
   it("declines an invitation and removes the card", async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    fetchMock.mockResolvedValue(json({ ok: true }));
     renderWithTheme(<InvitationsSection invitations={[invitation]} rosterAdds={[]} />);
 
     fireEvent.click(screen.getByTestId("invite-decline-inv1"));
@@ -80,7 +100,7 @@ describe("InvitationsSection", () => {
   });
 
   it("keeps the card and shows an error when the API fails", async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: "boom" }) });
+    fetchMock.mockResolvedValue(json({ error: "boom" }, 500));
     renderWithTheme(<InvitationsSection invitations={[invitation]} rosterAdds={[]} />);
 
     fireEvent.click(screen.getByTestId("invite-accept-inv1"));

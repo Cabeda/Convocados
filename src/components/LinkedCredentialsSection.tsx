@@ -11,6 +11,7 @@ import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { dateFormatTag } from "~/lib/timezones";
 import { authClient } from "~/lib/auth.client";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface CredentialView {
   id: string;
@@ -61,18 +62,22 @@ export function LinkedCredentialsSection({ profilePath }: { profilePath?: string
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/me/credentials", { credentials: "include" });
-      if (!res.ok) throw new Error("load failed");
-      const body = await res.json();
+      const body = (await apiRequest("GET /api/me/credentials", {
+        init: { credentials: "include" },
+      })) as { credentials?: CredentialView[] };
       setCredentials(body.credentials ?? []);
 
-      const mergeRes = await fetch("/api/me/credentials/pending-merge", { credentials: "include" });
-      if (mergeRes.ok) {
-        const mergeBody = await mergeRes.json();
+      try {
+        const mergeBody = (await apiRequest("GET /api/me/credentials/pending-merge", {
+          init: { credentials: "include" },
+        })) as { pendingMerge?: PendingMergeView };
         if (mergeBody.pendingMerge) {
           setPendingMerge(mergeBody.pendingMerge);
           setMergeDialogOpen(true);
         }
+      } catch (e) {
+        // An absent merge is not a failure; a network error still surfaces.
+        if (!(e instanceof ApiError)) throw e;
       }
       setError(null);
     } catch {
@@ -147,21 +152,14 @@ export function LinkedCredentialsSection({ profilePath }: { profilePath?: string
   const handleUnlink = async (accountId: string) => {
     setError(null);
     try {
-      const res = await fetch("/api/me/credentials", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId }),
-        credentials: "include",
+      await apiRequest("DELETE /api/me/credentials", {
+        body: { accountId },
+        init: { credentials: "include" },
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || t("credentialUnlinkError"));
-        return;
-      }
       setSnackbar(t("credentialUnlinked"));
       await load();
-    } catch {
-      setError(t("credentialUnlinkError"));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("credentialUnlinkError"));
     }
   };
 
@@ -169,24 +167,16 @@ export function LinkedCredentialsSection({ profilePath }: { profilePath?: string
     setMerging(true);
     setError(null);
     try {
-      const res = await fetch("/api/me/credentials/merge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: true }),
-        credentials: "include",
+      await apiRequest("POST /api/me/credentials/merge", {
+        body: { confirm: true },
+        init: { credentials: "include" },
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || t("mergeError"));
-        setMerging(false);
-        return;
-      }
       setMergeDialogOpen(false);
       setPendingMerge(null);
       setSnackbar(t("mergeSuccess"));
       await load();
-    } catch {
-      setError(t("mergeError"));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("mergeError"));
     } finally {
       setMerging(false);
     }

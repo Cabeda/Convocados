@@ -61,6 +61,9 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
 });
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -95,7 +98,7 @@ describe("ProfilePhotoDialog", () => {
   });
 
   it("saves the cropped image", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    const fetchMock = vi.fn().mockResolvedValue(json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
     const { onSaved, onClose } = renderDialog();
     upload(new File(["x"], "a.png", { type: "image/png" }));
@@ -115,7 +118,7 @@ describe("ProfilePhotoDialog", () => {
   it("shows the server error when saving fails", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue({ ok: false, json: async () => ({ error: "Nope." }) });
+      .mockResolvedValue(json({ error: "Nope." }, 400));
     vi.stubGlobal("fetch", fetchMock);
     const { onSaved } = renderDialog();
     upload(new File(["x"], "a.png", { type: "image/png" }));
@@ -150,7 +153,7 @@ describe("ProfilePhotoDialog", () => {
   });
 
   it("removes the current photo", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ image: null }) });
+    const fetchMock = vi.fn().mockResolvedValue(json({ image: null }));
     vi.stubGlobal("fetch", fetchMock);
     const { onSaved, onClose } = renderDialog({ currentImage: DATA_URL });
 
@@ -162,7 +165,7 @@ describe("ProfilePhotoDialog", () => {
   });
 
   it("shows an error when removal fails", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    const fetchMock = vi.fn().mockResolvedValue(json({}, 500));
     vi.stubGlobal("fetch", fetchMock);
     const { onSaved } = renderDialog({ currentImage: DATA_URL });
 
