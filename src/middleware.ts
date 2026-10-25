@@ -49,10 +49,12 @@ function canonicalHostRedirect(request: Request, url: URL): Response | null {
 
   // `no-store` keeps browsers from heuristically caching the 301. The route
   // cache is handled by the caller, which opts out before returning.
-  return new Response(null, {
-    status: decision.status,
-    headers: { Location: decision.location, "Cache-Control": decision.cacheControl },
-  });
+  return addSecurityHeaders(
+    new Response(null, {
+      status: decision.status,
+      headers: { Location: decision.location, "Cache-Control": decision.cacheControl },
+    }),
+  );
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
