@@ -427,6 +427,16 @@ export const openApiSpec = {
           "404": { description: "Event not found" },
         },
       },
+      put: {
+        summary: "Set or update event cost",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { totalAmount: { type: "number" }, currency: { type: "string" }, scope: { type: "string", enum: ["this_game", "all_future"] }, paymentMethods: {}, monthlyEnabled: { type: "boolean" }, monthlyFee: { type: "number" }, monthlyGamesCovered: { type: "integer" }, dropInSurcharge: { type: "number" } }, required: ["totalAmount", "currency", "scope"] } } },
+        },
+        responses: { "200": { description: "Event cost updated" }, ...errorResponses },
+      },
     },
     "/api/events/{id}/cost/override": {
       put: {
@@ -592,6 +602,18 @@ export const openApiSpec = {
         responses: { "200": { description: "All payments marked as paid" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/payments/config": {
+      patch: {
+        summary: "Set a game's payment mode and payer",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, mode: { type: "string", enum: ["tracked", "untracked"] }, payerEventPlayerId: { type: "string" }, payerExternalName: { type: "string" } }, required: ["mode"] } } },
+        },
+        responses: { "200": { description: "Payment config saved" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/payments/settlement": {
       get: {
         summary: "People-first settlement summary (receivers public, debtor names owner/admin-only)",
@@ -668,6 +690,46 @@ export const openApiSpec = {
         responses: { "200": { description: "Check-in snoozed" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/settle": {
+      get: {
+        summary: "Get the Settle Up payload for the caller (own balance and activity, admin view for owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Settle Up payload" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/settle/extras": {
+      post: {
+        summary: "Declare a spend from the extras pot (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { amountCents: { type: "integer" }, label: { type: "string" } }, required: ["amountCents", "label"] } } },
+        },
+        responses: { "200": { description: "Spend declared" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/settle/subscriptions": {
+      post: {
+        summary: "Mark a user as subscribed for a calendar month (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { userId: { type: "string" }, windowStart: { type: "string" } }, required: ["userId"] } } },
+        },
+        responses: { "200": { description: "Subscription created" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/settle/subscriptions/{subId}": {
+      delete: {
+        summary: "Cancel an active subscription (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam, { name: "subId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Subscription cancelled" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/balance": {
       get: {
         summary: "Get outstanding balance and enforcement info for the caller",
@@ -689,6 +751,10 @@ export const openApiSpec = {
         summary: "Cast MVP vote for a game",
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { votedForPlayerId: { type: "string" }, votedForName: { type: "string" } } } } },
+        },
         responses: { "200": { description: "Vote cast" }, ...errorResponses },
       },
     },
@@ -712,6 +778,10 @@ export const openApiSpec = {
         description: "count records how many goals one entry stands for (\"X scored 3\" is a single row with count=3). Omit it for a single goal.",
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { type: { type: "string", enum: ["goal", "assist"] }, team: { type: "string", enum: ["one", "two"] }, minute: {}, count: { type: "integer" }, scorerEventPlayerId: { type: "string" }, scorerName: { type: "string" }, assistEventPlayerId: { type: "string" }, assistName: {}, ownGoal: { type: "boolean" }, penalty: { type: "boolean" } }, required: ["type"] } } },
+        },
         responses: { "201": { description: "Match event created" }, ...errorResponses },
       },
     },
@@ -890,8 +960,18 @@ export const openApiSpec = {
       get: {
         summary: "Get game history for an event",
         tags: ["History"],
-        parameters: [eventIdParam],
+        parameters: [eventIdParam, { name: "cursor", in: "query", required: false, schema: { type: "string" } }],
         responses: { "200": { description: "Game history entries" } },
+      },
+      post: {
+        summary: "Add a historical (backfilled) game to an event",
+        tags: ["History"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { dateTime: { type: "string" }, teamOneName: { type: "string" }, teamTwoName: { type: "string" }, scoreOne: { type: "integer" }, scoreTwo: { type: "integer" }, scoreSets: {}, teamsSnapshot: {} }, required: ["dateTime", "teamOneName", "teamTwoName", "teamsSnapshot"] } } },
+        },
+        responses: { "201": { description: "Historical game created" }, ...errorResponses },
       },
     },
     "/api/events/{id}/history/{historyId}": {
@@ -905,7 +985,25 @@ export const openApiSpec = {
         summary: "Update a history entry (score, status)",
         tags: ["History"],
         parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { scoreOne: {}, scoreTwo: {}, scoreSets: {}, status: { type: "string", enum: ["played", "cancelled", "upcoming"] }, isFriendly: { type: "boolean" }, teamsSnapshot: {}, paymentsSnapshot: {}, costTotalAmount: { type: "number" }, costCurrency: { type: "string" } } } } },
+        },
         responses: { "200": { description: "History entry updated" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Delete a history entry",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "History entry deleted" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/history/{historyId}/approve-elo": {
+      post: {
+        summary: "Approve ELO for a backfilled historical game",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "ELO approved" }, ...errorResponses },
       },
     },
 

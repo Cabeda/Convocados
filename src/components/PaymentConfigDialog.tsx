@@ -5,6 +5,7 @@ import {
   FormControlLabel, Radio, Button, Alert,
 } from "@mui/material";
 import { useT } from "~/lib/useT";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 export interface PaymentConfigGame {
   gameId: string;
@@ -66,7 +67,7 @@ export function PaymentConfigDialog({
     setSaving(true);
     setErr(null);
     try {
-      const body: Record<string, unknown> = { gameId: game.gameId, mode };
+      const body: { gameId: string; mode: "tracked" | "untracked"; payerEventPlayerId?: string; payerExternalName?: string } = { gameId: game.gameId, mode };
       if (mode === "tracked") {
         if (payerKind === "player") {
           body.payerEventPlayerId = payerEventPlayerId;
@@ -74,19 +75,10 @@ export function PaymentConfigDialog({
           body.payerExternalName = payerExternalName.trim();
         }
       }
-      const res = await fetch(`/api/events/${eventId}/payments/config`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        setErr(j?.error ?? "failed");
-        return;
-      }
+      await apiRequest("PATCH /api/events/{id}/payments/config", { params: { id: eventId }, body });
       await onSaved();
-    } catch {
-      setErr("failed");
+    } catch (error) {
+      setErr(error instanceof ApiError ? error.message : "failed");
     } finally {
       setSaving(false);
     }
