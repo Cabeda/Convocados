@@ -8,6 +8,7 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { apiRequest } from "~/lib/api/client";
 import { detectLocale } from "~/lib/i18n";
 import { dateFormatTag } from "~/lib/timezones";
 
@@ -89,12 +90,8 @@ export default function AttendanceStatsPage({ eventId }: { eventId: string }) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/events/${eventId}/attendance`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Not found");
-        return r.json();
-      })
-      .then(setData)
+    apiRequest("GET /api/events/{id}/attendance", { params: { id: eventId } })
+      .then((payload) => setData(payload as AttendanceData))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [eventId]);
