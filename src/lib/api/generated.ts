@@ -31,6 +31,9 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    query: {
+      inviteToken?: string;
+    };
   };
   "PUT /api/events/{id}/title": {
     params: {
@@ -308,6 +311,11 @@ export interface ApiOperations {
     };
     body: {
       optOut: boolean;
+    };
+  };
+  "GET /api/events/{id}/rsvp": {
+    params: {
+      id: string;
     };
   };
   "POST /api/events/{id}/rsvp": {
@@ -620,6 +628,10 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      teamOneName: string;
+      teamTwoName: string;
+    };
   };
   "POST /api/events/{id}/claim": {
     params: {
@@ -627,6 +639,11 @@ export interface ApiOperations {
     };
   };
   "DELETE /api/events/{id}/claim": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/cancel": {
     params: {
       id: string;
     };
@@ -654,6 +671,16 @@ export interface ApiOperations {
       name: string;
       linkToAccount?: boolean;
       email?: string;
+      position?: string;
+    };
+  };
+  "PATCH /api/events/{id}/players": {
+    params: {
+      id: string;
+    };
+    body: {
+      name: string;
+      position: string | null;
     };
   };
   "DELETE /api/events/{id}/players": {
@@ -661,10 +688,18 @@ export interface ApiOperations {
       id: string;
     };
     body: {
-      name: string;
+      playerId: string;
     };
   };
   "PUT /api/events/{id}/reorder-players": {
+    params: {
+      id: string;
+    };
+    body: {
+      playerIds: string[];
+    };
+  };
+  "POST /api/events/{id}/reset-player-order": {
     params: {
       id: string;
     };
@@ -678,6 +713,12 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      name: string;
+      order: number;
+      userId: string | null;
+      removedAt: number;
+    };
   };
   "GET /api/events/{id}/known-players": {
     params: {
@@ -689,6 +730,14 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "PUT /api/events/{id}/teams": {
+    params: {
+      id: string;
+    };
+    body: {
+      matches: { team: string; formation?: string | null; players: { name: string; order: number; slot?: number | null }[] }[];
+    };
+  };
   "PATCH /api/events/{id}/teams": {
     params: {
       id: string;
@@ -697,6 +746,9 @@ export interface ApiOperations {
   "POST /api/events/{id}/randomize": {
     params: {
       id: string;
+    };
+    query: {
+      balanced?: boolean;
     };
   };
   "GET /api/events/{id}/history": {
@@ -719,6 +771,10 @@ export interface ApiOperations {
   "GET /api/events/{id}/ratings": {
     params: {
       id: string;
+    };
+    query: {
+      limit?: number;
+      cursor?: string;
     };
   };
   "PATCH /api/events/{id}/ratings": {
@@ -922,6 +978,12 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      userId?: string;
+      email?: string;
+      name?: string;
+      deliver?: boolean;
+    };
   };
   "PATCH /api/events/{id}/invites": {
     params: {
@@ -934,6 +996,9 @@ export interface ApiOperations {
   "DELETE /api/events/{id}/invites": {
     params: {
       id: string;
+    };
+    body: {
+      inviteId: string;
     };
   };
   "GET /api/invite/{token}": {

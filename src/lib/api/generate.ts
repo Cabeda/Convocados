@@ -10,6 +10,7 @@ const METHODS = ["get", "post", "put", "patch", "delete"] as const;
 const HEADER = "// @generated — do not edit; run pnpm generate:api-client\n";
 
 interface Schema {
+  /** OpenAPI 3.1 allows a union of types, e.g. `["string", "null"]`. */
   type?: string | readonly string[];
   properties?: Record<string, Schema>;
   required?: readonly string[];

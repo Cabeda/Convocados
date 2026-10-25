@@ -120,7 +120,10 @@ export const openApiSpec = {
         summary: "Get event details (anonymous link access; locked when password-protected)",
         tags: ["Events"],
         security: anonymous,
-        parameters: [eventIdParam],
+        parameters: [
+          eventIdParam,
+          { name: "inviteToken", in: "query", required: false, schema: { type: "string" } },
+        ],
         responses: {
           "200": { description: "Event details with players and teams" },
           "404": { description: "Event not found" },
@@ -518,6 +521,12 @@ export const openApiSpec = {
       },
     },
     "/api/events/{id}/rsvp": {
+      get: {
+        summary: "Get the caller's RSVP for an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "RSVP status" }, ...errorResponses },
+      },
       post: {
         summary: "Submit RSVP (yes/no/maybe) for an event",
         tags: ["Events"],
@@ -947,6 +956,10 @@ export const openApiSpec = {
         summary: "Update team names",
         tags: ["Events"],
         parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", required: ["teamOneName", "teamTwoName"], properties: { teamOneName: { type: "string" }, teamTwoName: { type: "string" } } } } },
+        },
         responses: { "200": { description: "Team names updated" }, ...errorResponses },
       },
     },
@@ -962,6 +975,14 @@ export const openApiSpec = {
         tags: ["Events"],
         parameters: [eventIdParam],
         responses: { "200": { description: "Ownership relinquished" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/cancel": {
+      put: {
+        summary: "Cancel the current game of an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Game cancelled" }, ...errorResponses },
       },
     },
     "/api/events/{id}/transfer": {
@@ -1007,7 +1028,7 @@ export const openApiSpec = {
         ],
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", required: ["name"], properties: { name: { type: "string" }, linkToAccount: { type: "boolean" }, email: { type: "string" } } } } },
+          content: { "application/json": { schema: { type: "object", required: ["name"], properties: { name: { type: "string" }, linkToAccount: { type: "boolean" }, email: { type: "string" }, position: { type: "string" } } } } },
         },
         responses: {
           "200": { description: "Player added" },
@@ -1015,13 +1036,23 @@ export const openApiSpec = {
           ...errorResponses,
         },
       },
+      patch: {
+        summary: "Set or clear one roster row's position",
+        tags: ["Players"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", required: ["name", "position"], properties: { name: { type: "string" }, position: { type: ["string", "null"] } } } } },
+        },
+        responses: { "200": { description: "Position updated" }, ...errorResponses },
+      },
       delete: {
         summary: "Remove a player from the event",
         tags: ["Players"],
         parameters: [eventIdParam],
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", required: ["name"], properties: { name: { type: "string" } } } } },
+          content: { "application/json": { schema: { type: "object", required: ["playerId"], properties: { playerId: { type: "string" } } } } },
         },
         responses: { "200": { description: "Player removed" }, ...errorResponses },
       },
@@ -1031,7 +1062,19 @@ export const openApiSpec = {
         summary: "Reorder players (owner only)",
         tags: ["Players"],
         parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", required: ["playerIds"], properties: { playerIds: { type: "array", items: { type: "string" } } } } } },
+        },
         responses: { "200": { description: "Players reordered" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/reset-player-order": {
+      post: {
+        summary: "Reset player order to signup order (ADRs 0016, 0035)",
+        tags: ["Players"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Player order reset" }, ...errorResponses },
       },
     },
     "/api/events/{id}/claim-player": {
@@ -1047,6 +1090,23 @@ export const openApiSpec = {
         summary: "Undo a recent player removal",
         tags: ["Players"],
         parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name", "order", "userId", "removedAt"],
+                properties: {
+                  name: { type: "string" },
+                  order: { type: "integer" },
+                  userId: { type: ["string", "null"] },
+                  removedAt: { type: "number" },
+                },
+              },
+            },
+          },
+        },
         responses: { "200": { description: "Removal undone" }, ...errorResponses },
       },
     },
@@ -1067,6 +1127,48 @@ export const openApiSpec = {
         parameters: [eventIdParam],
         responses: { "200": { description: "Team assignments" } },
       },
+      put: {
+        summary: "Replace team assignments (owner, admin, or player)",
+        tags: ["Teams"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["matches"],
+                properties: {
+                  matches: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      required: ["team", "players"],
+                      properties: {
+                        team: { type: "string" },
+                        formation: { type: ["string", "null"] },
+                        players: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["name", "order"],
+                            properties: {
+                              name: { type: "string" },
+                              order: { type: "integer" },
+                              slot: { type: ["integer", "null"] },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Teams updated" }, ...errorResponses },
+      },
       patch: {
         summary: "Manually update team assignments",
         tags: ["Teams"],
@@ -1078,7 +1180,10 @@ export const openApiSpec = {
       post: {
         summary: "Randomize team assignments",
         tags: ["Teams"],
-        parameters: [eventIdParam],
+        parameters: [
+          eventIdParam,
+          { name: "balanced", in: "query", required: false, schema: { type: "boolean" } },
+        ],
         responses: { "200": { description: "Teams randomized" }, ...errorResponses },
       },
     },
@@ -1112,7 +1217,11 @@ export const openApiSpec = {
       get: {
         summary: "Get player ELO ratings for an event",
         tags: ["Ratings"],
-        parameters: [eventIdParam],
+        parameters: [
+          eventIdParam,
+          { name: "limit", in: "query", required: false, schema: { type: "integer" } },
+          { name: "cursor", in: "query", required: false, schema: { type: "string" } },
+        ],
         responses: { "200": { description: "Player ratings" } },
       },
       patch: {
@@ -1708,12 +1817,32 @@ export const openApiSpec = {
         summary: "Create a player invite",
         tags: ["Invites"],
         parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  userId: { type: "string" },
+                  email: { type: "string" },
+                  name: { type: "string" },
+                  deliver: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
         responses: { "200": { description: "Invite created" }, ...errorResponses },
       },
       delete: {
         summary: "Retract a player invite",
         tags: ["Invites"],
         parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", required: ["inviteId"], properties: { inviteId: { type: "string" } } } } },
+        },
         responses: { "200": { description: "Invite retracted" }, ...errorResponses },
       },
       patch: {

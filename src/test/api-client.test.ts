@@ -43,15 +43,16 @@ describe("generated API client", () => {
     expect(output).not.toContain("count?: string;");
   });
 
-  it("renders a nullable property from a type array", () => {
+  it("types a nullable field as a union with null", () => {
     const output = renderApiClient({
       paths: {
-        "/api/things": {
-          put: {
+        "/api/things/{id}": {
+          patch: {
+            parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
             requestBody: {
               content: {
                 "application/json": {
-                  schema: { type: "object", properties: { note: { type: ["string", "null"] } } },
+                  schema: { type: "object", properties: { position: { type: ["string", "null"] } } },
                 },
               },
             },
@@ -59,7 +60,7 @@ describe("generated API client", () => {
         },
       },
     });
-    expect(output).toContain("note?: string | null;");
+    expect(output).toContain("position?: string | null;");
   });
 
   it("fails the check mode when the committed output is stale", () => {
@@ -134,6 +135,25 @@ describe("apiRequest", () => {
     });
   });
 
+  it("merges caller headers into the JSON request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiRequest("POST /api/events/{id}/players", {
+      params: { id: "e1" },
+      body: { name: "Ana" },
+      init: { headers: { "Idempotency-Key": "k1" } },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/players", {
+      method: "POST",
+      headers: { "Idempotency-Key": "k1", "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Ana" }),
+    });
+  });
+
   it("throws the server message and status on a failed response", async () => {
     vi.stubGlobal(
       "fetch",
@@ -147,6 +167,10 @@ describe("apiRequest", () => {
 
     await expect(
       apiRequest("PUT /api/events/{id}/sport", { params: { id: "e1" }, body: { sport: "tennis" } }),
-    ).rejects.toMatchObject({ status: 403, message: "Only the event owner can do this." });
+    ).rejects.toMatchObject({
+      status: 403,
+      message: "Only the event owner can do this.",
+      payload: { error: "Only the event owner can do this." },
+    });
   });
 });
