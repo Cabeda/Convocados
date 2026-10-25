@@ -137,4 +137,30 @@ describe("deliverReminder", () => {
     );
     expect(sendReminder).not.toHaveBeenCalled();
   });
+
+  it("delivers nothing for an archived Event", async () => {
+    const { event } = await seedEvent(24);
+    await prisma.event.update({ where: { id: event.id }, data: { archivedAt: new Date() } });
+
+    await expect(deliverReminder(event.id, "24h")).resolves.toBe("archived");
+
+    expect(sendReminder).not.toHaveBeenCalled();
+    expect(enqueueNotification).not.toHaveBeenCalled();
+    expect(await prisma.reminderLog.count({ where: { eventId: event.id } })).toBe(0);
+  });
+
+  it("keeps the stored row's auto-enabled email for a verified Google account", async () => {
+    const { event } = await seedEvent(24);
+    await prisma.account.create({
+      data: { id: "acc-pipe-1", accountId: "google-1", providerId: "google", userId: "u-pipe-1" },
+    });
+    await prisma.notificationPreferences.update({
+      where: { userId: "u-pipe-1" },
+      data: { emailEnabled: false, gameReminderEmail: true },
+    });
+
+    await deliverReminder(event.id, "24h");
+
+    expect(sendReminder).toHaveBeenCalledTimes(1);
+  });
 });

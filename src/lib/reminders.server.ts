@@ -159,8 +159,12 @@ const REMINDER_KEYS = {
  *
  * Remaining capacity is the Roster's answer (ADR 0016), read once and shared by
  * the push and the email. An archived Event, a disabled Reminder Timing or an
- * already-logged `(eventId, type)` delivers nothing, so a repeat trigger never
- * sends a second email and never throws.
+ * already-logged `(eventId, type)` delivers nothing and does not throw.
+ *
+ * The dedup is sequential, not a lease: two triggers that both read before
+ * either marks can both deliver. At-least-once is deliberate — a claim would
+ * trade the occasional duplicate for a silent miss, and the cron marks only
+ * after the push queue drains.
  *
  * The caller records the send with `markReminderSent` — the cron does it after
  * the push queue is drained, the scheduler inline.
@@ -212,13 +216,9 @@ export async function deliverReminder(eventId: string, type: ReminderType): Prom
     dateTime: event.dateTime.toISOString(),
   }).catch(() => {});
 
-  // Batch-load prefs for all players with accounts in one query
+  // Each player's preferences are read through the one loader, which also
+  // applies the auto-enable; merging a batch row back over it would undo that.
   const players = event.players.filter((p) => !p.archivedAt);
-  const userIds = players.map((p) => p.userId).filter(Boolean) as string[];
-  const prefsRows = userIds.length > 0
-    ? await prisma.notificationPreferences.findMany({ where: { userId: { in: userIds } } })
-    : [];
-  const prefsMap = new Map(prefsRows.map((p) => [p.userId, p]));
 
   const emailLimit = pLimit(EMAIL_CONCURRENCY);
   await Promise.allSettled(
@@ -226,11 +226,8 @@ export async function deliverReminder(eventId: string, type: ReminderType): Prom
       emailLimit(async () => {
         if (!player.userId || !player.user?.email) return;
         try {
-          const raw = prefsMap.get(player.userId);
           const prefs = await getNotificationPrefs(player.userId);
-          // Use cached row if available, otherwise fall back to getNotificationPrefs
-          const effective = raw ? { ...prefs, ...raw } : prefs;
-          if (!wantsEmailReminder(effective, type)) return;
+          if (!wantsEmailReminder(prefs, type)) return;
           await sendReminder(player.user.email, {
             eventTitle: event.title,
             dateTime: event.dateTime.toISOString(),
