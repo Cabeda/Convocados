@@ -31,6 +31,9 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    query: {
+      inviteToken?: string;
+    };
   };
   "PUT /api/events/{id}/title": {
     params: {
@@ -239,6 +242,21 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "PUT /api/events/{id}/cost": {
+    params: {
+      id: string;
+    };
+    body: {
+      totalAmount: number;
+      currency: string;
+      scope: "this_game" | "all_future";
+      paymentMethods?: unknown;
+      monthlyEnabled?: boolean;
+      monthlyFee?: number;
+      monthlyGamesCovered?: number;
+      dropInSurcharge?: number;
+    };
+  };
   "PUT /api/events/{id}/cost/override": {
     params: {
       id: string;
@@ -270,6 +288,11 @@ export interface ApiOperations {
     };
     body: {
       optOut: boolean;
+    };
+  };
+  "GET /api/events/{id}/rsvp": {
+    params: {
+      id: string;
     };
   };
   "POST /api/events/{id}/rsvp": {
@@ -343,6 +366,17 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "PATCH /api/events/{id}/payments/config": {
+    params: {
+      id: string;
+    };
+    body: {
+      gameId?: string;
+      mode: "tracked" | "untracked";
+      payerEventPlayerId?: string;
+      payerExternalName?: string;
+    };
+  };
   "GET /api/events/{id}/payments/settlement": {
     params: {
       id: string;
@@ -399,6 +433,35 @@ export interface ApiOperations {
       gameId: string;
     };
   };
+  "GET /api/events/{id}/settle": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/settle/extras": {
+    params: {
+      id: string;
+    };
+    body: {
+      amountCents: number;
+      label: string;
+    };
+  };
+  "POST /api/events/{id}/settle/subscriptions": {
+    params: {
+      id: string;
+    };
+    body: {
+      userId: string;
+      windowStart?: string;
+    };
+  };
+  "DELETE /api/events/{id}/settle/subscriptions/{subId}": {
+    params: {
+      id: string;
+      subId: string;
+    };
+  };
   "GET /api/events/{id}/balance": {
     params: {
       id: string;
@@ -413,6 +476,10 @@ export interface ApiOperations {
     params: {
       id: string;
       historyId: string;
+    };
+    body: {
+      votedForPlayerId?: string;
+      votedForName?: string;
     };
   };
   "GET /api/events/{id}/history/{historyId}/mvp": {
@@ -431,6 +498,18 @@ export interface ApiOperations {
     params: {
       id: string;
       historyId: string;
+    };
+    body: {
+      type: "goal" | "assist";
+      team?: "one" | "two";
+      minute?: unknown;
+      count?: number;
+      scorerEventPlayerId?: string;
+      scorerName?: string;
+      assistEventPlayerId?: string;
+      assistName?: unknown;
+      ownGoal?: boolean;
+      penalty?: boolean;
     };
   };
   "DELETE /api/events/{id}/history/{historyId}/match-events/{matchEventId}": {
@@ -454,6 +533,10 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      teamOneName: string;
+      teamTwoName: string;
+    };
   };
   "POST /api/events/{id}/claim": {
     params: {
@@ -461,6 +544,11 @@ export interface ApiOperations {
     };
   };
   "DELETE /api/events/{id}/claim": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/cancel": {
     params: {
       id: string;
     };
@@ -488,6 +576,16 @@ export interface ApiOperations {
       name: string;
       linkToAccount?: boolean;
       email?: string;
+      position?: string;
+    };
+  };
+  "PATCH /api/events/{id}/players": {
+    params: {
+      id: string;
+    };
+    body: {
+      name: string;
+      position: string | null;
     };
   };
   "DELETE /api/events/{id}/players": {
@@ -495,10 +593,18 @@ export interface ApiOperations {
       id: string;
     };
     body: {
-      name: string;
+      playerId: string;
     };
   };
   "PUT /api/events/{id}/reorder-players": {
+    params: {
+      id: string;
+    };
+    body: {
+      playerIds: string[];
+    };
+  };
+  "POST /api/events/{id}/reset-player-order": {
     params: {
       id: string;
     };
@@ -515,6 +621,12 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      name: string;
+      order: number;
+      userId: string | null;
+      removedAt: number;
+    };
   };
   "GET /api/events/{id}/known-players": {
     params: {
@@ -526,6 +638,14 @@ export interface ApiOperations {
       id: string;
     };
   };
+  "PUT /api/events/{id}/teams": {
+    params: {
+      id: string;
+    };
+    body: {
+      matches: { team: string; formation?: string | null; players: { name: string; order: number; slot?: number | null }[] }[];
+    };
+  };
   "PATCH /api/events/{id}/teams": {
     params: {
       id: string;
@@ -535,10 +655,30 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    query: {
+      balanced?: boolean;
+    };
   };
   "GET /api/events/{id}/history": {
     params: {
       id: string;
+    };
+    query: {
+      cursor?: string;
+    };
+  };
+  "POST /api/events/{id}/history": {
+    params: {
+      id: string;
+    };
+    body: {
+      dateTime: string;
+      teamOneName: string;
+      teamTwoName: string;
+      scoreOne?: number;
+      scoreTwo?: number;
+      scoreSets?: unknown;
+      teamsSnapshot: unknown;
     };
   };
   "GET /api/events/{id}/history/{historyId}": {
@@ -552,10 +692,37 @@ export interface ApiOperations {
       id: string;
       historyId: string;
     };
+    body: {
+      scoreOne?: unknown;
+      scoreTwo?: unknown;
+      scoreSets?: unknown;
+      status?: "played" | "cancelled" | "upcoming";
+      isFriendly?: boolean;
+      teamsSnapshot?: unknown;
+      paymentsSnapshot?: unknown;
+      costTotalAmount?: number;
+      costCurrency?: string;
+    };
+  };
+  "DELETE /api/events/{id}/history/{historyId}": {
+    params: {
+      id: string;
+      historyId: string;
+    };
+  };
+  "POST /api/events/{id}/history/{historyId}/approve-elo": {
+    params: {
+      id: string;
+      historyId: string;
+    };
   };
   "GET /api/events/{id}/ratings": {
     params: {
       id: string;
+    };
+    query: {
+      limit?: number;
+      cursor?: string;
     };
   };
   "PATCH /api/events/{id}/ratings": {
@@ -806,6 +973,12 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    body: {
+      userId?: string;
+      email?: string;
+      name?: string;
+      deliver?: boolean;
+    };
   };
   "PATCH /api/events/{id}/invites": {
     params: {
@@ -818,6 +991,9 @@ export interface ApiOperations {
   "DELETE /api/events/{id}/invites": {
     params: {
       id: string;
+    };
+    body: {
+      inviteId: string;
     };
   };
   "GET /api/invite/{token}": {
