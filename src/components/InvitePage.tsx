@@ -72,7 +72,8 @@ export function InvitePage({ token }: { token: string }) {
       }
       setData({ ...data, status: action === "accept" ? "accepted" : "declined" });
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("somethingWentWrong"));
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error ?? t("somethingWentWrong"));
     }
     setBusy(false);
   };
@@ -91,7 +92,8 @@ export function InvitePage({ token }: { token: string }) {
       });
       setData({ ...data, claimPlayerId: null });
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("somethingWentWrong"));
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error ?? t("somethingWentWrong"));
     }
     setBusy(false);
   };

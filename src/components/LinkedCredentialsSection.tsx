@@ -159,7 +159,8 @@ export function LinkedCredentialsSection({ profilePath }: { profilePath?: string
       setSnackbar(t("credentialUnlinked"));
       await load();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("credentialUnlinkError"));
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error || t("credentialUnlinkError"));
     }
   };
 
@@ -176,7 +177,8 @@ export function LinkedCredentialsSection({ profilePath }: { profilePath?: string
       setSnackbar(t("mergeSuccess"));
       await load();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("mergeError"));
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error || t("mergeError"));
     } finally {
       setMerging(false);
     }

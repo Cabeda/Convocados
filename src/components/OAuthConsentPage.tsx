@@ -88,7 +88,15 @@ export default function OAuthConsentPage() {
         window.location.href = data.url;
       }
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Network error. Please try again.");
+      const body = (e instanceof ApiError ? e.payload : undefined) as
+        | { error_description?: string; message?: string; error?: string }
+        | undefined;
+      setError(
+        body?.error_description ??
+          body?.message ??
+          body?.error ??
+          (e instanceof ApiError ? "Consent request failed" : "Network error. Please try again."),
+      );
       setLoading(false);
     }
   }

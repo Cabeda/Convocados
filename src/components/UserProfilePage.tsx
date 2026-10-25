@@ -309,7 +309,8 @@ function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved
       setSnackbar(true);
       onSaved();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("profileUpdateError"));
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error || t("profileUpdateError"));
     } finally {
       setSaving(false);
     }
@@ -659,7 +660,8 @@ function DeleteAccountSection() {
       await authClient.signOut();
       window.location.href = "/";
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("deleteAccountError"));
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error || t("deleteAccountError"));
       setDeleting(false);
     }
   };

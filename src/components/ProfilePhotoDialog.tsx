@@ -96,7 +96,8 @@ export default function ProfilePhotoDialog({
       onSaved(image);
       onClose();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("photoSaveError"));
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error || t("photoSaveError"));
     } finally {
       setSaving(false);
     }
