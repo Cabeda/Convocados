@@ -10,6 +10,7 @@ import { parsePaymentMethods } from "~/lib/paymentMethods";
 import { perPlayerShare } from "~/lib/gameCost";
 import { formatMoney, toCents } from "~/lib/money";
 import { PaymentMethodsList } from "~/components/PaymentMethodsList";
+import { apiRequest } from "~/lib/api/client";
 
 interface BalanceData {
   enforcement: string;
@@ -38,21 +39,24 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
 
   const fetchBalance = useCallback(async () => {
     try {
-      const [balRes, costRes] = await Promise.all([
-        fetch(`/api/events/${eventId}/balance`),
-        fetch(`/api/events/${eventId}/cost`),
+      const [balance, cost] = await Promise.all([
+        apiRequest("GET /api/events/{id}/balance", { params: { id: eventId } }).catch(() => null),
+        apiRequest("GET /api/events/{id}/cost", { params: { id: eventId } }).catch(() => null),
       ]);
-      if (balRes.ok) setBalanceData(await balRes.json());
-      if (costRes.ok) {
-        const cost = await costRes.json();
-        if (cost) {
-          const methods = parsePaymentMethods(cost.effectivePaymentMethods);
-          setPaymentMethods(methods);
-          setCostCurrency(cost.currency ?? "EUR");
-          // Per-player price = total / required playing slots (maxPlayers).
-          const maxPlayers = cost.maxPlayers ?? 1;
-          setPerPlayer(perPlayerShare(cost.totalAmount, maxPlayers));
-        }
+      if (balance) setBalanceData(balance as BalanceData);
+      if (cost) {
+        const eventCost = cost as {
+          effectivePaymentMethods?: string | null;
+          currency?: string;
+          maxPlayers?: number;
+          totalAmount: number;
+        };
+        const methods = parsePaymentMethods(eventCost.effectivePaymentMethods);
+        setPaymentMethods(methods);
+        setCostCurrency(eventCost.currency ?? "EUR");
+        // Per-player price = total / required playing slots (maxPlayers).
+        const maxPlayers = eventCost.maxPlayers ?? 1;
+        setPerPlayer(perPlayerShare(eventCost.totalAmount, maxPlayers));
       }
     } catch { /* ignore */ }
   }, [eventId]);
@@ -69,10 +73,9 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
   const handlePayAndJoin = async () => {
     if (balance) {
       try {
-        await fetch(`/api/events/${eventId}/payments`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ playerName: balance.playerName, status: "sent" }),
+        await apiRequest("PUT /api/events/{id}/payments", {
+          params: { id: eventId },
+          body: { playerName: balance.playerName, status: "sent" },
         });
       } catch { /* non-blocking — still try to join */ }
     }

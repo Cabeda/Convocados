@@ -7,6 +7,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { ApiError, apiErrorMessage, apiRequest } from "~/lib/api/client";
 
 interface SeasonSummary {
   id: string;
@@ -35,10 +36,12 @@ export default function SeasonListPage({ eventId }: { eventId: string }) {
 
   const loadSeasons = () => {
     const controller = new AbortController();
-    fetch(`/api/events/${eventId}/seasons`, { signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error ?? t("somethingWentWrong"));
+    apiRequest("GET /api/events/{id}/seasons", {
+      params: { id: eventId },
+      init: { signal: controller.signal },
+    })
+      .then((payload) => {
+        const data = payload as { locked?: boolean; seasons?: SeasonSummary[]; canManage?: boolean };
         if (data.locked) {
           setLocked(true);
           return;
@@ -47,7 +50,10 @@ export default function SeasonListPage({ eventId }: { eventId: string }) {
         setCanManage(!!data.canManage);
       })
       .catch((fetchError: unknown) => {
-        if (!controller.signal.aborted) setError(fetchError instanceof Error ? fetchError.message : t("somethingWentWrong"));
+        if (controller.signal.aborted) return;
+        setError(fetchError instanceof ApiError
+          ? apiErrorMessage(fetchError, t("somethingWentWrong"))
+          : fetchError instanceof Error ? fetchError.message : t("somethingWentWrong"));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -65,23 +71,20 @@ export default function SeasonListPage({ eventId }: { eventId: string }) {
     setCreating(true);
     setFormError(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/seasons`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await apiRequest("POST /api/events/{id}/seasons", {
+        params: { id: eventId },
+        body: {
           name: name.trim(),
           registrationOpensAt: opensAt ? new Date(opensAt).toISOString() : "",
           registrationClosesAt: closesAt ? new Date(closesAt).toISOString() : "",
-        }),
+        },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setFormError(data.error ?? t("somethingWentWrong")); return; }
       setShowForm(false);
       setName(""); setOpensAt(""); setClosesAt("");
       setLoading(true);
       loadSeasons();
-    } catch {
-      setFormError(t("somethingWentWrong"));
+    } catch (requestError) {
+      setFormError(apiErrorMessage(requestError, t("somethingWentWrong")));
     } finally {
       setCreating(false);
     }

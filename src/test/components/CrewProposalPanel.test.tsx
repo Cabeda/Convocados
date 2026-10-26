@@ -5,6 +5,10 @@ import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import CrewProposalPanel from "~/components/CrewProposalPanel";
 
+/** The client reads the body as JSON only when the response says so. */
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
 });
@@ -20,14 +24,14 @@ describe("CrewProposalPanel", () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ canPropose: true, canReview: false, proposerMembershipId: "membership-0", candidates: [
+      .mockResolvedValueOnce(json({ canPropose: true, canReview: false, proposerMembershipId: "membership-0", candidates: [
         { membershipId: "membership-0", name: "Player 0" },
         { membershipId: "membership-1", name: "Player 1" },
         { membershipId: "membership-2", name: "Player 2" },
         { membershipId: "membership-3", name: "Player 3" },
-      ], proposals: [] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ players: [{ name: "Player 4", userId: "user-4", gamesPlayed: 3 }] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ proposal: { id: "proposal-1", name: "North", status: "pending" } }), { status: 201 }));
+      ], proposals: [] }))
+      .mockResolvedValueOnce(json({ players: [{ name: "Player 4", userId: "user-4", gamesPlayed: 3 }] }))
+      .mockResolvedValueOnce(json({ proposal: { id: "proposal-1", name: "North", status: "pending" } }, 201));
 
     renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "Propose a Crew" });
@@ -51,7 +55,7 @@ describe("CrewProposalPanel", () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({
+      .mockResolvedValueOnce(json({
         canPropose: false,
         canReview: true,
         candidates: [],
@@ -62,9 +66,9 @@ describe("CrewProposalPanel", () => {
           proposerName: "Player 0",
           memberNames: ["Player 0", "Player 1", "Player 2"],
         }],
-      }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ proposal: { id: "proposal-1", status: "approved" } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
+      }))
+      .mockResolvedValueOnce(json({ proposal: { id: "proposal-1", status: "approved" } }))
+      .mockResolvedValueOnce(json({
         canPropose: false,
         canReview: true,
         candidates: [],
@@ -75,7 +79,7 @@ describe("CrewProposalPanel", () => {
           proposerName: "Player 0",
           memberNames: ["Player 0", "Player 1", "Player 2"],
         }],
-      }), { status: 200 }));
+      }));
 
     renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
     await screen.findByText("North");
@@ -93,15 +97,15 @@ describe("Crew proposal invitations", () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({
+      .mockResolvedValueOnce(json({
         canPropose: true,
         canReview: false,
         proposerMembershipId: "membership-0",
         candidates: [{ membershipId: "membership-0", name: "Player 0" }],
         proposals: [],
-      }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ players: [] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ invited: true, email: "new@example.test" }), { status: 202 }));
+      }))
+      .mockResolvedValueOnce(json({ players: [] }))
+      .mockResolvedValueOnce(json({ invited: true, email: "new@example.test" }, 202));
 
     renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "Propose a Crew" });

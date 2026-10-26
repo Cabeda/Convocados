@@ -1,10 +1,10 @@
 import type { APIRoute } from "astro";
-import { getUpcomingReminders, getPostGameReminders, markReminderSent, isReminderEnabled } from "~/lib/reminders.server";
+import { getUpcomingReminders, getPostGameReminders, markReminderSent, deliverReminder } from "~/lib/reminders.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { cleanupStalePushTokens, sendPushToUser } from "~/lib/push.server";
-import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
+import { sendPaymentReminder } from "~/lib/email.server";
 import { formatMoney, toCents } from "~/lib/money";
-import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
+import { getNotificationPrefs, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
 import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentReminderSent } from "~/lib/paymentReminders.server";
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
 import { expireUnconfirmed } from "~/lib/priority.server";
@@ -44,7 +44,6 @@ export const POST: APIRoute = async ({ request }) => {
 
   const limit = pLimit(EMAIL_CONCURRENCY);
   const sent: string[] = [];
-  const emailsSent: string[] = [];
 
   // ── Game reminders ────────────────────────────────────────────────────────
   // Collect events to mark as sent after the queue is drained
@@ -54,68 +53,12 @@ export const POST: APIRoute = async ({ request }) => {
     const reminders = await getUpcomingReminders(type);
     for (const r of reminders) {
       try {
-        // Reminder Timings gate: a disabled timing is recorded as sent
-        // ("intentionally skipped") but emits nothing on any channel.
-        if (!isReminderEnabled(r, type)) {
-          remindersToMark.push({ eventId: r.eventId, type });
-          continue;
-        }
-        // Remaining capacity is the Roster's answer (ADR 0016), read once and
-        // shared by the push and the email so the two channels cannot disagree.
-        const { spotsLeft } = await getRosterCapacity(r.eventId, r.maxPlayers, r.currentGameId);
-
-        // Enqueue push notification — drained at end of cron after emails are sent
-        await enqueueNotification(r.eventId, "reminder", {
-          title: r.eventTitle,
-          key: type === "24h" ? "notifyGameReminder24h" : type === "2h" ? "notifyGameReminder2h" : "notifyGameReminder1h",
-          params: { title: r.eventTitle },
-          url: `/events/${r.eventId}?action=rsvp`,
-          spotsLeft,
-          reminderType: type,
-        });
-        sent.push(`${r.eventId}:${type}`);
+        // One delivery pipeline for every trigger. A disabled timing is
+        // recorded as sent ("intentionally skipped") but emits nothing.
+        const outcome = await deliverReminder(r.eventId, type);
+        if (outcome === "already-sent" || outcome === "archived") continue;
+        if (outcome === "delivered") sent.push(`${r.eventId}:${type}`);
         remindersToMark.push({ eventId: r.eventId, type });
-
-        // Fire reminder webhook (non-blocking) — lean domain facts, client renders
-        fireWebhooks(r.eventId, "reminder", {
-          reminderType: type,
-          gameId: r.currentGameId,
-          dateTime: r.dateTime.toISOString(),
-        }).catch(() => {});
-
-        // Batch-load prefs for all players with accounts in one query
-        const userIds = r.players.map((p) => p.userId).filter(Boolean) as string[];
-        const prefsRows = userIds.length > 0
-          ? await prisma.notificationPreferences.findMany({ where: { userId: { in: userIds } } })
-          : [];
-        const prefsMap = new Map(prefsRows.map((p: { userId: string }) => [p.userId, p]));
-
-        // Send emails concurrently (bounded by EMAIL_CONCURRENCY)
-        await Promise.allSettled(
-          r.players.map((player) =>
-            limit(async () => {
-              if (!player.userId || !player.email) return;
-              try {
-                const raw = prefsMap.get(player.userId);
-                const prefs = await getNotificationPrefs(player.userId);
-                // Use cached row if available, otherwise fall back to getNotificationPrefs
-                const effective = raw ? { ...prefs, ...raw } : prefs;
-                if (!wantsEmailReminder(effective, type)) return;
-                await sendReminder(player.email, {
-                  eventTitle: r.eventTitle,
-                  dateTime: r.dateTime.toISOString(),
-                  location: r.location,
-                  spotsLeft,
-                  eventUrl: `${APP_URL}/events/${r.eventId}`,
-                  reminderType: type,
-                });
-                emailsSent.push(`${player.email}:${r.eventId}:${type}`);
-              } catch (err) {
-                log.error({ email: player.email, eventId: r.eventId, type, err }, "Failed to send email reminder");
-              }
-            }),
-          ),
-        );
       } catch (err) {
         log.error({ eventId: r.eventId, type, err }, "Failed to process reminder");
       }
@@ -185,20 +128,8 @@ export const POST: APIRoute = async ({ request }) => {
     const postGameReminders = await getPostGameReminders();
     for (const r of postGameReminders) {
       try {
-        // ADR 0017: Use recurring-aware message key for post-game notification
-        const pgEvent = await prisma.event.findUnique({
-          where: { id: r.eventId },
-          select: { isRecurring: true },
-        });
-        const pgKey = pgEvent?.isRecurring ? "postGameNotificationRecurring" as const : "postGameNotification" as const;
-        const { spotsLeft } = await getRosterCapacity(r.eventId, r.maxPlayers, r.currentGameId);
-        await enqueueNotification(r.eventId, "post_game", {
-          title: r.eventTitle,
-          key: pgKey,
-          params: { title: r.eventTitle },
-          url: `/events/${r.eventId}?action=add-score`,
-          spotsLeft,
-        });
+        const outcome = await deliverReminder(r.eventId, "post-game");
+        if (outcome === "already-sent" || outcome === "archived") continue;
         postGameRemindersSent.push(r.eventId);
         postGameRemindersToMark.push(r.eventId);
       } catch (err) {
@@ -463,7 +394,7 @@ export const POST: APIRoute = async ({ request }) => {
   ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, paymentEscalation, payerCheckIns, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
+    JSON.stringify({ ok: true, sent, paymentRemindersSent, paymentEscalation, payerCheckIns, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
     { headers: { "Content-Type": "application/json" } },
   );
 };

@@ -21,6 +21,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
+import { apiRequest } from "~/lib/api/client";
 import { dateFormatTag } from "~/lib/timezones";
 import type { TranslationKey } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
@@ -225,11 +226,10 @@ export default function EventLogPage({ eventId }: { eventId: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const fetchLogs = useCallback(async (cursor?: string | null) => {
-    const params = new URLSearchParams();
-    if (cursor) params.set("cursor", cursor);
-    const res = await fetch(`/api/events/${eventId}/log?${params.toString()}`);
-    if (!res.ok) throw new Error("Not found");
-    return res.json();
+    return (await apiRequest("GET /api/events/{id}/log", {
+      params: { id: eventId },
+      query: { cursor: cursor ?? undefined },
+    })) as { entries: LogEntry[]; hasMore: boolean; nextCursor: string | null };
   }, [eventId]);
 
   useEffect(() => {

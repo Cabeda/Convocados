@@ -22,7 +22,10 @@ function stubFetch(handlers: {
     const method = init?.method ?? "GET";
     if (method === "DELETE") return handlers.delete?.() ?? new Response("{}", { status: 200 });
     if (method === "POST") return handlers.post?.() ?? new Response("{}", { status: 200 });
-    return new Response(JSON.stringify(handlers.get ?? {}), { status: 200 });
+    return new Response(JSON.stringify(handlers.get ?? {}), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   });
 }
 
@@ -62,7 +65,10 @@ function stubPushBrowser(opts: {
 function stubFollowFetch(onPush?: (url: string) => Response | null) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     if (url === "/api/push/vapid-public-key") {
-      return new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 });
+      return new Response(JSON.stringify({ publicKey: "AQAB" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
     const override = onPush?.(url);
     if (override) return override;

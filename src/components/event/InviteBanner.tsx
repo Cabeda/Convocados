@@ -5,6 +5,7 @@ import {
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useT } from "~/lib/useT";
+import { ApiError, apiRequest } from "~/lib/api/client";
 
 interface InviteData {
   valid: boolean;
@@ -34,9 +35,8 @@ export function InviteBanner({ token, eventId, onAccepted }: { token: string; ev
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/invite/${token}`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => { if (!cancelled) setData(d); })
+    apiRequest("GET /api/invite/{token}", { params: { token }, init: { credentials: "include" } })
+      .then((d) => { if (!cancelled) setData(d as InviteData); })
       .catch(() => { if (!cancelled) setError(t("somethingWentWrong")); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -47,18 +47,11 @@ export function InviteBanner({ token, eventId, onAccepted }: { token: string; ev
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/invite/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ action }),
+      await apiRequest("POST /api/invite/{token}", {
+        params: { token },
+        body: { action },
+        init: { credentials: "include" },
       });
-      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
-      if (!res.ok) {
-        setError(json.error ?? t("somethingWentWrong"));
-        setBusy(false);
-        return;
-      }
       setData({ ...data, status: action === "accept" ? "accepted" : "declined" });
       if (action === "accept" && onAccepted) onAccepted();
       // Clean the token from URL after action so refresh doesn't re-trigger banner
@@ -67,8 +60,10 @@ export function InviteBanner({ token, eventId, onAccepted }: { token: string; ev
         url.searchParams.delete("inviteToken");
         window.history.replaceState({}, "", url.toString());
       } catch {}
-    } catch {
-      setError(t("somethingWentWrong"));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("somethingWentWrong"));
+      setBusy(false);
+      return;
     }
     setBusy(false);
   };

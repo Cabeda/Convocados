@@ -27,6 +27,7 @@ import { detectLocale } from "~/lib/i18n";
 import { dateFormatTag } from "~/lib/timezones";
 import { GameCard, type GameSummary } from "./GameCard";
 import { authClient } from "~/lib/auth.client";
+import { apiFetch, apiRequest, ApiError } from "~/lib/api/client";
 
 interface UserProfile {
   user: {
@@ -130,12 +131,8 @@ function StatsTabContent({ userId }: { userId: string }) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/users/${userId}/stats`)
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
-      .then((d) => { setData(d); setLoading(false); })
+    apiRequest("GET /api/users/{id}/stats", { params: { id: userId } })
+      .then((body) => { setData(body as StatsData); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, [userId]);
 
@@ -305,20 +302,15 @@ function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved
     setError(null);
     setSaving(true);
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
+      await apiRequest("PATCH /api/users/{id}", {
+        params: { id: user.id },
+        body: { name: name.trim() },
       });
-      if (!res.ok) {
-        const json = await res.json();
-        setError(json.error || t("profileUpdateError"));
-      } else {
-        setSnackbar(true);
-        onSaved();
-      }
-    } catch {
-      setError(t("profileUpdateError"));
+      setSnackbar(true);
+      onSaved();
+    } catch (e) {
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error || t("profileUpdateError"));
     } finally {
       setSaving(false);
     }
@@ -520,16 +512,10 @@ function ProfileVisibilitySection({ userId, userName, initialValue }: { userId: 
     setError(null);
     setSaving(true);
     try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: userName, profileVisibility: value }),
+      await apiRequest("PATCH /api/users/{id}", {
+        params: { id: userId },
+        body: { name: userName, profileVisibility: value as "public" | "participants" | "private" },
       });
-      if (!res.ok) {
-        setError(t("publicStatsSaveError"));
-        setSaving(false);
-        return;
-      }
       setVisibility(value);
       setSnackbar(true);
     } catch {
@@ -603,11 +589,7 @@ function ExportDataSection() {
     setError(null);
     setExporting(true);
     try {
-      const res = await fetch("/api/me/export");
-      if (!res.ok) {
-        setError(t("exportDataError"));
-        return;
-      }
+      const res = await apiFetch("GET /api/me/export");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -669,22 +651,13 @@ function DeleteAccountSection() {
     if (confirmText !== "DELETE") return;
     setDeleting(true);
     try {
-      const res = await fetch("/api/me/account", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      if (!res.ok) {
-        const json = await res.json();
-        setError(json.error || t("deleteAccountError"));
-        setDeleting(false);
-        return;
-      }
+      await apiRequest("DELETE /api/me/account", { body: { password } });
       // Sign out and redirect to home
       await authClient.signOut();
       window.location.href = "/";
-    } catch {
-      setError(t("deleteAccountError"));
+    } catch (e) {
+      const body = (e instanceof ApiError ? e.payload : undefined) as { error?: string } | undefined;
+      setError(body?.error || t("deleteAccountError"));
       setDeleting(false);
     }
   };
@@ -772,9 +745,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
 
   const fetchProfile = useCallback(async () => {
     try {
-      const r = await fetch(`/api/users/${userId}`);
-      if (!r.ok) throw new Error("Not found");
-      const json = await r.json();
+      const json = (await apiRequest("GET /api/users/{id}", { params: { id: userId } })) as UserProfile;
       setData(json);
       setError(null);
     } catch (e) {

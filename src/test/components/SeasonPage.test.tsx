@@ -5,6 +5,9 @@ import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import SeasonPage from "~/components/SeasonPage";
 
+// The typed client parses JSON by content type; a bare `new Response(body)` is text/plain.
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 const members = Array.from({ length: 6 }, (_, index) => ({
   membershipId: `membership-${index}`,
   eventPlayerId: `player-${index}`,
@@ -61,17 +64,17 @@ describe("SeasonPage", () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ crews: [
         { name: "Crew 1", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
         { name: "Crew 2", membershipIds: members.slice(3).map((member) => member.membershipId) },
-      ] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200 }))
+      ] }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
         { id: "crew-1", name: "North", membershipIds: members.slice(0, 4).map((member) => member.membershipId) },
         { id: "crew-2", name: "South", membershipIds: members.slice(4).map((member) => member.membershipId) },
-      ])), { status: 200 }));
+      ])), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -99,8 +102,8 @@ describe("SeasonPage", () => {
   it("pre-fills the season details with the current name and period", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -114,11 +117,11 @@ describe("SeasonPage", () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         season: { id: "season-1", name: "Autumn Season", registrationOpensAt: "2026-10-01T00:00:00.000Z", registrationClosesAt: "2026-10-31T00:00:00.000Z" },
-      }), { status: 200 }));
+      }), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -151,13 +154,13 @@ describe("SeasonPage", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
         { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
         { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
-      ])), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ membership: { id: "membership-0", status: "withdrawn" } }), { status: 200 }))
+      ])), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ membership: { id: "membership-0", status: "withdrawn" } }), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
         { id: "crew-1", name: "North", membershipIds: members.slice(1, 3).map((member) => member.membershipId) },
         { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
-      ])), { status: 200 }));
+      ])), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -182,8 +185,8 @@ describe("SeasonPage", () => {
       crews: [{ rank: 1, crewId: "crew-1", name: "Brothers", points: 3, tieBreakTotal: 3, roundsCounted: 1, roundsRepresented: 1, gameScores: [] }],
     };
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(withLeaderboard), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(withLeaderboard), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     expect(await screen.findByText("Standings")).toBeInTheDocument();
@@ -196,12 +199,12 @@ describe("SeasonPage", () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ crews: [
         { name: "Crew 1", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
         { name: "Crew 2", membershipIds: members.slice(3).map((member) => member.membershipId) },
-      ] }), { status: 200 }));
+      ] }), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -240,10 +243,10 @@ describe("SeasonPage", () => {
       },
     };
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(customSeason), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(customSeason), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(customSeason), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(customSeason), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -270,8 +273,8 @@ describe("SeasonPage", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
         { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
         { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
-      ])), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+      ])), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -291,16 +294,16 @@ describe("SeasonPage", () => {
     const fetchMock = vi.mocked(fetch);
     const refreshed = seasonResponse();
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         added: [
           { membershipId: "membership-0", eventPlayerId: "player-0", name: "Player 0" },
           { membershipId: "membership-1", eventPlayerId: "player-1", name: "Player 1" },
         ],
         skipped: [{ eventPlayerId: "player-9", name: "Guest", reason: "noAccount" }],
-      }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(refreshed), { status: 200 }));
+      }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(refreshed), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -315,10 +318,10 @@ describe("SeasonPage", () => {
   it("reports when no recent players can be added", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ added: [], skipped: [] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ added: [], skipped: [] }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -340,13 +343,13 @@ describe("SeasonPage", () => {
       { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
     ]);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(withCrews), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(candidates), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(withCrews), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(candidates), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         membership: { id: "membership-9", eventPlayerId: "player-9", userId: "user-9", status: "active", crewId: "crew-1" },
-      }), { status: 201 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(withCrews), { status: 200 }));
+      }), { status: 201, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(withCrews), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -368,9 +371,9 @@ describe("SeasonPage", () => {
       { eventPlayerId: "player-10", name: "Guest", hasAccount: false, gamesPlayed: 1, memberStatus: null },
     ] };
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(candidates), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(candidates), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -387,8 +390,8 @@ describe("SeasonPage", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
         { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
         { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
-      ], "active")), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+      ], "active")), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -403,7 +406,7 @@ describe("SeasonPage", () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
       { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
       { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
-    ], "completed")), { status: 200 }));
+    ], "completed")), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -422,9 +425,9 @@ describe("SeasonPage", () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "2 Crews require between 6 and 10 participants." }), { status: 422 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "2 Crews require between 6 and 10 participants." }), { status: 422, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -446,10 +449,10 @@ describe("SeasonPage", () => {
     joined.season.viewerMembership = { id: "membership-0", status: "active", eventPlayerId: "player-0" };
     joined.season.registrationOpen = true;
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(initial), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ membership: joined.season.viewerMembership }), { status: 201 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(joined), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(initial), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ membership: joined.season.viewerMembership }), { status: 201, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(joined), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await user.click(await screen.findByRole("button", { name: "Join Season" }));
@@ -466,8 +469,8 @@ describe("SeasonPage", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
         { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((m) => m.membershipId) },
         { id: "crew-2", name: "South", membershipIds: members.slice(3).map((m) => m.membershipId) },
-      ])), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+      ])), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -495,11 +498,11 @@ describe("SeasonPage", () => {
       },
     };
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(ready), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "active", activatedAt: new Date().toISOString() } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ...ready, season: { ...ready.season, status: "active" } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(ready), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "active", activatedAt: new Date().toISOString() } }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...ready, season: { ...ready.season, status: "active" } }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -540,13 +543,13 @@ describe("SeasonPage proposal refresh", () => {
       { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
     ]);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(initialSeason), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(pendingProposal), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ proposal: { id: "proposal-1", status: "approved" } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(approvedProposal), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(approvedSeason), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(approvedSeason), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(initialSeason), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(pendingProposal), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ proposal: { id: "proposal-1", status: "approved" } }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(approvedProposal), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(approvedSeason), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(approvedSeason), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     // Generous timeout: under coverage the proposal fetch can take >1s.
@@ -569,11 +572,11 @@ describe("SeasonPage completion lifecycle", () => {
     const fetchMock = vi.mocked(fetch);
     const rank = { players: [], edges: [] };
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "active")), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "completed" } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "completed")), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "active")), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "completed" } }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "completed")), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -597,11 +600,11 @@ describe("SeasonPage completion lifecycle", () => {
     const fetchMock = vi.mocked(fetch);
     const rank = { players: [], edges: [] };
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "completed")), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "active" } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "active")), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "completed")), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "active" } }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "active")), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -624,7 +627,7 @@ describe("SeasonPage completion lifecycle", () => {
     const fetchMock = vi.mocked(fetch);
     const completed = seasonResponse([], "completed");
     completed.season.hasOtherLiveSeason = true;
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -637,7 +640,7 @@ describe("SeasonPage completion lifecycle", () => {
     const fetchMock = vi.mocked(fetch);
     const readOnly = seasonResponse([], "active");
     delete (readOnly.season as { activeMembers?: unknown }).activeMembers;
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(readOnly), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(readOnly), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -655,12 +658,12 @@ describe("SeasonPage destructive actions", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
         { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
         { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
-      ])), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      ])), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
         { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
-      ])), { status: 200 }));
+      ])), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
@@ -683,10 +686,10 @@ describe("SeasonPage destructive actions", () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "cancelled" } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "cancelled")), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "cancelled" } }), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "cancelled")), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
