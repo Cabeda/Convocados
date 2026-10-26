@@ -1,14 +1,16 @@
 import { useState } from "react";
 import {
-  Box, Chip, Paper, Typography, alpha, useTheme, Stack, Avatar,
-  List, ListItem, ListItemAvatar, ListItemText, IconButton, TextField,
+  Box, Button, Chip, Paper, Snackbar, Tooltip, Typography, alpha, useTheme, Stack, Avatar,
+  List, ListItem, ListItemAvatar, IconButton, TextField,
 } from "@mui/material";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import GroupsIcon from "@mui/icons-material/Groups";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { Imatch } from "~/lib/random";
+import { movePlayer } from "~/lib/teams";
 import { useT } from "~/lib/useT";
 import { crewColor } from "~/lib/crewColors";
 import { TeamDragGhost, teamMotionKeyframes, useTeamDrag } from "./team/useTeamDrag";
@@ -93,6 +95,19 @@ export function TeamPicker({
     handlePointerUp,
   } = useTeamDrag({ matches, onResultChange, shuffleKey });
 
+  const [undoMove, setUndoMove] = useState<{ message: string; previous: Imatch[] } | null>(null);
+
+  // One tap is the mobile-safe alternative to dragging across stacked panels.
+  const moveToOtherTeam = (playerName: string, fromTeam: string, toTeam: string) => {
+    const next = movePlayer(matches, playerName, fromTeam, toTeam);
+    if (next === matches) return;
+    setUndoMove({
+      message: t("playerMovedToTeam", { name: playerName, team: toTeam }),
+      previous: matches,
+    });
+    onResultChange(next);
+  };
+
   return (
     <>
       <TeamDragGhost drag={drag} />
@@ -116,6 +131,9 @@ export function TeamPicker({
           const isActive = activeDropZone === team.team;
           const isMotionDestination = playerMotion?.destinationTeam === team.team;
           const n = team.players.length;
+          const otherTeam = matches.length === 2
+            ? matches.find((m) => m.team !== team.team)?.team
+            : undefined;
           const headerBg = alpha(colors.main, isDark ? 0.15 : 0.08);
           const headerColor = theme.palette.text.primary;
           const accentColor = colors.main;
@@ -151,7 +169,9 @@ export function TeamPicker({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
+                flexWrap: "wrap",
                 gap: 1,
+                rowGap: 1,
               }}>
                 {editingTeam === teamIdx ? (
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flex: 1 }}>
@@ -189,7 +209,7 @@ export function TeamPicker({
                     </IconButton>
                   </Box>
                 ) : (
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, flex: "1 1 auto" }}>
                     {onTeamNameSave && (
                       <IconButton
                         size="small"
@@ -199,12 +219,12 @@ export function TeamPicker({
                         <EditIcon sx={{ fontSize: "1rem" }} />
                       </IconButton>
                     )}
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: headerColor }}>
+                    <Typography variant="subtitle1" fontWeight={700} noWrap title={team.team} sx={{ color: headerColor }}>
                       {team.team}
                     </Typography>
                   </Box>
                 )}
-                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end", rowGap: 0.5 }}>
+                <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", justifyContent: "flex-end", rowGap: 0.5 }}>
                   <Chip
                     label={n === 1 ? t("playerCount", { n }) : t("playerCountPlural", { n })}
                     size="small"
@@ -241,6 +261,7 @@ export function TeamPicker({
                         } · #${crew.positionAfter}`}
                         size="small"
                         sx={{
+                          display: { xs: "none", sm: "inline-flex" },
                           bgcolor: alpha(crewTint, isDark ? 0.24 : 0.14),
                           color: crewTint,
                           fontWeight: 700,
@@ -275,6 +296,10 @@ export function TeamPicker({
                         data-testid={`team-player-${player.name}`}
                         data-motion={isArriving ? "arriving" : undefined}
                         sx={{
+                          display: "grid",
+                          gridTemplateColumns: "auto minmax(0, 1fr) auto",
+                          alignItems: "center",
+                          columnGap: 1,
                           userSelect: "none",
                           opacity: isBeingDragged ? 0.3 : 1,
                           animation: isArriving
@@ -302,91 +327,109 @@ export function TeamPicker({
                             {i + 1}
                           </Avatar>
                         </ListItemAvatar>
-                        <ListItemText
-                          primary={player.name}
-                          secondary={ratingsMap ? `${Math.round(ratingsMap[player.name] ?? 1000)}` : undefined}
-                          slotProps={{
-                            primary: {
-                              sx: { fontWeight: 500, fontSize: "0.9rem" },
-                            },
-
-                            secondary: {
-                              sx: { fontSize: "0.75rem", fontWeight: 600, color: "text.secondary" },
-                            }
-                          }} />
-                        {hasStake && (
-                          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flexShrink: 0, pr: 0.5 }}>
-                            {crew !== undefined && (crew ? (
-                              <Chip
-                                data-testid={`team-player-crew-${player.name}`}
-                                size="small"
-                                icon={<GroupsIcon />}
-                                label={crew.crewName}
-                                sx={{
-                                  height: 20, fontWeight: 700,
-                                  color: crewColor(crew.crewId),
-                                  bgcolor: alpha(crewColor(crew.crewId), isDark ? 0.24 : 0.14),
-                                  "& .MuiChip-icon": { color: "inherit", fontSize: 13 },
-                                }}
-                              />
-                            ) : (
-                              <Chip size="small" label={t("stakesPreviewFreeAgent")} sx={{ height: 20, color: "text.secondary" }} />
-                            ))}
-                            {stake && (
-                              <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5, justifyContent: "flex-end" }}>
-                                {(() => {
-                                  const pts = stake.contribution;
-                                  const color = pts === 3 ? theme.palette.success.main : pts === 1 ? theme.palette.warning.main : theme.palette.text.disabled;
-                                  return (
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            variant="body2"
+                            title={player.name}
+                            noWrap
+                            sx={{ fontWeight: 500, fontSize: "0.9rem" }}
+                          >
+                            {player.name}
+                          </Typography>
+                          {(ratingsMap || hasStake) && (
+                            <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5, mt: 0.25 }}>
+                              {ratingsMap && (
+                                <Typography variant="caption" sx={{ fontSize: "0.75rem", fontWeight: 600, color: "text.secondary" }}>
+                                  {Math.round(ratingsMap[player.name] ?? 1000)}
+                                </Typography>
+                              )}
+                              {crew !== undefined && (crew ? (
+                                <Chip
+                                  data-testid={`team-player-crew-${player.name}`}
+                                  size="small"
+                                  icon={<GroupsIcon />}
+                                  label={crew.crewName}
+                                  sx={{
+                                    height: 20, fontWeight: 700,
+                                    color: crewColor(crew.crewId),
+                                    bgcolor: alpha(crewColor(crew.crewId), isDark ? 0.24 : 0.14),
+                                    "& .MuiChip-icon": { color: "inherit", fontSize: 13 },
+                                  }}
+                                />
+                              ) : (
+                                <Chip size="small" label={t("stakesPreviewFreeAgent")} sx={{ height: 20, color: "text.secondary" }} />
+                              ))}
+                              {stake && (
+                                <>
+                                  {(() => {
+                                    const pts = stake.contribution;
+                                    const color = pts === 3 ? theme.palette.success.main : pts === 1 ? theme.palette.warning.main : theme.palette.text.disabled;
+                                    return (
+                                      <Chip
+                                        data-testid={`team-player-points-${player.name}`}
+                                        size="small"
+                                        label={t("stakesPreviewPts", { n: pts })}
+                                        title={t("stakesPreviewPtsTitle")}
+                                        sx={{ height: 20, fontWeight: 800, color, bgcolor: alpha(color, 0.14), border: `1px solid ${alpha(color, 0.4)}` }}
+                                      />
+                                    );
+                                  })()}
+                                  {/* Rank movement is the viewer's own; only they see it. */}
+                                  {rankEnabled && player.name === viewerName && (stake.provisional ? (
+                                    <Chip size="small" label={t("seasonRankProvisional")} sx={{ height: 20, color: "text.secondary" }} />
+                                  ) : (
                                     <Chip
-                                      data-testid={`team-player-points-${player.name}`}
+                                      data-testid={`team-player-rank-${player.name}`}
                                       size="small"
-                                      label={t("stakesPreviewPts", { n: pts })}
-                                      title={t("stakesPreviewPtsTitle")}
-                                      sx={{ height: 20, fontWeight: 800, color, bgcolor: alpha(color, 0.14), border: `1px solid ${alpha(color, 0.4)}` }}
+                                      label={`${t("stakesPreviewRankDelta", { delta: `${stake.rpDelta > 0 ? "+" : ""}${stake.rpDelta}` })}${
+                                        stake.passed > 0 ? ` ▲${stake.passed}` : stake.passed < 0 ? ` ▼${Math.abs(stake.passed)}` : ""
+                                      }`}
+                                      sx={{
+                                        height: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+                                        color: stake.passed > 0 ? theme.palette.success.main : stake.passed < 0 ? theme.palette.error.main : "text.secondary",
+                                        bgcolor: alpha(stake.passed > 0 ? theme.palette.success.main : stake.passed < 0 ? theme.palette.error.main : theme.palette.text.secondary, 0.12),
+                                      }}
                                     />
-                                  );
-                                })()}
-                                {/* Rank movement is the viewer's own; only they see it. */}
-                                {rankEnabled && player.name === viewerName && (stake.provisional ? (
-                                  <Chip size="small" label={t("seasonRankProvisional")} sx={{ height: 20, color: "text.secondary" }} />
-                                ) : (
-                                  <Chip
-                                    data-testid={`team-player-rank-${player.name}`}
-                                    size="small"
-                                    label={`${t("stakesPreviewRankDelta", { delta: `${stake.rpDelta > 0 ? "+" : ""}${stake.rpDelta}` })}${
-                                      stake.passed > 0 ? ` ▲${stake.passed}` : stake.passed < 0 ? ` ▼${Math.abs(stake.passed)}` : ""
-                                    }`}
-                                    sx={{
-                                      height: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                                      color: stake.passed > 0 ? theme.palette.success.main : stake.passed < 0 ? theme.palette.error.main : "text.secondary",
-                                      bgcolor: alpha(stake.passed > 0 ? theme.palette.success.main : stake.passed < 0 ? theme.palette.error.main : theme.palette.text.secondary, 0.12),
-                                    }}
-                                  />
-                                ))}
-                              </Box>
-                            )}
-                          </Stack>
-                        )}
-                        <Box
-                          data-testid={`team-player-handle-${player.name}`}
-                          onPointerDown={canEdit ? (e) => handlePointerDown(e, player.name, team.team) : undefined}
-                          sx={{
-                            cursor: canEdit ? (drag ? "grabbing" : "grab") : "default",
-                            touchAction: "none",
-                            display: "flex",
-                            alignItems: "center",
-                            p: 0.5,
-                            borderRadius: 1,
-                            "&:hover": canEdit ? {
-                              bgcolor: alpha(theme.palette.text.primary, 0.08),
-                            } : undefined,
-                          }}
-                        >
-                          <DragIndicatorIcon
-                            fontSize="small"
-                            sx={{ color: "text.disabled" }}
-                          />
+                                  ))}
+                                </>
+                              )}
+                            </Box>
+                          )}
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+                          {canEdit && otherTeam && (
+                            <Tooltip title={t("movePlayerToTeam", { team: otherTeam })}>
+                              <IconButton
+                                size="small"
+                                data-testid={`team-player-move-${player.name}`}
+                                aria-label={t("movePlayerToTeam", { team: otherTeam })}
+                                onClick={() => moveToOtherTeam(player.name, team.team, otherTeam)}
+                                sx={{ minWidth: 44, minHeight: 44 }}
+                              >
+                                <SwapHorizIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          <Box
+                            data-testid={`team-player-handle-${player.name}`}
+                            onPointerDown={canEdit ? (e) => handlePointerDown(e, player.name, team.team) : undefined}
+                            sx={{
+                              cursor: canEdit ? (drag ? "grabbing" : "grab") : "default",
+                              touchAction: "none",
+                              display: { xs: "none", sm: "flex" },
+                              alignItems: "center",
+                              p: 0.5,
+                              borderRadius: 1,
+                              "&:hover": canEdit ? {
+                                bgcolor: alpha(theme.palette.text.primary, 0.08),
+                              } : undefined,
+                            }}
+                          >
+                            <DragIndicatorIcon
+                              fontSize="small"
+                              sx={{ color: "text.disabled" }}
+                            />
+                          </Box>
                         </Box>
                       </ListItem>
                     );
@@ -406,6 +449,26 @@ export function TeamPicker({
           );
         })}
       </Box>
+      <Snackbar
+        open={!!undoMove}
+        autoHideDuration={6000}
+        onClose={() => setUndoMove(null)}
+        message={undoMove?.message ?? ""}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              const previous = undoMove?.previous;
+              setUndoMove(null);
+              if (previous) onResultChange(previous);
+            }}
+          >
+            {t("undoRemove")}
+          </Button>
+        }
+      />
     </>
   );
 }

@@ -105,6 +105,33 @@ describe("TeamPicker motion", () => {
   });
 });
 
+describe("TeamPicker touch move", () => {
+  it("moves a player to the other team in one click and undoes it", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamPickerHarness onResultChange={onResultChange} />);
+
+    const move = screen.getByTestId("team-player-move-Alice");
+    expect(move).toHaveAccessibleName("Move to Red");
+    fireEvent.click(move);
+
+    expect(onResultChange).toHaveBeenCalledTimes(1);
+    const moved = onResultChange.mock.calls[0][0] as Imatch[];
+    expect(moved.find((team) => team.team === "Blue")?.players.map((p) => p.name)).toEqual([]);
+    expect(moved.find((team) => team.team === "Red")?.players.map((p) => p.name)).toEqual(["Bob", "Alice"]);
+
+    expect(screen.getByText("Alice moved to Red")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Undo"));
+
+    expect(onResultChange).toHaveBeenCalledTimes(2);
+    expect(onResultChange.mock.calls[1][0]).toEqual(initialMatches);
+  });
+
+  it("renders no move control when the teams are read-only", () => {
+    renderWithTheme(<TeamPickerHarness canEdit={false} />);
+    expect(screen.queryByTestId("team-player-move-Alice")).not.toBeInTheDocument();
+  });
+});
+
 describe("TeamPicker stakes integration", () => {
   it("shows Crew association and projected points per player and per side", () => {
     renderWithTheme(

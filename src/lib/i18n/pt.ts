@@ -186,6 +186,7 @@ const pt: TranslationKeys = {
   addPlayerToTeam: "Adicionar jogador",
   saveTeams: "Guardar equipas",
   movePlayerToTeam: "Mover para {team}",
+  playerMovedToTeam: "{name} passou para {team}",
   decreaseScore: "Diminuir pontuação de {team}",
   increaseScore: "Aumentar pontuação de {team}",
   backToGame: "Voltar ao jogo",
