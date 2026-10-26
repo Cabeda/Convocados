@@ -149,6 +149,7 @@ Full docs at [`/docs`](https://convocados.cabeda.dev/docs):
 - [API reference](https://convocados.cabeda.dev/docs/api)
 - [Self-hosting](https://convocados.cabeda.dev/docs/guides/self-hosting)
 - [Delivery factory runbook](./docs/factory/README.md)
+- [Daily senior review](./docs/daily-review.md)
 
 ---
 
