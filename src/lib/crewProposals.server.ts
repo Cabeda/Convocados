@@ -1,4 +1,6 @@
 import type { Prisma } from "~/lib/db.server";
+import { prisma } from "./db.server";
+import { enqueueNotification } from "./notificationQueue.server";
 
 /**
  * The one shape both crew-proposal routes read, so a payload change is made once
@@ -45,4 +47,70 @@ export function serializeProposal(
     createdAt: proposal.createdAt,
     reviewedAt: proposal.reviewedAt,
   };
+}
+
+/**
+ * Tell the people a captain change concerns (#1558).
+ *
+ * Two facts, two audiences:
+ *  - a nomination reaches the nominee — always, even when they nominated
+ *    themselves, because otherwise nothing tells them;
+ *  - an acceptance reaches the crew's active members and the event's owner and
+ *    admins, minus whoever pressed the button.
+ *
+ * The recipient list is computed here, at the moment of the fact, and handed to
+ * the queue whole: `resolveJobAudience` resolves "who follows this event",
+ * which is a different question.
+ */
+export async function notifyCaptainNominated(opts: {
+  eventId: string;
+  seasonId: string;
+  crewName: string;
+  nomineeUserId: string;
+  nomineeName: string;
+}): Promise<void> {
+  await enqueueNotification(opts.eventId, "crew_captain_nominated", {
+    title: opts.crewName,
+    key: "captainNominatedBody",
+    params: { crew: opts.crewName, name: opts.nomineeName },
+    url: `/events/${opts.eventId}/seasons/${opts.seasonId}`,
+    spotsLeft: 0,
+    recipientUserIds: [opts.nomineeUserId],
+  });
+}
+
+export async function notifyCaptainAccepted(opts: {
+  eventId: string;
+  seasonId: string;
+  crewId: string;
+  crewName: string;
+  captainUserId: string;
+  captainName: string;
+  actorUserId: string;
+}): Promise<void> {
+  const [crewMembers, event, admins] = await Promise.all([
+    prisma.seasonMembership.findMany({
+      where: { seasonId: opts.seasonId, crewId: opts.crewId, status: "active" },
+      select: { userId: true },
+    }),
+    prisma.event.findUnique({ where: { id: opts.eventId }, select: { ownerId: true } }),
+    prisma.eventAdmin.findMany({ where: { eventId: opts.eventId }, select: { userId: true } }),
+  ]);
+
+  const recipients = new Set<string>([
+    ...crewMembers.map((member: { userId: string }) => member.userId),
+    ...admins.map((admin: { userId: string }) => admin.userId),
+    ...(event?.ownerId ? [event.ownerId] : []),
+  ]);
+  recipients.delete(opts.actorUserId);
+
+  if (recipients.size === 0) return;
+  await enqueueNotification(opts.eventId, "crew_captain_accepted", {
+    title: opts.crewName,
+    key: "captainAcceptedBody",
+    params: { crew: opts.crewName, name: opts.captainName },
+    url: `/events/${opts.eventId}/seasons/${opts.seasonId}`,
+    spotsLeft: 0,
+    recipientUserIds: [...recipients],
+  });
 }
