@@ -1,0 +1,9 @@
+---
+export const prerender = true;
+import BaseLayout from "../layouts/BaseLayout.astro";
+import NotificationsPage from "../components/NotificationsPage";
+---
+
+<BaseLayout title="Notifications — Convocados" mainTransitionName="page-notifications">
+  <NotificationsPage client:only="react" />
+</BaseLayout>

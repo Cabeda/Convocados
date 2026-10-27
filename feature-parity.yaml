@@ -161,6 +161,7 @@ notifications:
   capabilities:
     web-push: { web: true, android: false, wearos: false }
     fcm-push: { web: false, android: true, wearos: false }
+    in-app-feed: { web: true, android: true, wearos: false }
     notification-preferences: { web: true, android: true, wearos: false }
 
 sharing:

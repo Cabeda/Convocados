@@ -1122,6 +1122,17 @@ export interface ApiOperations {
     };
   };
   "DELETE /api/me/photo": Record<string, never>;
+  "GET /api/me/notifications": {
+    query: {
+      limit?: number;
+      cursor?: string;
+    };
+  };
+  "POST /api/me/notifications": {
+    body: {
+      ids?: string[];
+    };
+  };
   "GET /api/me/notification-preferences": Record<string, never>;
   "PUT /api/me/notification-preferences": {
     body: {

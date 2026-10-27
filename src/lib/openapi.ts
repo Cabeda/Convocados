@@ -1772,6 +1772,37 @@ export const openApiSpec = {
         responses: { "200": { description: "Photo removed" }, ...errorResponses },
       },
     },
+    "/api/me/notifications": {
+      get: {
+        summary: "Get the in-app notification feed (#1560)",
+        tags: ["Users"],
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer", maximum: 100 }, description: "Page size (default 50)" },
+          { name: "cursor", in: "query", schema: { type: "string" }, description: "Id of the last row of the previous page" },
+        ],
+        responses: {
+          "200": { description: "notifications[], unreadCount, nextCursor, hasMore" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+      post: {
+        summary: "Mark notifications as read",
+        tags: ["Users"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ids: { type: "array", items: { type: "string" }, description: "Omit to mark every unread row" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Marked" }, ...errorResponses },
+      },
+    },
     "/api/me/notification-preferences": {
       get: {
         summary: "Get notification preferences",
