@@ -298,8 +298,6 @@ describe("Crew captains", () => {
     expect((await prisma.crew.findUniqueOrThrow({ where: { id: crew.id } })).captainMembershipId).toBe(memberships[1].id);
   });
 
-
-
   it("offers the accept card to an owner who nominates themselves", async () => {
     const { event, season, crew } = await seedCrew();
     // The reported case: the organiser is also a player in the crew.
@@ -322,35 +320,23 @@ describe("Crew captains", () => {
     expect(nomination?.awaitingMyAcceptance).toBe(true);
   });
 
-  it("tells the nominee and, on acceptance, the crew and the admins (#1558)", async () => {
+  it("carries the pending nomination in the season payload, so it survives a reload", async () => {
     const { event, season, crew, memberships } = await seedCrew();
     mockGetSession.mockResolvedValue({ user: { id: OWNER } });
-
     const nominated = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
       action: "captain", crewId: crew.id, membershipId: memberships[0].id,
     }));
     expect(nominated.status).toBe(201);
 
-    const nominationJob = await prisma.notificationJob.findFirstOrThrow({
-      where: { eventId: event.id, type: "crew_captain_nominated" },
-    });
-    const nominationPayload = JSON.parse(nominationJob.payload) as { recipientUserIds: string[] };
-    // Always the nominee, even when the proposer is the nominee.
-    expect(nominationPayload.recipientUserIds).toEqual(["captain-user-1"]);
-
-    const proposalId = (await nominated.json()).proposal.id;
-    mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
-    const accepted = await decideProposal(context({ id: event.id, seasonId: season.id, proposalId }, "PATCH", { decision: "accept" }));
-    expect(accepted.status).toBe(200);
-
-    const acceptedJob = await prisma.notificationJob.findFirstOrThrow({
-      where: { eventId: event.id, type: "crew_captain_accepted" },
-    });
-    const acceptedPayload = JSON.parse(acceptedJob.payload) as { recipientUserIds: string[] };
-    // The crew (minus the actor) and the owner; never the other crew's member.
-    expect(new Set(acceptedPayload.recipientUserIds)).toEqual(new Set(["captain-user-2", "captain-user-3", OWNER]));
+    const payload = await (await getSeason(context({ id: event.id, seasonId: season.id }, "GET"))).json();
+    const saved = (payload.season.crews as Array<{
+      id: string; captainName: string | null;
+      pendingCaptainMembershipId: string | null; pendingCaptainName: string | null;
+    }>).find((candidate) => candidate.id === crew.id);
+    expect(saved?.captainName).toBeNull();
+    expect(saved?.pendingCaptainMembershipId).toBe(memberships[0].id);
+    expect(saved?.pendingCaptainName).toBe("Player 1");
   });
-
 
   it("refuses to accept a nomination whose nominee left the crew", async () => {
     const { event, season, crew, memberships } = await seedCrew();
@@ -423,5 +409,34 @@ describe("Crew captains", () => {
 
     expect(saved.status).toBe(200);
     expect((await prisma.crew.findUniqueOrThrow({ where: { id: crew.id } })).captainMembershipId).toBeNull();
+  });
+
+  it("tells the nominee and, on acceptance, the crew and the admins (#1558)", async () => {
+    const { event, season, crew, memberships } = await seedCrew();
+    mockGetSession.mockResolvedValue({ user: { id: OWNER } });
+
+    const nominated = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
+      action: "captain", crewId: crew.id, membershipId: memberships[0].id,
+    }));
+    expect(nominated.status).toBe(201);
+
+    const nominationJob = await prisma.notificationJob.findFirstOrThrow({
+      where: { eventId: event.id, type: "crew_captain_nominated" },
+    });
+    const nominationPayload = JSON.parse(nominationJob.payload) as { recipientUserIds: string[] };
+    // Always the nominee, even when the proposer is the nominee.
+    expect(nominationPayload.recipientUserIds).toEqual(["captain-user-1"]);
+
+    const proposalId = (await nominated.json()).proposal.id;
+    mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
+    const accepted = await decideProposal(context({ id: event.id, seasonId: season.id, proposalId }, "PATCH", { decision: "accept" }));
+    expect(accepted.status).toBe(200);
+
+    const acceptedJob = await prisma.notificationJob.findFirstOrThrow({
+      where: { eventId: event.id, type: "crew_captain_accepted" },
+    });
+    const acceptedPayload = JSON.parse(acceptedJob.payload) as { recipientUserIds: string[] };
+    // The crew (minus the actor) and the owner; never the other crew's member.
+    expect(new Set(acceptedPayload.recipientUserIds)).toEqual(new Set(["captain-user-2", "captain-user-3", OWNER]));
   });
 });
