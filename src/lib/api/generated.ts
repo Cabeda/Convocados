@@ -255,10 +255,13 @@ export interface ApiOperations {
       seasonId: string;
     };
     body: {
-      action?: "claim-invite" | "invite";
+      action?: "claim-invite" | "invite" | "captain" | "add" | "remove";
       token?: string;
       email?: string;
       name?: string;
+      crewId?: string;
+      membershipId?: string;
+      membershipIds?: string[];
       members?: { membershipId?: string; userId?: string }[];
     };
   };
@@ -269,7 +272,7 @@ export interface ApiOperations {
       proposalId: string;
     };
     body: {
-      decision: "approve" | "reject";
+      decision: "approve" | "reject" | "accept";
       rejectionReason?: string;
     };
   };
