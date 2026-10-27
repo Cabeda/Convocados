@@ -117,7 +117,10 @@ export default function CrewProposalPanel({
     return [...byKey.values()];
   }, [data?.candidates, data?.excludedUserIds, externalCandidates]);
 
-  if (!data || (!data.canPropose && !data.canReview && !data.captainOf && data.proposals.length === 0)) return null;
+  // A short or malformed payload must hide the panel, not crash the page: the
+  // page now mounts it for every non-terminal season (#1442), so its fetch runs
+  // on surfaces where it has nothing to say.
+  if (!data || (!data.canPropose && !data.canReview && !data.captainOf && (data.proposals?.length ?? 0) === 0)) return null;
 
   const statusLabel = (status: string) => ({
     pending: t("proposalStatusPending"),

@@ -573,6 +573,9 @@ describe("SeasonPage completion lifecycle", () => {
     const rank = { players: [], edges: [] };
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "active")), { status: 200, headers: JSON_HEADERS }))
+      // The proposal panel mounts for any non-terminal season (#1442), so it
+      // asks for its own data on this page too.
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "completed" } }), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "completed")), { status: 200, headers: JSON_HEADERS }))
@@ -602,8 +605,10 @@ describe("SeasonPage completion lifecycle", () => {
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "completed")), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200, headers: JSON_HEADERS }))
+      // Completed: the proposal panel is not mounted. Reopened to active: it is.
       .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "active" } }), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "active")), { status: 200, headers: JSON_HEADERS }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200, headers: JSON_HEADERS }))
       .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200, headers: JSON_HEADERS }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
