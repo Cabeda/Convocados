@@ -33,6 +33,7 @@ import { INSTALL_BANNER_DISMISS_KEY, installBannerDismissed } from "~/lib/pushPr
 import { BottomSlotProvider, useBottomSlotClaim } from "~/lib/bottomSlot";
 import { SignInButton } from "./SignInButton";
 import SupportLinks from "./SupportLinks";
+import NotificationsBell from "./NotificationsBell";
 
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
@@ -413,6 +414,10 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               {t("appName")}
               <Chip label="beta" size="small" sx={{ fontSize: "0.6rem", height: 18, ml: 0.5 }} />
             </Typography>
+            {/* The in-app feed has been written since the notification queue
+                landed; the web had no way to read it (#1560). */}
+            <NotificationsBell signedIn={!!session?.user} />
+
             <Tooltip title={t("publicGames")}>
               <IconButton color="inherit" aria-label={t("publicGames")}
                 href="/public"
