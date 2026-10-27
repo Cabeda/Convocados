@@ -1,4 +1,4 @@
-import { Prisma } from "~/lib/db.server";
+import type { Prisma } from "~/lib/db.server";
 
 /**
  * The one shape both crew-proposal routes read, so a payload change is made once

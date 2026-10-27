@@ -85,7 +85,6 @@ beforeEach(async () => {
   await prisma.crewProposalInvite.deleteMany();
   await prisma.crewProposalMember.deleteMany();
   await prisma.crewProposal.deleteMany();
-  await prisma.crew.updateMany({ data: { captainMembershipId: null } });
   await prisma.crew.deleteMany();
   await prisma.seasonMembership.deleteMany();
   await prisma.season.deleteMany();
@@ -223,7 +222,9 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-2" } });
     const participantSeason = await (await getSeason(context({ id: event.id, seasonId: season.id }, "GET"))).json();
-    expect(participantSeason.season.crews[0]).toMatchObject({ name: "North", captainMembershipId: memberships[0].id, captainName: "Player 1" });
+    expect(participantSeason.season.crews[0]).toMatchObject({ name: "North", captainName: "Player 1" });
+    // The captain's membership id is an internal handle: participants get the name only.
+    expect(participantSeason.season.crews[0]).not.toHaveProperty("captainMembershipId");
 
     mockGetSession.mockResolvedValue({ user: { id: OWNER } });
     const adminSeason = await (await getSeason(context({ id: event.id, seasonId: season.id }, "GET"))).json();

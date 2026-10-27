@@ -67,7 +67,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   const publicCrews = crews.map((crew) => ({
     name: crew.name,
     sortOrder: crew.sortOrder,
-    captainMembershipId: crew.captainMembershipId,
+    // The captain's membership id is an internal handle: everyone gets the name,
+    // only an admin needs the id to manage crews.
     captainName: crew.captainMembership?.eventPlayer.name ?? null,
     members: crew.memberships.map((membership) => ({ name: membership.eventPlayer.name })),
   }));
