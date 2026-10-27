@@ -44,6 +44,9 @@ interface PublicCrew {
   sortOrder: number;
   captainMembershipId?: string | null;
   captainName?: string | null;
+  /** A nomination still awaiting the nominee's acceptance (#1442). */
+  pendingCaptainMembershipId?: string | null;
+  pendingCaptainName?: string | null;
   members: Array<{ name: string; membershipId?: string }>;
 }
 
@@ -757,9 +760,12 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                                 const member = members.find((candidate) => candidate.membershipId === membershipId);
                                 if (!member) return null;
                                 const acceptedCaptainId = crew.id ? season.crews.find((saved) => saved.id === crew.id)?.captainMembershipId ?? null : null;
+                                const pendingCaptainId = crew.id
+                                  ? pendingCaptains[crew.id] ?? season.crews.find((saved) => saved.id === crew.id)?.pendingCaptainMembershipId ?? null
+                                  : null;
                                 const captainState = acceptedCaptainId === membershipId
                                   ? "accepted" as const
-                                  : crew.id && pendingCaptains[crew.id] === membershipId
+                                  : pendingCaptainId === membershipId
                                     ? "pending" as const
                                     : null;
                                 return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} onRemove={() => void removeMember(member)} disabled={busy !== null} captainState={captainState} />;
