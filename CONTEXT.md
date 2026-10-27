@@ -317,6 +317,26 @@ A player earns auto-confirm status by attending N consecutive games (N = `autoCo
 Only applies to recurring Events. The Owner enables it in event settings.
 _Avoid_: auto-RSVP, assumed attendance
 
+## Payer
+The one person a **Game**'s money is owed to: whoever fronted the cost is the creditor of that Game's debts. A **Payer** is not necessarily the **Owner** or an **Admin**, and is not the same as the person who collects. Set per Game (`payerEventPlayerId`, or `payerExternalName` for someone with no account), seeded by the Event's **Default Payer**, and changeable by any active player of that Game at any time.
+
+A Payer with no linked `User` cannot be asked anything and has no **Payment Details** of their own.
+_Avoid_: creditor, who paid, collector, organizer (the Owner is a different thing)
+
+## Default Payer
+The person an **Event** proposes as **Payer** for each new **Game**, so a crew that always pays the same way does not re-name them every week. Seeded onto the Game, never binding: any active player may claim the role for a given Game.
+_Avoid_: standing payer, permanent payer, owner
+
+## Payment Details
+A `User`'s own instructions for sending them money — a Revolut link or tag, an MB Way number, another route they choose to offer. They belong to the person owed the money, not to an Event, and are published only when that person has opted in to sharing them with the crew in question.
+
+Distinct from the **Event Payment Details** an organizer types into an Event, and from the method recorded when a debt is settled (what a debtor says they used).
+_Avoid_: payment methods (names an owner it does not have), payout details, bank details
+
+## Event Payment Details
+The payment details the **Owner** or an **Admin** types into an Event's cost settings. They are the standing fallback when a **Payer** has none of their own, and the only source of instructions for a Payer who is an external name with no account. They are never copied onto a `User`.
+_Avoid_: default payment methods, template
+
 ## Payment Nudge Escalation
 A 3-stage automatic reminder sequence for unpaid debts, replacing the flat daily reminder:
 
