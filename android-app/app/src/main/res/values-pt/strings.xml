@@ -444,6 +444,8 @@
     <string name="season_reopen">Reabrir Época</string>
     <string name="crew_league">Liga de Equipas</string>
     <string name="crew_captain">Capitão: %1$s</string>
+    <string name="captain_nomination">Nomeação de capitão — %1$s</string>
+    <string name="accept_captaincy">Aceitar capitania</string>
     <string name="crews">Equipas</string>
     <string name="season_enroll_recent">Inscrever jogadores recentes</string>
     <string name="season_recommend_crews">Recomendar equipas</string>
