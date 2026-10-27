@@ -1065,6 +1065,7 @@ data class SeasonCrew(
     val id: String? = null,
     val name: String = "",
     val sortOrder: Int = 0,
+    val captainName: String? = null,
     val members: List<SeasonCrewMember> = emptyList(),
 )
 

@@ -41,6 +41,8 @@ interface PublicCrew {
   id?: string;
   name: string;
   sortOrder: number;
+  captainMembershipId?: string | null;
+  captainName?: string | null;
   members: Array<{ name: string; membershipId?: string }>;
 }
 
@@ -84,7 +86,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [crewCount, setCrewCount] = useState(2);
   const [crews, setCrews] = useState<CrewDraft[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | "details" | "remove" | "crewDelete" | "cancel" | "complete" | "reopen" | null>(null);
+  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | "details" | "remove" | "crewDelete" | "cancel" | "complete" | "reopen" | "captain" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [candidates, setCandidates] = useState<MemberCandidate[]>([]);
@@ -454,6 +456,29 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     }
   };
 
+  /**
+   * The owner/admin offers the captaincy; the crew member accepts it, so the
+   * nomination stays pending until they do (#1442).
+   */
+  const nominateCaptain = async (crew: CrewDraft, membershipId: string) => {
+    if (!crew.id) return;
+    setBusy("captain");
+    setError(null);
+    setNotice(null);
+    try {
+      await apiRequest("POST /api/events/{id}/seasons/{seasonId}/crew-proposals", {
+        params: { id: eventId, seasonId },
+        body: { action: "captain", crewId: crew.id, membershipId },
+      });
+      setNotice(t("captainNominationFor", { crew: crew.name }));
+      await load();
+    } catch (requestError) {
+      setError(apiErrorMessage(requestError, t("crewProposalError")));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const rename = (index: number, name: string) => {
     setupDraftDirtyRef.current = true;
     setCrews((current) => current.map((crew, crewIndex) => crewIndex === index ? { ...crew, name } : crew));
@@ -633,6 +658,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                   <Card key={`${crew.name}-${crew.sortOrder}`} variant="outlined"><CardContent>
                     <Typography variant="h6">{crew.name}</Typography>
                     <Typography color="text.secondary">{crew.members.map((member) => member.name).join(", ")}</Typography>
+                    {crew.captainName && <Typography variant="body2" color="text.secondary">{t("crewCaptainIs", { name: crew.captainName })}</Typography>}
                   </CardContent></Card>
                 ))}
               </Stack>
@@ -723,6 +749,22 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                                 if (!member) return null;
                                 return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} onRemove={() => void removeMember(member)} disabled={busy !== null} />;
                               })}
+                              {crew.id && (
+                                <TextField
+                                  select
+                                  size="small"
+                                  label={t("crewCaptain")}
+                                  value={season.crews.find((saved) => saved.id === crew.id)?.captainMembershipId ?? ""}
+                                  onChange={(event) => void nominateCaptain(crew, event.target.value)}
+                                  disabled={busy !== null}
+                                  sx={{ maxWidth: { sm: 260 } }}
+                                >
+                                  <MenuItem value="" disabled>{t("noCaptainYet")}</MenuItem>
+                                  {crewMembers.map((member) => (
+                                    <MenuItem key={member.membershipId} value={member.membershipId}>{member.name}</MenuItem>
+                                  ))}
+                                </TextField>
+                              )}
                               <CrewMemberAutocomplete
                                 label={t("addPlayerToCrew", { crew: crew.name })}
                                 candidates={candidates.filter((candidate) => candidate.memberStatus !== "active")}

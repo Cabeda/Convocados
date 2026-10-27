@@ -485,6 +485,7 @@
     <string name="season_cancel">Cancel Season</string>
     <string name="season_reopen">Reopen Season</string>
     <string name="crew_league">Crew league</string>
+    <string name="crew_captain">Captain: %1$s</string>
     <string name="crews">Crews</string>
     <string name="season_enroll_recent">Enroll recent players</string>
     <string name="season_recommend_crews">Recommend crews</string>

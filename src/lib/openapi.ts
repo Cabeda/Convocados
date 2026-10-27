@@ -413,7 +413,7 @@ export const openApiSpec = {
           required: true,
           content: {
             "application/json": {
-              schema: { type: "object", properties: { action: { type: "string", enum: ["claim-invite", "invite"] }, token: { type: "string" }, email: { type: "string" }, name: { type: "string" }, members: { type: "array", items: { type: "object", properties: { membershipId: { type: "string" }, userId: { type: "string" } } } } } },
+              schema: { type: "object", properties: { action: { type: "string", enum: ["claim-invite", "invite", "captain", "add", "remove"] }, token: { type: "string" }, email: { type: "string" }, name: { type: "string" }, crewId: { type: "string" }, membershipId: { type: "string" }, membershipIds: { type: "array", items: { type: "string" } }, members: { type: "array", items: { type: "object", properties: { membershipId: { type: "string" }, userId: { type: "string" } } } } } },
             },
           },
         },
@@ -422,7 +422,7 @@ export const openApiSpec = {
     },
     "/api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}": {
       patch: {
-        summary: "Approve or reject a Season Crew proposal (admin)",
+        summary: "Review a Season Crew proposal, or accept a captain nomination",
         tags: ["Seasons"],
         parameters: [eventIdParam, seasonIdParam, { name: "proposalId", in: "path" as const, required: true, schema: { type: "string" } }],
         requestBody: {
@@ -433,7 +433,7 @@ export const openApiSpec = {
                 type: "object",
                 required: ["decision"],
                 properties: {
-                  decision: { type: "string", enum: ["approve", "reject"] },
+                  decision: { type: "string", enum: ["approve", "reject", "accept"] },
                   rejectionReason: { type: "string" },
                 },
               },

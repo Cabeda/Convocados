@@ -79,7 +79,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const sameEventMembershipIds = memberships
     .filter((membership) => membership.eventPlayer.eventId === season.eventId)
     .map((membership) => membership.id);
-  const existingCrews = await prisma.crew.findMany({ where: { seasonId: season.id }, select: { id: true, sortOrder: true } });
+  const existingCrews = await prisma.crew.findMany({ where: { seasonId: season.id }, select: { id: true, sortOrder: true, captainMembershipId: true } });
   const approvedProposals = await prisma.crewProposal.findMany({
     where: { seasonId: season.id, status: "approved", approvedCrewId: { not: null } },
     select: { approvedCrewId: true, members: { select: { seasonMembershipId: true } } },
@@ -125,14 +125,16 @@ export const POST: APIRoute = async ({ params, request }) => {
   try {
     await prisma.$transaction(async (tx) => {
       if (!registrationOpen && pendingProposals.length > 0) {
+        const closedAt = { reviewedByUserId: session.user.id, reviewedAt: new Date() };
         await tx.crewProposal.updateMany({
-          where: { seasonId: season.id, status: "pending" },
-          data: {
-            status: "rejected",
-            rejectionReason: "Registration closed before this proposal was approved.",
-            reviewedByUserId: session.user.id,
-            reviewedAt: new Date(),
-          },
+          where: { seasonId: season.id, status: "pending", proposerMembershipId: { not: null } },
+          data: { status: "rejected", rejectionReason: "Registration closed before this proposal was approved.", ...closedAt },
+        });
+        // A captain nomination is not "approved" — it waits for the nominee; say so,
+        // so the crew's audit trail does not read like a rejection of a roster change.
+        await tx.crewProposal.updateMany({
+          where: { seasonId: season.id, status: "pending", proposerMembershipId: null },
+          data: { status: "rejected", rejectionReason: "Registration closed before the nominated captain accepted.", ...closedAt },
         });
       }
       await tx.seasonMembership.updateMany({
@@ -159,6 +161,12 @@ export const POST: APIRoute = async ({ params, request }) => {
             where: { seasonId: season.id, id: { in: savedCrew.membershipIds } },
             data: { crewId: savedCrew.id },
           });
+        }
+        // A captain is a participant of the crew: unassigning them ends the captaincy
+        // instead of leaving the crew pointing at a non-member.
+        const captain = existingCrews.find((existing) => existing.id === savedCrew.id)?.captainMembershipId;
+        if (captain && !savedCrew.membershipIds.includes(captain)) {
+          await tx.crew.update({ where: { id: savedCrew.id }, data: { captainMembershipId: null } });
         }
       }
     });
