@@ -745,6 +745,13 @@ sportBadmintonSingles: "Badminton (simple)",
   proposalStatusApproved: "Approuvée",
   proposalStatusRejected: "Rejetée",
   crewProposalError: "Impossible de charger ou d'enregistrer la proposition d'équipe.",
+  crewCaptain: "Capitaine",
+  crewCaptainIs: "Capitaine : {name}",
+  noCaptainYet: "Pas encore de capitaine",
+  captainNominationTitle: "Nomination d'un capitaine",
+  captainNominationFor: "Nomination du capitaine — {crew}",
+  acceptCaptaincy: "Accepter le capitanat",
+  captainAccepted: "Vous êtes désormais le capitaine de {crew}.",
 
 
   // Access control

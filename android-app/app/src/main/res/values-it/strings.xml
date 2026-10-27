@@ -526,6 +526,7 @@
     <string name="season_cancel">Annulla stagione</string>
     <string name="season_reopen">Riapri stagione</string>
     <string name="crew_league">Lega crew</string>
+    <string name="crew_captain">Capitano: %1$s</string>
     <string name="crews">Crew</string>
     <string name="season_enroll_recent">Iscrivi giocatori recenti</string>
     <string name="season_recommend_crews">Consiglia crew</string>

@@ -378,6 +378,9 @@ fun SeasonDetailScreen(
                             Column(Modifier.padding(14.dp)) {
                                 Text(crew.name, fontWeight = FontWeight.Bold)
                                 Text(crew.members.joinToString(", ") { it.name }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                crew.captainName?.let {
+                                    Text(stringResource(R.string.crew_captain, it), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }

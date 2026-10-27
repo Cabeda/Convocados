@@ -92,8 +92,52 @@ describe("CrewProposalPanel", () => {
 });
 
 
-describe("Crew proposal invitations", () => {
-  it("invites an unregistered email from the proposal picker", async () => {
+describe("Captain nominations", () => {
+  const nomination = {
+    id: "proposal-9",
+    name: "North",
+    kind: "add",
+    status: "pending",
+    targetCrewId: "crew-1",
+    targetCrewName: "North",
+    captainNomination: true,
+    awaitingMyAcceptance: true,
+    proposerName: "Owner",
+    memberNames: ["Player 1"],
+  };
+
+  it("lets the nominated captain accept the nomination", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(json({ canPropose: false, canReview: false, candidates: [], proposals: [nomination] }))
+      .mockResolvedValueOnce(json({ proposal: { ...nomination, status: "approved" } }))
+      .mockResolvedValueOnce(json({ canPropose: false, canReview: false, candidates: [], proposals: [{ ...nomination, status: "approved", awaitingMyAcceptance: false }] }));
+
+    renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
+    await screen.findByText("Captain nomination — North");
+    expect(screen.getByText("Proposed by Owner")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Accept captaincy" }));
+
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/events/event-1/seasons/season-1/crew-proposals/proposal-9");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ decision: "accept" });
+  });
+
+  it("offers an admin only the cancel action on a nomination", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(json({
+      canPropose: false, canReview: true, candidates: [], proposals: [{ ...nomination, awaitingMyAcceptance: false }],
+    }));
+
+    renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
+    await screen.findByText("Captain nomination — North");
+
+    expect(screen.queryByRole("button", { name: "Approve proposal North" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject proposal North" })).toBeInTheDocument();
+  });
+});
+
+describe("Crew proposal invitations", () => {  it("invites an unregistered email from the proposal picker", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     fetchMock

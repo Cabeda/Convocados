@@ -526,6 +526,7 @@
     <string name="season_cancel">Saison absagen</string>
     <string name="season_reopen">Saison erneut öffnen</string>
     <string name="crew_league">Crew-Liga</string>
+    <string name="crew_captain">Kapitän: %1$s</string>
     <string name="crews">Crews</string>
     <string name="season_enroll_recent">Neue Spieler einschreiben</string>
     <string name="season_recommend_crews">Crews empfehlen</string>
