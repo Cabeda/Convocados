@@ -26,6 +26,11 @@ interface Proposal {
   awaitingMyAcceptance?: boolean;
 }
 
+interface CrewChangeTarget {
+  membershipId: string;
+  name: string;
+}
+
 interface ProposalResponse {
   canPropose: boolean;
   canReview: boolean;
@@ -33,6 +38,7 @@ interface ProposalResponse {
   candidates: Candidate[];
   excludedUserIds?: string[];
   proposals: Proposal[];
+  captainOf?: { crewId: string; crewName: string; members: CrewChangeTarget[] } | null;
 }
 
 function candidateKey(candidate: Candidate) {
@@ -65,6 +71,8 @@ export default function CrewProposalPanel({
   const [submitted, setSubmitted] = useState(false);
   const [invited, setInvited] = useState(false);
   const [acceptedCrew, setAcceptedCrew] = useState<string | null>(null);
+  const [crewChangeTarget, setCrewChangeTarget] = useState<CrewChangeTarget | null>(null);
+  const [crewChangeSent, setCrewChangeSent] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -109,7 +117,7 @@ export default function CrewProposalPanel({
     return [...byKey.values()];
   }, [data?.candidates, data?.excludedUserIds, externalCandidates]);
 
-  if (!data || (!data.canPropose && !data.canReview && data.proposals.length === 0)) return null;
+  if (!data || (!data.canPropose && !data.canReview && !data.captainOf && data.proposals.length === 0)) return null;
 
   const statusLabel = (status: string) => ({
     pending: t("proposalStatusPending"),
@@ -197,6 +205,29 @@ export default function CrewProposalPanel({
     }
   };
 
+  /** A captain proposes an add or a remove on their own crew; the owner reviews it. */
+  const proposeCrewChange = async (action: "add" | "remove") => {
+    if (!captainCrew || !crewChangeTarget) return;
+    setBusy(action);
+    setError(null);
+    setCrewChangeSent(false);
+    try {
+      await apiRequest(
+        "POST /api/events/{id}/seasons/{seasonId}/crew-proposals",
+        {
+          params: { id: eventId, seasonId },
+          body: { action, targetCrewId: captainCrew.crewId, membershipIds: [crewChangeTarget.membershipId] },
+        },
+      );
+      setCrewChangeTarget(null);
+      setCrewChangeSent(true);
+    } catch (changeError) {
+      setError(changeError instanceof ApiError ? changeError.message : t("crewProposalError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const acceptCaptaincy = async (proposal: Proposal) => {
     setBusy(proposal.id);
     setError(null);
@@ -223,6 +254,13 @@ export default function CrewProposalPanel({
     : selectedCandidates;
   const reviewProposals = data.proposals;
   const captainOffers = data.proposals.filter((proposal) => proposal.awaitingMyAcceptance);
+  const captainCrew = data.captainOf ?? null;
+  const addableCandidates: CrewChangeTarget[] = (data.candidates ?? []).flatMap((candidate) =>
+    candidate.membershipId ? [{ membershipId: candidate.membershipId, name: candidate.name }] : []);
+  const crewChangeOptions = [...addableCandidates, ...(captainCrew?.members ?? [])];
+  const pickedId = crewChangeTarget?.membershipId;
+  const canAddPicked = !!pickedId && addableCandidates.some((candidate) => candidate.membershipId === pickedId);
+  const canRemovePicked = !!pickedId && !!captainCrew?.members.some((member) => member.membershipId === pickedId);
 
   return (
     <Stack spacing={2}>
@@ -249,6 +287,33 @@ export default function CrewProposalPanel({
           </CardContent>
         </Card>
       )}
+
+      {captainCrew && (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={2}>
+              <BoxHeading title={t("captainToolsTitle")} description={t("captainToolsFor", { crew: captainCrew.crewName })} />
+              <Autocomplete<CrewChangeTarget, false, false, false>
+                options={crewChangeOptions}
+                value={crewChangeTarget}
+                onChange={(_, next) => setCrewChangeTarget(next)}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.membershipId === value.membershipId}
+                renderInput={(params) => <TextField {...params} label={t("captainPlayerName")} size="small" />}
+              />
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" onClick={() => void proposeCrewChange("add")} disabled={busy !== null || !canAddPicked}>
+                  {t("captainAddPlayer")}
+                </Button>
+                <Button variant="outlined" color="error" onClick={() => void proposeCrewChange("remove")} disabled={busy !== null || !canRemovePicked}>
+                  {t("captainRemovePlayer")}
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+      {crewChangeSent && <Alert severity="success">{t("captainChangeSubmitted")}</Alert>}
 
       {data.canPropose && (
         <Card variant="outlined">

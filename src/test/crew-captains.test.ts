@@ -154,7 +154,7 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const added = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: crew.id, membershipIds: [memberships[3].id],
+      action: "add", targetCrewId: crew.id, membershipIds: [memberships[3].id],
     }));
     const addedBody = await added.json();
     expect(added.status).toBe(201);
@@ -167,7 +167,7 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const dropped = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "remove", crewId: crew.id, membershipIds: [memberships[1].id],
+      action: "remove", targetCrewId: crew.id, membershipIds: [memberships[1].id],
     }));
     const droppedBody = await dropped.json();
     expect(dropped.status).toBe(201);
@@ -184,10 +184,10 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const first = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: crew.id, membershipIds: [memberships[3].id],
+      action: "add", targetCrewId: crew.id, membershipIds: [memberships[3].id],
     }));
     const second = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: crew.id, membershipIds: [memberships[4].id],
+      action: "add", targetCrewId: crew.id, membershipIds: [memberships[4].id],
     }));
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
@@ -206,12 +206,12 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const foreignCrew = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: otherCrew.id, membershipIds: [memberships[3].id],
+      action: "add", targetCrewId: otherCrew.id, membershipIds: [memberships[3].id],
     }));
     expect(foreignCrew.status).toBe(403);
 
     const selfRemoval = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "remove", crewId: crew.id, membershipIds: [memberships[0].id],
+      action: "remove", targetCrewId: crew.id, membershipIds: [memberships[0].id],
     }));
     expect(selfRemoval.status).toBe(409);
     expect(await prisma.crewProposal.count({ where: { kind: { in: ["add", "remove"] }, status: "pending" } })).toBe(0);
@@ -298,7 +298,7 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const added = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: crew.id, membershipIds: [memberships[3].id],
+      action: "add", targetCrewId: crew.id, membershipIds: [memberships[3].id],
     }));
     const proposalId = (await added.json()).proposal.id;
     await nominateAndAccept(event.id, season.id, crew.id, memberships[2].id);
@@ -317,7 +317,7 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const dropped = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "remove", crewId: crew.id, membershipIds: [memberships[1].id],
+      action: "remove", targetCrewId: crew.id, membershipIds: [memberships[1].id],
     }));
     const proposalId = (await dropped.json()).proposal.id;
     // Direct setup can hand the captaincy to the very member being removed.

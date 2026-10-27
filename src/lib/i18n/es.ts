@@ -752,6 +752,12 @@ sportBadmintonSingles: "Bádminton (individual)",
   captainNominationFor: "Nombramiento de capitán — {crew}",
   acceptCaptaincy: "Aceptar capitanía",
   captainAccepted: "Ya eres el capitán de {crew}.",
+  captainToolsTitle: "Herramientas del capitán",
+  captainToolsFor: "Propón cambios de plantilla para {crew}. El organizador revisa cada uno.",
+  captainPlayerName: "Nombre del jugador",
+  captainAddPlayer: "Añadir jugador",
+  captainRemovePlayer: "Quitar jugador",
+  captainChangeSubmitted: "Enviado al organizador para su aprobación.",
 
 
   // Access control

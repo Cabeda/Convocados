@@ -798,6 +798,12 @@ sportBadmintonSingles: "Badminton (singles)",
   captainNominationFor: "Captain nomination — {crew}",
   acceptCaptaincy: "Accept captaincy",
   captainAccepted: "You are now the captain of {crew}.",
+  captainToolsTitle: "Captain tools",
+  captainToolsFor: "Propose roster changes for {crew}. The organizer reviews each one.",
+  captainPlayerName: "Player name",
+  captainAddPlayer: "Add player",
+  captainRemovePlayer: "Remove player",
+  captainChangeSubmitted: "Sent to the organizer for approval.",
 
 
   // Access control

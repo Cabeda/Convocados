@@ -185,7 +185,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     return Response.json({ proposals: [], candidates: [], canPropose: false, canReview: false });
   }
 
-  const [proposals, candidates, assignedMemberships, seasonMemberships, eventPlayers] = await Promise.all([
+  const [proposals, candidates, assignedMemberships, seasonMemberships, eventPlayers, captainCrew] = await Promise.all([
     prisma.crewProposal.findMany({
       where: authz.isAdmin
         ? { seasonId: season.id }
@@ -219,6 +219,21 @@ export const GET: APIRoute = async ({ params, request }) => {
       select: { userId: true, name: true, gamesPlayed: true },
       orderBy: { gamesPlayed: "desc" },
     }),
+    // The caller's own crew, so a captain can propose roster changes to it (#1442).
+    callerMembership
+      ? prisma.crew.findFirst({
+        where: { seasonId: season.id, captainMembershipId: callerMembership.id },
+        select: {
+          id: true,
+          name: true,
+          memberships: {
+            where: { status: "active", eventPlayer: { eventId: season.eventId } },
+            select: { id: true, eventPlayer: { select: { name: true } } },
+            orderBy: { joinedAt: "asc" },
+          },
+        },
+      })
+      : Promise.resolve(null),
   ]);
   const assignedUserIds = new Set(assignedMemberships.map((membership) => membership.userId));
   const withdrawnUserIds = new Set(seasonMemberships.filter((membership) => membership.status === "withdrawn").map((membership) => membership.userId));
@@ -234,6 +249,13 @@ export const GET: APIRoute = async ({ params, request }) => {
       ...externalEventCandidates,
     ],
     excludedUserIds: assignedMemberships.map((membership) => membership.userId),
+    captainOf: captainCrew
+      ? {
+        crewId: captainCrew.id,
+        crewName: captainCrew.name,
+        members: captainCrew.memberships.map((membership) => ({ membershipId: membership.id, name: membership.eventPlayer.name })),
+      }
+      : null,
     proposerMembershipId: isParticipant ? callerMembership?.id : null,
     canPropose: isParticipant,
     canReview: authz.isAdmin,
@@ -249,7 +271,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const season = await getSeasonForEvent(params.seasonId ?? "", params.id ?? "");
   if (!season) return Response.json({ error: "Season not found." }, { status: 404 });
 
-  let body: { action?: unknown; email?: unknown; token?: unknown; name?: unknown; members?: unknown; membershipIds?: unknown; crewId?: unknown; membershipId?: unknown };
+  let body: { action?: unknown; email?: unknown; token?: unknown; name?: unknown; members?: unknown; membershipIds?: unknown; crewId?: unknown; membershipId?: unknown; targetCrewId?: unknown };
   try {
     const parsed: unknown = await request.json();
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return Response.json({ error: "Invalid JSON." }, { status: 400 });
@@ -374,7 +396,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   // like any other proposal (#1442). Captains act only on their own crew.
   if (body.action === "add" || body.action === "remove") {
     const kind = body.action;
-    const crewId = typeof body.crewId === "string" ? body.crewId.trim() : "";
+    const crewId = typeof body.targetCrewId === "string" ? body.targetCrewId.trim() : "";
     const membershipIds = Array.isArray(body.membershipIds)
       ? body.membershipIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : null;
