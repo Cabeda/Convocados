@@ -275,6 +275,29 @@ describe("Crew captains", () => {
     expect((await prisma.crew.findUniqueOrThrow({ where: { id: crew.id } })).captainMembershipId).toBe(memberships[0].id);
   });
 
+  it("lets the owner replace a captain after registration closes", async () => {
+    const { event, season, crew, memberships } = await seedCrew();
+    mockGetSession.mockResolvedValue({ user: { id: OWNER } });
+    await nominateAndAccept(event.id, season.id, crew.id, memberships[0].id);
+    mockGetSession.mockResolvedValue({ user: { id: OWNER } });
+    await prisma.season.update({ where: { id: season.id }, data: { registrationClosesAt: new Date(Date.now() - 1_000) } });
+
+    // "The owner can replace a pending or an accepted captain" — the window
+    // closing must not freeze who runs a crew.
+    const replacement = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
+      action: "captain", crewId: crew.id, membershipId: memberships[1].id,
+    }));
+    expect(replacement.status).toBe(201);
+
+    const proposalId = (await replacement.json()).proposal.id;
+    mockGetSession.mockResolvedValue({ user: { id: "captain-user-2" } });
+    const accepted = await decideProposal(
+      context({ id: event.id, seasonId: season.id, proposalId }, "PATCH", { decision: "accept" }),
+    );
+    expect(accepted.status).toBe(200);
+    expect((await prisma.crew.findUniqueOrThrow({ where: { id: crew.id } })).captainMembershipId).toBe(memberships[1].id);
+  });
+
   it("refuses to accept a nomination whose nominee left the crew", async () => {
     const { event, season, crew, memberships } = await seedCrew();
     mockGetSession.mockResolvedValue({ user: { id: OWNER } });

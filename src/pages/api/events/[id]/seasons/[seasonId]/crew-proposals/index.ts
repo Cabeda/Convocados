@@ -295,7 +295,12 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const authz = await authorizeSeasonRequest(season, session, request);
   if (!authz.allowed) return Response.json({ error: "Event access required." }, { status: 403 });
-  if (!isSeasonRegistrationOpen(season)) return Response.json({ error: "Season registration is closed." }, { status: 409 });
+  // A captain nomination outlives registration (#1442): the owner may replace a
+  // pending or an accepted captain at any point in the season, and the nominee
+  // answers whenever they see it. Every roster proposal still needs the window.
+  if (body.action !== "captain" && !isSeasonRegistrationOpen(season)) {
+    return Response.json({ error: "Season registration is closed." }, { status: 409 });
+  }
 
   if (body.action === "captain") {
     if (!authz.isAdmin) return Response.json({ error: "Only the event owner or an admin can nominate a captain." }, { status: 403 });
