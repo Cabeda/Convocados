@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-  FormControl, IconButton, InputLabel, MenuItem, Select, Stack, TextField, Typography,
+  FormControl, IconButton, InputLabel, MenuItem, Select, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 import GroupsIcon from "@mui/icons-material/Groups";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -11,6 +11,7 @@ import RecommendIcon from "@mui/icons-material/Recommend";
 import SaveIcon from "@mui/icons-material/Save";
 import AddIcon from "@mui/icons-material/Add";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
+import StarIcon from "@mui/icons-material/Star";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import CancelIcon from "@mui/icons-material/Cancel";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -86,6 +87,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [crewCount, setCrewCount] = useState(2);
   const [crews, setCrews] = useState<CrewDraft[]>([]);
   const [loading, setLoading] = useState(true);
+  // crewId -> membershipId of a nomination the owner just filed (#1442 UX): the
+  // backend keeps it pending until the nominee accepts, so the roster has to
+  // carry that state or the choice looks dropped after the refetch.
+  const [pendingCaptains, setPendingCaptains] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | "details" | "remove" | "crewDelete" | "cancel" | "complete" | "reopen" | "captain" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -471,6 +476,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
         body: { action: "captain", crewId: crew.id, membershipId },
       });
       setNotice(t("captainNominationFor", { crew: crew.name }));
+      setPendingCaptains((current) => ({ ...current, [crew.id as string]: membershipId }));
       await load();
     } catch (requestError) {
       setError(apiErrorMessage(requestError, t("crewProposalError")));
@@ -747,7 +753,13 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                               {crew.membershipIds.map((membershipId) => {
                                 const member = members.find((candidate) => candidate.membershipId === membershipId);
                                 if (!member) return null;
-                                return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} onRemove={() => void removeMember(member)} disabled={busy !== null} />;
+                                const acceptedCaptainId = crew.id ? season.crews.find((saved) => saved.id === crew.id)?.captainMembershipId ?? null : null;
+                                const captainState = acceptedCaptainId === membershipId
+                                  ? "accepted" as const
+                                  : crew.id && pendingCaptains[crew.id] === membershipId
+                                    ? "pending" as const
+                                    : null;
+                                return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} onRemove={() => void removeMember(member)} disabled={busy !== null} captainState={captainState} />;
                               })}
                               {crew.id && (
                                 <TextField
@@ -894,10 +906,12 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   );
 }
 
-function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart, onDragEnd, onRemove, disabled }: {
+function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart, onDragEnd, onRemove, disabled, captainState }: {
   member: Member;
   crews: CrewDraft[];
   currentCrewIndex: number | null;
+  /** "accepted" once the nominee took the captaincy, "pending" while they have not. */
+  captainState?: "accepted" | "pending" | null;
   onMove: (membershipId: string, crewIndex: number | null) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -917,6 +931,20 @@ function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart
     >
       <DragHandleIcon fontSize="small" sx={{ cursor: "grab", color: "text.disabled", flexShrink: 0 }} data-testid={`member-grip-${member.membershipId}`} />
       <Typography sx={{ flex: 1 }}>{member.name}</Typography>
+      {captainState && (
+        <Tooltip title={captainState === "accepted" ? t("crewCaptainIs", { name: member.name }) : t("captainPending")}>
+          <StarIcon
+            fontSize="small"
+            aria-label={captainState === "accepted"
+              ? t("crewCaptainIs", { name: member.name })
+              : `${t("captainPending")}: ${member.name}`}
+            sx={{
+              color: captainState === "accepted" ? "warning.main" : "text.disabled",
+              ...(captainState === "pending" ? { opacity: 0.7 } : {}),
+            }}
+          />
+        </Tooltip>
+      )}
       <Chip size="small" variant="outlined" label={Math.round(member.rating)} />
       <FormControl size="small" sx={{ minWidth: 135 }}>
         <Select
