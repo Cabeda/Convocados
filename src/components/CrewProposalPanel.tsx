@@ -21,6 +21,14 @@ interface Proposal {
   proposerName: string;
   memberNames: string[];
   rejectionReason?: string | null;
+  targetCrewName?: string | null;
+  captainNomination?: boolean;
+  awaitingMyAcceptance?: boolean;
+}
+
+interface CrewChangeTarget {
+  membershipId: string;
+  name: string;
 }
 
 interface ProposalResponse {
@@ -30,6 +38,7 @@ interface ProposalResponse {
   candidates: Candidate[];
   excludedUserIds?: string[];
   proposals: Proposal[];
+  captainOf?: { crewId: string; crewName: string; members: CrewChangeTarget[] } | null;
 }
 
 function candidateKey(candidate: Candidate) {
@@ -61,6 +70,9 @@ export default function CrewProposalPanel({
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [invited, setInvited] = useState(false);
+  const [acceptedCrew, setAcceptedCrew] = useState<string | null>(null);
+  const [crewChangeTarget, setCrewChangeTarget] = useState<CrewChangeTarget | null>(null);
+  const [crewChangeSent, setCrewChangeSent] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -105,7 +117,7 @@ export default function CrewProposalPanel({
     return [...byKey.values()];
   }, [data?.candidates, data?.excludedUserIds, externalCandidates]);
 
-  if (!data || (!data.canPropose && !data.canReview && data.proposals.length === 0)) return null;
+  if (!data || (!data.canPropose && !data.canReview && !data.captainOf && data.proposals.length === 0)) return null;
 
   const statusLabel = (status: string) => ({
     pending: t("proposalStatusPending"),
@@ -193,6 +205,47 @@ export default function CrewProposalPanel({
     }
   };
 
+  /** A captain proposes an add or a remove on their own crew; the owner reviews it. */
+  const proposeCrewChange = async (action: "add" | "remove") => {
+    if (!captainCrew || !crewChangeTarget) return;
+    setBusy(action);
+    setError(null);
+    setCrewChangeSent(false);
+    try {
+      await apiRequest(
+        "POST /api/events/{id}/seasons/{seasonId}/crew-proposals",
+        {
+          params: { id: eventId, seasonId },
+          body: { action, targetCrewId: captainCrew.crewId, membershipIds: [crewChangeTarget.membershipId] },
+        },
+      );
+      setCrewChangeTarget(null);
+      setCrewChangeSent(true);
+    } catch (changeError) {
+      setError(changeError instanceof ApiError ? changeError.message : t("crewProposalError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const acceptCaptaincy = async (proposal: Proposal) => {
+    setBusy(proposal.id);
+    setError(null);
+    try {
+      await apiRequest(
+        "PATCH /api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}",
+        { params: { id: eventId, seasonId, proposalId: proposal.id }, body: { decision: "accept" } },
+      );
+      setAcceptedCrew(proposal.targetCrewName ?? proposal.name);
+      await load();
+      await onCrewApproved?.();
+    } catch (acceptError) {
+      setError(acceptError instanceof ApiError ? acceptError.message : t("crewProposalError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const proposer = data.proposerMembershipId
     ? allCandidates.find((candidate) => candidate.membershipId === data.proposerMembershipId)
     : undefined;
@@ -200,12 +253,67 @@ export default function CrewProposalPanel({
     ? [proposer, ...selectedCandidates]
     : selectedCandidates;
   const reviewProposals = data.proposals;
+  const captainOffers = data.proposals.filter((proposal) => proposal.awaitingMyAcceptance);
+  const captainCrew = data.captainOf ?? null;
+  const addableCandidates: CrewChangeTarget[] = (data.candidates ?? []).flatMap((candidate) =>
+    candidate.membershipId ? [{ membershipId: candidate.membershipId, name: candidate.name }] : []);
+  const crewChangeOptions = [...addableCandidates, ...(captainCrew?.members ?? [])];
+  const pickedId = crewChangeTarget?.membershipId;
+  const canAddPicked = !!pickedId && addableCandidates.some((candidate) => candidate.membershipId === pickedId);
+  const canRemovePicked = !!pickedId && !!captainCrew?.members.some((member) => member.membershipId === pickedId);
 
   return (
     <Stack spacing={2}>
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
       {submitted && <Alert severity="success">{t("proposalSubmitted")}</Alert>}
       {invited && <Alert severity="success">{t("inviteSent", { name: invitedEmail })}</Alert>}
+      {acceptedCrew && <Alert severity="success">{t("captainAccepted", { crew: acceptedCrew })}</Alert>}
+
+      {captainOffers.length > 0 && (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h6">{t("captainNominationTitle")}</Typography>
+              {captainOffers.map((proposal) => (
+                <Stack key={proposal.id} spacing={1}>
+                  <Typography fontWeight={600}>{t("captainNominationFor", { crew: proposal.targetCrewName ?? proposal.name })}</Typography>
+                  <Typography variant="body2" color="text.secondary">{t("proposalProposedBy", { name: proposal.proposerName })}</Typography>
+                  <Button variant="contained" onClick={() => void acceptCaptaincy(proposal)} disabled={busy !== null} sx={{ alignSelf: "flex-start" }}>
+                    {t("acceptCaptaincy")}
+                  </Button>
+                </Stack>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
+      {captainCrew && (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={2}>
+              <BoxHeading title={t("captainToolsTitle")} description={t("captainToolsFor", { crew: captainCrew.crewName })} />
+              <Autocomplete<CrewChangeTarget, false, false, false>
+                options={crewChangeOptions}
+                value={crewChangeTarget}
+                onChange={(_, next) => setCrewChangeTarget(next)}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.membershipId === value.membershipId}
+                renderInput={(params) => <TextField {...params} label={t("captainPlayerName")} size="small" />}
+              />
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" onClick={() => void proposeCrewChange("add")} disabled={busy !== null || !canAddPicked}>
+                  {t("captainAddPlayer")}
+                </Button>
+                <Button variant="outlined" color="error" onClick={() => void proposeCrewChange("remove")} disabled={busy !== null || !canRemovePicked}>
+                  {t("captainRemovePlayer")}
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+      {crewChangeSent && <Alert severity="success">{t("captainChangeSubmitted")}</Alert>}
 
       {data.canPropose && (
         <Card variant="outlined">
@@ -262,7 +370,9 @@ export default function CrewProposalPanel({
               {reviewProposals.length === 0 ? <Typography color="text.secondary">{t("noPendingProposals")}</Typography> : reviewProposals.map((proposal) => (
                 <Stack key={proposal.id} spacing={1.5}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-                    <Typography variant="subtitle1" fontWeight={600}>{proposal.name}</Typography>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      {proposal.captainNomination ? t("captainNominationFor", { crew: proposal.targetCrewName ?? proposal.name }) : proposal.name}
+                    </Typography>
                     <Chip size="small" label={statusLabel(proposal.status)} />
                   </Stack>
                   <Typography color="text.secondary">{proposal.memberNames.join(", ")}</Typography>
@@ -275,9 +385,12 @@ export default function CrewProposalPanel({
                       size="small"
                     />
                     <Stack direction="row" spacing={1}>
-                      <Button variant="contained" aria-label={t("approveProposalFor", { name: proposal.name })} onClick={() => void decide(proposal, "approve")} disabled={busy !== null}>
-                        {t("approveProposal")}
-                      </Button>
+                      {/* A captain nomination is approved by the nominee, not reviewed here. */}
+                      {!proposal.captainNomination && (
+                        <Button variant="contained" aria-label={t("approveProposalFor", { name: proposal.name })} onClick={() => void decide(proposal, "approve")} disabled={busy !== null}>
+                          {t("approveProposal")}
+                        </Button>
+                      )}
                       <Button variant="outlined" color="error" aria-label={t("rejectProposalFor", { name: proposal.name })} onClick={() => void decide(proposal, "reject")} disabled={busy !== null}>
                         {t("rejectProposal")}
                       </Button>

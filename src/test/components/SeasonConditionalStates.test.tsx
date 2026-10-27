@@ -57,6 +57,36 @@ describe("SeasonPage conditional states", () => {
 
     expect(await screen.findByText("Sign in as the event owner or an admin to manage Crews.")).toBeInTheDocument();
   });
+
+  it("shows the Crew captain on the participant crew list", async () => {
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("crew-proposals")) {
+        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        season: {
+          id: "season-1",
+          name: "Spring",
+          status: "active",
+          registrationOpensAt: "2026-01-01T00:00:00.000Z",
+          registrationClosesAt: "2026-02-01T00:00:00.000Z",
+          crews: [{
+            name: "North",
+            sortOrder: 0,
+            captainMembershipId: "membership-1",
+            captainName: "Ana",
+            members: [{ name: "Ana" }, { name: "Bo" }],
+          }],
+          viewerMembership: { id: "membership-2", status: "active", eventPlayerId: "player-2" },
+        },
+      }), { status: 200, headers: JSON_HEADERS }));
+    });
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+
+    expect(await screen.findByText("Captain: Ana")).toBeInTheDocument();
+  });
 });
 
 describe("SeasonListPage conditional states", () => {

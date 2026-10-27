@@ -53,6 +53,7 @@ model User {
   createdSeasons           Season[]            @relation("SeasonCreator")
   seasonMemberships        SeasonMembership[]  @relation("SeasonMembershipUser")
   reviewedCrewProposals    CrewProposal[]      @relation("CrewProposalReviewer")
+  authoredCrewNominations  CrewProposal[]      @relation("CrewProposalNominationAuthor")
   crewProposalInvitesSent  CrewProposalInvite[] @relation("CrewProposalInviteSender")
   claimedCrewProposalInvites CrewProposalInvite[] @relation("CrewProposalInviteClaimer")
 }
@@ -493,6 +494,7 @@ model SeasonMembership {
   user           User         @relation("SeasonMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
   proposedCrewProposals CrewProposal[] @relation("CrewProposalProposer")
   proposalMembers CrewProposalMember[]
+  captainOfCrews Crew[] @relation("CrewCaptain")
   status         String       @default("active") // "active" | "withdrawn"
   joinedAt       DateTime     @default(now())
   withdrawnAt    DateTime?
@@ -512,7 +514,12 @@ model Crew {
   name         String
   sortOrder    Int                @default(0)
   memberships  SeasonMembership[]
+  // At most one captain per crew (#1442). "The captain is a member of this crew"
+  // is application code: SQLite cannot express it.
+  captainMembershipId String?             @unique
+  captainMembership   SeasonMembership?   @relation("CrewCaptain", fields: [captainMembershipId], references: [id], onDelete: SetNull)
   approvedProposal CrewProposal? @relation("CrewProposalApprovedCrew")
+  targetProposals  CrewProposal[] @relation("CrewProposalTarget")
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
@@ -525,8 +532,15 @@ model CrewProposal {
   id                    String              @id @default(cuid())
   seasonId              String
   season                Season              @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  proposerMembershipId  String
-  proposerMembership    SeasonMembership    @relation("CrewProposalProposer", fields: [proposerMembershipId], references: [id], onDelete: Cascade)
+  // Null proposer = a captain nomination made by the owner/admin
+  // (proposedByUserId), which the nominee accepts instead of a review (#1442).
+  proposerMembershipId  String?
+  proposerMembership    SeasonMembership?   @relation("CrewProposalProposer", fields: [proposerMembershipId], references: [id], onDelete: Cascade)
+  proposedByUserId      String?
+  proposedByUser        User?               @relation("CrewProposalNominationAuthor", fields: [proposedByUserId], references: [id], onDelete: SetNull)
+  kind                  String              @default("create") // "create" | "add" | "remove"
+  targetCrewId          String?
+  targetCrew            Crew?               @relation("CrewProposalTarget", fields: [targetCrewId], references: [id], onDelete: Cascade)
   name                  String
   status                String              @default("pending") // "pending" | "approved" | "rejected"
   reviewedByUserId      String?
@@ -541,6 +555,7 @@ model CrewProposal {
 
   @@index([seasonId, status])
   @@index([proposerMembershipId])
+  @@index([targetCrewId])
 }
 
 model CrewProposalMember {
@@ -549,6 +564,7 @@ model CrewProposalMember {
   proposal            CrewProposal     @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   seasonMembershipId  String
   seasonMembership    SeasonMembership @relation(fields: [seasonMembershipId], references: [id], onDelete: Cascade)
+  action              String           @default("add") // "add" | "remove"
 
   @@unique([proposalId, seasonMembershipId])
   @@index([seasonMembershipId])

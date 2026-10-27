@@ -35,6 +35,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     prisma.crew.findMany({
       where: { seasonId },
       include: {
+        captainMembership: { select: { id: true, eventPlayer: { select: { name: true } } } },
         memberships: {
           where: { status: "active", eventPlayer: { eventId } },
           include: { eventPlayer: { select: { id: true, name: true, userId: true, rating: true } } },
@@ -66,6 +67,9 @@ export const GET: APIRoute = async ({ params, request }) => {
   const publicCrews = crews.map((crew) => ({
     name: crew.name,
     sortOrder: crew.sortOrder,
+    // The captain's membership id is an internal handle: everyone gets the name,
+    // only an admin needs the id to manage crews.
+    captainName: crew.captainMembership?.eventPlayer.name ?? null,
     members: crew.memberships.map((membership) => ({ name: membership.eventPlayer.name })),
   }));
 
@@ -111,6 +115,8 @@ export const GET: APIRoute = async ({ params, request }) => {
         name: crew.name,
         sortOrder: crew.sortOrder,
         averageRating,
+        captainMembershipId: crew.captainMembershipId,
+        captainName: crew.captainMembership?.eventPlayer.name ?? null,
         members: crewMembers,
       };
     });
