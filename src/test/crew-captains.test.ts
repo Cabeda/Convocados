@@ -298,6 +298,46 @@ describe("Crew captains", () => {
     expect((await prisma.crew.findUniqueOrThrow({ where: { id: crew.id } })).captainMembershipId).toBe(memberships[1].id);
   });
 
+  it("offers the accept card to an owner who nominates themselves", async () => {
+    const { event, season, crew } = await seedCrew();
+    // The reported case: the organiser is also a player in the crew.
+    const ownerPlayer = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Owner", userId: OWNER },
+    });
+    const ownerMembership = await prisma.seasonMembership.create({
+      data: { seasonId: season.id, eventPlayerId: ownerPlayer.id, userId: OWNER, crewId: crew.id, status: "active" },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: OWNER } });
+    const nominated = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
+      action: "captain", crewId: crew.id, membershipId: ownerMembership.id,
+    }));
+    expect(nominated.status).toBe(201);
+
+    const listed = await (await listProposals(context({ id: event.id, seasonId: season.id }, "GET"))).json();
+    const nomination = (listed.proposals as Array<{ captainNomination: boolean; awaitingMyAcceptance: boolean }>)
+      .find((proposal) => proposal.captainNomination);
+    expect(nomination?.awaitingMyAcceptance).toBe(true);
+  });
+
+  it("carries the pending nomination in the season payload, so it survives a reload", async () => {
+    const { event, season, crew, memberships } = await seedCrew();
+    mockGetSession.mockResolvedValue({ user: { id: OWNER } });
+    const nominated = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
+      action: "captain", crewId: crew.id, membershipId: memberships[0].id,
+    }));
+    expect(nominated.status).toBe(201);
+
+    const payload = await (await getSeason(context({ id: event.id, seasonId: season.id }, "GET"))).json();
+    const saved = (payload.season.crews as Array<{
+      id: string; captainName: string | null;
+      pendingCaptainMembershipId: string | null; pendingCaptainName: string | null;
+    }>).find((candidate) => candidate.id === crew.id);
+    expect(saved?.captainName).toBeNull();
+    expect(saved?.pendingCaptainMembershipId).toBe(memberships[0].id);
+    expect(saved?.pendingCaptainName).toBe("Player 1");
+  });
+
   it("refuses to accept a nomination whose nominee left the crew", async () => {
     const { event, season, crew, memberships } = await seedCrew();
     mockGetSession.mockResolvedValue({ user: { id: OWNER } });

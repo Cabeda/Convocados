@@ -56,6 +56,28 @@ describe("season captain selection", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps the pending captain on the row after a reload", async () => {
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("crew-proposals")) {
+        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
+      }
+      // A fresh page load: no local state, the payload carries the nomination.
+      const payload = seasonPayload([
+        { id: "crew-1", name: "Old Bones", captainMembershipId: null, captainName: null },
+      ]);
+      Object.assign(payload.season.crews[0], {
+        pendingCaptainMembershipId: "m2",
+        pendingCaptainName: "Luis",
+      });
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200, headers: JSON_HEADERS }));
+    });
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+
+    expect(await screen.findByLabelText("awaiting acceptance: Luis")).toBeInTheDocument();
+  });
+
   it("offers the nominee the accept card after registration closes", async () => {
     vi.mocked(fetch).mockImplementation((input) => {
       const url = String(input);

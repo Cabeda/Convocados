@@ -54,6 +54,22 @@ export const GET: APIRoute = async ({ params, request }) => {
     }) : Promise.resolve(null),
   ]);
 
+  // A captain nomination stays pending until the nominee accepts (#1442). The
+  // roster carries it so the mark survives a reload instead of living only in
+  // the page that filed it.
+  const pendingNominations = await prisma.crewProposal.findMany({
+    where: { seasonId, status: "pending", proposerMembershipId: null, targetCrewId: { not: null } },
+    select: {
+      targetCrewId: true,
+      members: { select: { seasonMembership: { select: { id: true, eventPlayer: { select: { name: true } } } } } },
+    },
+  });
+  const pendingCaptainByCrewId = new Map(
+    pendingNominations.flatMap((proposal) => proposal.targetCrewId
+      ? [[proposal.targetCrewId, proposal.members[0]?.seasonMembership ?? null] as const]
+      : []),
+  );
+
   const ratings = authz.isAdmin
     ? await prisma.playerRating.findMany({ where: { eventId }, select: { userId: true, name: true, rating: true } })
     : [];
@@ -70,6 +86,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     // The captain's membership id is an internal handle: everyone gets the name,
     // only an admin needs the id to manage crews.
     captainName: crew.captainMembership?.eventPlayer.name ?? null,
+    pendingCaptainName: pendingCaptainByCrewId.get(crew.id)?.eventPlayer.name ?? null,
     members: crew.memberships.map((membership) => ({ name: membership.eventPlayer.name })),
   }));
 
@@ -117,6 +134,8 @@ export const GET: APIRoute = async ({ params, request }) => {
         averageRating,
         captainMembershipId: crew.captainMembershipId,
         captainName: crew.captainMembership?.eventPlayer.name ?? null,
+        pendingCaptainMembershipId: pendingCaptainByCrewId.get(crew.id)?.id ?? null,
+        pendingCaptainName: pendingCaptainByCrewId.get(crew.id)?.eventPlayer.name ?? null,
         members: crewMembers,
       };
     });
