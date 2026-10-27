@@ -50,11 +50,23 @@ money.
 - **The prompt is sited where money is already being discussed.** When the Payer has no
   details, the add-details form is reachable from the payments page payer card and from the
   existing payer check-in (#1236). Skippable, and it never blocks marking the group paid.
-- **`Event.defaultPayer` exists**, seeded onto each new Game and still overridable there.
+- **`Event.defaultPayer` is added**, seeded onto each new Game and still overridable there.
   Recurrence carries it for linked and external payers alike, and cancel stops losing it.
 - **Any active roster player may claim the Payer role, at any time**, with the change
   attributed. This is the owner's call, taken against the recommendation to restrict claims
   to owner/admin after kickoff.
+- **The Payer is settable before the Game starts.** Today every payer control is hosted by a
+  post-game surface — the payments page lists only Games whose `dateTime` has passed, and the
+  post-game banner and history card appear only after the Game ends — so a crew cannot
+  organise itself in advance. The control moves onto the event page's payment row and onto
+  the home page's game card, sharing one component. Android is a linked follow-up (#1566),
+  because it has no payer-setting UI at all.
+- **A Payer may stand down for one Game.** Standing down withdraws the commitment without
+  erasing the identity: the Game keeps `payerEventPlayerId` and is marked **Vacant**, so
+  anyone on the roster can claim it and the Owner still knows who to ask back. The Default
+  Payer is untouched and seeds the next Game. Nulling the payer or flipping the Game to
+  `untracked` were both rejected — `tracked` requires exactly one payer, and clearing it
+  manufactures an invalid Game.
 
 ## Considered options
 
@@ -64,7 +76,10 @@ money.
   publishes a number a person never entered for that Event, to URLs they do not know about.
 - **Restrict self-service claims to owner/admin once the Game is underway.** Recommended and
   rejected; see the risk below.
-- **Ship IBAN and PayPal in v1.** Deferred. There is no field-level encryption, and
+- **Clear the payer, or flip the Game to `untracked`, when the Payer stands down.** Rejected:
+  the first breaks the `tracked`-requires-one-payer invariant, and the second silently
+  changes what everyone owes for that Game.
+- **Ship IBAN and PayPal in v1.** Deferred to #1550. There is no field-level encryption, and
   `litestream.yml` carries no `age` encryption, so a bank account number would sit in
   plaintext SQLite and in every R2 replica. The type set waits for an encryption decision.
 
@@ -75,14 +90,23 @@ money.
   prompt as the mitigation. A reader who finds this surprising should read it as deliberate.
 - **A self-service claim after kickoff is a misdirection vector**: any roster member can
   make themselves the creditor while the group still owes. The only v1 guards are the
-  attribution on the change and the payer card being visible on the payments page. A
-  notification to the displaced payer is a follow-up, not part of this Change.
+  attribution on the change and the payer card being visible on the payments page. The
+  notification to the displaced payer is #1551, which is why the stand-down half waits on it.
 - **The displaced Payer is not told**, and neither is the Payer when first assigned. Both
-  need a notification job type and six locales, so both are follow-up tickets.
-- `src/pages/docs/api/webhooks.astro` is the public contract for the payload and must gain
-  the field in the same Change as `WEBHOOK_EVENT_TYPES`; ADR 0051 already requires that
-  these stay in step.
-- `User.phone` is the first personal contact datum the app stores. Data export and account
-  deletion must cover it, alongside the details themselves.
-- Six locales, and web ↔ `:app` parity. `:wear` has no profile screen and no push channel,
-  so there is no parity gap to close there.
+  need a notification job type and six locales, so both are tracked in #1551.
+- **#1551 is a prerequisite for the stand-down half, not for the claim half.** A stand-down
+  nobody hears about is a quiet unset: the group keeps assuming the default payer is
+  collecting and does not organise itself, which is the whole point. The claim half can ship
+  without it; "Bruno can't this week — who's collecting?" cannot.
+- No new webhook event types are introduced. Both `game_payer_set` and `payment_nudge` already
+  exist in `src/lib/webhookEvents.ts`, so the obligation is narrower than a catalogue change:
+  the resolved-details fields must be added to their two rows in
+  `src/pages/docs/api/webhooks.astro` in the same Change that emits them. ADR 0051 makes that
+  page the public contract, and `paymentMethods` keeps its name — renaming it would break
+  every existing subscriber.
+- `User.phone` is the first phone number the app stores, and the first contact datum on the
+  profile that is not a credential. `User.email` already exists and is already exported and
+  deleted; the new field joins those paths rather than opening them.
+- Six locales. Web ships first; `:app` is a linked follow-up (#1566) rather than a silent
+  gap, because it has no payer-setting UI to extend. `:wear` has no profile screen and no
+  push channel, so there is nothing to bring into parity there.
