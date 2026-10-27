@@ -4,7 +4,7 @@ import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { sendPlayerInviteToRegister } from "~/lib/email.server";
 import { authorizeSeasonRequest, getSeasonForEvent, isSeasonRegistrationOpen } from "~/lib/seasonSetup.server";
-import { proposalInclude, serializeProposal } from "~/lib/crewProposals.server";
+import { notifyCaptainNominated, proposalInclude, serializeProposal } from "~/lib/crewProposals.server";
 
 type ProposalMemberInput = {
   membershipId?: string;
@@ -313,7 +313,7 @@ export const POST: APIRoute = async ({ params, request }) => {
         if (!crew) throw new ProposalInputError(400, "Crew not found in this Season.");
         const nominee = await tx.seasonMembership.findFirst({
           where: { id: membershipId, seasonId: season.id, crewId: crew.id, status: "active", eventPlayer: { eventId: season.eventId } },
-          select: { id: true },
+          select: { id: true, userId: true, eventPlayer: { select: { name: true } } },
         });
         if (!nominee) throw new ProposalInputError(400, "The captain must be an active participant of that Crew.");
         // Replacing a pending nomination: the newest one is the live offer.
@@ -333,6 +333,22 @@ export const POST: APIRoute = async ({ params, request }) => {
           include: proposalInclude,
         });
       });
+      // The nominee must learn about the offer even when they made it
+      // themselves — nothing else would tell them (#1558).
+      const nomineeRow = await prisma.seasonMembership.findUnique({
+        where: { id: membershipId },
+        select: { userId: true, eventPlayer: { select: { name: true } } },
+      });
+      if (nomineeRow?.userId) {
+        const crewRow = await prisma.crew.findUnique({ where: { id: crewId }, select: { name: true } });
+        await notifyCaptainNominated({
+          eventId: season.eventId,
+          seasonId: season.id,
+          crewName: crewRow?.name ?? "",
+          nomineeUserId: nomineeRow.userId,
+          nomineeName: nomineeRow.eventPlayer.name,
+        });
+      }
       return Response.json({ proposal: serializeProposal(proposal) }, { status: 201 });
     } catch (error) {
       if (error instanceof ProposalInputError) return Response.json({ error: error.message }, { status: error.status });

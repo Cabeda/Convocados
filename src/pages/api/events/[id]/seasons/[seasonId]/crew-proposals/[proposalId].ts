@@ -3,7 +3,7 @@ import { prisma, Prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { getSeasonForEvent, requireSeasonAdmin, isSeasonRegistrationOpen } from "~/lib/seasonSetup.server";
-import { isCaptainNomination, proposalInclude, serializeProposal } from "~/lib/crewProposals.server";
+import { isCaptainNomination, notifyCaptainAccepted, proposalInclude, serializeProposal } from "~/lib/crewProposals.server";
 import { MAX_CREW_SIZE } from "~/lib/crewRecommendation";
 
 class ProposalDecisionError extends Error {
@@ -83,6 +83,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
           data: { status: "approved", reviewedByUserId: session.user.id, reviewedAt: new Date() },
           include: proposalInclude,
         });
+        // NOTE: the caller notifies after the transaction commits.
       }
 
       if (isCaptainNomination(proposal) && body.decision === "approve") {
@@ -163,6 +164,26 @@ export const PATCH: APIRoute = async ({ params, request }) => {
         include: proposalInclude,
       });
     });
+    // A captain change notifies the crew and the admins once it has actually
+    // happened — after the commit, so a rolled-back transaction says nothing
+    // (#1558, the actor is excluded inside the helper).
+    if (body.decision === "accept" && isCaptainNomination(updated)) {
+      const crew = updated.targetCrewId
+        ? await prisma.crew.findUnique({ where: { id: updated.targetCrewId }, select: { id: true, name: true } })
+        : null;
+      const captain = updated.members.find((member) => member.seasonMembership.userId === session.user.id);
+      if (crew) {
+        await notifyCaptainAccepted({
+          eventId: season.eventId,
+          seasonId: season.id,
+          crewId: crew.id,
+          crewName: crew.name,
+          captainUserId: session.user.id,
+          captainName: captain?.seasonMembership.eventPlayer.name ?? session.user.name ?? "",
+          actorUserId: session.user.id,
+        });
+      }
+    }
     return Response.json({ proposal: serializeProposal(updated) });
   } catch (error) {
     if (error instanceof ProposalDecisionError) return Response.json({ error: error.message }, { status: error.status });
