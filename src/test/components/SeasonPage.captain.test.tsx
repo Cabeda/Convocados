@@ -56,6 +56,39 @@ describe("season captain selection", () => {
     vi.unstubAllGlobals();
   });
 
+  it("offers the nominee the accept card after registration closes", async () => {
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("crew-proposals")) {
+        return Promise.resolve(new Response(JSON.stringify({
+          canPropose: false,
+          canReview: false,
+          candidates: [],
+          proposals: [{
+            id: "proposal-1",
+            kind: "add",
+            status: "pending",
+            captainNomination: true,
+            awaitingMyAcceptance: true,
+            targetCrewId: "crew-1",
+            targetCrewName: "Old Bones",
+          }],
+        }), { status: 200, headers: JSON_HEADERS }));
+      }
+      const payload = seasonPayload([
+        { id: "crew-1", name: "Old Bones", captainMembershipId: null, captainName: null },
+      ]);
+      payload.season.status = "active";
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200, headers: JSON_HEADERS }));
+    });
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+
+    // "a pending proposal stays pending until they do" — the window closing
+    // must not take the accept card away.
+    expect(await screen.findByRole("button", { name: "Accept captaincy" })).toBeInTheDocument();
+  });
+
   it("shows the chosen captain on the player row while the nomination is pending", async () => {
     const posted: unknown[] = [];
     vi.mocked(fetch).mockImplementation((input, init) => {

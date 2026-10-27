@@ -629,7 +629,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                   : (isSeasonMember ? t("leaveSeason") : t("joinSeason"))}
               </Button>
             )}
-            {season.status === "registration" && <CrewProposalPanel eventId={eventId} seasonId={seasonId} onCrewApproved={() => setupDraftDirtyRef.current ? undefined : load()} />}
+            {/* Not just registration: a captain nomination stays pending until the
+                nominee answers, and the API accepts it after the window closes
+                (#1442). The panel hides itself when the viewer has nothing. */}
+            {!isTerminal && <CrewProposalPanel eventId={eventId} seasonId={seasonId} onCrewApproved={() => setupDraftDirtyRef.current ? undefined : load()} />}
 
             <LeaderboardTables
               data={leaderboard}
