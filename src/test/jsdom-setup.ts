@@ -47,6 +47,32 @@ if (typeof window !== "undefined") {
     });
   }
 
+  // Node 26 + jsdom 30.1.2: window.localStorage is missing even with a
+  // http://localhost origin, so components that read the theme choice crash
+  // before rendering. A per-file in-memory shim is enough for component tests;
+  // the browser keeps the real implementation.
+  if (typeof window.localStorage === "undefined") {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, String(value));
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => {
+        store.clear();
+      },
+      key: (index: number) => [...store.keys()][index] ?? null,
+      get length() {
+        return store.size;
+      },
+    };
+    Object.defineProperty(window, "localStorage", { configurable: true, value: storage });
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
+  }
+
   // jsdom >=30.1.0 exposes the Document as the `relatedTarget` of a focus
   // event when focus moves out of the document. MUI's FocusTrap stores that
   // value and later calls `.focus()` to restore it, which throws

@@ -1,0 +1,23 @@
+[Unit]
+Description=Convocados daily senior review (OpenCode)
+Documentation=file://@REPO@/docs/daily-review.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/scripts/daily-review/run.sh
+EnvironmentFile=-%h/.config/convocados/daily-review.env
+Environment=PATH=%h/.opencode/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# A full six-lens run is allowed to take a while; the step budgets inside the
+# agents stop it long before this backstop.
+TimeoutStartSec=2h
+# Keep the Pi responsive for Jellyfin/Home Assistant while the review reads and
+# reasons. This is IO-light but CPU-bursty on the model calls.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=default.target
