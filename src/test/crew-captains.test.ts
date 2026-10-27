@@ -85,7 +85,6 @@ beforeEach(async () => {
   await prisma.crewProposalInvite.deleteMany();
   await prisma.crewProposalMember.deleteMany();
   await prisma.crewProposal.deleteMany();
-  await prisma.crew.updateMany({ data: { captainMembershipId: null } });
   await prisma.crew.deleteMany();
   await prisma.seasonMembership.deleteMany();
   await prisma.season.deleteMany();
@@ -154,7 +153,7 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const added = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: crew.id, membershipIds: [memberships[3].id],
+      action: "add", targetCrewId: crew.id, membershipIds: [memberships[3].id],
     }));
     const addedBody = await added.json();
     expect(added.status).toBe(201);
@@ -167,7 +166,7 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const dropped = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "remove", crewId: crew.id, membershipIds: [memberships[1].id],
+      action: "remove", targetCrewId: crew.id, membershipIds: [memberships[1].id],
     }));
     const droppedBody = await dropped.json();
     expect(dropped.status).toBe(201);
@@ -184,10 +183,10 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const first = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: crew.id, membershipIds: [memberships[3].id],
+      action: "add", targetCrewId: crew.id, membershipIds: [memberships[3].id],
     }));
     const second = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: crew.id, membershipIds: [memberships[4].id],
+      action: "add", targetCrewId: crew.id, membershipIds: [memberships[4].id],
     }));
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
@@ -206,12 +205,12 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
     const foreignCrew = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "add", crewId: otherCrew.id, membershipIds: [memberships[3].id],
+      action: "add", targetCrewId: otherCrew.id, membershipIds: [memberships[3].id],
     }));
     expect(foreignCrew.status).toBe(403);
 
     const selfRemoval = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
-      action: "remove", crewId: crew.id, membershipIds: [memberships[0].id],
+      action: "remove", targetCrewId: crew.id, membershipIds: [memberships[0].id],
     }));
     expect(selfRemoval.status).toBe(409);
     expect(await prisma.crewProposal.count({ where: { kind: { in: ["add", "remove"] }, status: "pending" } })).toBe(0);
@@ -223,7 +222,9 @@ describe("Crew captains", () => {
 
     mockGetSession.mockResolvedValue({ user: { id: "captain-user-2" } });
     const participantSeason = await (await getSeason(context({ id: event.id, seasonId: season.id }, "GET"))).json();
-    expect(participantSeason.season.crews[0]).toMatchObject({ name: "North", captainMembershipId: memberships[0].id, captainName: "Player 1" });
+    expect(participantSeason.season.crews[0]).toMatchObject({ name: "North", captainName: "Player 1" });
+    // The captain's membership id is an internal handle: participants get the name only.
+    expect(participantSeason.season.crews[0]).not.toHaveProperty("captainMembershipId");
 
     mockGetSession.mockResolvedValue({ user: { id: OWNER } });
     const adminSeason = await (await getSeason(context({ id: event.id, seasonId: season.id }, "GET"))).json();
@@ -245,13 +246,14 @@ describe("Crew captains", () => {
     expect((await prisma.crew.findUniqueOrThrow({ where: { id: crew.id } })).captainMembershipId).toBe(memberships[0].id);
   });
 
-  it("gives a pending captain nomination its own reason when setup closes registration", async () => {
+  it("keeps a captain nomination pending past registration, and the nominee still accepts it", async () => {
     const { event, season, crew, memberships } = await seedCrew();
     mockGetSession.mockResolvedValue({ user: { id: OWNER } });
     const nomination = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
       action: "captain", crewId: crew.id, membershipId: memberships[0].id,
     }));
     expect(nomination.status).toBe(201);
+    const proposalId = (await nomination.json()).proposal.id;
     await prisma.season.update({ where: { id: season.id }, data: { registrationClosesAt: new Date(Date.now() - 1_000) } });
 
     const saved = await saveCrews(context({ id: event.id, seasonId: season.id }, "POST", {
@@ -260,11 +262,74 @@ describe("Crew captains", () => {
         { name: "South", membershipIds: memberships.slice(3, 6).map((membership) => membership.id) },
       ],
     }));
-
     expect(saved.status).toBe(200);
-    const closed = await prisma.crewProposal.findFirstOrThrow({ where: { proposerMembershipId: null } });
-    expect(closed.status).toBe("rejected");
-    expect(closed.rejectionReason).toContain("captain");
+    expect((await prisma.crewProposal.findUniqueOrThrow({ where: { id: proposalId } })).status).toBe("pending");
+
+    mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
+    const offer = await (await listProposals(context({ id: event.id, seasonId: season.id }, "GET"))).json();
+    expect(offer.proposals).toHaveLength(1);
+    expect(offer.proposals[0]).toMatchObject({ awaitingMyAcceptance: true, captainNomination: true });
+
+    const accepted = await decideProposal(context({ id: event.id, seasonId: season.id, proposalId }, "PATCH", { decision: "accept" }));
+    expect(accepted.status).toBe(200);
+    expect((await prisma.crew.findUniqueOrThrow({ where: { id: crew.id } })).captainMembershipId).toBe(memberships[0].id);
+  });
+
+  it("refuses to accept a nomination whose nominee left the crew", async () => {
+    const { event, season, crew, memberships } = await seedCrew();
+    mockGetSession.mockResolvedValue({ user: { id: OWNER } });
+    const nomination = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
+      action: "captain", crewId: crew.id, membershipId: memberships[0].id,
+    }));
+    const proposalId = (await nomination.json()).proposal.id;
+    const otherCrew = await prisma.crew.create({ data: { seasonId: season.id, name: "South", sortOrder: 1 } });
+    await prisma.seasonMembership.update({ where: { id: memberships[0].id }, data: { crewId: otherCrew.id } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
+    const accepted = await decideProposal(context({ id: event.id, seasonId: season.id, proposalId }, "PATCH", { decision: "accept" }));
+
+    expect(accepted.status).toBe(409);
+    expect((await accepted.json()).error).toContain("Crew");
+    expect((await prisma.crew.findUniqueOrThrow({ where: { id: crew.id } })).captainMembershipId).toBeNull();
+  });
+
+  it("refuses to approve a captain's change once the captain has been replaced", async () => {
+    const { event, season, crew, memberships } = await seedCrew();
+    await nominateAndAccept(event.id, season.id, crew.id, memberships[0].id);
+
+    mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
+    const added = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
+      action: "add", targetCrewId: crew.id, membershipIds: [memberships[3].id],
+    }));
+    const proposalId = (await added.json()).proposal.id;
+    await nominateAndAccept(event.id, season.id, crew.id, memberships[2].id);
+
+    mockGetSession.mockResolvedValue({ user: { id: OWNER } });
+    const approved = await decideProposal(context({ id: event.id, seasonId: season.id, proposalId }, "PATCH", { decision: "approve" }));
+
+    expect(approved.status).toBe(409);
+    expect((await approved.json()).error).toContain("captain has changed");
+    expect((await prisma.seasonMembership.findUniqueOrThrow({ where: { id: memberships[3].id } })).crewId).toBeNull();
+  });
+
+  it("refuses to approve a removal that would strip the current captain", async () => {
+    const { event, season, crew, memberships } = await seedCrew();
+    await nominateAndAccept(event.id, season.id, crew.id, memberships[0].id);
+
+    mockGetSession.mockResolvedValue({ user: { id: "captain-user-1" } });
+    const dropped = await createProposal(context({ id: event.id, seasonId: season.id }, "POST", {
+      action: "remove", targetCrewId: crew.id, membershipIds: [memberships[1].id],
+    }));
+    const proposalId = (await dropped.json()).proposal.id;
+    // Direct setup can hand the captaincy to the very member being removed.
+    await prisma.crew.update({ where: { id: crew.id }, data: { captainMembershipId: memberships[1].id } });
+
+    mockGetSession.mockResolvedValue({ user: { id: OWNER } });
+    const approved = await decideProposal(context({ id: event.id, seasonId: season.id, proposalId }, "PATCH", { decision: "approve" }));
+
+    expect(approved.status).toBe(409);
+    expect((await approved.json()).error).toContain("current captain");
+    expect((await prisma.seasonMembership.findUniqueOrThrow({ where: { id: memberships[1].id } })).crewId).toBe(crew.id);
   });
 
   it("clears a crew's captain when direct setup moves them to another crew", async () => {

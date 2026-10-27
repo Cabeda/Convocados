@@ -412,6 +412,8 @@
     <string name="proposal_proposed_by">Propuesto por %1$s</string>
     <string name="your_crew_proposals">Tus propuestas</string>
     <string name="approve_proposal">Aprobar</string>
+    <string name="captain_nomination">Nominación de capitán — %1$s</string>
+    <string name="accept_captaincy">Aceptar capitanía</string>
     <string name="reject_proposal">Rechazar</string>
     <string name="rejection_reason">Motivo del rechazo (opcional)</string>
     <string name="proposal_status_pending">Pendiente</string>

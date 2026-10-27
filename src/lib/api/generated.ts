@@ -260,6 +260,7 @@ export interface ApiOperations {
       email?: string;
       name?: string;
       crewId?: string;
+      targetCrewId?: string;
       membershipId?: string;
       membershipIds?: string[];
       members?: { membershipId?: string; userId?: string }[];

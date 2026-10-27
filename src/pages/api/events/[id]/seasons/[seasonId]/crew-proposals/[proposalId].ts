@@ -4,15 +4,13 @@ import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { getSeasonForEvent, requireSeasonAdmin, isSeasonRegistrationOpen } from "~/lib/seasonSetup.server";
 import { isCaptainNomination, proposalInclude, serializeProposal } from "~/lib/crewProposals.server";
+import { MAX_CREW_SIZE } from "~/lib/crewRecommendation";
 
 class ProposalDecisionError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
   }
 }
-
-/** A crew is 3–5 people; approving an add must not push it over. */
-const MAX_CREW_SIZE = 5;
 
 export const PATCH: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -38,7 +36,15 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   }
   // Accepting a captain nomination is the nominee's act, not a review.
   if (body.decision !== "accept" && !authz.isAdmin) return Response.json({ error: "Only the event owner or an admin can review Crew proposals." }, { status: 403 });
-  if (!isSeasonRegistrationOpen(season)) return Response.json({ error: "Crew proposals are closed for this Season." }, { status: 409 });
+  // A nomination stays pending until the nominee answers it, so accepting is not
+  // bound to the registration window — only to a Season that still exists (#1442).
+  if (body.decision === "accept") {
+    if (season.status === "completed" || season.status === "cancelled") {
+      return Response.json({ error: "This Season is closed." }, { status: 409 });
+    }
+  } else if (!isSeasonRegistrationOpen(season)) {
+    return Response.json({ error: "Crew proposals are closed for this Season." }, { status: 409 });
+  }
 
   const hasInvalidReason = body.rejectionReason !== undefined && body.rejectionReason !== null && typeof body.rejectionReason !== "string";
   if (hasInvalidReason) return Response.json({ error: "Rejection reason must be text." }, { status: 400 });
@@ -64,6 +70,13 @@ export const PATCH: APIRoute = async ({ params, request }) => {
           ? await tx.crew.findFirst({ where: { id: proposal.targetCrewId, seasonId: season.id }, select: { id: true } })
           : null;
         if (!crew) throw new ProposalDecisionError(409, "The Crew for this nomination no longer exists.");
+        // Re-assert the nomination's premise inside the transaction: a roster move
+        // between nomination and accept must not crown a non-member.
+        const stillMember = await tx.seasonMembership.findFirst({
+          where: { id: nominee.seasonMembershipId, seasonId: season.id, crewId: crew.id, status: "active" },
+          select: { id: true },
+        });
+        if (!stillMember) throw new ProposalDecisionError(409, "The nominated participant is no longer an active member of this Crew.");
         await tx.crew.update({ where: { id: crew.id }, data: { captainMembershipId: nominee.seasonMembershipId } });
         return tx.crewProposal.update({
           where: { id: proposal.id },
@@ -87,9 +100,17 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       const membershipIds = proposal.members.map((member) => member.seasonMembershipId);
       if (proposal.kind !== "create") {
         const crew = proposal.targetCrewId
-          ? await tx.crew.findFirst({ where: { id: proposal.targetCrewId, seasonId: season.id }, select: { id: true } })
+          ? await tx.crew.findFirst({ where: { id: proposal.targetCrewId, seasonId: season.id }, select: { id: true, captainMembershipId: true } })
           : null;
         if (!crew) throw new ProposalDecisionError(409, "The Crew for this proposal no longer exists.");
+        // Authority is a fact of the moment, not of creation: the captain who
+        // proposed may have been replaced since (#1442).
+        if (proposal.kind === "remove" && crew.captainMembershipId && membershipIds.includes(crew.captainMembershipId)) {
+          throw new ProposalDecisionError(409, "The current captain cannot be removed; nominate another captain first.");
+        }
+        if (proposal.proposerMembershipId !== crew.captainMembershipId) {
+          throw new ProposalDecisionError(409, "The captain has changed; this proposal can no longer be approved.");
+        }
         if (proposal.kind === "add") {
           const memberships = await tx.seasonMembership.findMany({
             where: { id: { in: membershipIds }, seasonId: season.id, crewId: null, status: "active", eventPlayer: { eventId: season.eventId } },
