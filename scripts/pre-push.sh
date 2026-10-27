@@ -106,8 +106,15 @@ if [ "$failed" -ne 0 ]; then
 fi
 
 echo "→ Running tests with coverage..."
-if ! pnpm vitest run --coverage; then
+# The suite's own output is the diagnosis; the coverage table is not. Printing
+# the failures first stops the next reader chasing the table, which is what
+# happened twice while this hook was the gate (the failing test was hundreds of
+# lines above the tail).
+if ! pnpm vitest run --coverage 2>&1 | tee /tmp/pre-push-tests.log | tail -n 25; then
   echo "✗ Tests failed. Push aborted."
+  echo ""
+  echo "Failing tests:"
+  grep -E "^ *(FAIL|×) " /tmp/pre-push-tests.log | sort -u | head -n 20
   echo ""
   echo "Coverage detail (files below 94% line threshold):"
   sh "$root/scripts/coverage-report.sh" 94
