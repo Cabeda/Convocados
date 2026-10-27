@@ -149,7 +149,31 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!season) return Response.json({ error: "Season not found." }, { status: 404 });
   if (!authz?.allowed) return Response.json({ error: "Event access required." }, { status: 403 });
   if (!isSeasonRegistrationOpen(season)) {
-    return Response.json({ proposals: [], candidates: [], canPropose: false, canReview: authz.isAdmin, closed: true });
+    // A captain nomination outlives registration — the nominee may answer it at any
+    // time — so it stays visible here. Everything else is closed (#1442).
+    const callerMembership = await prisma.seasonMembership.findUnique({
+      where: { seasonId_userId: { seasonId: season.id, userId: session.user.id } },
+      select: { id: true },
+    });
+    const nominations = callerMembership
+      ? await prisma.crewProposal.findMany({
+        where: {
+          seasonId: season.id,
+          proposerMembershipId: null,
+          status: "pending",
+          members: { some: { seasonMembershipId: callerMembership.id } },
+        },
+        include: proposalInclude,
+        orderBy: { createdAt: "desc" },
+      })
+      : [];
+    return Response.json({
+      proposals: nominations.map((proposal) => serializeProposal(proposal, callerMembership?.id)),
+      candidates: [],
+      canPropose: false,
+      canReview: authz.isAdmin,
+      closed: true,
+    });
   }
 
   const callerMembership = await prisma.seasonMembership.findUnique({

@@ -126,15 +126,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     await prisma.$transaction(async (tx) => {
       if (!registrationOpen && pendingProposals.length > 0) {
         const closedAt = { reviewedByUserId: session.user.id, reviewedAt: new Date() };
+        // Captain nominations are not swept: they stay pending until the nominee
+        // answers, whenever that is (#1442).
         await tx.crewProposal.updateMany({
           where: { seasonId: season.id, status: "pending", proposerMembershipId: { not: null } },
           data: { status: "rejected", rejectionReason: "Registration closed before this proposal was approved.", ...closedAt },
-        });
-        // A captain nomination is not "approved" — it waits for the nominee; say so,
-        // so the crew's audit trail does not read like a rejection of a roster change.
-        await tx.crewProposal.updateMany({
-          where: { seasonId: season.id, status: "pending", proposerMembershipId: null },
-          data: { status: "rejected", rejectionReason: "Registration closed before the nominated captain accepted.", ...closedAt },
         });
       }
       await tx.seasonMembership.updateMany({
