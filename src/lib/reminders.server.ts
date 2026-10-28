@@ -14,6 +14,10 @@ const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?
 /** Max concurrent outbound reminder emails to avoid overwhelming the SMTP provider. */
 const EMAIL_CONCURRENCY = 10;
 
+// One limiter per process, not per delivery: the scheduler runs several due
+// jobs at once, so a limiter built inside deliverReminder multiplied the cap.
+const emailLimit = pLimit(EMAIL_CONCURRENCY);
+
 const WINDOWS: Record<string, { minMs: number; maxMs: number }> = {
   "24h": { minMs: 22 * 3600_000, maxMs: 26 * 3600_000 },
   "2h":  { minMs: 1 * 3600_000,  maxMs: 3 * 3600_000 },
@@ -145,7 +149,7 @@ export function isReminderEnabled(
 export type GameReminderType = "24h" | "2h" | "1h";
 export type ReminderType = GameReminderType | "post-game";
 
-export type ReminderOutcome = "delivered" | "disabled" | "already-sent" | "archived";
+export type ReminderOutcome = "delivered" | "delivered-with-failures" | "disabled" | "already-sent" | "archived";
 
 const REMINDER_KEYS = {
   "24h": "notifyGameReminder24h",
@@ -220,7 +224,7 @@ export async function deliverReminder(eventId: string, type: ReminderType): Prom
   // applies the auto-enable; merging a batch row back over it would undo that.
   const players = event.players.filter((p) => !p.archivedAt);
 
-  const emailLimit = pLimit(EMAIL_CONCURRENCY);
+  let emailFailures = 0;
   await Promise.allSettled(
     players.map((player) =>
       emailLimit(async () => {
@@ -237,11 +241,12 @@ export async function deliverReminder(eventId: string, type: ReminderType): Prom
             reminderType: type,
           });
         } catch (err) {
+          emailFailures++;
           log.error({ email: player.user.email, eventId: event.id, type, err }, "Failed to send email reminder");
         }
       }),
     ),
   );
 
-  return "delivered";
+  return emailFailures > 0 ? "delivered-with-failures" : "delivered";
 }

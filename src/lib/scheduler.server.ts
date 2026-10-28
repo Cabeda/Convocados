@@ -244,9 +244,16 @@ async function _processReminderJob(job: { id: string; eventId: string | null; ty
   const reminderType = job.type.replace("reminder_", "") as GameReminderType;
   const outcome = await deliverReminder(job.eventId, reminderType);
   if (outcome === "already-sent" || outcome === "archived") return;
+  if (outcome === "delivered-with-failures") {
+    log.warn({ eventId: job.eventId, type: reminderType }, "Reminder delivered with email failures");
+  }
   // A disabled timing is still recorded as sent ("intentionally skipped") so
-  // the job is closed out and nothing re-sweeps the window.
-  if (outcome === "delivered") await drainNotificationQueue();
+  // the job is closed out and nothing re-sweeps the window. The same holds
+  // after a partial email failure: the push already went out, and retrying
+  // would duplicate it.
+  if (outcome === "delivered" || outcome === "delivered-with-failures") {
+    await drainNotificationQueue();
+  }
   await markReminderSent(job.eventId, reminderType);
 }
 

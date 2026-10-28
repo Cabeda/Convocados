@@ -44,6 +44,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const limit = pLimit(EMAIL_CONCURRENCY);
   const sent: string[] = [];
+  const emailFailures: string[] = [];
 
   // ── Game reminders ────────────────────────────────────────────────────────
   // Collect events to mark as sent after the queue is drained
@@ -58,6 +59,7 @@ export const POST: APIRoute = async ({ request }) => {
         const outcome = await deliverReminder(r.eventId, type);
         if (outcome === "already-sent" || outcome === "archived") continue;
         if (outcome === "delivered") sent.push(`${r.eventId}:${type}`);
+        if (outcome === "delivered-with-failures") emailFailures.push(`${r.eventId}:${type}`);
         remindersToMark.push({ eventId: r.eventId, type });
       } catch (err) {
         log.error({ eventId: r.eventId, type, err }, "Failed to process reminder");
@@ -131,6 +133,7 @@ export const POST: APIRoute = async ({ request }) => {
         const outcome = await deliverReminder(r.eventId, "post-game");
         if (outcome === "already-sent" || outcome === "archived") continue;
         postGameRemindersSent.push(r.eventId);
+        if (outcome === "delivered-with-failures") emailFailures.push(`${r.eventId}:post-game`);
         postGameRemindersToMark.push(r.eventId);
       } catch (err) {
         log.error({ eventId: r.eventId, err }, "Failed to process post-game reminder");
@@ -394,7 +397,7 @@ export const POST: APIRoute = async ({ request }) => {
   ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, paymentRemindersSent, paymentEscalation, payerCheckIns, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
+    JSON.stringify({ ok: true, sent, emailFailures, paymentRemindersSent, paymentEscalation, payerCheckIns, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
     { headers: { "Content-Type": "application/json" } },
   );
 };
