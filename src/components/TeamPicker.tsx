@@ -95,7 +95,11 @@ export function TeamPicker({
     handlePointerUp,
   } = useTeamDrag({ matches, onResultChange, shuffleKey });
 
-  const [undoMove, setUndoMove] = useState<{ message: string; previous: Imatch[] } | null>(null);
+  const [undoMove, setUndoMove] = useState<{
+    message: string;
+    previous: Imatch[];
+    expected: Imatch[];
+  } | null>(null);
 
   // One tap is the mobile-safe alternative to dragging across stacked panels.
   const moveToOtherTeam = (playerName: string, fromTeam: string, toTeam: string) => {
@@ -104,6 +108,7 @@ export function TeamPicker({
     setUndoMove({
       message: t("playerMovedToTeam", { name: playerName, team: toTeam }),
       previous: matches,
+      expected: next,
     });
     onResultChange(next);
   };
@@ -455,14 +460,20 @@ export function TeamPicker({
         onClose={() => setUndoMove(null)}
         message={undoMove?.message ?? ""}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        // Sit above the page's 60s removal undo rather than behind it.
+        sx={{ bottom: { xs: 88, sm: 24 } }}
         action={
           <Button
             color="inherit"
             size="small"
             onClick={() => {
-              const previous = undoMove?.previous;
+              const undo = undoMove;
               setUndoMove(null);
-              if (previous) onResultChange(previous);
+              if (!undo) return;
+              // Only undo if the lineup is still the one the move produced.
+              // A randomize or another edit in between must survive.
+              if (JSON.stringify(matches) !== JSON.stringify(undo.expected)) return;
+              onResultChange(undo.previous);
             }}
           >
             {t("undoRemove")}

@@ -23,6 +23,33 @@ function TeamPickerHarness({ shuffleKey = 0, canEdit = true, onResultChange }: {
   );
 }
 
+/** A harness that can apply a newer lineup change after a move. */
+function StaleUndoHarness() {
+  const [matches, setMatches] = useState(initialMatches);
+  return (
+    <>
+      <button
+        onClick={() =>
+          setMatches([
+            { team: "Blue", players: [] },
+            {
+              team: "Red",
+              players: [
+                { name: "Bob", order: 0 },
+                { name: "Alice", order: 1 },
+                { name: "Cara", order: 2 },
+              ],
+            },
+          ])
+        }
+      >
+        newer-lineup
+      </button>
+      <TeamPicker matches={matches} onResultChange={setMatches} canEdit />
+    </>
+  );
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -124,6 +151,20 @@ describe("TeamPicker touch move", () => {
 
     expect(onResultChange).toHaveBeenCalledTimes(2);
     expect(onResultChange.mock.calls[1][0]).toEqual(initialMatches);
+  });
+
+  it("drops a stale move undo instead of reverting a newer lineup change", () => {
+    renderWithTheme(<StaleUndoHarness />);
+
+    fireEvent.click(screen.getByTestId("team-player-move-Alice"));
+    fireEvent.click(screen.getByText("newer-lineup"));
+    expect(screen.getByTestId("team-player-Cara")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Undo"));
+
+    // The stale pre-move snapshot must not wipe Cara out.
+    expect(screen.getByTestId("team-player-Cara")).toBeInTheDocument();
+    expect(screen.getByTestId("team-player-Alice")).toBeInTheDocument();
   });
 
   it("renders no move control when the teams are read-only", () => {
