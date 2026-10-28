@@ -1693,6 +1693,12 @@ adminPickupsDetected: "Pickups erkannt",
   myPaymentDetailsSaved: "Zahlungsdaten gespeichert.",
   myPaymentDetailsSaveError: "Deine Zahlungsdaten konnten nicht gespeichert werden.",
   paymentsRemove: "Entfernen",
+  // ADR 0055 — payer card
+  payerCardCollecting: "{name} sammelt ein",
+  payerCardVacant: "Noch sammelt niemand ein",
+  payerCardClaim: "Ich sammle ein",
+  payerCardStandDown: "Diese Woche nicht",
+  payerCardError: "Hat nicht funktioniert. Versuch es erneut.",
 };
 
 export default de;

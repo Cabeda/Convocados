@@ -133,6 +133,10 @@ model Event {
   balanced       Boolean               @default(false)
   isRecurring    Boolean               @default(false)
   recurrenceRule String?
+  // Who is expected to front the cost each Game (ADR 0055). Only a seed for
+  // new Games — the role stays per-Game and anyone on the roster can claim it.
+  defaultPayerEventPlayerId String?
+  defaultPayerExternalName  String?
   nextResetAt    DateTime?
   ownerId        String?
   owner          User?                 @relation("EventOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -393,6 +397,9 @@ model Game {
   // everyone paid. sentAt = last time we asked; snoozedUntil = "ask me again
   // in 24h" marker read by the cron sweep.
   payerCheckInSentAt      DateTime?
+  // Set when the Payer withdrew for this Game (ADR 0055). The id stays so the
+  // Owner knows who to ask back; the role is Vacant for display and claims.
+  payerStoodDownAt        DateTime?
   payerCheckInSnoozedUntil DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

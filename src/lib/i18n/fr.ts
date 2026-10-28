@@ -1693,6 +1693,12 @@ adminPickupsDetected: "Pickups détectés",
   myPaymentDetailsSaved: "Coordonnees de paiement enregistrees.",
   myPaymentDetailsSaveError: "Impossible d'enregistrer tes coordonnees de paiement.",
   paymentsRemove: "Retirer",
+  // ADR 0055 — payer card
+  payerCardCollecting: "{name} encaisse",
+  payerCardVacant: "Personne n'encaisse encore",
+  payerCardClaim: "J'encaisse",
+  payerCardStandDown: "Pas cette semaine",
+  payerCardError: "Ça n'a pas marché. Réessaie.",
 };
 
 export default fr;

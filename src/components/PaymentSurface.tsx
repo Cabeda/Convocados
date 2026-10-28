@@ -6,6 +6,7 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useT } from "~/lib/useT";
 import { useEventCost } from "~/lib/useEventCost";
+import { PayerCard } from "./PayerCard";
 import { formatMoney, formatShortDate, toCents, type PaymentStatus } from "~/lib/money";
 import { perPlayerShare } from "~/lib/gameCost";
 import { apiRequest } from "~/lib/api/client";
@@ -119,6 +120,8 @@ export function PaymentSurface({
             {t("postGameGoToPayments")}
           </Button>
         </Box>
+
+        <PayerCard eventId={eventId} />
 
         {!canEdit && myDebt && (
           <Box sx={{ px: 0.5, pb: 0.5 }}>

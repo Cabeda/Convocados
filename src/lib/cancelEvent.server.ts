@@ -122,8 +122,16 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
       });
 
       if (claimed.count === 1) {
+        // Seed the replacement Game with the Event's default payer (ADR 0055) —
+        // a cancel used to drop the payer entirely.
         const newGame = await prisma.game.create({
-          data: { eventId: event.id, dateTime: newDateTime, status: "upcoming" },
+          data: {
+            eventId: event.id,
+            dateTime: newDateTime,
+            status: "upcoming",
+            payerEventPlayerId: event.defaultPayerEventPlayerId ?? null,
+            payerExternalName: event.defaultPayerExternalName ?? null,
+          },
         });
 
         await prisma.event.update({

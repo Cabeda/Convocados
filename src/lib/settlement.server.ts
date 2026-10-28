@@ -430,6 +430,8 @@ export async function setPaymentConfig(
         paymentMode: "tracked",
         payerEventPlayerId: config.payerEventPlayerId ?? null,
         payerExternalName,
+        // Setting a payer ends any stand-down: the role is held again.
+        payerStoodDownAt: null,
       },
     });
     await syncGamePaymentsTx(tx, gameId, eventId);

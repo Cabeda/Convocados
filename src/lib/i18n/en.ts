@@ -1752,7 +1752,13 @@ adminPickupsDetected: "Pickups detected",
   myPaymentDetailsSaved: "Payment details saved.",
   myPaymentDetailsSaveError: "Could not save your payment details.",
   paymentsRemove: "Remove",
-} as const;
+
+  // ADR 0055 — payer card
+  payerCardCollecting: "{name} is collecting",
+  payerCardVacant: "Nobody's collecting yet",
+  payerCardClaim: "I'll collect",
+  payerCardStandDown: "I can't this week",
+  payerCardError: "That didn't work. Try again.",} as const;
 
 export default en;
 /** The shape that every locale file must satisfy — same keys as `en`, string values */

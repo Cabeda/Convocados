@@ -88,6 +88,7 @@ export async function advanceDueRecurringEvent(
   const oldGameId = event.currentGameId;
   let inheritMode: string | null = null;
   let inheritPayerId: string | null = null;
+  let inheritExternalName: string | null = null;
   if (oldGameId) {
     const oldGame = await prisma.game.findUnique({
       where: { id: oldGameId },
@@ -101,6 +102,19 @@ export async function advanceDueRecurringEvent(
       });
       if (payerStillActive) inheritPayerId = oldGame.payerEventPlayerId;
     }
+    if (!inheritPayerId) {
+      const previousExternal = await prisma.game.findUnique({
+        where: { id: oldGameId },
+        select: { payerExternalName: true },
+      });
+      inheritExternalName = previousExternal?.payerExternalName ?? null;
+    }
+  }
+  // Fall back to the Event's default payer (ADR 0055) so "the same person always
+  // pays" survives a roster change, a cancelled Game, or an external payer.
+  if (!inheritPayerId && !inheritExternalName) {
+    inheritPayerId = event.defaultPayerEventPlayerId ?? null;
+    inheritExternalName = event.defaultPayerExternalName ?? null;
   }
   const newGame = await prisma.game.create({
     data: {
@@ -109,6 +123,7 @@ export async function advanceDueRecurringEvent(
       status: "upcoming",
       paymentMode: inheritMode,
       payerEventPlayerId: inheritPayerId,
+      payerExternalName: inheritExternalName,
     },
   });
   if (oldGameId) {
