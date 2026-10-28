@@ -105,6 +105,103 @@ describe("GET /api/health", () => {
     }
   });
 
+  it("reports the last successful sync and stays healthy when it is fresh", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    await prisma.schedulerHeartbeat.upsert({
+      where: { id: "scheduler" },
+      create: { id: "scheduler", lastSeenAt: new Date() },
+      update: { lastSeenAt: new Date() },
+    });
+    const nowIso = new Date().toISOString();
+    vi.doMock("node:child_process", () => ({
+      execSync: vi.fn((cmd: string) => {
+        if (cmd.startsWith("pgrep")) return Buffer.from("1234");
+        return JSON.stringify({
+          databases: [{ path: "/data/db.sqlite", status: "replicating", last_sync_at: nowIso }],
+        });
+      }),
+    }));
+    try {
+      vi.resetModules();
+      const { GET: getHealth } = await import("~/pages/api/health");
+      const res = await getHealth(ctx());
+      const body = await res.json();
+      expect(body.litestream).toEqual({
+        running: true,
+        status: "replicating",
+        lastSyncAt: nowIso,
+        syncAgeSeconds: expect.any(Number),
+      });
+      expect(body.litestream.syncAgeSeconds).toBeLessThan(60);
+      expect(body.degraded).toBeUndefined();
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+      vi.doUnmock("node:child_process");
+    }
+  });
+
+  it("degrades when the daemon is up but the last sync is stale", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    await prisma.schedulerHeartbeat.upsert({
+      where: { id: "scheduler" },
+      create: { id: "scheduler", lastSeenAt: new Date() },
+      update: { lastSeenAt: new Date() },
+    });
+    const staleIso = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    vi.doMock("node:child_process", () => ({
+      execSync: vi.fn((cmd: string) => {
+        if (cmd.startsWith("pgrep")) return Buffer.from("1234");
+        return JSON.stringify({
+          databases: [{ path: "/data/db.sqlite", status: "replicating", last_sync_at: staleIso }],
+        });
+      }),
+    }));
+    try {
+      vi.resetModules();
+      const { GET: getHealth } = await import("~/pages/api/health");
+      const res = await getHealth(ctx());
+      const body = await res.json();
+      expect(body.litestream.running).toBe(true);
+      expect(body.litestream.status).toBe("replicating");
+      expect(body.litestream.syncAgeSeconds).toBeGreaterThan(24 * 60 * 60);
+      expect(body.degraded).toBe(true);
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+      vi.doUnmock("node:child_process");
+    }
+  });
+
+  it("degrades when replication is stopped even with a fresh sync", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    await prisma.schedulerHeartbeat.upsert({
+      where: { id: "scheduler" },
+      create: { id: "scheduler", lastSeenAt: new Date() },
+      update: { lastSeenAt: new Date() },
+    });
+    vi.doMock("node:child_process", () => ({
+      execSync: vi.fn((cmd: string) => {
+        if (cmd.startsWith("pgrep")) return Buffer.from("1234");
+        return JSON.stringify({
+          databases: [{ path: "/data/db.sqlite", status: "stopped", last_sync_at: new Date().toISOString() }],
+        });
+      }),
+    }));
+    try {
+      vi.resetModules();
+      const { GET: getHealth } = await import("~/pages/api/health");
+      const res = await getHealth(ctx());
+      const body = await res.json();
+      expect(body.litestream.status).toBe("stopped");
+      expect(body.degraded).toBe(true);
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+      vi.doUnmock("node:child_process");
+    }
+  });
+
   it("reports scheduler running=true when heartbeat is fresh in production", async () => {
     const oldNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
@@ -145,7 +242,9 @@ describe("GET /api/health", () => {
       const body = await res.json();
       // Dead letters don't fail the health check, but they must be visible.
       expect(body.scheduler).toEqual({ running: true, failedJobs: 1 });
-      expect(body.degraded).toBeUndefined();
+      expect(body.status).toBe("ok");
+      // This test runs without a Litestream daemon, so `degraded` is set for
+      // that separate reason; dead letters themselves never degrade health.
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
     }

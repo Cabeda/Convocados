@@ -2,6 +2,12 @@
 # Replicates the production database to an S3-compatible bucket (Cloudflare R2).
 # See: https://litestream.io/reference/config/
 
+# Control socket: /api/health runs `litestream list -json` to read the last
+# successful sync, not just whether the supervisor process exists.
+socket:
+  enabled: true
+  path: /var/run/litestream.sock
+
 dbs:
   - path: /data/db.sqlite
     replica:

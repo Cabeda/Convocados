@@ -10,6 +10,12 @@ const log = createLogger("health");
  * (3min tolerates maintenance timeouts + rotating deploys without false alarms.) */
 const SCHEDULER_STALE_MS = 3 * 60 * 1000;
 
+/** Litestream only syncs when the WAL changes, so a quiet night is not a
+ * failure. A full day without a successful sync is: the R2 outage in #1487
+ * went unnoticed for ~95h because health only checked the supervisor process. */
+const LITESTREAM_STALE_SECONDS = 24 * 60 * 60;
+const LITESTREAM_SOCKET = "/var/run/litestream.sock";
+
 function resolveDbPath(): string {
   const url = process.env.DATABASE_URL || "file:./prisma/dev.db";
   return url.replace(/^file:/, "");
@@ -51,17 +57,53 @@ export const GET: APIRoute = async () => {
       },
     };
 
-    // In production, check if Litestream replication process is running
+    // In production, check Litestream. Process-up is not replication-current:
+    // `litestream list` reads the daemon's last successful sync from the
+    // control socket (enabled in litestream.yml).
     if (process.env.NODE_ENV === "production") {
       let running = false;
+      const { execSync } = await import("node:child_process");
       try {
-        const { execSync } = await import("node:child_process");
-        execSync("pgrep -x litestream", { timeout: 1000 });
+        execSync("pgrep -x litestream", { timeout: 1000, stdio: "ignore" });
         running = true;
       } catch {
         // pgrep exits non-zero when no process matches
       }
-      response.litestream = { running };
+
+      let status: string | null = null;
+      let lastSyncAt: string | null = null;
+      let syncAgeSeconds: number | null = null;
+      try {
+        const output = execSync(`litestream list -json -socket ${LITESTREAM_SOCKET}`, {
+          timeout: 1500,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        });
+        const parsed = JSON.parse(output) as {
+          databases?: Array<{ path?: string; status?: string; last_sync_at?: string }>;
+        };
+        const databases = Array.isArray(parsed.databases) ? parsed.databases : [];
+        const database = databases.find((row) => row.path === resolveDbPath()) ?? databases[0];
+        if (database) {
+          status = typeof database.status === "string" ? database.status : null;
+          lastSyncAt = typeof database.last_sync_at === "string" ? database.last_sync_at : null;
+          if (lastSyncAt) {
+            const ageMs = Date.now() - new Date(lastSyncAt).getTime();
+            if (Number.isFinite(ageMs)) syncAgeSeconds = Math.max(0, Math.floor(ageMs / 1000));
+          }
+        }
+      } catch {
+        // Socket not enabled yet (old deploy) or daemon still starting; the
+        // process check above still reports what it can.
+      }
+      response.litestream = { running, status, lastSyncAt, syncAgeSeconds };
+      if (
+        !running ||
+        (status !== null && status !== "replicating") ||
+        (syncAgeSeconds !== null && syncAgeSeconds > LITESTREAM_STALE_SECONDS)
+      ) {
+        response.degraded = true;
+      }
 
       // Check the scheduler heartbeat — a stale one means reminders are stuck.
       // Report it as degraded but DON'T fail the check: the scheduler polls the
