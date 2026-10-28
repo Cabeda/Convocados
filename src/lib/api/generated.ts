@@ -1154,6 +1154,14 @@ export interface ApiOperations {
       reminder1h?: boolean;
     };
   };
+  "GET /api/me/payment-details": Record<string, never>;
+  "PUT /api/me/payment-details": {
+    body: {
+      phone?: string;
+      paymentDetails?: { type: "phone" | "mbway" | "revolut_tag" | "revolut_link" | "cash" | "other"; value: string; label?: string }[];
+      sharePaymentDetails?: boolean;
+    };
+  };
   "POST /api/me/calendar-token": {
     body: {
       scope?: "user" | "event";

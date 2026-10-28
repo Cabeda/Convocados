@@ -1681,6 +1681,18 @@ adminPickupsDetected: "Pickup rilevati",
   matchEventsShowDetails: "Aggiungi minuto, assist o autogol",
   matchEventsHideDetails: "Nascondi dettagli",
   matchEventsTimes: "×{count}",
+  // ADR 0055 — a person's own Payment Details
+  myPaymentDetails: "Come ti pagano",
+  myPaymentDetailsDesc: "Salva i tuoi dati una volta. Quando sei il pagatore di una partita, il gruppo vede come mandarti il denaro, invece del conto dell'organizzatore.",
+  myPhoneNumber: "Numero di telefono",
+  myPhoneNumberHint: "Usato per MB Way e gli altri metodi tramite telefono.",
+  myPaymentDetailsMethods: "Modi per pagarti",
+  myPaymentDetailsEmpty: "Nessun modo di pagamento. Aggiungine uno qui sotto.",
+  shareMyPaymentDetails: "Condividi questi dati quando sono il pagatore",
+  shareMyPaymentDetailsDesc: "Inviato agli iscritti webhook dell'evento e mostrato ai giocatori di quella partita. Disattivato per impostazione predefinita.",
+  myPaymentDetailsSaved: "Dati di pagamento salvati.",
+  myPaymentDetailsSaveError: "Impossibile salvare i tuoi dati di pagamento.",
+  paymentsRemove: "Rimuovi",
 };
 
 export default it;

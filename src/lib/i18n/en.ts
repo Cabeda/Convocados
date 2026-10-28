@@ -1740,6 +1740,18 @@ adminPickupsDetected: "Pickups detected",
   matchEventsShowDetails: "Add minute, assist or own goal",
   matchEventsHideDetails: "Hide extra details",
   matchEventsTimes: "×{count}",
+  // ADR 0055 — a person's own Payment Details
+  myPaymentDetails: "How people pay you",
+  myPaymentDetailsDesc: "Save your details once. When you are the payer for a game, the group sees how to send you the money, instead of the organizer's account.",
+  myPhoneNumber: "Phone number",
+  myPhoneNumberHint: "Used for MB Way and other phone-based methods.",
+  myPaymentDetailsMethods: "Ways to pay you",
+  myPaymentDetailsEmpty: "No ways to pay yet. Add one below.",
+  shareMyPaymentDetails: "Share these details when I am the payer",
+  shareMyPaymentDetailsDesc: "Sent to the event's webhook subscribers and shown to players in that game. Off by default.",
+  myPaymentDetailsSaved: "Payment details saved.",
+  myPaymentDetailsSaveError: "Could not save your payment details.",
+  paymentsRemove: "Remove",
 } as const;
 
 export default en;
