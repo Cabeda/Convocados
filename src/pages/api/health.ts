@@ -97,10 +97,19 @@ export const GET: APIRoute = async () => {
         // process check above still reports what it can.
       }
       response.litestream = { running, status, lastSyncAt, syncAgeSeconds };
+      // A replica that has never recorded a successful sync after a full day of
+      // uptime is a failing replica, not a quiet one. The R2 outage in #1487
+      // keeps `status: replicating` with no `last_sync_at`.
+      const neverSynced =
+        running &&
+        status === "replicating" &&
+        lastSyncAt === null &&
+        process.uptime() > LITESTREAM_STALE_SECONDS;
       if (
         !running ||
         (status !== null && status !== "replicating") ||
-        (syncAgeSeconds !== null && syncAgeSeconds > LITESTREAM_STALE_SECONDS)
+        (syncAgeSeconds !== null && syncAgeSeconds > LITESTREAM_STALE_SECONDS) ||
+        neverSynced
       ) {
         response.degraded = true;
       }
