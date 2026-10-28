@@ -164,6 +164,29 @@ describe("validateWebhookUrl", () => {
     }
   });
 
+  it("rejects IPv4-mapped IPv6 loopback, private and metadata hosts", () => {
+    // URL normalises [::ffff:127.0.0.1] to [::ffff:7f00:1]; see #1539.
+    for (const url of [
+      "http://[::ffff:127.0.0.1]/hook",
+      "http://[::ffff:7f00:1]/hook",
+      "http://[::ffff:10.0.0.5]/hook",
+      "http://[::ffff:a00:5]/hook",
+      "http://[::ffff:192.168.1.10]/hook",
+      "http://[::ffff:c0a8:10a]/hook",
+      "http://[::ffff:169.254.169.254]/hook",
+      "http://[::ffff:a9fe:a9fe]/hook",
+      "http://[::7f00:1]/hook",
+      "http://[::a9fe:a9fe]/hook",
+    ]) {
+      expect(validateWebhookUrl(url), url).not.toBeNull();
+    }
+  });
+
+  it("still accepts a public IPv4-mapped IPv6 host", () => {
+    expect(validateWebhookUrl("http://[::ffff:8.8.8.8]/hook")).toBeNull();
+    expect(validateWebhookUrl("http://[::ffff:808:808]/hook")).toBeNull();
+  });
+
   it("rejects non-http protocols and malformed URLs", () => {
     expect(validateWebhookUrl("ftp://example.com")).not.toBeNull();
     expect(validateWebhookUrl("not a url")).not.toBeNull();
