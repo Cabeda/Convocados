@@ -1699,6 +1699,9 @@ adminPickupsDetected: "Pickups erkannt",
   payerCardClaim: "Ich sammle ein",
   payerCardStandDown: "Diese Woche nicht",
   payerCardError: "Hat nicht funktioniert. Versuch es erneut.",
+  // ADR 0055 — payer notifications
+  payerAssignedBody: "Du sammelst für {title} ein. Die Gruppe sieht deine Zahlungsdaten, wenn du sie teilst.",
+  payerChangedBody: "{name} sammelt für {title} statt dir ein.",
 };
 
 export default de;

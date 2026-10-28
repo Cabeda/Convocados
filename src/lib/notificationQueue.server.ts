@@ -30,6 +30,8 @@ export type NotificationJobType =
   | "bench_promoted_capacity"
   | "payment_confirmed"
   | "payment_self_reported"
+  | "payer_assigned"
+  | "payer_changed"
   | "recruitment"
   | "few_spots_left"
   | "player_invited"

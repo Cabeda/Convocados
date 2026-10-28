@@ -1758,7 +1758,10 @@ adminPickupsDetected: "Pickups detected",
   payerCardVacant: "Nobody's collecting yet",
   payerCardClaim: "I'll collect",
   payerCardStandDown: "I can't this week",
-  payerCardError: "That didn't work. Try again.",} as const;
+  payerCardError: "That didn't work. Try again.",
+  // ADR 0055 — payer notifications
+  payerAssignedBody: "You are collecting for {title}. The group will see your payment details if you share them.",
+  payerChangedBody: "{name} is collecting for {title} instead of you.",} as const;
 
 export default en;
 /** The shape that every locale file must satisfy — same keys as `en`, string values */

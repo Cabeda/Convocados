@@ -1699,6 +1699,9 @@ adminPickupsDetected: "Pickup rilevati",
   payerCardClaim: "Incasso io",
   payerCardStandDown: "Questa settimana no",
   payerCardError: "Non ha funzionato. Riprova.",
+  // ADR 0055 — payer notifications
+  payerAssignedBody: "Stai incassando per {title}. Il gruppo vedrà i tuoi dati di pagamento se li condividi.",
+  payerChangedBody: "{name} sta incassando per {title} al posto tuo.",
 };
 
 export default it;
