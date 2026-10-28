@@ -756,6 +756,52 @@ describe("game_payer_set webhook (#1359)", () => {
     );
   });
 
+  it("sends the payer's own shared details instead of the event's", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana-shared");
+    await prisma.user.update({
+      where: { id: "user-ana-shared" },
+      data: {
+        sharePaymentDetails: true,
+        paymentDetails: JSON.stringify([{ type: "revolut_tag", value: "ana" }]),
+      },
+    });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ paymentMethods: [{ type: "revolut_tag", value: "ana" }] }),
+    );
+  });
+
+  it("keeps the event's details when the payer has not consented", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana-private");
+    await prisma.user.update({
+      where: { id: "user-ana-private" },
+      data: {
+        sharePaymentDetails: false,
+        paymentDetails: JSON.stringify([{ type: "revolut_tag", value: "ana" }]),
+      },
+    });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ paymentMethods: [{ type: "mbway", value: "912345678" }] }),
+    );
+  });
+
   it("carries the payer's account id when the payer is linked", async () => {
     const { event, game } = await seedEndedGameWithMethods();
     await linkUser("Ana", "user-ana");

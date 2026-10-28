@@ -22,7 +22,7 @@ import { shareFor, perPlayerShare } from "./gameCost";
 import { summarizePayments } from "./paymentSummary";
 import { systemUserId, ensureSystemUserId } from "./payerIdentity.server";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
-import { parsePaymentMethods, effectivePaymentMethodsRaw } from "./paymentMethods";
+import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 import { isGameEnded } from "./gameStatus";
 import { fireWebhooks } from "./webhook.server";
 
@@ -335,13 +335,10 @@ async function fireGamePayerSet(
   game: { id: string; dateTime: Date; status: string },
   payer: { eventPlayerId: string | null; externalName: string | null },
 ): Promise<void> {
-  const [event, eventCost] = await Promise.all([
-    prisma.event.findUnique({ where: { id: eventId }, select: { durationMinutes: true } }),
-    prisma.eventCost.findUnique({
-      where: { eventId },
-      select: { paymentMethods: true, tempPaymentMethods: true },
-    }),
-  ]);
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { durationMinutes: true },
+  });
   if (!event) return;
 
   // A cancelled game never happened — never ask anyone to pay for it. "Ended"
@@ -368,15 +365,17 @@ async function fireGamePayerSet(
   // No cost → nothing to pay. Never send a "pay €0" instruction to the group.
   if (effective.total <= 0) return;
 
+  // One resolver decides where the money goes (ADR 0055): temp override →
+  // the Payer's own details when shared → the Event's → nothing.
+  const { methods: paymentMethods } = await resolvePaymentDetails(eventId, game.id);
+
   fireWebhooks(eventId, "game_payer_set", {
     gameId: game.id,
     dateTime: game.dateTime.toISOString(),
     payerName,
     payerEventPlayerId: payer.eventPlayerId ?? null,
     payerUserId,
-    paymentMethods: parsePaymentMethods(
-      effectivePaymentMethodsRaw(eventCost?.tempPaymentMethods, eventCost?.paymentMethods),
-    ),
+    paymentMethods,
     amountPerPlayer: perPlayerShare(effective.total, effective.maxPlayers),
     currency: effective.currency,
   }).catch(() => {});
