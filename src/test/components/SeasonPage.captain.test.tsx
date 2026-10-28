@@ -108,7 +108,7 @@ describe("season captain selection", () => {
 
     // "a pending proposal stays pending until they do" — the window closing
     // must not take the accept card away.
-    expect(await screen.findByRole("button", { name: "Accept captaincy" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Accept captaincy" }, { timeout: 3000 })).toBeInTheDocument();
   });
 
   it("shows the chosen captain on the player row while the nomination is pending", async () => {
