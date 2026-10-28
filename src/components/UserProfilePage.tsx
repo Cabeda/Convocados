@@ -20,6 +20,7 @@ import AddAPhotoIcon from "@mui/icons-material/AddAPhoto";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
+import { PaymentDetailsSection } from "./PaymentDetailsSection";
 import { LinkedCredentialsSection } from "./LinkedCredentialsSection";
 import ProfilePhotoDialog from "./ProfilePhotoDialog";
 import { useT } from "~/lib/useT";
@@ -881,6 +882,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
             {isOwnProfile && (
               <>
                 <ProfileVisibilitySection userId={user.id} userName={user.name} initialValue={data.profileVisibility ?? "public"} />
+                <PaymentDetailsSection />
                 <NotificationSettingsSection />
                 <ChangePasswordSection hasPassword={hasPassword ?? false} />
                 <LinkedCredentialsSection profilePath={`/users/${user.id}`} />

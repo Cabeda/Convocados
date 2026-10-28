@@ -1681,6 +1681,18 @@ adminPickupsDetected: "Pickups détectés",
   matchEventsShowDetails: "Ajouter minute, passe ou csc",
   matchEventsHideDetails: "Masquer les détails",
   matchEventsTimes: "×{count}",
+  // ADR 0055 — a person's own Payment Details
+  myPaymentDetails: "Comment on te paie",
+  myPaymentDetailsDesc: "Enregistre tes coordonnees une fois. Quand tu es le payeur d'un match, le groupe voit comment t'envoyer l'argent, au lieu du compte de l'organisateur.",
+  myPhoneNumber: "Numero de telephone",
+  myPhoneNumberHint: "Utilise pour MB Way et les autres methodes par telephone.",
+  myPaymentDetailsMethods: "Facons de te payer",
+  myPaymentDetailsEmpty: "Aucun moyen de paiement pour l'instant. Ajoutes-en un ci-dessous.",
+  shareMyPaymentDetails: "Partager ces coordonnees quand je suis le payeur",
+  shareMyPaymentDetailsDesc: "Envoye aux abonnes webhook de l'evenement et affiche aux joueurs de ce match. Desactive par defaut.",
+  myPaymentDetailsSaved: "Coordonnees de paiement enregistrees.",
+  myPaymentDetailsSaveError: "Impossible d'enregistrer tes coordonnees de paiement.",
+  paymentsRemove: "Retirer",
 };
 
 export default fr;

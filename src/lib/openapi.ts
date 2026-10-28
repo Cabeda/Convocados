@@ -1827,6 +1827,53 @@ export const openApiSpec = {
         responses: { "200": { description: "Preferences updated" }, ...errorResponses },
       },
     },
+    "/api/me/payment-details": {
+      get: {
+        summary: "Get your own payment details",
+        tags: ["Users"],
+        responses: {
+          "200": { description: "Payment details" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+      put: {
+        summary: "Update your own payment details and sharing consent",
+        tags: ["Users"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  phone: { type: "string", nullable: true, description: "Phone number, 6-15 digits" },
+                  paymentDetails: {
+                    type: "array",
+                    maxItems: 10,
+                    items: {
+                      type: "object",
+                      properties: {
+                        type: {
+                          type: "string",
+                          enum: ["phone", "mbway", "revolut_tag", "revolut_link", "cash", "other"],
+                        },
+                        value: { type: "string" },
+                        label: { type: "string" },
+                      },
+                      required: ["type", "value"],
+                    },
+                  },
+                  sharePaymentDetails: {
+                    type: "boolean",
+                    description: "Publish these details when you are the Game's Payer",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Payment details updated" }, ...errorResponses },
+      },
+    },
     "/api/me/calendar-token": {
       post: {
         summary: "Generate or retrieve a calendar feed token",

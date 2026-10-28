@@ -23,6 +23,11 @@ model User {
   pushPromptLastDismissedAt DateTime?
   // One-click email unsubscribe (no login required) — token embedded in email footer links
   emailUnsubscribeToken String? @unique
+  // Payment Details a person offers when they are the Payer (ADR 0055). The
+  // phone is the canonical number a phone-based method pre-fills from.
+  phone              String?
+  paymentDetails     String?  // JSON PaymentMethod[] — same shape as EventCost.paymentMethods
+  sharePaymentDetails Boolean @default(false) // consent: publish them when this user is the Payer
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   sessions       Session[]
