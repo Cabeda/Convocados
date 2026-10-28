@@ -54,10 +54,11 @@ beforeEach(async () => {
 });
 
 /** A one-player Event `hoursFromNow` away, whose player wants the email reminder. */
-async function seedEvent(hoursFromNow: number) {
+async function seedEvent(hoursFromNow: number, suffix = "1") {
   const dateTime = new Date(Date.now() + hoursFromNow * 3600_000);
+  const userId = `u-pipe-${suffix}`;
   const user = await prisma.user.create({
-    data: { id: "u-pipe-1", name: "Player", email: "pipe@test.com", emailVerified: true },
+    data: { id: userId, name: `Player ${suffix}`, email: `pipe-${suffix}@test.com`, emailVerified: true },
   });
   await prisma.notificationPreferences.create({
     data: { userId: user.id, emailEnabled: true, gameReminderEmail: true, reminder24h: true },
@@ -67,8 +68,24 @@ async function seedEvent(hoursFromNow: number) {
   });
   const game = await prisma.game.create({ data: { eventId: event.id, dateTime } });
   await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
-  await prisma.player.create({ data: { eventId: event.id, name: "Player", userId: user.id, order: 0 } });
+  await prisma.player.create({ data: { eventId: event.id, name: `Player ${suffix}`, userId: user.id, order: 0 } });
   return { event, dateTime };
+}
+
+/** Add [count] more email-enabled players to [event]. */
+async function seedPlayers(event: { id: string }, count: number, prefix: string) {
+  for (let i = 0; i < count; i++) {
+    const userId = `${prefix}-extra-${i}`;
+    await prisma.user.create({
+      data: { id: userId, name: `${prefix} ${i}`, email: `${userId}@test.com`, emailVerified: true },
+    });
+    await prisma.notificationPreferences.create({
+      data: { userId, emailEnabled: true, gameReminderEmail: true, reminder24h: true },
+    });
+    await prisma.player.create({
+      data: { eventId: event.id, name: `${prefix} ${i}`, userId, order: i + 1 },
+    });
+  }
 }
 
 async function runCron() {
@@ -97,6 +114,41 @@ describe("deliverReminder", () => {
     await expect(deliverReminder(event.id, "24h")).resolves.toBe("already-sent");
     expect(sendReminder).toHaveBeenCalledTimes(1);
     expect(await prisma.reminderLog.count({ where: { eventId: event.id, type: "24h" } })).toBe(1);
+  });
+
+  it("caps concurrent reminder emails at 10 across two concurrent deliveries", async () => {
+    const a = await seedEvent(24, "a");
+    const b = await seedEvent(24, "b");
+    await seedPlayers(a.event, 7, "a");
+    await seedPlayers(b.event, 7, "b");
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    vi.mocked(sendReminder).mockImplementation(async () => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      inFlight--;
+    });
+
+    try {
+      await Promise.all([deliverReminder(a.event.id, "24h"), deliverReminder(b.event.id, "24h")]);
+      // 2 events x 8 players = 16 sends; the module-level limiter must keep 10.
+      expect(maxInFlight).toBeLessThanOrEqual(10);
+      expect(maxInFlight).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.mocked(sendReminder).mockResolvedValue(undefined);
+    }
+  });
+
+  it("reports an email provider failure instead of claiming delivery", async () => {
+    const { event } = await seedEvent(24, "fail");
+    vi.mocked(sendReminder).mockRejectedValueOnce(new Error("provider down"));
+    try {
+      await expect(deliverReminder(event.id, "24h")).resolves.toBe("delivered-with-failures");
+    } finally {
+      vi.mocked(sendReminder).mockResolvedValue(undefined);
+    }
   });
 
   it("marks the same reminder twice without throwing and keeps one log row", async () => {
