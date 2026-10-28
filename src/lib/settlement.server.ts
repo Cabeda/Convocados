@@ -23,6 +23,7 @@ import { summarizePayments } from "./paymentSummary";
 import { systemUserId, ensureSystemUserId } from "./payerIdentity.server";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
 import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
+import { enqueueNotification } from "./notificationQueue.server";
 import { isGameEnded } from "./gameStatus";
 import { fireWebhooks } from "./webhook.server";
 
@@ -381,6 +382,57 @@ async function fireGamePayerSet(
   }).catch(() => {});
 }
 
+
+/**
+ * Tell the incoming and outgoing Payer, and nobody else (#1551). Best-effort: a
+ * notification never fails the payment config change.
+ */
+async function notifyPayerChange(
+  eventId: string,
+  previousEventPlayerId: string | null,
+  nextEventPlayerId: string | null,
+  nextExternalName: string | null,
+): Promise<void> {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { title: true } });
+  if (!event) return;
+
+  const ids = [previousEventPlayerId, nextEventPlayerId].filter((id): id is string => !!id);
+  const players = ids.length
+    ? await prisma.eventPlayer.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, userId: true },
+      })
+    : [];
+  const byId = new Map(players.map((p) => [p.id, p]));
+
+  const incoming = nextEventPlayerId ? byId.get(nextEventPlayerId) : null;
+  const outgoing = previousEventPlayerId ? byId.get(previousEventPlayerId) : null;
+  const incomingName = incoming?.name ?? nextExternalName ?? null;
+  const url = `/events/${eventId}`;
+
+  if (incoming?.userId && incoming.userId !== outgoing?.userId) {
+    await enqueueNotification(eventId, "payer_assigned", {
+      title: event.title,
+      key: "payerAssignedBody",
+      params: { title: event.title },
+      url,
+      spotsLeft: 0,
+      recipientUserIds: [incoming.userId],
+    });
+  }
+
+  if (outgoing?.userId && outgoing.userId !== incoming?.userId && incomingName) {
+    await enqueueNotification(eventId, "payer_changed", {
+      title: event.title,
+      key: "payerChangedBody",
+      params: { name: incomingName, title: event.title },
+      url,
+      spotsLeft: 0,
+      recipientUserIds: [outgoing.userId],
+    });
+  }
+}
+
 /** Set a game's payment mode + payer. Tracked requires exactly one payer ref. */
 export async function setPaymentConfig(
   eventId: string,
@@ -445,6 +497,12 @@ export async function setPaymentConfig(
   const payerChanged =
     nextEventPlayerId !== (game.payerEventPlayerId ?? null) ||
     payerExternalName !== (game.payerExternalName ?? null);
+  if (payerChanged) {
+    await notifyPayerChange(eventId, game.payerEventPlayerId, nextEventPlayerId, payerExternalName).catch(
+      () => {},
+    );
+  }
+
   if ((nextEventPlayerId || payerExternalName) && payerChanged) {
     await fireGamePayerSet(
       eventId,

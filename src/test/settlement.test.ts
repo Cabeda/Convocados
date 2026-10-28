@@ -802,6 +802,47 @@ describe("game_payer_set webhook (#1359)", () => {
     );
   });
 
+  it("tells the incoming payer they are collecting", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana-notified");
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: event.id, type: "payer_assigned" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(job).not.toBeNull();
+    const payload = JSON.parse(job!.payload);
+    expect(payload.recipientUserIds).toEqual(["user-ana-notified"]);
+    expect(payload.key).toBe("payerAssignedBody");
+  });
+
+  it("tells the displaced payer who took over", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana-first");
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    const other = await prisma.eventPlayer.findFirstOrThrow({ where: { name: { not: "Ana" } } });
+    await linkUser(other.name, "user-other-takes");
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: other.id }, "PATCH"),
+    );
+
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: event.id, type: "payer_changed" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(job).not.toBeNull();
+    expect(JSON.parse(job!.payload).recipientUserIds).toEqual(["user-ana-first"]);
+  });
+
   it("carries the payer's account id when the payer is linked", async () => {
     const { event, game } = await seedEndedGameWithMethods();
     await linkUser("Ana", "user-ana");

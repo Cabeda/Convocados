@@ -1699,6 +1699,9 @@ adminPickupsDetected: "Pickups detectados",
   payerCardClaim: "Yo cobro",
   payerCardStandDown: "Esta semana no puedo",
   payerCardError: "No funcionó. Inténtalo de nuevo.",
+  // ADR 0055 — payer notifications
+  payerAssignedBody: "Estás cobrando para {title}. El grupo verá tus datos de pago si los compartes.",
+  payerChangedBody: "{name} está cobrando para {title} en tu lugar.",
 };
 
 export default es;
