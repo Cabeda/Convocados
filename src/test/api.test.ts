@@ -536,6 +536,17 @@ describe("POST /api/events/[id]/players", () => {
     expect(players[0].name).toBe("Alice");
   });
 
+  it("rejects adding a player when the current Game is cancelled", async () => {
+    const id = await seedEvent();
+    const game = await prisma.game.create({
+      data: { eventId: id, dateTime: new Date(Date.now() + 86400_000), status: "cancelled" },
+    });
+    await prisma.event.update({ where: { id }, data: { currentGameId: game.id } });
+
+    const res = await addPlayer(ctx({ id }, { name: "Alice" }));
+    expect(res.status).toBe(409);
+  });
+
   it("marks a name-only add as anonymous (no account to notify)", async () => {
     const id = await seedEvent();
     const res = await addPlayer(ctx({ id }, { name: "GuestGuy" }));
@@ -1344,6 +1355,24 @@ describe("GET /api/events/public", () => {
     const body = await res.json();
     expect(body.data).toHaveLength(1);
     expect(body.data[0].title).toBe("Public Game");
+  });
+
+  it("omits an event whose current Game is cancelled", async () => {
+    const cancelledId = await seedEvent({ title: "Cancelled Game" });
+    await prisma.event.update({ where: { id: cancelledId }, data: { isPublic: true } });
+    const game = await prisma.game.create({
+      data: { eventId: cancelledId, dateTime: new Date(Date.now() + 86400_000), status: "cancelled" },
+    });
+    await prisma.event.update({ where: { id: cancelledId }, data: { currentGameId: game.id } });
+
+    const liveId = await seedEvent({ title: "Live Game" });
+    await prisma.event.update({ where: { id: liveId }, data: { isPublic: true } });
+
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    const ids = body.data.map((event: { id: string }) => event.id);
+    expect(ids).toContain(liveId);
+    expect(ids).not.toContain(cancelledId);
   });
 
   it("exposes the city, and still lists an event that has none (#1445)", async () => {
