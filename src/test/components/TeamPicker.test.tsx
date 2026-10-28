@@ -111,7 +111,7 @@ describe("TeamPicker touch move", () => {
     renderWithTheme(<TeamPickerHarness onResultChange={onResultChange} />);
 
     const move = screen.getByTestId("team-player-move-Alice");
-    expect(move).toHaveAccessibleName("Move to Red");
+    expect(move).toHaveAccessibleName("Move Alice to Red");
     fireEvent.click(move);
 
     expect(onResultChange).toHaveBeenCalledTimes(1);

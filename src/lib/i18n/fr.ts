@@ -171,7 +171,7 @@ const fr: TranslationKeys = {
   saveScore: "Enregistrer le score",
   addPlayerToTeam: "Ajouter un joueur",
   saveTeams: "Enregistrer les équipes",
-  movePlayerToTeam: "Déplacer vers {team}",
+  movePlayerToTeam: "Déplacer {name} vers {team}",
   playerMovedToTeam: "{name} est passé dans {team}",
   decreaseScore: "Diminuer le score de {team}",
   increaseScore: "Augmenter le score de {team}",

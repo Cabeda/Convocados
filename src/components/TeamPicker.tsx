@@ -398,11 +398,11 @@ export function TeamPicker({
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
                           {canEdit && otherTeam && (
-                            <Tooltip title={t("movePlayerToTeam", { team: otherTeam })}>
+                            <Tooltip title={t("movePlayerToTeam", { name: player.name, team: otherTeam })}>
                               <IconButton
                                 size="small"
                                 data-testid={`team-player-move-${player.name}`}
-                                aria-label={t("movePlayerToTeam", { team: otherTeam })}
+                                aria-label={t("movePlayerToTeam", { name: player.name, team: otherTeam })}
                                 onClick={() => moveToOtherTeam(player.name, team.team, otherTeam)}
                                 sx={{ minWidth: 44, minHeight: 44 }}
                               >
