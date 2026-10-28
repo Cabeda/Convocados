@@ -184,7 +184,7 @@ const en = {
   saveScore: "Save score",
   addPlayerToTeam: "Add player",
   saveTeams: "Save teams",
-  movePlayerToTeam: "Move to {team}",
+  movePlayerToTeam: "Move {name} to {team}",
   playerMovedToTeam: "{name} moved to {team}",
   decreaseScore: "Decrease {team} score",
   increaseScore: "Increase {team} score",
