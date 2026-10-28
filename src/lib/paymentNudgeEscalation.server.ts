@@ -145,7 +145,9 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
           stage,
           amountCents: Math.round(payment.amount * 100),
           currency,
-          paymentMethods,
+          // Absent, not empty, when nothing is known: a subscriber must never
+          // render "pay via []" for an event nobody configured.
+          ...(paymentMethods.length > 0 ? { paymentMethods } : {}),
           ...(event.showDebtorNames ? { playerName: payment.playerName } : {}),
         }).catch(() => {});
 
