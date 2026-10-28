@@ -601,6 +601,27 @@ export interface ApiOperations {
       payerExternalName?: string;
     };
   };
+  "GET /api/events/{id}/payments/payer": {
+    params: {
+      id: string;
+    };
+  };
+  "POST /api/events/{id}/payments/payer/claim": {
+    params: {
+      id: string;
+    };
+    body: {
+      gameId?: string;
+    };
+  };
+  "POST /api/events/{id}/payments/payer/stand-down": {
+    params: {
+      id: string;
+    };
+    body: {
+      gameId?: string;
+    };
+  };
   "GET /api/events/{id}/payments/settlement": {
     params: {
       id: string;

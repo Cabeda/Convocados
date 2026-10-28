@@ -1693,6 +1693,12 @@ adminPickupsDetected: "Pickups detectados",
   myPaymentDetailsSaved: "Datos de pago guardados.",
   myPaymentDetailsSaveError: "No se pudieron guardar tus datos de pago.",
   paymentsRemove: "Quitar",
+  // ADR 0055 — payer card
+  payerCardCollecting: "{name} está cobrando",
+  payerCardVacant: "Todavía nadie está cobrando",
+  payerCardClaim: "Yo cobro",
+  payerCardStandDown: "Esta semana no puedo",
+  payerCardError: "No funcionó. Inténtalo de nuevo.",
 };
 
 export default es;

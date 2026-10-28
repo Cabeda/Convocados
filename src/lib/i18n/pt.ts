@@ -1741,6 +1741,12 @@ adminPickupsDetected: "Pickups detetados",
   myPaymentDetailsSaved: "Dados de pagamento guardados.",
   myPaymentDetailsSaveError: "Nao foi possivel guardar os teus dados de pagamento.",
   paymentsRemove: "Remover",
+  // ADR 0055 — payer card
+  payerCardCollecting: "{name} está a receber",
+  payerCardVacant: "Ainda ninguém está a receber",
+  payerCardClaim: "Eu recebo",
+  payerCardStandDown: "Esta semana não posso",
+  payerCardError: "Não funcionou. Tenta outra vez.",
 };
 
 export default pt;

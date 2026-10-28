@@ -904,6 +904,32 @@ export const openApiSpec = {
         responses: { "200": { description: "Payment config saved" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/payments/payer": {
+      get: {
+        summary: "Who is collecting for the current game, and what the viewer may do",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Payer state" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/payer/claim": {
+      post: {
+        summary: "Claim the payer role for the current game (any roster player)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" } } } } } },
+        responses: { "200": { description: "Role claimed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/payer/stand-down": {
+      post: {
+        summary: "Withdraw from the payer role for this game, leaving it Vacant",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" } } } } } },
+        responses: { "200": { description: "Role left vacant" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/payments/settlement": {
       get: {
         summary: "People-first settlement summary (receivers public, debtor names owner/admin-only)",

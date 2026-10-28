@@ -5,6 +5,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { detectLocale } from "~/lib/i18n";
 import { useT } from "~/lib/useT";
 import { formatDateInTz } from "~/lib/timezones";
+import { PayerCard } from "./PayerCard";
 
 export interface GameSummary {
   id: string;
@@ -60,6 +61,7 @@ export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast
             </Typography>
           </Box>
         </Stack>
+        <PayerCard eventId={game.id} />
       </Stack>
     </Paper>
   );
