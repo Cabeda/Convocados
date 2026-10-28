@@ -202,6 +202,36 @@ describe("GET /api/health", () => {
     }
   });
 
+  it("degrades when a replicating daemon has no successful sync after a day", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    await prisma.schedulerHeartbeat.upsert({
+      where: { id: "scheduler" },
+      create: { id: "scheduler", lastSeenAt: new Date() },
+      update: { lastSeenAt: new Date() },
+    });
+    vi.doMock("node:child_process", () => ({
+      execSync: vi.fn((cmd: string) => {
+        if (cmd.startsWith("pgrep")) return Buffer.from("1234");
+        return JSON.stringify({ databases: [{ path: "/data/db.sqlite", status: "replicating" }] });
+      }),
+    }));
+    const uptime = vi.spyOn(process, "uptime").mockReturnValue(25 * 60 * 60);
+    try {
+      vi.resetModules();
+      const { GET: getHealth } = await import("~/pages/api/health");
+      const res = await getHealth(ctx());
+      const body = await res.json();
+      expect(body.litestream.status).toBe("replicating");
+      expect(body.litestream.lastSyncAt).toBeNull();
+      expect(body.degraded).toBe(true);
+    } finally {
+      uptime.mockRestore();
+      process.env.NODE_ENV = oldNodeEnv;
+      vi.doUnmock("node:child_process");
+    }
+  });
+
   it("reports scheduler running=true when heartbeat is fresh in production", async () => {
     const oldNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
