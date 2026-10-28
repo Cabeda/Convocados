@@ -27,6 +27,12 @@ minimumReleaseAgeExclude:
   - playwright-core@1.62.0
   - playwright@1.62.0
 overrides:
+  # zod 4.x: memory exhaustion while validating oversized constrained
+  # collections (GHSA-mrhx-c7xc-m3w5), patched in 4.6.6. Reached through astro
+  # and @better-auth/core in the production graph. Pin the 4.x line to 4.6.7;
+  # the 3.x copy used by chromium-bidi stays on 3.x on purpose (a 4.x override
+  # there would be a breaking major for a devDependency).
+  'zod@>=4.0.0 <4.6.6': '>=4.6.7'
   # Quadratic-time CPU DoS in basic-ftp's Client.list() parser (GHSA-c475-qrg2-pj4r),
   # reached through @lhci/cli -> lighthouse -> puppeteer-core -> proxy-agent.
   # Patched in 6.2.1. This single entry replaces the older version-scoped
@@ -117,16 +123,13 @@ auditConfig:
     - GHSA-7pqw-9j4j-h8q3
     #
     # zod <4.6.6 — memory exhaustion while validating oversized constrained
-    # collections (GHSA-mrhx-c7xc-m3w5). No fixed 3.x exists: the patch lands in
-    # 4.6.6 only, and the vulnerable copy is zod 3.25.76 reached through
-    # @lhci/cli -> lighthouse -> puppeteer-core -> chromium-bidi. Forcing 4.x
-    # into chromium-bidi is a breaking major for a devDependency, so the
-    # override is not an option and the exemption carries the decision.
+    # collections (GHSA-mrhx-c7xc-m3w5). The production 4.x copies (astro,
+    # @better-auth/core) are pinned to 4.6.7 by the `zod@>=4.0.0 <4.6.6`
+    # override, so `pnpm audit --prod` is clean. The remaining vulnerable copy
+    # is zod 3.25.76 reached through @lhci/cli -> lighthouse -> puppeteer-core
+    # -> chromium-bidi. That is dev-only; forcing 4.x there is a breaking major
+    # for a devDependency, so this exemption covers that copy.
     #
-    # Exposure is dev-only: @lhci/cli is a devDependency and zod is imported by
-    # puppeteer's browser plumbing, never by the server runtime. The other 4.x
-    # copy (eslint-plugin-react-hooks) is unaffected by this entry.
-    #
-    # Reviewed by Cabeda on 2026-10-24; re-review by 2026-11-24, or sooner if a
+    # Reviewed by Cabeda on 2026-10-28; re-review by 2026-11-28, or sooner if a
     # 3.x patch publishes.
     - GHSA-mrhx-c7xc-m3w5
