@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { authenticateRequest } from "~/lib/authenticate.server";
+import { authenticateRequest, requireScope } from "~/lib/authenticate.server";
+import { insufficientScopeChallenge } from "~/lib/mcp/protocol";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { authorizeEventMutation } from "~/lib/eventAuthz.server";
@@ -22,6 +23,12 @@ export const POST: APIRoute = async ({ params, request }) => {
   const authCtx = await authenticateRequest(request);
   const userId = authCtx?.userId ?? (await getSession(request))?.user?.id ?? null;
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (authCtx && !requireScope(authCtx, "manage:payments")) {
+    return Response.json(
+      { error: "insufficient_scope", scope: "manage:payments" },
+      { status: 403, headers: { "WWW-Authenticate": insufficientScopeChallenge(["manage:payments"]) } },
+    );
+  }
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },

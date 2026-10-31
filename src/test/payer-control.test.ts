@@ -8,9 +8,14 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: (...args: any[]) => mockGetSession(...args),
   checkOwnership: async () => ({ isOwner: false, isAdmin: false, session: null }),
 }));
-vi.mock("~/lib/authenticate.server", () => ({
-  authenticateRequest: async () => null,
-}));
+const mockAuthenticate = vi.fn();
+vi.mock("~/lib/authenticate.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/lib/authenticate.server")>();
+  return {
+    ...actual,
+    authenticateRequest: (...args: any[]) => mockAuthenticate(...args),
+  };
+});
 vi.mock("~/lib/logger.server", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -93,6 +98,8 @@ beforeEach(async () => {
   await testPrisma.event.deleteMany({ where: { id: { startsWith: "pc-e-" } } });
   await testPrisma.user.deleteMany({ where: { id: { startsWith: "pc-" } } });
   mockGetSession.mockReset();
+  mockAuthenticate.mockReset();
+  mockAuthenticate.mockResolvedValue(null);
 });
 
 describe("POST payer/claim", () => {
@@ -122,6 +129,15 @@ describe("POST payer/claim", () => {
 
     const res = await claim(CTX(event.id));
     expect(res.status).toBe(401);
+  });
+
+  it("rejects a read-only API key", async () => {
+    const { event, ana } = await seed();
+    mockAuthenticate.mockResolvedValue({ userId: ana.id, scopes: ["read:profile"], authMethod: "api_key" });
+
+    const res = await claim(CTX(event.id));
+    expect(res.status).toBe(403);
+    expect(res.headers.get("WWW-Authenticate")).toContain("insufficient_scope");
   });
 
   it("refuses a player who has left the active roster", async () => {

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
-import { authenticateRequest } from "../../../lib/authenticate.server";
+import { authenticateRequest, requireScope, type AuthContext } from "../../../lib/authenticate.server";
+import { insufficientScopeChallenge } from "../../../lib/mcp/protocol";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { rateLimitResponseForKey } from "../../../lib/apiRateLimit.server";
 import {
@@ -41,16 +42,20 @@ function serialize(user: {
   };
 }
 
-async function resolveUserId(request: Request): Promise<string | null> {
+async function resolveAuth(request: Request): Promise<AuthContext | null> {
   const authCtx = await authenticateRequest(request);
-  return authCtx?.userId ?? (await getSession(request))?.user?.id ?? null;
+  if (authCtx) return authCtx;
+  const session = await getSession(request);
+  if (!session?.user) return null;
+  return { userId: session.user.id, scopes: ["*"], authMethod: "session" };
 }
 
 export const GET: APIRoute = async ({ request }) => {
-  const userId = await resolveUserId(request);
-  if (!userId) {
+  const auth = await resolveAuth(request);
+  if (!auth) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = auth.userId;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -64,10 +69,19 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const PUT: APIRoute = async ({ request }) => {
-  const userId = await resolveUserId(request);
-  if (!userId) {
+  const auth = await resolveAuth(request);
+  if (!auth) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // A read-only API key must not be able to change where the crew is told to
+  // send money. Session callers carry ["*"] and always pass.
+  if (!requireScope(auth, "manage:payments")) {
+    return Response.json(
+      { error: "insufficient_scope", scope: "manage:payments" },
+      { status: 403, headers: { "WWW-Authenticate": insufficientScopeChallenge(["manage:payments"]) } },
+    );
+  }
+  const userId = auth.userId;
 
   const limited = await rateLimitResponseForKey(userId, "write");
   if (limited) return limited;
