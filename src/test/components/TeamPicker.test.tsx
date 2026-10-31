@@ -23,6 +23,33 @@ function TeamPickerHarness({ shuffleKey = 0, canEdit = true, onResultChange }: {
   );
 }
 
+/** A harness that can apply a newer lineup change after a move. */
+function StaleUndoHarness() {
+  const [matches, setMatches] = useState(initialMatches);
+  return (
+    <>
+      <button
+        onClick={() =>
+          setMatches([
+            { team: "Blue", players: [] },
+            {
+              team: "Red",
+              players: [
+                { name: "Bob", order: 0 },
+                { name: "Alice", order: 1 },
+                { name: "Cara", order: 2 },
+              ],
+            },
+          ])
+        }
+      >
+        newer-lineup
+      </button>
+      <TeamPicker matches={matches} onResultChange={setMatches} canEdit />
+    </>
+  );
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -102,6 +129,47 @@ describe("TeamPicker motion", () => {
     });
 
     expect(onResultChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("TeamPicker touch move", () => {
+  it("moves a player to the other team in one click and undoes it", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamPickerHarness onResultChange={onResultChange} />);
+
+    const move = screen.getByTestId("team-player-move-Alice");
+    expect(move).toHaveAccessibleName("Move Alice to Red");
+    fireEvent.click(move);
+
+    expect(onResultChange).toHaveBeenCalledTimes(1);
+    const moved = onResultChange.mock.calls[0][0] as Imatch[];
+    expect(moved.find((team) => team.team === "Blue")?.players.map((p) => p.name)).toEqual([]);
+    expect(moved.find((team) => team.team === "Red")?.players.map((p) => p.name)).toEqual(["Bob", "Alice"]);
+
+    expect(screen.getByText("Alice moved to Red")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Undo"));
+
+    expect(onResultChange).toHaveBeenCalledTimes(2);
+    expect(onResultChange.mock.calls[1][0]).toEqual(initialMatches);
+  });
+
+  it("drops a stale move undo instead of reverting a newer lineup change", () => {
+    renderWithTheme(<StaleUndoHarness />);
+
+    fireEvent.click(screen.getByTestId("team-player-move-Alice"));
+    fireEvent.click(screen.getByText("newer-lineup"));
+    expect(screen.getByTestId("team-player-Cara")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Undo"));
+
+    // The stale pre-move snapshot must not wipe Cara out.
+    expect(screen.getByTestId("team-player-Cara")).toBeInTheDocument();
+    expect(screen.getByTestId("team-player-Alice")).toBeInTheDocument();
+  });
+
+  it("renders no move control when the teams are read-only", () => {
+    renderWithTheme(<TeamPickerHarness canEdit={false} />);
+    expect(screen.queryByTestId("team-player-move-Alice")).not.toBeInTheDocument();
   });
 });
 

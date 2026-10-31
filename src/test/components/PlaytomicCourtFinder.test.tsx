@@ -30,7 +30,7 @@ describe("PlaytomicCourtFinder — a court price uses the one money format", () 
         : { courts: [{ resource_id: "r1", resource_name: "Court 1", slots: [
             { start_time: "18:00:00", duration: 60, price: 15.5, currency: "EUR" },
           ] }] };
-      return { ok: true, json: async () => body } as unknown as Response;
+      return { ok: true, headers: { get: () => "application/json" }, json: async () => body } as unknown as Response;
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -51,7 +51,7 @@ describe("PlaytomicCourtFinder — a court price uses the one money format", () 
         : { courts: [{ resource_id: "r1", resource_name: "Court 1", slots: [
             { start_time: "18:00:00", duration: 60, price: 15.5, currency: "SEK" },
           ] }] };
-      return { ok: true, json: async () => body } as unknown as Response;
+      return { ok: true, headers: { get: () => "application/json" }, json: async () => body } as unknown as Response;
     }));
 
     renderWithTheme(

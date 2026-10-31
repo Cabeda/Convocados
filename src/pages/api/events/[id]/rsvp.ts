@@ -7,6 +7,7 @@ import { upsertRsvp, getRsvpForUser } from "~/lib/rsvp.server";
 import { isRsvpStatusValue } from "~/lib/rsvp";
 import { enqueueRsvpAnswerNotification } from "~/lib/rsvp-notifications.server";
 import { logEvent } from "~/lib/eventLog.server";
+import { isCurrentGameCancelled } from "~/lib/currentGame.server";
 import { IDEMPOTENCY_HEADER, getCachedResponse, makeCacheKey, hasConflictingEntry, storeCachedResponse } from "~/lib/idempotency";
 
 /** POST /api/events/[id]/rsvp — body { status: "yes" | "no" | "maybe" }. Idempotent. */
@@ -20,9 +21,13 @@ export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, dateTime: true, title: true, ownerId: true },
+    select: { id: true, dateTime: true, title: true, ownerId: true, currentGameId: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  if (await isCurrentGameCancelled(event.currentGameId)) {
+    return Response.json({ error: "This game has been cancelled." }, { status: 409 });
+  }
 
   // RSVP closes at kickoff
   if (event.dateTime.getTime() <= Date.now()) {

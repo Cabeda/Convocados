@@ -27,11 +27,13 @@ import { useThemeMode } from "./ThemeModeProvider";
 import { useLocale } from "~/lib/useT";
 import type { Locale } from "~/lib/i18n";
 import { useSession, signOut } from "~/lib/auth.client";
+import { apiRequest } from "~/lib/api/client";
 import { shareForHomeScreen } from "~/lib/pwaInstall";
 import { INSTALL_BANNER_DISMISS_KEY, installBannerDismissed } from "~/lib/pushPrompt";
 import { BottomSlotProvider, useBottomSlotClaim } from "~/lib/bottomSlot";
 import { SignInButton } from "./SignInButton";
 import SupportLinks from "./SupportLinks";
+import NotificationsBell from "./NotificationsBell";
 
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
@@ -361,7 +363,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (!session?.user) { setIsAdminUser(false); return; }
-    fetch("/api/admin/check").then((r) => r.json()).then((d) => setIsAdminUser(d.isAdmin)).catch(() => {});
+    apiRequest("GET /api/admin/check").then((d) => setIsAdminUser((d as { isAdmin: boolean }).isAdmin)).catch(() => {});
   }, [session?.user]);
 
   const handleLangSelect = (code: Locale) => {
@@ -412,6 +414,10 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               {t("appName")}
               <Chip label="beta" size="small" sx={{ fontSize: "0.6rem", height: 18, ml: 0.5 }} />
             </Typography>
+            {/* The in-app feed has been written since the notification queue
+                landed; the web had no way to read it (#1560). */}
+            <NotificationsBell signedIn={!!session?.user} />
+
             <Tooltip title={t("publicGames")}>
               <IconButton color="inherit" aria-label={t("publicGames")}
                 href="/public"

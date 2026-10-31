@@ -875,7 +875,12 @@ export const WRITE_TOOLS: ToolDef[] = [
   {
     name: "convocados_create_event",
     title: "Create game",
-    description: "Create a new Game (Event) owned by the caller with its first Game instance. Location is stored as text (no geocoding).",
+    description:
+      "Create a game (Event) owned by the caller, with its first instance. Requires title, dateTime and location. " +
+      "Pass dateTime as local wall-clock ISO 8601 (\"2026-10-29T20:00\") plus timezone (\"Europe/Lisbon\"); " +
+      "without a timezone the time is stored as UTC and lands at the wrong hour. " +
+      'Example: {"title":"Thursday 5-a-side","dateTime":"2026-10-29T20:00","timezone":"Europe/Lisbon","location":"Pavilhao Municipal","maxPlayers":10}. ' +
+      "Location is stored as text (no geocoding).",
     inputSchema: {
       type: "object",
       properties: {

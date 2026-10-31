@@ -30,9 +30,13 @@ export type NotificationJobType =
   | "bench_promoted_capacity"
   | "payment_confirmed"
   | "payment_self_reported"
+  | "payer_assigned"
+  | "payer_changed"
   | "recruitment"
   | "few_spots_left"
-  | "player_invited";
+  | "player_invited"
+  | "crew_captain_nominated"
+  | "crew_captain_accepted";
 
 export interface NotificationJobPayload {
   title: string;
@@ -42,6 +46,11 @@ export interface NotificationJobPayload {
   spotsLeft: number;
   /** Only set for "reminder" jobs — used to check per-timing push prefs */
   reminderType?: "24h" | "2h" | "1h";
+  /**
+   * The exact people this fact concerns (#1558). A crew captain change is not
+   * "who follows the event", so the drain must not re-derive its audience.
+   */
+  recipientUserIds?: string[];
 }
 
 /**
@@ -295,6 +304,7 @@ async function _doDrain(): Promise<number> {
             // read this one list, so a channel cannot reach a different answer.
             const audience = await resolveJobAudience(job.eventId, type, {
               excludeUserIds: job.senderClientId ? [job.senderClientId] : [],
+              ...(payload.recipientUserIds ? { onlyUserIds: payload.recipientUserIds } : {}),
             });
             await sendPushToEvent(
               job.eventId,

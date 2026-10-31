@@ -1,6 +1,6 @@
 {
   "name": "convocados",
-  "version": "3.254.1",
+  "version": "3.262.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -38,6 +38,8 @@
     "sync:i18n": "tsx scripts/generate-android-strings.ts",
     "sync:feature-parity-docs": "tsx scripts/generate-feature-parity-docs.ts",
     "check:feature-parity": "tsx scripts/generate-feature-parity-docs.ts --check",
+    "generate:api-client": "tsx scripts/generate-api-client.ts",
+    "check:api-client": "tsx scripts/generate-api-client.ts --check",
     "db:seed:settlement": "sh scripts/with-env.sh tsx prisma/seed-settlement-demo.ts",
     "db:backfill:merged-identity": "sh scripts/with-env.sh tsx scripts/backfill-merged-player-identity.ts",
     "db:repair:participant-order": "sh scripts/with-env.sh tsx scripts/repair-game-participant-order.ts"

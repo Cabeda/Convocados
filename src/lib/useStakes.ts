@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StakesPreviewData, StakesScenario } from "~/lib/stakesPreview";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 export interface UseStakesResult {
   /** Null when there is no active Season, the viewer is not a participant, or the request failed. */
@@ -29,20 +30,15 @@ export function useStakes(eventId: string, teamOne: string[], teamTwo: string[])
       abortRef.current?.abort();
       abortRef.current = controller;
       try {
-        const res = await fetch(`/api/events/${eventId}/stakes-preview`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ teamOne, teamTwo }),
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          setData(null);
-          return;
-        }
-        const json = (await res.json()) as { active: boolean; preview?: StakesPreviewData };
+        const json = (await apiRequest("POST /api/events/{id}/stakes-preview", {
+          params: { id: eventId },
+          body: { teamOne, teamTwo },
+          init: { signal: controller.signal },
+        })) as { active: boolean; preview?: StakesPreviewData };
         setData(json.active && json.preview ? json.preview : null);
-      } catch {
-        /* aborted or offline — keep the last projection in place */
+      } catch (err) {
+        if (err instanceof ApiError) setData(null);
+        // aborted or offline — keep the last projection in place
       }
     }, 250);
     return () => {

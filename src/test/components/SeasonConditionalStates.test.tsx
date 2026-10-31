@@ -7,6 +7,9 @@ import SeasonListPage from "~/components/SeasonListPage";
 import CrewProposalPanel from "~/components/CrewProposalPanel";
 import { LeaderboardTables, type LeaderboardPayload } from "~/components/LeaderboardTables";
 
+// The typed client parses JSON by content type; a bare `new Response(body)` is text/plain.
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 const emptyProposalPanel = { canPropose: false, canReview: false, candidates: [], proposals: [] };
 
 beforeEach(() => {
@@ -30,9 +33,9 @@ describe("SeasonPage conditional states", () => {
     vi.mocked(fetch).mockImplementation((input) => {
       const url = String(input);
       if (url.includes("crew-proposals")) {
-        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
       }
-      return Promise.resolve(new Response(JSON.stringify({ error: "Boom" }), { status: 500 }));
+      return Promise.resolve(new Response(JSON.stringify({ error: "Boom" }), { status: 500, headers: JSON_HEADERS }));
     });
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
@@ -45,14 +48,44 @@ describe("SeasonPage conditional states", () => {
     vi.mocked(fetch).mockImplementation((input) => {
       const url = String(input);
       if (url.includes("crew-proposals")) {
-        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
       }
-      return Promise.resolve(new Response(JSON.stringify({}), { status: 401 }));
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 401, headers: JSON_HEADERS }));
     });
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
 
     expect(await screen.findByText("Sign in as the event owner or an admin to manage Crews.")).toBeInTheDocument();
+  });
+
+  it("shows the Crew captain on the participant crew list", async () => {
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("crew-proposals")) {
+        return Promise.resolve(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        season: {
+          id: "season-1",
+          name: "Spring",
+          status: "active",
+          registrationOpensAt: "2026-01-01T00:00:00.000Z",
+          registrationClosesAt: "2026-02-01T00:00:00.000Z",
+          crews: [{
+            name: "North",
+            sortOrder: 0,
+            captainMembershipId: "membership-1",
+            captainName: "Ana",
+            members: [{ name: "Ana" }, { name: "Bo" }],
+          }],
+          viewerMembership: { id: "membership-2", status: "active", eventPlayerId: "player-2" },
+        },
+      }), { status: 200, headers: JSON_HEADERS }));
+    });
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+
+    expect(await screen.findByText("Captain: Ana")).toBeInTheDocument();
   });
 });
 
@@ -64,13 +97,13 @@ describe("SeasonListPage conditional states", () => {
   });
 
   it("surfaces a load failure", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: "Nope" }), { status: 500 }));
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: "Nope" }), { status: 500, headers: JSON_HEADERS }));
     renderWithTheme(<SeasonListPage eventId="event-1" />);
     expect(await screen.findByText("Nope")).toBeInTheDocument();
   });
 
   it("shows the locked notice without season data", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ locked: true }), { status: 200 }));
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ locked: true }), { status: 200, headers: JSON_HEADERS }));
     renderWithTheme(<SeasonListPage eventId="event-1" />);
     expect(await screen.findByText("This event is password-protected.")).toBeInTheDocument();
   });
@@ -78,7 +111,7 @@ describe("SeasonListPage conditional states", () => {
 
 describe("CrewProposalPanel conditional states", () => {
   it("renders nothing when the viewer has no proposal access", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(emptyProposalPanel), { status: 200 }));
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(emptyProposalPanel), { status: 200, headers: JSON_HEADERS }));
     renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -87,11 +120,11 @@ describe("CrewProposalPanel conditional states", () => {
   });
 
   it("renders nothing when the proposals request is forbidden", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 }));
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: JSON_HEADERS }));
     renderWithTheme(<CrewProposalPanel eventId="event-1" seasonId="season-1" />);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/events/event-1/seasons/season-1/crew-proposals");
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/events/event-1/seasons/season-1/crew-proposals", { method: "GET" });
     expect(screen.queryByRole("heading", { name: "Propose a Crew" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Submit Crew proposal" })).not.toBeInTheDocument();
   });

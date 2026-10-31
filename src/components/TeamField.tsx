@@ -284,16 +284,17 @@ export function TeamField({
                 transition: "border-color 0.2s, background-color 0.2s",
               }}
             >
-              <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", rowGap: 0.5 }}>
                 <Typography
                   variant="subtitle1"
                   fontWeight={700}
                   noWrap
-                  sx={{ color: "#ffffff", textShadow: "0 1px 2px rgba(0,0,0,0.45)" }}
+                  title={team.team}
+                  sx={{ color: "#ffffff", textShadow: "0 1px 2px rgba(0,0,0,0.45)", minWidth: 0, flex: "1 1 auto" }}
                 >
                   {team.team}
                 </Typography>
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end", rowGap: 0.5 }}>
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", rowGap: 0.5 }}>
                   {(crewChipsByTeamIndex?.[teamIdx] ?? []).map((c) => {
                     const col = crewColor(c.crewId);
                     const up = c.passed > 0;
@@ -308,6 +309,7 @@ export function TeamField({
                         } · #${c.positionAfter}`}
                         size="small"
                         sx={{
+                          display: { xs: "none", sm: "inline-flex" },
                           bgcolor: alpha(col, 0.4),
                           color: "#ffffff",
                           fontWeight: 700,

@@ -44,7 +44,12 @@ const mockEvents = [
 ];
 
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch;
+// apiRequest reads the content-type header; these tests stub only the parsed body.
+globalThis.fetch = ((...args: Parameters<typeof fetch>) =>
+  Promise.resolve(mockFetch(...args)).then((res) => ({
+    headers: { get: () => "application/json" },
+    ...res,
+  }))) as typeof fetch;
 
 afterEach(() => cleanup());
 

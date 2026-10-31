@@ -1065,6 +1065,7 @@ data class SeasonCrew(
     val id: String? = null,
     val name: String = "",
     val sortOrder: Int = 0,
+    val captainName: String? = null,
     val members: List<SeasonCrewMember> = emptyList(),
 )
 
@@ -1195,6 +1196,12 @@ data class CrewProposal(
     val id: String = "",
     val name: String = "",
     val status: String = "pending",
+    /** create | add | remove — a captain nomination is an `add` with no proposer. */
+    val kind: String = "create",
+    val targetCrewId: String? = null,
+    val targetCrewName: String? = null,
+    val captainNomination: Boolean = false,
+    val awaitingMyAcceptance: Boolean = false,
     val proposerName: String = "",
     val memberNames: List<String> = emptyList(),
     val rejectionReason: String? = null,

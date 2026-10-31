@@ -2,7 +2,6 @@
 
 Status: design interview in progress
 
-Pilot Event: [Ninjas da Areosa](https://convocados.fly.dev/events/cmmkfrx8b0000o2ixrix1yp2m)
 Tracking issue: [#875](https://github.com/Cabeda/Convocados/issues/875)
 
 ## Purpose
@@ -62,9 +61,9 @@ The pilot must not pressure people to attend, expose weaker players, or make the
 - Web and Android phone expose registration, Crews, standings, badges, and Crew-aware team generation. WhatsApp links open the web Season page. Wear OS score entry continues feeding backend standings, but Wear does not add registration or standings UI in the pilot.
 - The feature requires user-facing rules and contextual explanations so participants understand scoring, attendance, pairing, membership changes, review, and badges before opting in.
 - The first pilot ends with the table winner and badge. A Final Four is deferred as a separate future year-end Crew Cup with its own lineup, substitute, scheduling, qualification, and forfeit rules.
-- Pilot rules are fixed. Admins configure only the Season name and registration dates, then may cancel, approve one replacement per Crew, reopen, or finalize. Alternative competition rules may become named presets only after testing.
+- Pilot rules are fixed. Admins configure only the Season name and registration dates, then may cancel, nominate or replace a Crew's Captain, approve one replacement per Crew, reopen, or finalize. Alternative competition rules may become named presets only after testing.
 - Before opting in, a player sees the eight-Game and best-six format, 3/1/0 averaging, lack of attendance commitment, balance-first pairing, public Crew standings, private individual contributions, membership lock, withdrawal right, replacement rule, and badge eligibility. The Season page retains a full rules explanation and worked scoring example.
-- Any account-linked EventPlayer may create one Crew and becomes its Captain. Captains name the Crew, invite up to four members, and cancel pending invitations. They cannot remove confirmed members without consent or Admin intervention, and cannot control scores, standings, replacements, or team generation.
+- Any account-linked EventPlayer may create one Crew. The **Event owner/Admin nominates its Captain** from that Crew's active members and the nominee **accepts**; the owner may replace a pending or an accepted Captain at any point in the Season ([#1442](https://github.com/Cabeda/Convocados/issues/1442), `GLOSSARY.md` → Captain). Captains name the Crew, invite up to four members, and cancel pending invitations. A Captain **proposes** adding or dropping a player on their own Crew and the owner/Admin reviews it; they cannot edit the roster directly, and cannot control scores, standings, replacements, or team generation.
 - Crew names are unique within a Season and subject to Admin moderation. Unmatched free agents are never assigned automatically; their opt-in expires when registration closes.
 - Convocados sends no new Season push or email notifications. Season and Crew changes extend the Event's existing opt-in webhook subscriptions, while invitations and state remain visible in-app and Captains may share the Event link themselves.
 - The webhook catalog adds `season_registration_opened`, `crew_created`, `crew_invitation_created`, `crew_membership_changed`, `season_started`, `season_standings_updated`, `season_review_started`, `season_completed`, `season_cancelled`, and `season_reopened`. Membership changes carry a joined, declined, withdrew, or replaced action.
@@ -75,7 +74,13 @@ The pilot must not pressure people to attend, expose weaker players, or make the
 - Season access inherits Event access. Anyone who may view the Event may view Crew names, members, rules, and standings. `showCompetitiveData` continues controlling individual ELO data and does not hide an explicitly enabled Season.
 - Crew and Season scores display two decimal places but rank on unrounded values derived from the underlying result counts. Crews still tied for first after the all-eight-Games tie-breaker are co-champions, and every eligible co-champion receives the same badge.
 - At registration close, Crews with fewer than three confirmed members do not qualify. Their members become unmatched free agents whose opt-ins then expire. Crew names lock when competition starts; only Admin typo corrections or moderation remain allowed.
-- If a Captain withdraws, the longest-standing confirmed member becomes Captain. Captain transfer does not consume the Crew's replacement. A Crew whose entire membership withdraws remains in historical standings and scores zero in future rounds.
+- If a Captain withdraws there is **no automatic transfer**: the owner/Admin nominates a new Captain from the Crew's remaining active members, and the Crew has no Captain until that nominee accepts. A replacement Captain does not consume the Crew's replacement. A Crew whose entire membership withdraws remains in historical standings and scores zero in future rounds.
+
+## Status
+
+The Captain model described above is the one shipped in #1442 (the nomination, acceptance,
+replacement and proposal flow). Where this document and `GLOSSARY.md` disagree, the glossary and
+the Issue win.
 
 ## Current product constraints
 

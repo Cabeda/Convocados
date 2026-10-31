@@ -378,6 +378,9 @@ fun SeasonDetailScreen(
                             Column(Modifier.padding(14.dp)) {
                                 Text(crew.name, fontWeight = FontWeight.Bold)
                                 Text(crew.members.joinToString(", ") { it.name }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                crew.captainName?.let {
+                                    Text(stringResource(R.string.crew_captain, it), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
@@ -402,26 +405,16 @@ fun SeasonDetailScreen(
                 if (showProposals && s.status == "registration") {
                     item { Text(stringResource(R.string.crew_proposals), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
 
-                    if (canReview && proposals.any { it.status == "pending" }) {
+                    if ((canReview || proposals.any { it.awaitingMyAcceptance }) && proposals.any { it.status == "pending" }) {
                         item { Text(stringResource(R.string.crew_proposal_review_queue), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
                         items(proposals.filter { it.status == "pending" }, key = { it.id }) { proposal ->
-                            Card(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(proposal.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                        AssistChip(onClick = {}, label = { Text(stringResource(R.string.proposal_status_pending)) })
-                                    }
-                                    Text(proposal.memberNames.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Button(onClick = { viewModel.decideProposal(eventId, seasonId, proposal.id, "approve") }, enabled = !busy) {
-                                            Text(stringResource(R.string.approve_proposal))
-                                        }
-                                        OutlinedButton(onClick = { rejectingId = proposal.id }, enabled = !busy) {
-                                            Text(stringResource(R.string.reject_proposal))
-                                        }
-                                    }
-                                }
-                            }
+                            PendingCrewProposalCard(
+                                proposal = proposal,
+                                canReview = canReview,
+                                busy = busy,
+                                onDecide = { decision -> viewModel.decideProposal(eventId, seasonId, proposal.id, decision) },
+                                onReject = { rejectingId = proposal.id },
+                            )
                         }
                     }
 
@@ -521,4 +514,46 @@ private fun statusLabel(status: String): String = when (status) {
     "approved" -> stringResource(R.string.proposal_status_approved)
     "rejected" -> stringResource(R.string.proposal_status_rejected)
     else -> stringResource(R.string.proposal_status_pending)
+}
+
+/**
+ * One pending proposal in the review queue. A captain nomination is answered by its
+ * nominee (Accept), never approved by a reviewer (#1442).
+ */
+@Composable
+internal fun PendingCrewProposalCard(
+    proposal: CrewProposal,
+    canReview: Boolean,
+    busy: Boolean,
+    onDecide: (decision: String) -> Unit,
+    onReject: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (proposal.captainNomination) {
+                        stringResource(R.string.captain_nomination, proposal.targetCrewName ?: proposal.name)
+                    } else {
+                        proposal.name
+                    },
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                AssistChip(onClick = {}, label = { Text(stringResource(R.string.proposal_status_pending)) })
+            }
+            Text(proposal.memberNames.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (proposal.awaitingMyAcceptance) {
+                    Button(onClick = { onDecide("accept") }, enabled = !busy) { Text(stringResource(R.string.accept_captaincy)) }
+                }
+                if (canReview && !proposal.captainNomination) {
+                    Button(onClick = { onDecide("approve") }, enabled = !busy) { Text(stringResource(R.string.approve_proposal)) }
+                }
+                if (canReview) {
+                    OutlinedButton(onClick = onReject, enabled = !busy) { Text(stringResource(R.string.reject_proposal)) }
+                }
+            }
+        }
+    }
 }

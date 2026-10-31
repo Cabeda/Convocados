@@ -60,6 +60,14 @@ export interface ResolveEventAudienceOptions {
   excludeUserIds?: Iterable<string>;
   /** Apply ADR 0025 ping suppression (declined / opted-out users). */
   suppressPingDeclines?: boolean;
+  /**
+   * Deliver to exactly these users, bypassing follower/owner resolution.
+   *
+   * For a notification whose audience is not "who follows this event" — a crew
+   * captain's crew and admins (#1558). The caller computes the list at the
+   * moment of the fact; the queue must not re-derive a different one.
+   */
+  onlyUserIds?: Iterable<string>;
 }
 
 export async function resolveEventAudience(
@@ -136,6 +144,11 @@ export async function resolveJobAudience(
   type: NotificationJobType | undefined,
   opts: ResolveEventAudienceOptions = {},
 ): Promise<JobAudience> {
+  const named = opts.onlyUserIds ? [...opts.onlyUserIds] : null;
+  if (named) {
+    return { eventId, userIds: named, decisions: new Map(named.map((userId) => [userId, "open" as MuteTierDecision])) };
+  }
+
   const { userIds, follows, notificationDefaults, maxPlayers, currentGameId } = await resolveEventAudience(
     eventId,
     {

@@ -1,17 +1,11 @@
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
-import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
-import { sendReminder } from "./email.server";
-import { getNotificationPrefs, wantsEmailReminder } from "./notificationPrefs.server";
-import { isReminderEnabled } from "./reminders.server";
-import { getRosterCapacity } from "./roster.server";
-import { fireWebhooks } from "./webhook.server";
+import { drainNotificationQueue } from "./notificationQueue.server";
+import { deliverReminder, markReminderSent, type GameReminderType } from "./reminders.server";
 import { findSplitIdentities, collapseSplitIdentities, reconcilePaymentNames } from "./backfillMergedIdentity.server";
 import { recalculateAllRatings } from "./elo.server";
 
 const log = createLogger("scheduler");
-
-const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 
 export const SCHEDULER_HEARTBEAT_ID = "scheduler";
 
@@ -30,14 +24,6 @@ const REMINDER_OFFSETS = {
   reminder_2h: 2 * 60 * 60 * 1000,
   reminder_1h: 60 * 60 * 1000,
 } as const;
-
-/** Map ScheduledJob type to ReminderLog type */
-const JOB_TO_LOG_TYPE: Record<string, string> = {
-  reminder_24h: "24h",
-  reminder_2h: "2h",
-  reminder_1h: "1h",
-  post_game: "post-game",
-};
 
 /**
  * Schedule reminder jobs for an event.
@@ -255,124 +241,29 @@ export async function processJob(jobId: string): Promise<"processed" | "skipped"
 async function _processReminderJob(job: { id: string; eventId: string | null; type: string }) {
   if (!job.eventId) return;
 
-  const reminderType = job.type.replace("reminder_", "") as "24h" | "2h" | "1h";
-  const event = await prisma.event.findUnique({
-    where: { id: job.eventId },
-    include: {
-      players: { include: { user: { select: { email: true } } } },
-    },
-  });
-  if (!event) return;
-  // Archived events never notify — jobs may still be queued from before the
-  // archive. Mark processed (the caller does) without sending anything.
-  if (event.archivedAt) return;
-
-  // Reminder Timings gate: a disabled timing emits nothing on any channel,
-  // but is still recorded as sent ("intentionally skipped") so the job is
-  // closed out and nothing re-sweeps the window.
-  if (!isReminderEnabled(event, reminderType)) {
-    const logType = JOB_TO_LOG_TYPE[job.type];
-    if (logType) {
-      await prisma.reminderLog.upsert({
-        where: { eventId_type: { eventId: event.id, type: logType } },
-        create: { eventId: event.id, type: logType },
-        update: {},
-      });
-    }
-    return;
+  const reminderType = job.type.replace("reminder_", "") as GameReminderType;
+  const outcome = await deliverReminder(job.eventId, reminderType);
+  if (outcome === "already-sent" || outcome === "archived") return;
+  if (outcome === "delivered-with-failures") {
+    log.warn({ eventId: job.eventId, type: reminderType }, "Reminder delivered with email failures");
   }
-
-  // Recipients still come from the legacy Player rows, but remaining capacity is
-  // the Roster's answer (ADR 0016): those rows accumulate across an Event's Games
-  // and would report a full Game for a recurring Event past its first Game.
-  const activePlayers = event.players.filter((p) => !p.archivedAt);
-  const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
-
-  // Enqueue push notification
-  await enqueueNotification(event.id, "reminder", {
-    title: event.title,
-    key: reminderType === "24h" ? "notifyGameReminder24h" : reminderType === "2h" ? "notifyGameReminder2h" : "notifyGameReminder1h",
-    params: { title: event.title },
-    url: `/events/${event.id}`,
-    spotsLeft,
-    reminderType,
-  });
-  await drainNotificationQueue();
-
-  // Send emails to players who want them
-  const userIds = activePlayers.map((p) => p.userId).filter(Boolean) as string[];
-  if (userIds.length > 0) {
-    const prefsRows = await prisma.notificationPreferences.findMany({
-      where: { userId: { in: userIds } },
-    });
-    const prefsMap = new Map(prefsRows.map((p) => [p.userId, p]));
-
-    for (const player of activePlayers) {
-      if (!player.userId || !player.user?.email) continue;
-      const raw = prefsMap.get(player.userId);
-      const prefs = await getNotificationPrefs(player.userId);
-      const effective = raw ? { ...prefs, ...raw } : prefs;
-      if (!wantsEmailReminder(effective, reminderType)) continue;
-
-      try {
-        await sendReminder(player.user.email, {
-          eventTitle: event.title,
-          dateTime: event.dateTime.toISOString(),
-          location: event.location,
-          spotsLeft,
-          eventUrl: `${APP_URL}/events/${event.id}`,
-          reminderType,
-        });
-      } catch (err) {
-        log.error({ email: player.user.email, eventId: event.id, err }, "Failed to send reminder email");
-      }
-    }
+  // A disabled timing is still recorded as sent ("intentionally skipped") so
+  // the job is closed out and nothing re-sweeps the window. The same holds
+  // after a partial email failure: the push already went out, and retrying
+  // would duplicate it.
+  if (outcome === "delivered" || outcome === "delivered-with-failures") {
+    await drainNotificationQueue();
   }
-
-  // Fire reminder webhook (non-blocking) — lean domain facts, client renders
-  fireWebhooks(event.id, "reminder", {
-    reminderType,
-    gameId: event.currentGameId ?? null,
-    dateTime: event.dateTime.toISOString(),
-  }).catch(() => {});
-
-  // Mark reminder as sent (idempotent — handles retries / duplicates gracefully)
-  const logType = JOB_TO_LOG_TYPE[job.type];
-  if (logType) {
-    await prisma.reminderLog.upsert({
-      where: { eventId_type: { eventId: event.id, type: logType } },
-      create: { eventId: event.id, type: logType },
-      update: {},
-    });
-  }
+  await markReminderSent(job.eventId, reminderType);
 }
 
 async function _processPostGameJob(job: { id: string; eventId: string | null }) {
   if (!job.eventId) return;
 
-  const event = await prisma.event.findUnique({
-    where: { id: job.eventId },
-  });
-  if (!event) return;
-  // Archived events never notify (see _processReminderJob).
-  if (event.archivedAt) return;
-
-  const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
-
-  await enqueueNotification(event.id, "post_game", {
-    title: event.title,
-    key: event.isRecurring ? "postGameNotificationRecurring" : "postGameNotification",
-    params: { title: event.title },
-    url: `/events/${event.id}?action=add-score`,
-    spotsLeft,
-  });
+  const outcome = await deliverReminder(job.eventId, "post-game");
+  if (outcome === "already-sent" || outcome === "archived") return;
   await drainNotificationQueue();
-
-  await prisma.reminderLog.upsert({
-    where: { eventId_type: { eventId: event.id, type: "post-game" } },
-    create: { eventId: event.id, type: "post-game" },
-    update: {},
-  });
+  await markReminderSent(job.eventId, "post-game");
 }
 
 /**

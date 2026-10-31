@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { apiRequest } from "~/lib/api/client";
 
 /** The event cost fields the client UI reads from `GET /api/events/[id]/cost`. */
 export interface EventCostData {
@@ -17,8 +18,8 @@ export function useEventCost(eventId: string) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/cost`);
-      if (res.ok) setCost(await res.json());
+      const data = (await apiRequest("GET /api/events/{id}/cost", { params: { id: eventId } })) as EventCostData;
+      setCost(data);
     } catch { /* ignore */ }
   }, [eventId]);
 

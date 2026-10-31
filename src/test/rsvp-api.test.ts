@@ -60,7 +60,7 @@ function getCtx(eventId: string, session: { user: { id: string; name: string } }
   } as any;
 }
 
-async function seedEvent(dateOffsetMs: number) {
+async function seedEvent(dateOffsetMs: number, gameStatus = "upcoming") {
   const event = await testPrisma.event.create({
     data: {
       title: "Game",
@@ -69,7 +69,9 @@ async function seedEvent(dateOffsetMs: number) {
       ownerId: null,
     },
   });
-  const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  const game = await testPrisma.game.create({
+    data: { eventId: event.id, dateTime: event.dateTime, status: gameStatus },
+  });
   await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
   return { ...event, currentGameId: game.id };
 }
@@ -127,6 +129,15 @@ describe("POST /api/events/[id]/rsvp", () => {
     const user = { user: { id: "u1", name: "U" } };
     const res = await rsvpPost(ctx(ev.id, { status: "yes" }, user));
     expect(res.status).toBe(409);
+  });
+
+  it("refuses when the current Game is cancelled", async () => {
+    const ev = await seedEvent(7 * 86400_000, "cancelled");
+    const user = { user: { id: "u1", name: "U" } };
+    const res = await rsvpPost(ctx(ev.id, { status: "yes" }, user));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/cancelled/i);
   });
 
   it("returns 422 when Idempotency-Key is reused with a different payload", async () => {

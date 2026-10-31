@@ -56,6 +56,12 @@ if ! pnpm check:feature-parity; then
   failed=1
 fi
 
+echo "→ Generated API client..."
+if ! pnpm check:api-client; then
+  echo "✗ src/lib/api/generated.ts is out of date. Run 'pnpm generate:api-client' and commit. Push aborted."
+  failed=1
+fi
+
 echo "→ Play listing assets..."
 if ! pnpm check:play-listing; then
   echo "✗ Play listing assets failed. Push aborted."

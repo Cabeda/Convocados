@@ -37,13 +37,34 @@ function isPrivateIpv4(parts: number[]): boolean {
   return false;
 }
 
+/**
+ * Decode an IPv4 tail of an IPv6 address. WHATWG URL normalises
+ * `[::ffff:127.0.0.1]` to `[::ffff:7f00:1]` and `[::127.0.0.1]` to
+ * `[::7f00:1]`, so matching the dotted form alone misses loopback.
+ */
+function ipv4FromTail(tail: string): number[] | null {
+  const dotted = parseIpv4(tail);
+  if (dotted) return dotted;
+
+  const hex = tail.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (!hex) return null;
+  const high = parseInt(hex[1], 16);
+  const low = parseInt(hex[2], 16);
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff];
+}
+
 function isPrivateIpv6(host: string): boolean {
   const h = host.replace(/^\[|\]$/g, "").toLowerCase();
   if (h === "::1" || h === "::") return true;
   if (h.startsWith("fe80")) return true; // link-local
   if (h.startsWith("fc") || h.startsWith("fd")) return true; // unique local fc00::/7
   if (h.startsWith("::ffff:")) {
-    const v4 = parseIpv4(h.slice(7));
+    const v4 = ipv4FromTail(h.slice(7));
+    return v4 ? isPrivateIpv4(v4) : false;
+  }
+  // IPv4-compatible ::/96 (deprecated, but still normalised by URL).
+  if (h.startsWith("::")) {
+    const v4 = ipv4FromTail(h.slice(2));
     return v4 ? isPrivateIpv4(v4) : false;
   }
   return false;

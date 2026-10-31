@@ -27,6 +27,12 @@ minimumReleaseAgeExclude:
   - playwright-core@1.62.0
   - playwright@1.62.0
 overrides:
+  # zod 4.x: memory exhaustion while validating oversized constrained
+  # collections (GHSA-mrhx-c7xc-m3w5), patched in 4.6.6. Reached through astro
+  # and @better-auth/core in the production graph. Pin the 4.x line to 4.6.7;
+  # the 3.x copy used by chromium-bidi stays on 3.x on purpose (a 4.x override
+  # there would be a breaking major for a devDependency).
+  'zod@>=4.0.0 <4.6.6': '>=4.6.7'
   # Quadratic-time CPU DoS in basic-ftp's Client.list() parser (GHSA-c475-qrg2-pj4r),
   # reached through @lhci/cli -> lighthouse -> puppeteer-core -> proxy-agent.
   # Patched in 6.2.1. This single entry replaces the older version-scoped
@@ -34,6 +40,12 @@ overrides:
   basic-ftp: '>=6.2.1'
   better-auth@<1.6.2: '>=1.6.2'
   body-parser@<1.20.6: '>=1.20.6'
+  # Trailing-bytes DoS after a compressed body (GHSA-27r3-jxmh-p828).
+  # Patched 2.4.0; reached through @lhci/cli -> express -> body-parser, dev-only.
+  'body-parser@<2.4.0': '>=2.4.0'
+  # undici 8.x request-smuggling fix (GHSA-xjj6-f33q-929c), patched 8.12.2.
+  # Dev-only: reached through jsdom/vitest. Patch bump inside major 8.
+  'undici@<8.12.2': '>=8.12.2'
   # minimatch/glob ask for brace-expansion ^4 and ^2. An open-ended '>=5.0.7'
   # override let pnpm satisfy a ^2 request with 4.x, which is now the vulnerable
   # line (GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p: DoS via uncontrolled
@@ -109,3 +121,15 @@ auditConfig:
     # CVEs, reason or review date go missing.
     - GHSA-jmr9-qjv8-65gv
     - GHSA-7pqw-9j4j-h8q3
+    #
+    # zod <4.6.6 — memory exhaustion while validating oversized constrained
+    # collections (GHSA-mrhx-c7xc-m3w5). The production 4.x copies (astro,
+    # @better-auth/core) are pinned to 4.6.7 by the `zod@>=4.0.0 <4.6.6`
+    # override, so `pnpm audit --prod` is clean. The remaining vulnerable copy
+    # is zod 3.25.76 reached through @lhci/cli -> lighthouse -> puppeteer-core
+    # -> chromium-bidi. That is dev-only; forcing 4.x there is a breaking major
+    # for a devDependency, so this exemption covers that copy.
+    #
+    # Reviewed by Cabeda on 2026-10-28; re-review by 2026-11-28, or sooner if a
+    # 3.x patch publishes.
+    - GHSA-mrhx-c7xc-m3w5

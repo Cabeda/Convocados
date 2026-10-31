@@ -4,6 +4,7 @@ import BookmarkIcon from "@mui/icons-material/Bookmark";
 import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
 import { useT } from "~/lib/useT";
 import { enableDevicePush } from "~/lib/devicePush";
+import { apiRequest } from "~/lib/api/client";
 
 interface Props {
   eventId: string;
@@ -24,10 +25,9 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch(`/api/events/${eventId}/follow`)
-      .then((r) => r.json())
+    apiRequest("GET /api/events/{id}/follow", { params: { id: eventId } })
       .then((d) => {
-        setFollowing(!!d.following);
+        setFollowing(!!(d as { following?: boolean }).following);
       })
       .catch(() => {});
   }, [eventId, isAuthenticated]);
@@ -36,31 +36,29 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
     setLoading(true);
     try {
       if (following) {
-        const res = await fetch(`/api/events/${eventId}/follow`, { method: "DELETE" });
-        if (res.ok) {
-          setFollowing(false);
-          setToast(t("unfollowedToast"));
-        }
+        await apiRequest("DELETE /api/events/{id}/follow", { params: { id: eventId } });
+        setFollowing(false);
+        setToast(t("unfollowedToast"));
       } else {
-        const res = await fetch(`/api/events/${eventId}/follow`, { method: "POST" });
-        if (res.ok) {
-          setFollowing(true);
-          setToast(t("followedToast"));
+        await apiRequest("POST /api/events/{id}/follow", { params: { id: eventId } });
+        setFollowing(true);
+        setToast(t("followedToast"));
 
-          // Subscribe this device to push. Requests the permission first and
-          // reports every failure mode instead of dropping them silently.
-          const pushResult = await enableDevicePush();
-          if (pushResult.reason === "needs-install") {
-            setToast(t("notifyDeviceNeedsInstall"));
-          } else if (pushResult.reason === "blocked") {
-            setToast(t("notifyDeviceBlocked"));
-          } else if (pushResult.reason === "unsupported") {
-            setToast(t("notifyDeviceUnsupported"));
-          } else if (pushResult.reason === "error") {
-            setToast(t("notifyPushEnableFailed"));
-          }
+        // Subscribe this device to push. Requests the permission first and
+        // reports every failure mode instead of dropping them silently.
+        const pushResult = await enableDevicePush();
+        if (pushResult.reason === "needs-install") {
+          setToast(t("notifyDeviceNeedsInstall"));
+        } else if (pushResult.reason === "blocked") {
+          setToast(t("notifyDeviceBlocked"));
+        } else if (pushResult.reason === "unsupported") {
+          setToast(t("notifyDeviceUnsupported"));
+        } else if (pushResult.reason === "error") {
+          setToast(t("notifyPushEnableFailed"));
         }
       }
+    } catch {
+      /* a rejected toggle leaves the button as it was */
     } finally {
       setLoading(false);
     }

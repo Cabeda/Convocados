@@ -169,6 +169,18 @@ describe("findDiscoverableUpcomingEvents", () => {
     expect(results.map((e) => e.id)).not.toContain(ev.id);
   });
 
+  it("drops an event whose current Game is cancelled", async () => {
+    const now = new Date();
+    const ev = await seedEvent({ title: "Cancelled Game", dateTime: new Date(now.getTime() + DAY) });
+    const game = await prisma.game.create({
+      data: { eventId: ev.id, dateTime: ev.dateTime, status: "cancelled" },
+    });
+    await prisma.event.update({ where: { id: ev.id }, data: { currentGameId: game.id } });
+
+    const results = await findDiscoverableUpcomingEvents({ now, take: 3 });
+    expect(results.map((e) => e.id)).not.toContain(ev.id);
+  });
+
   it("drops a recurring game with no usable rule even while nextResetAt is ahead", async () => {
     const now = new Date();
     const ev = await seedEvent({

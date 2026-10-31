@@ -12,14 +12,16 @@ vi.mock("~/lib/auth.client", () => ({
 import MergeDiscoveryPrompt from "~/components/MergeDiscoveryPrompt";
 
 function mockFetch({ pending, mergeOk = true }: { pending: unknown; mergeOk?: boolean }) {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
   return vi.fn().mockImplementation((url: string, _opts?: RequestInit) => {
     if (url.includes("/pending-merge")) {
-      return Promise.resolve({ ok: true, json: async () => ({ pendingMerge: pending }) });
+      return Promise.resolve(json({ pendingMerge: pending }));
     }
     if (url.includes("/credentials/merge")) {
-      return Promise.resolve({ ok: mergeOk, json: async () => (mergeOk ? { ok: true } : { error: "boom" }) });
+      return Promise.resolve(json(mergeOk ? { ok: true } : { error: "boom" }, mergeOk ? 200 : 500));
     }
-    return Promise.resolve({ ok: true, json: async () => ({}) });
+    return Promise.resolve(json({}));
   });
 }
 

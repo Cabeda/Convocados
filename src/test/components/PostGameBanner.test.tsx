@@ -11,6 +11,8 @@ vi.mock("~/components/MvpVotingCard", () => ({
   MvpVotingCard: () => null,
 }));
 
+const jsonHeaders = new Headers({ "Content-Type": "application/json" });
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -43,17 +45,20 @@ const baseStatus: PostGameStatus = {
 };
 
 function mockFetchStatus(status: PostGameStatus | null) {
+  const headers = jsonHeaders;
   vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
     const u = String(url);
     // Current-game settlement endpoint returns a benign payload in tests.
     if (u.includes("/payments/game")) {
       return Promise.resolve({
         ok: true,
+        headers,
         json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }),
       });
     }
     return Promise.resolve({
       ok: true,
+      headers,
       json: async () => status,
     });
   }));
@@ -154,9 +159,9 @@ describe("PostGameBanner viewer-scoped dismissal (wrap-up todo-list)", () => {
     vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
       const u = String(url);
       if (u.includes("/payments/game")) {
-        return Promise.resolve({ ok: true, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
+        return Promise.resolve({ ok: true, headers: jsonHeaders, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
       }
-      return Promise.resolve({ ok: true, json: async () => status });
+      return Promise.resolve({ ok: true, headers: jsonHeaders, json: async () => status });
     }));
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     await act(async () => { await Promise.resolve(); });
@@ -178,9 +183,9 @@ describe("PostGameBanner viewer-scoped dismissal (wrap-up todo-list)", () => {
     vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
       const u = String(url);
       if (u.includes("/payments/game")) {
-        return Promise.resolve({ ok: true, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
+        return Promise.resolve({ ok: true, headers: jsonHeaders, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
       }
-      return Promise.resolve({ ok: true, json: async () => status });
+      return Promise.resolve({ ok: true, headers: jsonHeaders, json: async () => status });
     }));
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     // Celebration holds ~1.6s, then the card collapses away.
@@ -561,9 +566,9 @@ describe("PostGameBanner initial payload gating (banner flash on load)", () => {
     vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
       const u = String(url);
       if (u.includes("/payments/game")) {
-        return Promise.resolve({ ok: true, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
+        return Promise.resolve({ ok: true, headers: jsonHeaders, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
       }
-      return Promise.resolve({ ok: true, json: async () => status });
+      return Promise.resolve({ ok: true, headers: jsonHeaders, json: async () => status });
     }));
     renderWithTheme(<PostGameBanner eventId="evt1" initialStatus={baseStatus} />);
     await act(async () => { await Promise.resolve(); });

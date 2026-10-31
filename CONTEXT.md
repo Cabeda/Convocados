@@ -317,6 +317,38 @@ A player earns auto-confirm status by attending N consecutive games (N = `autoCo
 Only applies to recurring Events. The Owner enables it in event settings.
 _Avoid_: auto-RSVP, assumed attendance
 
+## Payer
+The one person a **Game**'s money is owed to: whoever fronted the cost is the creditor of that Game's debts. A **Payer** is not necessarily the **Owner** or an **Admin**, and is not the same as the person who collects.
+
+_Today_: set per Game (`payerEventPlayerId`, or `payerExternalName` for someone with no account), by the Owner or an Admin only, and only from a post-game surface. A Payer with no linked `User` cannot be asked anything and has no **Payment Details** of their own.
+
+_Planned, not built_ (ADR 0055): the **Event**'s **Default Payer** seeds each Game, any active roster player may claim the role, the role is settable before the Game starts, and a Payer may stand down for one Game, leaving it **Vacant**.
+_Avoid_: creditor, who paid, collector, organizer (the Owner is a different thing)
+
+## Default Payer
+_Planned, not built_ (ADR 0055): the person an **Event** proposes as **Payer** for each new **Game**, so a crew that always pays the same way does not re-name them every week. Seeded onto the Game, never binding: it can be claimed by anyone, and the Default Payer may stand down for a single Game without losing the role.
+
+There is no such thing today: a recurring Event carries the previous Game's payer only as a side effect of that Game's roster, and loses it on cancel.
+_Avoid_: standing payer, permanent payer, owner
+
+## Vacant Payer
+_Planned, not built_ (ADR 0055): the state of a **Game** whose **Payer** role is held by nobody — never set, or withdrawn because the **Default Payer** stood down for that one Game. A Vacant Game can be claimed by any active roster player; the **Default Payer** is untouched and still seeds the next Game.
+
+Standing down withdraws the commitment, not the identity: the Game still records who would have paid, so the Owner knows who to ask back. A Payer who stands down still owes their own share — they simply are not fronting the cost.
+_Avoid_: no payer, unassigned, open payer
+
+## Payment Details
+_Planned, not built_ (ADR 0055): a `User`'s own instructions for sending them money — a Revolut link or tag, an MB Way number, another route they choose to offer. They belong to the person owed the money, not to an Event, and are published only while that person has opted in to sharing them with the crew in question.
+
+Distinct from **Event Payment Details**, and from the method recorded when a debt is settled (what a debtor says they used). Identifiers deliberately keep their current names: the Event-level field stays `EventCost.paymentDetails` / `effectivePaymentDetails` (an older, still-live concept), and the webhook payload field stays `paymentMethods`. Renaming either breaks the public subscriber contract.
+_Avoid_: payment methods as the name for a User's details (the wire field keeps that name), payout details, bank details
+
+## Event Payment Details
+The payment details the **Owner** or an **Admin** types into an Event's cost settings (`EventCost.paymentMethods`, sent on the wire as `paymentMethods`). They are the only source of transfer instructions today.
+
+_Planned, not built_ (ADR 0055): they become the standing fallback when a **Payer** has none of their own, and the only source for a Payer who is an external name with no account. They are never copied onto a `User`.
+_Avoid_: default payment methods, template
+
 ## Payment Nudge Escalation
 A 3-stage automatic reminder sequence for unpaid debts, replacing the flat daily reminder:
 

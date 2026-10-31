@@ -11,6 +11,8 @@ COPY dist ./dist
 COPY public ./public
 COPY scripts/start.sh ./scripts/start.sh
 COPY scripts/server.mjs ./scripts/server.mjs
+COPY scripts/server-handler.mjs ./scripts/server-handler.mjs
+COPY src/lib/canonicalHost.mjs ./src/lib/canonicalHost.mjs
 COPY scripts/release-migrate.sh ./scripts/release-migrate.sh
 COPY litestream.yml ./litestream.yml
 COPY prisma ./prisma
