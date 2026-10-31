@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { authenticateRequest } from "../../../../lib/authenticate.server";
+import { authenticateRequest, requireScope } from "../../../../lib/authenticate.server";
+import { insufficientScopeChallenge } from "../../../../lib/mcp/protocol";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { applyFormationLayout } from "../../../../lib/teams";
@@ -184,8 +185,15 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   const auth = await authenticateRequest(request);
   if (!auth) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!auth.scopes.includes("write:events") && !auth.scopes.includes("manage:players")) {
-    return Response.json({ error: "Forbidden: insufficient scope" }, { status: 403 });
+  const canWriteTeams =
+    requireScope(auth, "manage:teams") ||
+    requireScope(auth, "write:events") ||
+    requireScope(auth, "manage:players");
+  if (!canWriteTeams) {
+    return Response.json(
+      { error: "Forbidden: insufficient scope" },
+      { status: 403, headers: { "WWW-Authenticate": insufficientScopeChallenge(["manage:teams"]) } },
+    );
   }
 
   const event = await prisma.event.findUnique({

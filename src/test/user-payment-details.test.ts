@@ -8,6 +8,15 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: (...args: any[]) => mockGetSession(...args),
 }));
 
+const mockAuthenticate = vi.fn();
+vi.mock("~/lib/authenticate.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/lib/authenticate.server")>();
+  return {
+    ...actual,
+    authenticateRequest: (...args: any[]) => mockAuthenticate(...args),
+  };
+});
+
 vi.mock("~/lib/logger.server", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -52,6 +61,8 @@ function session(userId: string) {
 beforeEach(async () => {
   await testPrisma.user.deleteMany({ where: { id: { startsWith: "user-pd-" } } });
   mockGetSession.mockReset();
+  mockAuthenticate.mockReset();
+  mockAuthenticate.mockResolvedValue(null);
 });
 
 // ── GET ──────────────────────────────────────────────────────────────────────
@@ -110,6 +121,26 @@ describe("PUT /api/me/payment-details", () => {
     expect(res.status).toBe(400);
     const stored = await testPrisma.user.findUnique({ where: { id: userId } });
     expect(JSON.parse(stored!.paymentDetails!)).toEqual([{ type: "revolut_tag", value: "ana" }]);
+  });
+
+  it("rejects a read-only API key that tries to change payment details", async () => {
+    const userId = await seedUser();
+    mockAuthenticate.mockResolvedValue({ userId, scopes: ["read:profile"], authMethod: "api_key" });
+
+    const res = await PUT(
+      putCtx({
+        phone: "+351 912 345 678",
+        paymentDetails: [{ type: "mbway", value: "912345678" }],
+        sharePaymentDetails: true,
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(res.headers.get("WWW-Authenticate")).toContain("insufficient_scope");
+    const stored = await testPrisma.user.findUnique({ where: { id: userId } });
+    expect(stored!.phone).toBeNull();
+    expect(stored!.paymentDetails).toBeNull();
+    expect(stored!.sharePaymentDetails).toBe(false);
   });
 
   it("stores consent separately from the details", async () => {
