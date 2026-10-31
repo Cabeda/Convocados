@@ -12,10 +12,13 @@ import { verifyResourceAccessToken } from "./oauthResourceToken.server";
  */
 export function describeRejectedBearer(token: string): Record<string, unknown> {
   const parts = token.split(".");
-  const decode = (segment?: string): Record<string, any> | null => {
+  const decode = (segment?: string): Record<string, unknown> | null => {
     if (!segment) return null;
     try {
-      return JSON.parse(Buffer.from(segment, "base64url").toString("utf8"));
+      return JSON.parse(Buffer.from(segment, "base64url").toString("utf8")) as Record<
+        string,
+        unknown
+      >;
     } catch {
       return null;
     }
