@@ -48,6 +48,31 @@ function jsonRpcResult(id: unknown, result: unknown) {
   return Response.json({ jsonrpc: "2.0", id: id ?? null, result }, { status: 200 });
 }
 
+/**
+ * Auth failure shaped for both connector platforms.
+ *
+ * The status and `WWW-Authenticate` header are what Claude and the MCP spec
+ * read. ChatGPT only offers its linking UI when the response body also carries
+ * `_meta["mcp/www_authenticate"]` with both `error` and `error_description`
+ * (developers.openai.com/plugins/build/auth) — without it the protected tools
+ * are called anonymously and the plugin looks broken.
+ */
+function authFailure(id: unknown, status: 401 | 403, message: string, challenge: string) {
+  const meta = { "mcp/www_authenticate": [challenge] };
+  return Response.json(
+    {
+      jsonrpc: "2.0",
+      id: id ?? null,
+      // OpenAI's examples put `_meta` on the payload; the MCP schema allows it
+      // on the error object. Emitting both costs nothing and covers either
+      // reader, so a wrong guess cannot leave the fix inert.
+      error: { code: -32001, message, _meta: meta },
+      _meta: meta,
+    },
+    { status, headers: { "WWW-Authenticate": challenge } },
+  );
+}
+
 /** JSON-RPC notification — no response body (Streamable HTTP: 202 Accepted). */
 function accepted() {
   return new Response(null, { status: 202 });
@@ -166,6 +191,13 @@ export const POST: APIRoute = async ({ request }) => {
       annotations: t.readOnly
         ? { readOnlyHint: true }
         : { readOnlyHint: false, destructiveHint: t.destructive === true },
+      // ChatGPT derives its linking UI from per-tool `securitySchemes`: without
+      // it, a protected tool is treated as anonymous and never prompts the
+      // user to connect (developers.openai.com/plugins/build/auth).
+      securitySchemes:
+        t.requiresAuth === false
+          ? [{ type: "noauth" }, { type: "oauth2", scopes: [t.scope] }]
+          : [{ type: "oauth2", scopes: [t.scope] }],
     }));
     return jsonRpcResult(id, {
       tools,
@@ -199,17 +231,19 @@ export const POST: APIRoute = async ({ request }) => {
       authCtx = await authenticateRequest(request);
     }
     if (requiresAuth && !authCtx) {
-      return jsonRpcError(id, -32001, "Unauthorized: missing or invalid Bearer token", undefined, 401, {
-        "WWW-Authenticate": wwwAuthenticate(originOf(request), MCP_SCOPES),
-      });
+      const challenge = `${wwwAuthenticate(originOf(request), MCP_SCOPES)}, error="invalid_token", error_description="Missing or invalid access token"`;
+      return authFailure(id, 401, "Unauthorized: missing or invalid Bearer token", challenge);
     }
     if (authCtx && !requireScope(authCtx, tool.scope)) {
       // Ask for a re-authorization covering what the token already has plus the
       // missing scope; a bare 403 is a terminal error in Claude (no step-up).
       const needed = [...new Set([...authCtx.scopes, tool.scope])].filter((s) => s !== "*");
-      return jsonRpcError(id, -32001, `Forbidden: missing scope ${tool.scope}`, undefined, 403, {
-        "WWW-Authenticate": insufficientScopeChallenge(needed),
-      });
+      return authFailure(
+        id,
+        403,
+        `Forbidden: missing scope ${tool.scope}`,
+        insufficientScopeChallenge(needed),
+      );
     }
 
     try {

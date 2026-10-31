@@ -90,5 +90,5 @@ export function wwwAuthenticate(baseUrl: string, scope: string): string {
  * error in Claude, so the connector never offers to re-authorize.
  */
 export function insufficientScopeChallenge(scopes: string[]): string {
-  return `Bearer error="insufficient_scope", scope="${scopes.join(" ")}"`;
+  return `Bearer error="insufficient_scope", error_description="Additional scope required", scope="${scopes.join(" ")}"`;
 }

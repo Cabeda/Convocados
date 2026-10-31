@@ -10,6 +10,7 @@ vi.mock("~/lib/authenticate.server", () => ({
 }));
 
 import { authenticateRequest } from "~/lib/authenticate.server";
+import { TOOLS } from "~/lib/mcp/tools";
 // Import after mock
 const { POST, GET } = await import("~/pages/api/mcp");
 
@@ -209,6 +210,19 @@ describe("POST /api/mcp — stateless transport", () => {
     expect(body.result._meta?.cacheScope).toBe("global");
     // convocados prefix
     expect(names.every((n: string) => n.startsWith("convocados_"))).toBe(true);
+    // ChatGPT reads per-tool securitySchemes to know which tools need the
+    // OAuth link; an anonymous tool must also advertise noauth so it stays
+    // callable before the user connects. Asserted as an exact mapping, not
+    // `some()`: the value that matters is which tools are in each set.
+    for (const tool of body.result.tools) {
+      const def = TOOLS.find((t) => t.name === tool.name);
+      expect(def).toBeDefined();
+      expect(tool.securitySchemes.map((s: any) => s.type).sort()).toEqual(
+        def?.requiresAuth === false ? ["noauth", "oauth2"] : ["oauth2"],
+      );
+      const oauth = tool.securitySchemes.find((s: any) => s.type === "oauth2");
+      expect(oauth?.scopes).toEqual([def?.scope]);
+    }
   });
 
   it("tools/call needs only params.name (Mcp-Name optional)", async () => {
@@ -277,6 +291,15 @@ describe("POST /api/mcp — stateless transport", () => {
     // scope would mint a token that can read but not write.
     expect(challenge).toMatch(/scope="[^"]*\bread:events\b/);
     expect(challenge).toMatch(/\bcreate:events\b/);
+    // ChatGPT needs the challenge in the body too, with both error params.
+    const body: any = await res.json();
+    const fromBody = body._meta?.["mcp/www_authenticate"]?.[0] ?? "";
+    expect(fromBody).toContain('error="invalid_token"');
+    expect(fromBody).toContain("error_description=");
+    expect(fromBody).toMatch(/resource_metadata=/);
+    // Also inside the error object: the MCP schema allows `_meta` there, and
+    // that is where a spec-following reader looks for it.
+    expect(body.error?._meta?.["mcp/www_authenticate"]?.[0]).toBe(fromBody);
   });
 
   it("tools/call without the needed scope returns 403 with a step-up challenge", async () => {
@@ -294,6 +317,12 @@ describe("POST /api/mcp — stateless transport", () => {
     // Every scope still needed, not just the missing one.
     expect(challenge).toMatch(/scope="[^"]*\bread:events\b/);
     expect(challenge).toMatch(/\bcreate:events\b/);
+    // Same challenge in the body, so ChatGPT can offer the step-up link.
+    const body: any = await res.json();
+    expect(body._meta?.["mcp/www_authenticate"]?.[0]).toContain('error="insufficient_scope"');
+    expect(body._meta?.["mcp/www_authenticate"]?.[0]).toContain("error_description=");
+    // And inside the error object, where the MCP schema allows `_meta`.
+    expect(body.error?._meta?.["mcp/www_authenticate"]?.[0]).toContain("error_description=");
   });
 
   it("anonymous tools/call can fetch a link-accessible event", async () => {
