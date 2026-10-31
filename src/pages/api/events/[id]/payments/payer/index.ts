@@ -2,6 +2,8 @@ import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { authenticateRequest } from "~/lib/authenticate.server";
 import { getSession } from "~/lib/auth.helpers.server";
+import { checkAccess } from "~/lib/eventAccess";
+import { canReadEventFinances } from "~/lib/eventReadAccess.server";
 
 /**
  * GET /api/events/[id]/payments/payer
@@ -18,9 +20,27 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, currentGameId: true },
+    select: { id: true, currentGameId: true, ownerId: true, isPublic: true, accessPassword: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const access = checkAccess({
+    eventOwnerId: event.ownerId,
+    accessPassword: event.accessPassword,
+    requestUserId: userId,
+    cookieHeader: request.headers.get("cookie"),
+    eventId: event.id,
+    isInvited: false,
+  });
+  if (!access.granted) {
+    return Response.json({ locked: true, error: "This event is locked." }, { status: 403 });
+  }
+  // Ownerless unlisted Events are the link-is-the-capability flow (ADR 0035);
+  // everything else must pass the finances read seam.
+  const linkCapability = event.ownerId === null && !event.isPublic;
+  if (!linkCapability && !(await canReadEventFinances(request, event))) {
+    return Response.json({ error: "You cannot read this event's payments." }, { status: 403 });
+  }
   if (!event.currentGameId) {
     return Response.json({ gameId: null, mode: "tracked", hasCost: false, payerName: null, isPayer: false, isRosterPlayer: false, vacant: false });
   }
