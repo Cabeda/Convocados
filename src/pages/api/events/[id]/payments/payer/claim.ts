@@ -4,6 +4,7 @@ import { authenticateRequest } from "~/lib/authenticate.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { setPaymentConfig } from "~/lib/settlement.server";
+import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
 
 /**
  * POST /api/events/[id]/payments/payer/claim
@@ -33,16 +34,35 @@ export const POST: APIRoute = async ({ params, request }) => {
   } catch {
     // An empty body is fine: the current Game is the default.
   }
-  const gameId = typeof body.gameId === "string" ? body.gameId : event.currentGameId;
+  const requestedGameId = typeof body.gameId === "string" ? body.gameId : null;
+  if (requestedGameId && requestedGameId !== event.currentGameId) {
+    // A played or older Game is already settled; only the current Game can
+    // change payer through the self-service route.
+    return Response.json({ error: "Only the current game can be claimed." }, { status: 400 });
+  }
+  const gameId = event.currentGameId;
   if (!gameId) return Response.json({ error: "No active game to claim." }, { status: 400 });
 
-  // You can only claim the role for yourself, and only if you are on the roster.
-  const me = await prisma.eventPlayer.findFirst({
-    where: { eventId, userId },
-    select: { id: true, name: true },
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    select: { paymentMode: true },
   });
+  if (!game) return Response.json({ error: "Game not found." }, { status: 404 });
+  if (game.paymentMode === "untracked") {
+    // Claiming must not turn an untracked game into a tracked one (no payment
+    // rows, no ledger debits); there is no payer role to take.
+    return Response.json({ error: "This game has no tracked cost to collect." }, { status: 400 });
+  }
+
+  // You can only claim the role for yourself, and only while you hold a
+  // non-archived GameParticipant on this Game. EventPlayer survives a leave.
+  const participant = await prisma.gameParticipant.findFirst({
+    where: { ...activeParticipantsWhere(gameId), eventPlayer: { eventId, userId } },
+    select: { eventPlayer: { select: { id: true, name: true } } },
+  });
+  const me = participant?.eventPlayer;
   if (!me) {
-    return Response.json({ error: "Only a roster player can claim the payer role." }, { status: 403 });
+    return Response.json({ error: "Only an active roster player can claim the payer role." }, { status: 403 });
   }
 
   try {

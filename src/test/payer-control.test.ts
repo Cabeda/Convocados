@@ -22,6 +22,7 @@ vi.mock("~/lib/db.server", async () => {
 });
 vi.mock("~/lib/webhook.server", () => ({ fireWebhooks: vi.fn().mockResolvedValue(undefined) }));
 
+import { hashPassword, buildAccessCookie } from "~/lib/eventAccess";
 import { POST as claim } from "~/pages/api/events/[id]/payments/payer/claim";
 import { POST as standDown } from "~/pages/api/events/[id]/payments/payer/stand-down";
 import { GET as getPayer } from "~/pages/api/events/[id]/payments/payer/index";
@@ -36,8 +37,14 @@ const CTX = (id: string, body: unknown = {}) =>
     }),
   }) as any;
 
-const GET_CTX = (id: string) =>
-  ({ params: { id }, request: new Request("http://localhost/x", { method: "GET" }) }) as any;
+const GET_CTX = (id: string, cookie?: string) =>
+  ({
+    params: { id },
+    request: new Request("http://localhost/x", {
+      method: "GET",
+      headers: cookie ? { cookie } : {},
+    }),
+  }) as any;
 
 async function seed() {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -74,6 +81,9 @@ async function seed() {
     },
   });
   await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  await testPrisma.gameParticipant.create({
+    data: { gameId: game.id, eventPlayerId: anaPlayer.id, order: 0 },
+  });
   return { event, game, ana, outsider, owner, anaPlayer };
 }
 
@@ -112,6 +122,65 @@ describe("POST payer/claim", () => {
 
     const res = await claim(CTX(event.id));
     expect(res.status).toBe(401);
+  });
+
+  it("refuses a player who has left the active roster", async () => {
+    const { event, game, ana } = await seed();
+    await testPrisma.gameParticipant.updateMany({
+      where: { gameId: game.id },
+      data: { archivedAt: new Date() },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+
+    const res = await claim(CTX(event.id));
+    expect(res.status).toBe(403);
+  });
+
+  it("refuses a played Game id and leaves its settled payer untouched", async () => {
+    const { event, ana, anaPlayer } = await seed();
+    const oldGame = await testPrisma.game.create({
+      data: {
+        id: `pc-old-${Date.now()}`,
+        eventId: event.id,
+        dateTime: new Date("2026-10-20T20:00:00Z"),
+        status: "played",
+        payerEventPlayerId: anaPlayer.id,
+      },
+    });
+    const oldPayment = await testPrisma.gamePayment.create({
+      data: {
+        gameId: oldGame.id,
+        eventPlayerId: anaPlayer.id,
+        playerName: "Ana",
+        amount: 10,
+        status: "paid",
+        method: "payer",
+        paidAt: new Date(),
+      },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+
+    const res = await claim(CTX(event.id, { gameId: oldGame.id }));
+    expect(res.status).toBe(400);
+
+    const after = await testPrisma.gamePayment.findUnique({ where: { id: oldPayment.id } });
+    expect(after!.status).toBe("paid");
+    expect(after!.method).toBe("payer");
+    const oldAfter = await testPrisma.game.findUnique({ where: { id: oldGame.id } });
+    expect(oldAfter!.payerEventPlayerId).toBe(anaPlayer.id);
+  });
+
+  it("does not turn an untracked Game into a tracked one", async () => {
+    const { event, game, ana } = await seed();
+    await testPrisma.game.update({ where: { id: game.id }, data: { paymentMode: "untracked" } });
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+
+    const res = await claim(CTX(event.id));
+    expect(res.status).toBe(400);
+
+    const after = await testPrisma.game.findUnique({ where: { id: game.id } });
+    expect(after!.paymentMode).toBe("untracked");
+    expect(await testPrisma.gamePayment.count({ where: { gameId: game.id } })).toBe(0);
   });
 });
 
@@ -204,5 +273,22 @@ describe("GET payer/index", () => {
 
     const res = await getPayer(GET_CTX(event.id));
     expect(res.status).toBe(401);
+  });
+
+  it("denies a non-member on a locked Event and allows a roster player with the access cookie", async () => {
+    const { event, ana, outsider } = await seed();
+    const accessPassword = hashPassword("secret");
+    await testPrisma.event.update({ where: { id: event.id }, data: { accessPassword } });
+
+    mockGetSession.mockResolvedValue({ user: { id: outsider.id } });
+    const denied = await getPayer(GET_CTX(event.id));
+    expect(denied.status).toBe(403);
+    expect((await denied.json()).locked).toBe(true);
+
+    const cookie = buildAccessCookie(null, event.id, accessPassword);
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+    const allowed = await getPayer(GET_CTX(event.id, cookie));
+    expect(allowed.status).toBe(200);
+    expect((await allowed.json()).payerName).toBe("Ana");
   });
 });
