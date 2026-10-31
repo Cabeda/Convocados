@@ -2,6 +2,7 @@ import { defineMiddleware } from "astro:middleware";
 import { applySecurityHeaders as addSecurityHeaders } from "~/lib/securityHeaders";
 import { isTrackableAppOpen } from "~/lib/appOpen";
 import { canonicalHostRedirect as decideCanonicalRedirect } from "~/lib/canonicalHost.mjs";
+import { logger } from "~/lib/logger.server";
 
 /**
  * Security middleware: CSRF protection + security headers (CSP, etc.)
@@ -27,6 +28,9 @@ const BYPASS_PREFIXES = [
 ];
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/** Paths that a failing connector crosses; traced for diagnosis. */
+const TRACE_PREFIXES = ["/api/mcp", "/api/auth/oauth2"];
 
 /**
  * Middleware adapter for the shared rule in `~/lib/canonicalHost.mjs`, which
@@ -74,6 +78,30 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // link opened on the old host loops with ERR_TOO_MANY_REDIRECTS.
     context.cache?.set(false);
     return canonicalRedirect;
+  }
+
+  // ── OAuth / MCP connectivity trace ────────────────────────────────────────
+  // A connector that completes OAuth and then still fails is undebuggable from
+  // the outside: the app logged nothing per request and Fly keeps no request
+  // log (docs/runbooks/production-inspection.md). One structured line per
+  // OAuth or MCP request names the hop and the status that failed.
+  if (TRACE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
+    const startedAt = Date.now();
+    const response = await next();
+    logger.info(
+      {
+        method: request.method,
+        path: url.pathname,
+        status: response.status,
+        ms: Date.now() - startedAt,
+        auth: request.headers.get("authorization") ? "bearer" : "none",
+        mcpVersion: request.headers.get("mcp-protocol-version") ?? undefined,
+        accept: request.headers.get("accept") ?? undefined,
+        userAgent: request.headers.get("user-agent") ?? undefined,
+      },
+      "oauth/mcp request",
+    );
+    return addSecurityHeaders(response);
   }
 
   // Safe methods don't need CSRF protection

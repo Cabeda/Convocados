@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { generateApiKey } from "~/lib/apiKey.server";
-import { authenticateRequest, requireScope } from "~/lib/authenticate.server";
+import { authenticateRequest, describeRejectedBearer, requireScope } from "~/lib/authenticate.server";
 import type { AuthContext } from "~/lib/authenticate.server";
 
 beforeEach(async () => {
@@ -120,6 +120,37 @@ describe("authenticateRequest", () => {
         makeRequest({ authorization: "Bearer unknown_token_xyz" }),
       );
       expect(ctx).toBeNull();
+    });
+
+    it("summarises the claims of a rejected JWT for the auth log", () => {
+      const b64 = (value: unknown) =>
+        Buffer.from(JSON.stringify(value)).toString("base64url");
+      const token = [
+        b64({ alg: "EdDSA", kid: "key-1" }),
+        b64({
+          iss: "https://elsewhere.example",
+          aud: ["https://elsewhere.example/api/mcp"],
+          exp: 1,
+          scope: "read:events",
+          sub: "u1",
+          client_id: "c1",
+        }),
+        "signature",
+      ].join(".");
+
+      const summary = describeRejectedBearer(token);
+      expect(summary).toMatchObject({
+        segments: 3,
+        alg: "EdDSA",
+        kid: "key-1",
+        iss: "https://elsewhere.example",
+        aud: ["https://elsewhere.example/api/mcp"],
+        scope: "read:events",
+        hasSub: true,
+        clientId: "c1",
+      });
+      // The token itself must never reach the log.
+      expect(JSON.stringify(summary)).not.toContain("signature");
     });
   });
 

@@ -2,8 +2,38 @@ import { createHash } from "node:crypto";
 import { auth, ensureAuthKeysHealthy } from "./auth.server";
 import { authenticateApiKey } from "./apiKey.server";
 import { prisma } from "./db.server";
+import { logger } from "./logger.server";
 import { parseStoredScopes } from "./scopes";
 import { verifyResourceAccessToken } from "./oauthResourceToken.server";
+
+/**
+ * Claim summary of a bearer token that failed both the opaque-row lookup and
+ * the JWT verification. Diagnostics only — never includes the token.
+ */
+export function describeRejectedBearer(token: string): Record<string, unknown> {
+  const parts = token.split(".");
+  const decode = (segment?: string): Record<string, any> | null => {
+    if (!segment) return null;
+    try {
+      return JSON.parse(Buffer.from(segment, "base64url").toString("utf8"));
+    } catch {
+      return null;
+    }
+  };
+  const header = decode(parts[0]);
+  const payload = decode(parts[1]);
+  return {
+    segments: parts.length,
+    alg: header?.alg,
+    kid: header?.kid,
+    iss: payload?.iss,
+    aud: payload?.aud,
+    exp: payload?.exp,
+    scope: payload?.scope,
+    hasSub: Boolean(payload?.sub),
+    clientId: payload?.client_id,
+  };
+}
 
 /** Hash a token the same way better-auth stores them (SHA-256 → base64url) */
 function hashToken(token: string): string {
@@ -86,7 +116,12 @@ export async function authenticateRequest(
         clientId: claims.clientId,
       };
     }
-    // Token not found or expired — don't fall through to session
+    // Token not found or expired — don't fall through to session.
+    // Logged because a connector that mints tokens but then fails every MCP
+    // call is otherwise invisible: Fly keeps no request log, and the claim
+    // values below are what tell a wrong issuer from a wrong audience or a
+    // stale signature. Never log the token itself.
+    logger.warn(describeRejectedBearer(token), "oauth bearer rejected");
     return null;
   }
 
