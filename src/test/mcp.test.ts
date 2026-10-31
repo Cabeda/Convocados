@@ -209,6 +209,16 @@ describe("POST /api/mcp — stateless transport", () => {
     expect(body.result._meta?.cacheScope).toBe("global");
     // convocados prefix
     expect(names.every((n: string) => n.startsWith("convocados_"))).toBe(true);
+    // ChatGPT reads per-tool securitySchemes to know which tools need the
+    // OAuth link; an anonymous tool must also advertise noauth so it stays
+    // callable before the user connects.
+    for (const tool of body.result.tools) {
+      const oauth = tool.securitySchemes?.find((s: any) => s.type === "oauth2");
+      expect(oauth?.scopes).toEqual([expect.any(String)]);
+    }
+    expect(
+      body.result.tools.some((t: any) => t.securitySchemes.some((s: any) => s.type === "noauth")),
+    ).toBe(true);
   });
 
   it("tools/call needs only params.name (Mcp-Name optional)", async () => {
@@ -277,6 +287,12 @@ describe("POST /api/mcp — stateless transport", () => {
     // scope would mint a token that can read but not write.
     expect(challenge).toMatch(/scope="[^"]*\bread:events\b/);
     expect(challenge).toMatch(/\bcreate:events\b/);
+    // ChatGPT needs the challenge in the body too, with both error params.
+    const body: any = await res.json();
+    const fromBody = body._meta?.["mcp/www_authenticate"]?.[0] ?? "";
+    expect(fromBody).toContain('error="invalid_token"');
+    expect(fromBody).toContain("error_description=");
+    expect(fromBody).toMatch(/resource_metadata=/);
   });
 
   it("tools/call without the needed scope returns 403 with a step-up challenge", async () => {
@@ -294,6 +310,9 @@ describe("POST /api/mcp — stateless transport", () => {
     // Every scope still needed, not just the missing one.
     expect(challenge).toMatch(/scope="[^"]*\bread:events\b/);
     expect(challenge).toMatch(/\bcreate:events\b/);
+    // Same challenge in the body, so ChatGPT can offer the step-up link.
+    const body: any = await res.json();
+    expect(body._meta?.["mcp/www_authenticate"]?.[0]).toContain('error="insufficient_scope"');
   });
 
   it("anonymous tools/call can fetch a link-accessible event", async () => {
