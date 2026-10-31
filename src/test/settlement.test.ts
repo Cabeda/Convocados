@@ -658,6 +658,46 @@ describe("settlement API routes", () => {
     expect(json.updated).toBe(3);
   });
 
+  it("bulk settle route settles the current game and a past game of the same event", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const past = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() - 7 * 86400_000), status: "played" },
+    });
+    const players = await prisma.eventPlayer.findMany({ where: { eventId: event.id } });
+    for (let i = 0; i < players.length; i++) {
+      await prisma.gameParticipant.create({ data: { gameId: past.id, eventPlayerId: players[i].id, order: i } });
+    }
+    await syncGamePayments(past.id, event.id);
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const currentRes = await bulkSettle(ctx({ id: event.id }, { gameId: game.id }, "PUT"));
+    expect(currentRes.status).toBe(200);
+    expect((await currentRes.json()).updated).toBe(3);
+
+    const pastRes = await bulkSettle(ctx({ id: event.id }, { gameId: past.id }, "PUT"));
+    expect(pastRes.status).toBe(200);
+    expect((await pastRes.json()).updated).toBe(3);
+
+    expect(await prisma.gamePayment.count({ where: { gameId: game.id, status: "paid" } })).toBe(3);
+    expect(await prisma.gamePayment.count({ where: { gameId: past.id, status: "paid" } })).toBe(3);
+  });
+
+  it("bulk settle route rejects a gameId from another event and leaves that event's payments untouched", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    const victim = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    await syncGamePayments(victim.game.id, victim.event.id);
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const res = await bulkSettle(ctx({ id: event.id }, { gameId: victim.game.id }, "PUT"));
+    expect(res.status).toBe(400);
+
+    const victimRows = await prisma.gamePayment.findMany({ where: { gameId: victim.game.id } });
+    expect(victimRows).toHaveLength(3);
+    expect(victimRows.every((r) => r.status === "pending")).toBe(true);
+  });
+
   it("config route rejects a game from another event", async () => {
     const { event } = await seedEvent({ cost: 60 });
     const other = await prisma.event.create({ data: { title: "Other", location: "X", dateTime: new Date() } });

@@ -24,6 +24,7 @@ vi.mock("~/lib/webhook.server", () => ({ fireWebhooks: vi.fn().mockResolvedValue
 
 import { POST as claim } from "~/pages/api/events/[id]/payments/payer/claim";
 import { POST as standDown } from "~/pages/api/events/[id]/payments/payer/stand-down";
+import { GET as getPayer } from "~/pages/api/events/[id]/payments/payer/index";
 
 const CTX = (id: string, body: unknown = {}) =>
   ({
@@ -34,6 +35,9 @@ const CTX = (id: string, body: unknown = {}) =>
       body: JSON.stringify(body),
     }),
   }) as any;
+
+const GET_CTX = (id: string) =>
+  ({ params: { id }, request: new Request("http://localhost/x", { method: "GET" }) }) as any;
 
 async function seed() {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -149,5 +153,56 @@ describe("POST payer/stand-down", () => {
     const updated = await testPrisma.game.findUnique({ where: { id: game.id } });
     expect(updated!.payerEventPlayerId).toBe(anaPlayer.id);
     expect(updated!.payerStoodDownAt).toBeNull();
+  });
+});
+
+describe("GET payer/index", () => {
+  it("returns the current game's payer summary", async () => {
+    const { event, game, ana } = await seed();
+    await testPrisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 60, currency: "EUR" },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+
+    const res = await getPayer(GET_CTX(event.id));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.gameId).toBe(game.id);
+    expect(json.mode).toBe("tracked");
+    expect(json.hasCost).toBe(true);
+    expect(json.payerName).toBe("Ana");
+    expect(json.isPayer).toBe(true);
+    expect(json.isRosterPlayer).toBe(true);
+    expect(json.vacant).toBe(false);
+  });
+
+  it("reports a vacant payer after a stand-down", async () => {
+    const { event, ana } = await seed();
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+    await standDown(CTX(event.id));
+
+    const json = await (await getPayer(GET_CTX(event.id))).json();
+    expect(json.vacant).toBe(true);
+    expect(json.isPayer).toBe(false);
+    expect(json.payerName).toBe("Ana"); // who may pick it back up
+  });
+
+  it("returns a null game when the event has none", async () => {
+    const { event, ana } = await seed();
+    await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: null } });
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+
+    const json = await (await getPayer(GET_CTX(event.id))).json();
+    expect(json.gameId).toBeNull();
+    expect(json.payerName).toBeNull();
+    expect(json.isPayer).toBe(false);
+  });
+
+  it("refuses an unauthenticated caller", async () => {
+    const { event } = await seed();
+    mockGetSession.mockResolvedValue(null);
+
+    const res = await getPayer(GET_CTX(event.id));
+    expect(res.status).toBe(401);
   });
 });

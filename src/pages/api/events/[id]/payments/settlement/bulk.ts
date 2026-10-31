@@ -28,6 +28,13 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const gameId = String(body.gameId ?? "");
   if (!gameId) return Response.json({ error: "gameId is required." }, { status: 400 });
 
+  // Bind the supplied game to THIS event — otherwise an owner/admin of event A
+  // could bulk-settle shares on a game belonging to event B (see settlement.ts).
+  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { eventId: true } });
+  if (!game || game.eventId !== eventId) {
+    return Response.json({ error: "gameId does not belong to this event." }, { status: 400 });
+  }
+
   const markedBy = session?.user?.id ?? event.ownerId ?? "unknown";
   try {
     const updated = await bulkSettleGame(eventId, gameId, markedBy);
