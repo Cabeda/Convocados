@@ -118,7 +118,18 @@ Never re-point the pre-push scan at the git index (`gitleaks ... --staged`): at 
 index is empty, so it checks nothing while reporting success. Push scanning must use the
 `--log-opts` range supplied on stdin.
 
+A suite that reports **all tests passed and still exits non-zero** has an unhandled error: read
+the `Errors` line, not the totals. It aborted two pushes on 2026-10-27 while the totals said green.
+
 **NEVER use `git push --no-verify`**. If the pre-push hook fails, fix the underlying issue (lint errors, type errors, failing tests) rather than bypassing the hook. The hook exists to prevent broken code from reaching the remote.
+
+### Destructive commands
+
+One path per `rm -rf`, and never a tracked directory: `rm -rf node_modules/.vite android-app`
+deleted the whole Android module (recovered with `git restore`, but the gitignored build files
+were gone). `git checkout -- .` and `git restore .` discard uncommitted work — use `git stash`.
+And do not chain a branch switch: `git switch -c x origin/main || …` followed by `git commit`
+lands the commit on whichever branch you were already on.
 
 ### Branch Naming
 ```
@@ -237,9 +248,13 @@ else bypasses the rules — a direct push to `main` must pass the same checks.
 > nothing else bypasses the rules (#1222). The residual is deliberate and is the line above:
 > a merge taken through the bypass ships untested, so do not take it.
 
-Consequence worth internalising: **merging a Change deploys it.** `release.yml` fires on
-CI green against `main` and then bumps the version, tags, releases, deploys Fly, publishes
-Android to the Play internal track, and deploys the scheduler. One click is production.
+Consequence worth internalising: **merging a Change deploys it — if the
+post-merge run is green.** `release.yml` fires on the CI run for `main`; a red run skips it
+silently (`conclusion == 'success'` is the gate), so a merged Change can sit undeployed for hours
+— it happened to the captain feature on 2026-10-27. After a merge: check that run, then verify the
+artifact (the new route answers, the version bumped), never "merged, therefore live". A green
+run then bumps the version, tags, releases, deploys Fly, publishes Android to the Play internal
+track, and deploys the scheduler. One click is production.
 
 ## The Delivery Factory
 
