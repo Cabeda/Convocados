@@ -58,12 +58,16 @@ function jsonRpcResult(id: unknown, result: unknown) {
  * are called anonymously and the plugin looks broken.
  */
 function authFailure(id: unknown, status: 401 | 403, message: string, challenge: string) {
+  const meta = { "mcp/www_authenticate": [challenge] };
   return Response.json(
     {
       jsonrpc: "2.0",
       id: id ?? null,
-      error: { code: -32001, message },
-      _meta: { "mcp/www_authenticate": [challenge] },
+      // OpenAI's examples put `_meta` on the payload; the MCP schema allows it
+      // on the error object. Emitting both costs nothing and covers either
+      // reader, so a wrong guess cannot leave the fix inert.
+      error: { code: -32001, message, _meta: meta },
+      _meta: meta,
     },
     { status, headers: { "WWW-Authenticate": challenge } },
   );
