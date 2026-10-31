@@ -5,7 +5,15 @@ vi.mock("astro:middleware", () => ({
   defineMiddleware: (fn: unknown) => fn,
 }));
 
+// The trace line is the whole point of this branch; pin it rather than
+// trusting it to stay in an `if` nobody exercises.
+vi.mock("~/lib/logger.server", () => {
+  const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
+  return { logger, createLogger: () => logger };
+});
+
 import { onRequest } from "~/middleware";
+import { logger } from "~/lib/logger.server";
 
 type Handler = (ctx: unknown, next: () => Promise<Response>) => Promise<Response>;
 const run = onRequest as unknown as Handler;
@@ -116,5 +124,128 @@ describe("canonical host redirect", () => {
       async () => new Response('{"status":"ok"}', { status: 200 }),
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe("CSRF origin gate on traced routes", () => {
+  /** A cookie-bearing cross-origin POST — the shape CSRF protection exists for. */
+  function crossOriginPost(url: string) {
+    return {
+      request: new Request(url, {
+        method: "POST",
+        headers: {
+          cookie: "better-auth.session_token=abc",
+          origin: "https://evil.example",
+          "sec-fetch-site": "cross-site",
+          "content-type": "text/plain",
+        },
+        body: "{}",
+      }),
+      url: new URL(url),
+    };
+  }
+
+  it("blocks a cookie-bearing cross-origin POST to /api/mcp before it reaches the handler", async () => {
+    const next = vi.fn(async () => new Response("handled", { status: 200 }));
+    const res = await run(crossOriginPost("https://convocados.cabeda.dev/api/mcp"), next);
+    expect(res.status).toBe(403);
+    // /api/mcp is traced; the trace must never be a way around the gate.
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("still blocks the same request on a non-traced route", async () => {
+    const next = vi.fn(async () => new Response("handled", { status: 200 }));
+    const res = await run(crossOriginPost("https://convocados.cabeda.dev/api/events"), next);
+    expect(res.status).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("lets a same-origin POST to /api/mcp through and logs the trace", async () => {
+    vi.mocked(logger.info).mockClear();
+    const next = vi.fn(async () => new Response("handled", { status: 200 }));
+    const res = await run(
+      {
+        request: new Request("https://convocados.cabeda.dev/api/mcp", {
+          method: "POST",
+          headers: { cookie: "better-auth.session_token=abc", origin: "https://convocados.cabeda.dev" },
+          body: "{}",
+        }),
+        url: new URL("https://convocados.cabeda.dev/api/mcp"),
+      },
+      next,
+    );
+    expect(res.status).toBe(200);
+    expect(next).toHaveBeenCalledOnce();
+    // The diagnostic itself must exist: path, status and the credential kind
+    // (a session cookie still authenticates this endpoint).
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "POST", path: "/api/mcp", status: 200, auth: "cookie" }),
+      "oauth/mcp request",
+    );
+  });
+
+  it("logs the blocked cross-origin attempt too, with its status", async () => {
+    vi.mocked(logger.info).mockClear();
+    const res = await run(crossOriginPost("https://convocados.cabeda.dev/api/mcp"), async () =>
+      new Response("handled", { status: 200 }),
+    );
+    expect(res.status).toBe(403);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/api/mcp", status: 403 }),
+      "oauth/mcp request",
+    );
+  });
+
+  it("does not trace unrelated routes", async () => {
+    vi.mocked(logger.info).mockClear();
+    await run(ctx("GET", "https://convocados.cabeda.dev/api/events"), async () =>
+      new Response("ok", { status: 200 }),
+    );
+    expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  it("still logs when the handler throws, then lets the error propagate", async () => {
+    vi.mocked(logger.error).mockClear();
+    const boom = new Error("db exploded");
+    await expect(
+      run(
+        {
+          request: new Request("https://convocados.cabeda.dev/api/mcp", {
+            method: "POST",
+            headers: { authorization: "Bearer t" },
+            body: "{}",
+          }),
+          url: new URL("https://convocados.cabeda.dev/api/mcp"),
+        },
+        async () => {
+          throw boom;
+        },
+      ),
+    ).rejects.toThrow("db exploded");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/api/mcp", status: 500, auth: "bearer" }),
+      "oauth/mcp request failed",
+    );
+  });
+
+  it("lets a bearer-authenticated cross-origin POST to /api/mcp through", async () => {
+    const next = vi.fn(async () => new Response("handled", { status: 200 }));
+    const res = await run(
+      {
+        request: new Request("https://convocados.cabeda.dev/api/mcp", {
+          method: "POST",
+          headers: {
+            cookie: "better-auth.session_token=abc",
+            origin: "https://evil.example",
+            authorization: "Bearer token",
+          },
+          body: "{}",
+        }),
+        url: new URL("https://convocados.cabeda.dev/api/mcp"),
+      },
+      next,
+    );
+    expect(res.status).toBe(200);
+    expect(next).toHaveBeenCalledOnce();
   });
 });
