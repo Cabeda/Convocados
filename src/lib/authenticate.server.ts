@@ -123,8 +123,12 @@ export async function authenticateRequest(
     // Logged because a connector that mints tokens but then fails every MCP
     // call is otherwise invisible: Fly keeps no request log, and the claim
     // values below are what tell a wrong issuer from a wrong audience or a
-    // stale signature. Never log the token itself.
-    logger.warn(describeRejectedBearer(token), "oauth bearer rejected");
+    // stale signature. Never log the token itself. Scoped to the MCP endpoint:
+    // this function runs on ~47 routes, several of them unlimited reads, so an
+    // unscoped warn would let a garbage bearer token flood the log.
+    if (new URL(request.url).pathname.startsWith("/api/mcp")) {
+      logger.warn(describeRejectedBearer(token), "oauth bearer rejected");
+    }
     return null;
   }
 

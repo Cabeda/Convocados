@@ -148,7 +148,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
         path: url.pathname,
         status: response.status,
         ms: Date.now() - startedAt,
-        auth: request.headers.get("authorization") ? "bearer" : "none",
+        auth: request.headers.get("authorization")
+          ? "bearer"
+          : request.headers.get("cookie")
+            ? "cookie"
+            : "none",
         mcpVersion: request.headers.get("mcp-protocol-version") ?? undefined,
         accept: request.headers.get("accept") ?? undefined,
         userAgent: request.headers.get("user-agent") ?? undefined,

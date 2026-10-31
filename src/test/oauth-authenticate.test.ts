@@ -1,8 +1,16 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { generateApiKey } from "~/lib/apiKey.server";
 import { authenticateRequest, describeRejectedBearer, requireScope } from "~/lib/authenticate.server";
 import type { AuthContext } from "~/lib/authenticate.server";
+
+// The rejection log is what makes a broken connector diagnosable; pin the call
+// site, not only the helper it formats with.
+vi.mock("~/lib/logger.server", () => {
+  const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
+  return { logger, createLogger: () => logger };
+});
+import { logger } from "~/lib/logger.server";
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
@@ -151,6 +159,32 @@ describe("authenticateRequest", () => {
       });
       // The token itself must never reach the log.
       expect(JSON.stringify(summary)).not.toContain("signature");
+    });
+
+    it("logs the claim summary when a bearer token is rejected on the MCP endpoint", async () => {
+      vi.mocked(logger.warn).mockClear();
+      const ctx = await authenticateRequest(
+        new Request("http://localhost:4321/api/mcp", {
+          method: "POST",
+          headers: { authorization: "Bearer not.a.jwt" },
+        }),
+      );
+      expect(ctx).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ segments: 3 }),
+        "oauth bearer rejected",
+      );
+    });
+
+    it("stays quiet for a rejected bearer on other routes", async () => {
+      // ~47 routes call this; several are unlimited reads, so an unscoped warn
+      // is a log-flood vector, not a diagnostic.
+      vi.mocked(logger.warn).mockClear();
+      const ctx = await authenticateRequest(
+        makeRequest({ authorization: "Bearer not.a.jwt" }),
+      );
+      expect(ctx).toBeNull();
+      expect(logger.warn).not.toHaveBeenCalled();
     });
   });
 

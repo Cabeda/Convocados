@@ -5,7 +5,15 @@ vi.mock("astro:middleware", () => ({
   defineMiddleware: (fn: unknown) => fn,
 }));
 
+// The trace line is the whole point of this branch; pin it rather than
+// trusting it to stay in an `if` nobody exercises.
+vi.mock("~/lib/logger.server", () => {
+  const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
+  return { logger, createLogger: () => logger };
+});
+
 import { onRequest } from "~/middleware";
+import { logger } from "~/lib/logger.server";
 
 type Handler = (ctx: unknown, next: () => Promise<Response>) => Promise<Response>;
 const run = onRequest as unknown as Handler;
@@ -153,6 +161,7 @@ describe("CSRF origin gate on traced routes", () => {
   });
 
   it("lets a same-origin POST to /api/mcp through and logs the trace", async () => {
+    vi.mocked(logger.info).mockClear();
     const next = vi.fn(async () => new Response("handled", { status: 200 }));
     const res = await run(
       {
@@ -167,6 +176,32 @@ describe("CSRF origin gate on traced routes", () => {
     );
     expect(res.status).toBe(200);
     expect(next).toHaveBeenCalledOnce();
+    // The diagnostic itself must exist: path, status and the credential kind
+    // (a session cookie still authenticates this endpoint).
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "POST", path: "/api/mcp", status: 200, auth: "cookie" }),
+      "oauth/mcp request",
+    );
+  });
+
+  it("logs the blocked cross-origin attempt too, with its status", async () => {
+    vi.mocked(logger.info).mockClear();
+    const res = await run(crossOriginPost("https://convocados.cabeda.dev/api/mcp"), async () =>
+      new Response("handled", { status: 200 }),
+    );
+    expect(res.status).toBe(403);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/api/mcp", status: 403 }),
+      "oauth/mcp request",
+    );
+  });
+
+  it("does not trace unrelated routes", async () => {
+    vi.mocked(logger.info).mockClear();
+    await run(ctx("GET", "https://convocados.cabeda.dev/api/events"), async () =>
+      new Response("ok", { status: 200 }),
+    );
+    expect(logger.info).not.toHaveBeenCalled();
   });
 
   it("lets a bearer-authenticated cross-origin POST to /api/mcp through", async () => {
