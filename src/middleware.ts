@@ -139,26 +139,33 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // OAuth or MCP request names the hop and the status that failed.
   if (TRACE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
     const startedAt = Date.now();
+    const fields = {
+      method: request.method,
+      path: url.pathname,
+      auth: request.headers.get("authorization")
+        ? "bearer"
+        : request.headers.get("cookie")
+          ? "cookie"
+          : "none",
+      mcpVersion: request.headers.get("mcp-protocol-version") ?? undefined,
+      accept: request.headers.get("accept") ?? undefined,
+      userAgent: request.headers.get("user-agent") ?? undefined,
+    };
     // The gate runs first: tracing must never be a way around CSRF.
     const rejection = SAFE_METHODS.has(request.method) ? null : csrfRejection(request, url);
-    const response = rejection ?? (await next());
-    logger.info(
-      {
-        method: request.method,
-        path: url.pathname,
-        status: response.status,
-        ms: Date.now() - startedAt,
-        auth: request.headers.get("authorization")
-          ? "bearer"
-          : request.headers.get("cookie")
-            ? "cookie"
-            : "none",
-        mcpVersion: request.headers.get("mcp-protocol-version") ?? undefined,
-        accept: request.headers.get("accept") ?? undefined,
-        userAgent: request.headers.get("user-agent") ?? undefined,
-      },
-      "oauth/mcp request",
-    );
+    let response: Response;
+    try {
+      response = rejection ?? (await next());
+    } catch (error) {
+      // A thrown handler is the likeliest "connector failed" cause, so it must
+      // still leave a line before the error propagates.
+      logger.error(
+        { ...fields, status: 500, ms: Date.now() - startedAt, err: String(error) },
+        "oauth/mcp request failed",
+      );
+      throw error;
+    }
+    logger.info({ ...fields, status: response.status, ms: Date.now() - startedAt }, "oauth/mcp request");
     return rejection ?? addSecurityHeaders(response);
   }
 

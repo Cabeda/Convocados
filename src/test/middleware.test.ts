@@ -204,6 +204,30 @@ describe("CSRF origin gate on traced routes", () => {
     expect(logger.info).not.toHaveBeenCalled();
   });
 
+  it("still logs when the handler throws, then lets the error propagate", async () => {
+    vi.mocked(logger.error).mockClear();
+    const boom = new Error("db exploded");
+    await expect(
+      run(
+        {
+          request: new Request("https://convocados.cabeda.dev/api/mcp", {
+            method: "POST",
+            headers: { authorization: "Bearer t" },
+            body: "{}",
+          }),
+          url: new URL("https://convocados.cabeda.dev/api/mcp"),
+        },
+        async () => {
+          throw boom;
+        },
+      ),
+    ).rejects.toThrow("db exploded");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/api/mcp", status: 500, auth: "bearer" }),
+      "oauth/mcp request failed",
+    );
+  });
+
   it("lets a bearer-authenticated cross-origin POST to /api/mcp through", async () => {
     const next = vi.fn(async () => new Response("handled", { status: 200 }));
     const res = await run(
