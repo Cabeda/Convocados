@@ -62,6 +62,19 @@ describe("a gate checks, it does not repair", () => {
   });
 });
 
+describe("the test gate reads vitest's exit status", () => {
+  // `#!/bin/sh` with no pipefail: in `if ! pnpm vitest … | tee … | tail`, `$?`
+  // is tail's, so the failure branch is dead and a red suite still pushes.
+  it("does not pipe the suite inside the `if` condition", () => {
+    expect(read(HOOK)).not.toMatch(/^\s*if\s+!?\s*pnpm vitest run[^\n]*\|/m);
+  });
+
+  it("captures the suite's output in a per-run temp file", () => {
+    expect(read(HOOK)).toMatch(/tests_log="\$\(mktemp /);
+    expect(read(HOOK)).not.toMatch(/\/tmp\/pre-push-tests\.log/);
+  });
+});
+
 describe("thresholds live in one place", () => {
   it("the lint warning cap is on the package.json script, so CI enforces it too", () => {
     const scripts = JSON.parse(read("package.json")).scripts as Record<string, string>;

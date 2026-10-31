@@ -110,11 +110,19 @@ echo "→ Running tests with coverage..."
 # the failures first stops the next reader chasing the table, which is what
 # happened twice while this hook was the gate (the failing test was hundreds of
 # lines above the tail).
-if ! pnpm vitest run --coverage 2>&1 | tee /tmp/pre-push-tests.log | tail -n 25; then
+# The `if` tests vitest's own status: this is `sh` without pipefail, so piping
+# the suite through tee/tail would test tail's exit status and never fire.
+tests_log="$(mktemp "${TMPDIR:-/tmp}/pre-push-tests.XXXXXX")"
+trap 'rm -f "$tests_log"' EXIT
+
+if pnpm vitest run --coverage >"$tests_log" 2>&1; then
+  tail -n 25 "$tests_log"
+else
+  tail -n 25 "$tests_log"
   echo "✗ Tests failed. Push aborted."
   echo ""
   echo "Failing tests:"
-  grep -E "^ *(FAIL|×) " /tmp/pre-push-tests.log | sort -u | head -n 20
+  grep -E "^ *(FAIL|×) " "$tests_log" | sort -u | head -n 20
   echo ""
   echo "Coverage detail (files below 94% line threshold):"
   sh "$root/scripts/coverage-report.sh" 94
