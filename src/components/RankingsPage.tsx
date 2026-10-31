@@ -20,6 +20,7 @@ import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { deriveEventPermissions } from "~/lib/eventView";
 import { PasswordPrompt } from "./event/PasswordPrompt";
+import { ApiError, apiErrorMessage, apiRequest } from "~/lib/api/client";
 
 interface PlayerRating {
   name: string;
@@ -92,20 +93,26 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [merging, setMerging] = useState(false);
 
   const load = useCallback(async () => {
-    const [evRes, ratRes] = await Promise.all([
-      fetch(`/api/events/${eventId}`),
-      fetch(`/api/events/${eventId}/ratings`),
+    const [evResult, ratResult] = await Promise.all([
+      apiRequest("GET /api/events/{id}", { params: { id: eventId } }).catch((error: unknown) => error),
+      apiRequest("GET /api/events/{id}/ratings", { params: { id: eventId } }).catch((error: unknown) => error),
     ]);
-    if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
-    const ev = await evRes.json();
+    if (evResult instanceof ApiError && evResult.status === 404) { setNotFound(true); setLoading(false); return; }
+    const ev = evResult as {
+      id: string; title: string; locked?: boolean; ownerId?: string | null; isPublic?: boolean;
+      isAdmin?: boolean; allowManualRating?: boolean;
+      players?: Array<{ id: string; name: string; userId?: string | null }>;
+    };
     if (ev.locked) { setTitle(ev.title); setLockedEvent({ id: ev.id, title: ev.title }); setLoading(false); return; }
-    if (ratRes.status === 403) { setTitle(ev.title); setHidden(true); setLoading(false); return; }
-    const rat = ratRes.ok ? await ratRes.json() : { data: [], nextCursor: null, hasMore: false };
+    if (ratResult instanceof ApiError && ratResult.status === 403) { setTitle(ev.title); setHidden(true); setLoading(false); return; }
+    const rat = (ratResult instanceof ApiError ? { data: [], nextCursor: null, hasMore: false } : ratResult) as {
+      data: PlayerRating[]; nextCursor: string | null; hasMore: boolean;
+    };
     setTitle(ev.title);
     setRatings(rat.data);
     setNextCursor(rat.nextCursor);
     setHasMore(rat.hasMore);
-    setPlayers((ev.players ?? []).map((p: { id: string; name: string; userId?: string | null }) => ({ id: p.id, name: p.name, userId: p.userId ?? null })));
+    setPlayers((ev.players ?? []).map((p) => ({ id: p.id, name: p.name, userId: p.userId ?? null })));
     const perms = deriveEventPermissions(session?.user?.id ?? null, {
       ownerId: ev.ownerId ?? null,
       isPublic: !!ev.isPublic,
@@ -122,8 +129,10 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
-    const res = await fetch(`/api/events/${eventId}/ratings?cursor=${nextCursor}`);
-    const page = await res.json();
+    const page = (await apiRequest("GET /api/events/{id}/ratings", {
+      params: { id: eventId },
+      query: { cursor: nextCursor },
+    })) as { data: PlayerRating[]; nextCursor: string | null; hasMore: boolean };
     setRatings((prev) => [...prev, ...page.data]);
     setNextCursor(page.nextCursor);
     setHasMore(page.hasMore);
@@ -133,20 +142,20 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const handleRecalculate = async () => {
     setRecalculating(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/ratings/recalculate`, { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        setSnack({ msg: t("ratingsRecalculated", { n: data.gamesProcessed }), severity: "success" });
-        const ratRes = await fetch(`/api/events/${eventId}/ratings`);
-        const rat = ratRes.ok ? await ratRes.json() : { data: [], nextCursor: null, hasMore: false };
-        setRatings(rat.data);
-        setNextCursor(rat.nextCursor);
-        setHasMore(rat.hasMore);
-      } else {
-        setSnack({ msg: data.error || "Error", severity: "error" });
-      }
-    } catch {
-      setSnack({ msg: "Error", severity: "error" });
+      const data = (await apiRequest("POST /api/events/{id}/ratings/recalculate", {
+        params: { id: eventId },
+      })) as { gamesProcessed: number };
+      setSnack({ msg: t("ratingsRecalculated", { n: data.gamesProcessed }), severity: "success" });
+      const rat = (await apiRequest("GET /api/events/{id}/ratings", {
+        params: { id: eventId },
+      }).catch(() => ({ data: [], nextCursor: null, hasMore: false }))) as {
+        data: PlayerRating[]; nextCursor: string | null; hasMore: boolean;
+      };
+      setRatings(rat.data);
+      setNextCursor(rat.nextCursor);
+      setHasMore(rat.hasMore);
+    } catch (requestError) {
+      setSnack({ msg: apiErrorMessage(requestError, "Error"), severity: "error" });
     }
     setRecalculating(false);
   };
@@ -160,18 +169,13 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     if (!purgeTarget) return;
     setPurging(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/purge-player`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: purgeTarget }),
+      await apiRequest("DELETE /api/events/{id}/purge-player", {
+        params: { id: eventId },
+        body: { name: purgeTarget },
       });
-      if (res.ok) {
-        setSnack({ msg: t("purgePlayerSuccess"), severity: "success" });
-        setRatings((prev) => prev.filter((r) => r.name !== purgeTarget));
-        setPurgeTarget(null);
-      } else {
-        setSnack({ msg: t("purgePlayerError"), severity: "error" });
-      }
+      setSnack({ msg: t("purgePlayerSuccess"), severity: "success" });
+      setRatings((prev) => prev.filter((r) => r.name !== purgeTarget));
+      setPurgeTarget(null);
     } catch {
       setSnack({ msg: t("purgePlayerError"), severity: "error" });
     }
@@ -184,26 +188,20 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     if (isNaN(val) || val < 500 || val > 1500) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/ratings`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editPlayer, initialRating: val }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const msg = data.needsRecalculate ? t("initialRatingNeedsRecalculate") : t("initialRatingSaved");
-        setSnack({ msg, severity: "success" });
-        setRatings((prev) => prev.map((r) =>
-          r.name === editPlayer
-            ? { ...r, rating: data.rating, initialRating: data.initialRating }
-            : r
-        ));
-        setEditPlayer(null);
-      } else {
-        setSnack({ msg: data.error || "Error", severity: "error" });
-      }
-    } catch {
-      setSnack({ msg: "Error", severity: "error" });
+      const data = (await apiRequest("PATCH /api/events/{id}/ratings", {
+        params: { id: eventId },
+        body: { name: editPlayer, initialRating: val },
+      })) as { needsRecalculate?: boolean; rating: number; initialRating: number | null };
+      const msg = data.needsRecalculate ? t("initialRatingNeedsRecalculate") : t("initialRatingSaved");
+      setSnack({ msg, severity: "success" });
+      setRatings((prev) => prev.map((r) =>
+        r.name === editPlayer
+          ? { ...r, rating: data.rating, initialRating: data.initialRating }
+          : r
+      ));
+      setEditPlayer(null);
+    } catch (requestError) {
+      setSnack({ msg: apiErrorMessage(requestError, "Error"), severity: "error" });
     }
     setSaving(false);
   };
@@ -212,22 +210,15 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     if (!claimTarget) return;
     setClaiming(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/claim-player`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId: claimTarget.id }),
+      await apiRequest("POST /api/events/{id}/claim-player", {
+        params: { id: eventId },
+        body: { playerId: claimTarget.id },
       });
-      if (res.ok) {
-        setSnack({ msg: t("claimPlayerSuccess"), severity: "success" });
-        setClaimTarget(null);
-        load();
-      } else {
-        const data = await res.json();
-        setSnack({ msg: data.error || "Error", severity: "error" });
-        setClaimTarget(null);
-      }
-    } catch {
-      setSnack({ msg: "Error", severity: "error" });
+      setSnack({ msg: t("claimPlayerSuccess"), severity: "success" });
+      setClaimTarget(null);
+      load();
+    } catch (requestError) {
+      setSnack({ msg: apiErrorMessage(requestError, "Error"), severity: "error" });
       setClaimTarget(null);
     }
     setClaiming(false);
@@ -241,23 +232,17 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     if (!mergeSource || !mergeTarget) return;
     setMerging(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/merge-player`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceName: mergeSource, targetName: mergeTarget }),
+      await apiRequest("POST /api/events/{id}/merge-player", {
+        params: { id: eventId },
+        body: { sourceName: mergeSource, targetName: mergeTarget },
       });
-      if (res.ok) {
-        setSnack({ msg: t("mergePlayerSuccess"), severity: "success" });
-        setMergeOpen(false);
-        setMergeSource(null);
-        setMergeTarget(null);
-        load();
-      } else {
-        const data = await res.json();
-        setSnack({ msg: data.error || "Error", severity: "error" });
-      }
-    } catch {
-      setSnack({ msg: "Error", severity: "error" });
+      setSnack({ msg: t("mergePlayerSuccess"), severity: "success" });
+      setMergeOpen(false);
+      setMergeSource(null);
+      setMergeTarget(null);
+      load();
+    } catch (requestError) {
+      setSnack({ msg: apiErrorMessage(requestError, "Error"), severity: "error" });
     }
     setMerging(false);
   };

@@ -23,6 +23,8 @@ const TIER_2_TYPES = new Set<NotificationJobType>([
   "bench_promoted_capacity",
   "payment_confirmed",
   "payment_self_reported",
+  "payer_assigned",
+  "payer_changed",
 ]);
 
 /** Returns true if this notification type is game-level (Tier 2) */
@@ -73,6 +75,8 @@ export function wantsPushForJobType(prefs: NotificationPrefs, type: Notification
     case "bench_promoted_capacity":
     case "payment_confirmed":
     case "payment_self_reported":
+    case "payer_assigned":
+    case "payer_changed":
       return prefs.playerActivityPush;
     case "event_details":
     case "game_cancelled":
@@ -141,6 +145,8 @@ export function resolveMuteTier(
     case "bench_promoted_capacity":
     case "payment_confirmed":
     case "payment_self_reported":
+    case "payer_assigned":
+    case "payer_changed":
       fieldName = "mutePlayerActivity";
       break;
     case "event_details":

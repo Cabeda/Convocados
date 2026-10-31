@@ -39,6 +39,8 @@ COPY public ./public
 COPY litestream.yml ./litestream.yml
 COPY scripts/start.sh ./scripts/start.sh
 COPY scripts/server.mjs ./scripts/server.mjs
+COPY scripts/server-handler.mjs ./scripts/server-handler.mjs
+COPY src/lib/canonicalHost.mjs ./src/lib/canonicalHost.mjs
 COPY scripts/release-migrate.sh ./scripts/release-migrate.sh
 
 EXPOSE 3000

@@ -27,6 +27,7 @@ import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { isGameEnded } from "~/lib/gameStatus";
 import { mergeSuggestionPills } from "~/lib/suggestionPills";
 import { useSession } from "~/lib/auth.client";
+import { apiRequest, ApiError, apiErrorMessage } from "~/lib/api/client";
 
 import {
   EventHeader,
@@ -110,9 +111,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
   useEffect(() => {
     if (!balanced) { setRatingsResponse(null); return; }
     const controller = new AbortController();
-    fetch(`/api/events/${eventId}/ratings?limit=100`, { signal: controller.signal })
-      .then((r) => r.json())
-      .then(setRatingsResponse)
+    apiRequest("GET /api/events/{id}/ratings", {
+      params: { id: eventId },
+      query: { limit: 100 },
+      init: { signal: controller.signal },
+    })
+      .then((data) => setRatingsResponse(data as { data: { name: string; rating: number }[] }))
       .catch(() => {});
     return () => controller.abort();
   }, [balanced, eventId]);
@@ -169,10 +173,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const fetchEvent = useCallback(async () => {
     try {
-      const inviteParam = inviteToken ? `?inviteToken=${encodeURIComponent(inviteToken)}` : "";
-      const r = await fetch(`/api/events/${eventId}${inviteParam}`);
-      if (r.status === 404) { setError({ status: 404 }); return; }
-      const data = await r.json();
+      const data = (await apiRequest("GET /api/events/{id}", {
+        params: { id: eventId },
+        query: { inviteToken: inviteToken ?? undefined },
+      })) as EventData & { locked?: boolean };
       if (data.locked) {
         setLockedEvent({ id: data.id, title: data.title });
         setEvent(null);
@@ -181,8 +185,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
         setLockedEvent(null);
         setError(null);
       }
-    } catch (_e) {
-      setError({});
+    } catch (e) {
+      setError(e instanceof ApiError && e.status === 404 ? { status: 404 } : {});
     } finally {
       setIsLoading(false);
     }
@@ -208,9 +212,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [knownPlayersData, setKnownPlayersData] = useState<{ players: KnownPlayer[] } | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/events/${eventId}/known-players`, { signal: controller.signal })
-      .then((r) => r.json())
-      .then(setKnownPlayersData)
+    apiRequest("GET /api/events/{id}/known-players", {
+      params: { id: eventId },
+      init: { signal: controller.signal },
+    })
+      .then((data) => setKnownPlayersData(data as { players: KnownPlayer[] }))
       .catch(() => {});
     return () => controller.abort();
   }, [eventId]);
@@ -220,9 +226,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
   useEffect(() => {
     if (!session?.user) return;
     const controller = new AbortController();
-    fetch(`/api/me/co-players`, { signal: controller.signal })
-      .then((r) => (r.ok ? r.json() : Promise.resolve({ players: [] })))
-      .then((d) => setCoPlayersData(d))
+    apiRequest("GET /api/me/co-players", { init: { signal: controller.signal } })
+      .then((d) => setCoPlayersData(d as {
+        players: Array<{ name: string; userId: string; image: string | null; coPlayCount: number }>;
+      }))
       .catch(() => {});
     return () => controller.abort();
   }, [eventId, session?.user]);
@@ -243,9 +250,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
       return;
     }
     const controller = new AbortController();
-    fetch(`/api/events/${eventId}/suggestions`, { signal: controller.signal })
-      .then((r) => (r.ok ? r.json() : Promise.resolve({ suggestions: [] })))
-      .then((d) => setCoPlaySuggestions(Array.isArray(d?.suggestions) ? d.suggestions : []))
+    apiRequest("GET /api/events/{id}/suggestions", {
+      params: { id: eventId },
+      init: { signal: controller.signal },
+    })
+      .then((d) => {
+        const json = d as { suggestions?: CoPlaySuggestion[] } | undefined;
+        setCoPlaySuggestions(Array.isArray(json?.suggestions) ? json.suggestions : []);
+      })
       .catch(() => {});
     return () => controller.abort();
   }, [eventId, event?.gameId, isOwnerFlag, isAdminFlag]);
@@ -256,16 +268,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
     setPlayerError(null);
     setInvitingName(name);
     try {
-      const res = await fetch(`/api/events/${eventId}/invites`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      });
-      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
-      if (!res.ok) {
-        setPlayerError(json.error ?? t("somethingWentWrong"));
-        return;
-      }
+      const json = (await apiRequest("POST /api/events/{id}/invites", {
+        params: { id: eventId },
+        body: { userId },
+      })) as { channels?: unknown; inviteUrl?: unknown };
       // Always surface the shareable link so the organizer can copy/share
       // via WhatsApp etc., even when push/email channels are enabled.
       const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
@@ -289,8 +295,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
         setSnackbar(t("inviteSent", { name }));
       }
       fetchEvent();
-    } catch {
-      setPlayerError(t("somethingWentWrong"));
+    } catch (e) {
+      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
     } finally {
       setInvitingName(null);
     }
@@ -302,22 +308,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
     const inviteIdForAction = invite.inviteId ?? invite.id;
     setResendingInviteId(inviteIdForAction);
     try {
-      const res = await fetch(`/api/events/${eventId}/invites`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inviteId: inviteIdForAction }),
-      });
-      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
-      if (!res.ok) {
-        if (res.status === 429 && typeof json?.retryAfterSeconds === "number") {
-          const mins = Math.ceil(json.retryAfterSeconds / 60);
-          const time = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
-          setSnackbar(t("inviteResendCooldown", { time }));
-        } else {
-          setPlayerError(json.error ?? t("somethingWentWrong"));
-        }
-        return;
-      }
+      const json = (await apiRequest("PATCH /api/events/{id}/invites", {
+        params: { id: eventId },
+        body: { inviteId: inviteIdForAction },
+      })) as { channels?: unknown };
       const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
       const labels: string[] = [];
       if (channels?.email) labels.push(t("channelEmail"));
@@ -327,8 +321,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
         ? t("inviteResentVia", { name: invite.name, channels: labels.join(", ") })
         : t("inviteSent", { name: invite.name }));
       fetchEvent();
-    } catch {
-      setPlayerError(t("somethingWentWrong"));
+    } catch (e) {
+      const retryAfter = e instanceof ApiError && e.status === 429
+        ? (e.payload as { retryAfterSeconds?: unknown } | undefined)?.retryAfterSeconds
+        : undefined;
+      if (typeof retryAfter === "number") {
+        const mins = Math.ceil(retryAfter / 60);
+        const time = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+        setSnackbar(t("inviteResendCooldown", { time }));
+      } else {
+        setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
+      }
     } finally {
       setResendingInviteId(null);
     }
@@ -341,20 +344,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (!window.confirm(t("inviteRetractConfirm", { name: invite.name }))) return;
     setRetractingInviteId(inviteIdForAction);
     try {
-      const res = await fetch(`/api/events/${eventId}/invites`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inviteId: inviteIdForAction }),
+      await apiRequest("DELETE /api/events/{id}/invites", {
+        params: { id: eventId },
+        body: { inviteId: inviteIdForAction },
       });
-      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
-      if (!res.ok) {
-        setPlayerError(json.error ?? t("somethingWentWrong"));
-        return;
-      }
       setSnackbar(t("inviteRetracted", { name: invite.name }));
       fetchEvent();
-    } catch {
-      setPlayerError(t("somethingWentWrong"));
+    } catch (e) {
+      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
     } finally {
       setRetractingInviteId(null);
     }
@@ -370,9 +367,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [cachedBalance, setCachedBalance] = useState<{ amount: number; gateAmount: number; enforcement: string; threshold: number } | null>(null);
   const refreshBalance = useCallback(async () => {
     try {
-      const r = await fetch(`/api/events/${eventId}/balance`);
-      if (!r.ok) return;
-      const j = await r.json();
+      const j = (await apiRequest("GET /api/events/{id}/balance", {
+        params: { id: eventId },
+      })) as {
+        callerBalance?: { amount?: number };
+        gateAmount?: number;
+        enforcement?: string;
+        threshold?: number;
+      };
       const amt = j?.callerBalance?.amount ?? 0;
       setCachedBalance({
         amount: amt,
@@ -607,26 +609,21 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
 
     try {
-      const res = await fetch(`/api/events/${eventId}/players`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Client-Id": clientIdRef.current,
-          "Idempotency-Key": idempotencyKey,
-        },
-        body: JSON.stringify({
+      const json = (await apiRequest("POST /api/events/{id}/players", {
+        params: { id: eventId },
+        body: {
           name: trimmed,
           linkToAccount,
           ...(email ? { email: email.trim() } : {}),
           ...(position ? { position } : {}),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setPlayerError(json.error);
-        fetchEvent(); // revert optimistic update
-        return;
-      }
+        },
+        init: {
+          headers: {
+            "X-Client-Id": clientIdRef.current,
+            "Idempotency-Key": idempotencyKey,
+          },
+        },
+      })) as { resolvedName?: string; anonymous?: boolean };
       const resolvedName: string | undefined = json.resolvedName;
       // Anonymous player (no account): no notification channel exists — surface
       // the share-by-link option right away so the inviter can reach them.
@@ -637,6 +634,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
       }
       addKnownName(resolvedName ?? trimmed);
       fetchEvent();
+    } catch (e) {
+      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
+      fetchEvent(); // revert optimistic update
     } finally {
       addInFlightRef.current = null;
       setAddInFlightName(null);
@@ -655,14 +655,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   /** #1448: set or clear one roster row's position. */
   const setPlayerPosition = async (name: string, position: string | null) => {
-    const res = await fetch(`/api/events/${eventId}/players`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
-      body: JSON.stringify({ name, position }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      setSnackbar(body?.error ?? t("somethingWentWrong"));
+    try {
+      await apiRequest("PATCH /api/events/{id}/players", {
+        params: { id: eventId },
+        body: { name, position },
+        init: { headers: { "X-Client-Id": clientIdRef.current } },
+      });
+    } catch (e) {
+      setSnackbar(apiErrorMessage(e, t("somethingWentWrong")));
       return;
     }
     setEvent((current) => current && {
@@ -697,26 +697,22 @@ export default function EventPage({ eventId }: { eventId: string }) {
       setPlayerError(null);
       setInvitingName(intent.name);
       try {
-        const res = await fetch(`/api/events/${eventId}/invites`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            intent.userId
-              ? { userId: intent.userId, deliver: false }
-              : intent.email
-                ? { email: intent.email, deliver: false }
-                : { name: intent.name },
-          ),
-        });
-        const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
-        if (res.ok && typeof json?.inviteUrl === "string") {
+        const json = (await apiRequest("POST /api/events/{id}/invites", {
+          params: { id: eventId },
+          body: intent.userId
+            ? { userId: intent.userId, deliver: false }
+            : intent.email
+              ? { email: intent.email, deliver: false }
+              : { name: intent.name },
+        })) as { inviteUrl?: unknown };
+        if (typeof json?.inviteUrl === "string") {
           setInviteShare({ url: json.inviteUrl, name: intent.name });
           fetchEvent();
           return;
         }
-        setPlayerError(json.error ?? t("somethingWentWrong"));
-      } catch {
         setPlayerError(t("somethingWentWrong"));
+      } catch (e) {
+        setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
       } finally {
         setInvitingName(null);
       }
@@ -731,44 +727,40 @@ export default function EventPage({ eventId }: { eventId: string }) {
         setPlayerError(null);
         setInvitingName(intent.name);
         try {
-          const res = await fetch(`/api/events/${eventId}/invites`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: intent.email }),
-          });
-          const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
-          if (res.ok) {
-            const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
-            const anyChannel = !!(channels?.email || channels?.webPush || channels?.appPush);
-            if (typeof json?.inviteUrl === "string") {
-              if (anyChannel) {
-                const labels: string[] = [];
-                if (channels?.email) labels.push(t("channelEmail"));
-                if (channels?.webPush) labels.push(t("channelWebPush"));
-                if (channels?.appPush) labels.push(t("channelAppPush"));
-                setSnackbar(t("inviteSentVia", { name: intent.name, channels: labels.join(", ") }));
-              }
-              setInviteShare({ url: json.inviteUrl, name: intent.name });
-            } else if (anyChannel) {
+          const json = (await apiRequest("POST /api/events/{id}/invites", {
+            params: { id: eventId },
+            body: { email: intent.email },
+          })) as { channels?: unknown; inviteUrl?: unknown };
+          const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
+          const anyChannel = !!(channels?.email || channels?.webPush || channels?.appPush);
+          if (typeof json?.inviteUrl === "string") {
+            if (anyChannel) {
               const labels: string[] = [];
               if (channels?.email) labels.push(t("channelEmail"));
               if (channels?.webPush) labels.push(t("channelWebPush"));
               if (channels?.appPush) labels.push(t("channelAppPush"));
               setSnackbar(t("inviteSentVia", { name: intent.name, channels: labels.join(", ") }));
-            } else {
-              setSnackbar(t("inviteSent", { name: intent.name }));
             }
-            fetchEvent();
-            return;
+            setInviteShare({ url: json.inviteUrl, name: intent.name });
+          } else if (anyChannel) {
+            const labels: string[] = [];
+            if (channels?.email) labels.push(t("channelEmail"));
+            if (channels?.webPush) labels.push(t("channelWebPush"));
+            if (channels?.appPush) labels.push(t("channelAppPush"));
+            setSnackbar(t("inviteSentVia", { name: intent.name, channels: labels.join(", ") }));
+          } else {
+            setSnackbar(t("inviteSent", { name: intent.name }));
           }
-          if (res.status === 404 && typeof json.error === "string" && json.error.includes("No registered user")) {
+          fetchEvent();
+          return;
+        } catch (e) {
+          // An unregistered email is a 404 here; fall back to the direct-add flow.
+          if (e instanceof ApiError && e.status === 404 && e.message.includes("No registered user")) {
             const idempotencyKey = crypto.randomUUID();
             await performAdd(intent.name, false, intent.email, idempotencyKey, intent.position);
             return;
           }
-          setPlayerError(json.error ?? t("somethingWentWrong"));
-        } catch {
-          setPlayerError(t("somethingWentWrong"));
+          setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
         } finally {
           setInvitingName(null);
         }
@@ -816,9 +808,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
       return;
     }
     // No cached balance yet — fetch, then decide.
-    fetch(`/api/events/${eventId}/balance`)
-      .then((r) => r.json())
-      .then((j: { callerBalance?: { amount?: number }; gateAmount?: number; enforcement?: string; threshold?: number }) => {
+    apiRequest("GET /api/events/{id}/balance", { params: { id: eventId } })
+      .then((data) => {
+        const j = data as { callerBalance?: { amount?: number }; gateAmount?: number; enforcement?: string; threshold?: number };
         const amt = j?.callerBalance?.amount ?? 0;
         const balance = {
           amount: amt,
@@ -851,20 +843,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
       return { ...current, players: current.players.filter((p) => p.id !== playerId) };
     });
 
-    const res = await fetch(`/api/events/${eventId}/players`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
-      body: JSON.stringify({ playerId }),
-    });
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const data = (await apiRequest("DELETE /api/events/{id}/players", {
+        params: { id: eventId },
+        body: { playerId },
+        init: { headers: { "X-Client-Id": clientIdRef.current } },
+      })) as { undo?: { name: string; order: number; userId: string | null; removedAt: number } };
       if (data.undo) {
         setUndoData({ eventId, ...data.undo });
       }
-    } else {
+    } catch {
       // #1237: the x used to fail silently here, so a player the page still listed
-      // had no way off it and no idea why. Localized text only — json.error is a
-      // raw English server string and this UI is not English-only.
+      // had no way off it and no idea why. Localized text only — the server's error
+      // is a raw English string and this UI is not English-only.
       setPlayerError(t("somethingWentWrong"));
       fetchEvent();
       return;
@@ -877,16 +868,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const handleUndo = useCallback(async () => {
     if (!undoData) return;
-    const res = await fetch(`/api/events/${undoData.eventId}/undo-remove`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(undoData),
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("POST /api/events/{id}/undo-remove", {
+        params: { id: undoData.eventId },
+        body: undoData,
+      });
       fetchEvent();
-    } else {
-      const json = await res.json();
-      setPlayerError(json.error);
+    } catch (e) {
+      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
     }
     setUndoData(null);
   }, [undoData, fetchEvent]);
@@ -900,20 +889,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Player reorder ──────────────────────────────────────────────────────────
 
   const reorderPlayers = useCallback(async (reorderedIds: string[]) => {
-    await fetch(`/api/events/${eventId}/reorder-players`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerIds: reorderedIds }),
-    });
+    await apiRequest("PUT /api/events/{id}/reorder-players", {
+      params: { id: eventId },
+      body: { playerIds: reorderedIds },
+    }).catch(() => undefined);
     fetchEvent();
   }, [eventId, fetchEvent]);
 
   const resetPlayerOrder = useCallback(async () => {
-    const res = await fetch(`/api/events/${eventId}/reset-player-order`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (res.ok) fetchEvent();
+    try {
+      await apiRequest("POST /api/events/{id}/reset-player-order", { params: { id: eventId } });
+      fetchEvent();
+    } catch { /* nothing to show: the old code only refetched on success */ }
   }, [eventId, fetchEvent]);
 
   // ── Team operations ─────────────────────────────────────────────────────────
@@ -923,14 +910,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
     setIsRandomizing(true);
     setShuffleVersion((version) => version + 1);
     try {
-      const qs = balanced ? "?balanced=true" : "";
-      const res = await fetch(`/api/events/${eventId}/randomize${qs}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      await apiRequest("POST /api/events/{id}/randomize", {
+        params: { id: eventId },
+        query: { balanced: balanced || undefined },
       });
-      const json = await res.json();
-      if (!res.ok) { setPlayerError(json.error); return; }
       await fetchEvent();
+    } catch (e) {
+      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
     } finally {
       setIsRandomizing(false);
     }
@@ -939,25 +925,24 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const handleTeamChange = async (matches: Imatch[]) => {
     setLocalMatches(matches);
     isDraggingRef.current = true;
-    const res = await fetch(`/api/events/${eventId}/teams`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matches }),
-    });
-    isDraggingRef.current = false;
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      setSnackbar(json.error || "Failed to update teams");
+    try {
+      await apiRequest("PUT /api/events/{id}/teams", {
+        params: { id: eventId },
+        body: { matches },
+      });
+    } catch (e) {
+      setSnackbar(apiErrorMessage(e, "Failed to update teams"));
+    } finally {
+      isDraggingRef.current = false;
     }
     fetchEvent();
   };
 
   const handleTeamNameSave = async (one: string, two: string) => {
-    await fetch(`/api/events/${eventId}/team-names`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamOneName: one, teamTwoName: two }),
-    });
+    await apiRequest("PUT /api/events/{id}/team-names", {
+      params: { id: eventId },
+      body: { teamOneName: one, teamTwoName: two },
+    }).catch(() => undefined);
     fetchEvent();
   };
 
@@ -966,23 +951,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const handleSaveTitle = async (title: string) => {
     // Optimistic update
     setEvent((e) => e ? { ...e, title } : e);
-    const res = await fetch(`/api/events/${eventId}/title`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    if (!res.ok) fetchEvent(); // revert on error
-    else fetchEvent();
+    // The route's response is unused; a refetch is the recovery path on either outcome.
+    await apiRequest("PUT /api/events/{id}/title", { params: { id: eventId }, body: { title } })
+      .catch(() => undefined);
+    fetchEvent();
   };
 
   const handleSaveLocation = async (location: string) => {
-    const res = await fetch(`/api/events/${eventId}/location`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ location }),
-    });
-    const data = await res.json();
-    if (location && !data.geocoded) {
+    const data = (await apiRequest("PUT /api/events/{id}/location", {
+      params: { id: eventId },
+      body: { location },
+    }).catch(() => null)) as { geocoded?: boolean } | null;
+    if (location && !data?.geocoded) {
       setSnackbar(t("locationNotGeocoded"));
     }
     fetchEvent();
@@ -991,53 +971,49 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const handleSaveDateTime = async (dateTime: string, timezone: string) => {
     // Convert the datetime-local value (in the event's timezone) to a UTC ISO string
     const utcIso = fromDateTimeLocalValue(dateTime, timezone);
-    await fetch(`/api/events/${eventId}/datetime`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dateTime: utcIso, timezone }),
-    });
+    await apiRequest("PUT /api/events/{id}/datetime", {
+      params: { id: eventId },
+      body: { dateTime: utcIso, timezone },
+    }).catch(() => undefined);
     fetchEvent();
   };
 
   const handleSaveSport = async (sport: string) => {
-    await fetch(`/api/events/${eventId}/sport`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport }),
-    });
+    // The route's response is derived from the event; the refetch supplies it.
+    await apiRequest("PUT /api/events/{id}/sport", { params: { id: eventId }, body: { sport } })
+      .catch(() => undefined);
     fetchEvent();
   };
 
   // ── Ownership ───────────────────────────────────────────────────────────────
 
   const handleClaimOwnership = async () => {
-    const res = await fetch(`/api/events/${eventId}/claim`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (res.ok) {
+    try {
+      await apiRequest("POST /api/events/{id}/claim", { params: { id: eventId } });
       fetchEvent();
       setSnackbar(t("claimOwnership"));
-    }
+    } catch { /* the old code ignored a failed claim */ }
   };
 
   const handleRelinquishOwnership = async () => {
     setRelinquishConfirmOpen(false);
-    const res = await fetch(`/api/events/${eventId}/claim`, { method: "DELETE" });
-    if (res.ok) fetchEvent();
+    try {
+      await apiRequest("DELETE /api/events/{id}/claim", { params: { id: eventId } });
+      fetchEvent();
+    } catch { /* the old code ignored a failed relinquish */ }
   };
 
   const handleCancelGame = async () => {
     setCancelConfirmBusy(true);
-    const res = await fetch(`/api/events/${eventId}/cancel`, { method: "PUT" });
-    setCancelConfirmBusy(false);
-    setCancelConfirmOpen(false);
-    if (res.ok) {
+    try {
+      await apiRequest("PUT /api/events/{id}/cancel", { params: { id: eventId } });
       setSnackbar(t("gameCancelledSnackbar"));
       fetchEvent();
-    } else {
-      const body = await res.json();
-      setSnackbar(body.error || t("somethingWentWrong"));
+    } catch (e) {
+      setSnackbar(apiErrorMessage(e, t("somethingWentWrong")));
+    } finally {
+      setCancelConfirmBusy(false);
+      setCancelConfirmOpen(false);
     }
   };
 
@@ -1059,12 +1035,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
       return;
     }
     let alive = true;
-    fetch(`/api/events/${eventId}/rsvp`, { credentials: "include" })
-      .then(async (r) => {
+    apiRequest("GET /api/events/{id}/rsvp", {
+      params: { id: eventId },
+      init: { credentials: "include" },
+    })
+      .then((data) => {
         if (!alive) return;
-        if (!r.ok) { setMyRsvpStatus(null); return; }
-        const data = await r.json();
-        setMyRsvpStatus((data.status ?? null) as "yes" | "no" | "maybe" | null);
+        setMyRsvpStatus(((data as { status?: unknown }).status ?? null) as "yes" | "no" | "maybe" | null);
       })
       .catch(() => alive && setMyRsvpStatus(null));
     return () => { alive = false; };
@@ -1076,27 +1053,24 @@ export default function EventPage({ eventId }: { eventId: string }) {
     try {
       // #XXX "no" goes through the leave endpoint: it sets Rsvp="no" AND archives the player.
       // "yes" stays on the plain rsvp endpoint (user stays on the player list).
-      const url = status === "no"
-        ? `/api/events/${eventId}/leave`
-        : `/api/events/${eventId}/rsvp`;
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status }),
-      });
-      if (!r.ok) {
-        setMyRsvpStatus(prev);
-        const j = await r.json().catch(() => ({}));
-        setSnackbar(j.error ?? t("somethingWentWrong"));
-        return;
+      if (status === "no") {
+        await apiRequest("POST /api/events/{id}/leave", {
+          params: { id: eventId },
+          init: { credentials: "include" },
+        });
+      } else {
+        await apiRequest("POST /api/events/{id}/rsvp", {
+          params: { id: eventId },
+          body: { status },
+          init: { credentials: "include" },
+        });
       }
       setSnackbar(status === "yes" ? t("rsvpYesToast") : t("rsvpNoToast"));
       // Refetch event so the archived player disappears from the list.
       fetchEvent();
-    } catch {
+    } catch (e) {
       setMyRsvpStatus(prev);
-      setSnackbar(t("somethingWentWrong"));
+      setSnackbar(apiErrorMessage(e, t("somethingWentWrong")));
     }
   }, [eventId, myRsvpStatus, t, fetchEvent]);
 
@@ -1356,6 +1330,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onPlayerErrorChange={setPlayerError}
               onAddPlayer={(name, email, position) => addPlayer(name, false, email, position)}
               onSetPosition={setPlayerPosition}
+              positionsEnabled={event.positionsEnabled ?? false}
               onRequestAdd={requestAddPlayer}
               onRemovePlayer={removePlayer}
               onReorderPlayers={reorderPlayers}

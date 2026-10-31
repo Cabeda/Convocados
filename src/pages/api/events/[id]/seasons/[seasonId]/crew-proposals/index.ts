@@ -4,14 +4,7 @@ import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { sendPlayerInviteToRegister } from "~/lib/email.server";
 import { authorizeSeasonRequest, getSeasonForEvent, isSeasonRegistrationOpen } from "~/lib/seasonSetup.server";
-
-const proposalInclude = {
-  proposerMembership: { include: { eventPlayer: { select: { name: true } } } },
-  members: {
-    orderBy: { id: "asc" as const },
-    include: { seasonMembership: { include: { eventPlayer: { select: { name: true } } } } },
-  },
-} as const;
+import { notifyCaptainNominated, proposalInclude, serializeProposal } from "~/lib/crewProposals.server";
 
 type ProposalMemberInput = {
   membershipId?: string;
@@ -24,21 +17,6 @@ class ProposalInputError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
   }
-}
-
-function serializeProposal(proposal: Awaited<ReturnType<typeof prisma.crewProposal.findFirst<{ include: typeof proposalInclude }>>>) {
-  if (!proposal) return null;
-  return {
-    id: proposal.id,
-    name: proposal.name,
-    status: proposal.status,
-    proposerName: proposal.proposerMembership.eventPlayer.name,
-    memberNames: proposal.members.map((member) => member.seasonMembership.eventPlayer.name),
-    rejectionReason: proposal.rejectionReason,
-    approvedCrewId: proposal.approvedCrewId,
-    createdAt: proposal.createdAt,
-    reviewedAt: proposal.reviewedAt,
-  };
 }
 
 function parseMemberInputs(body: { members?: unknown; membershipIds?: unknown }): ProposalMemberInput[] | null {
@@ -171,7 +149,31 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!season) return Response.json({ error: "Season not found." }, { status: 404 });
   if (!authz?.allowed) return Response.json({ error: "Event access required." }, { status: 403 });
   if (!isSeasonRegistrationOpen(season)) {
-    return Response.json({ proposals: [], candidates: [], canPropose: false, canReview: authz.isAdmin, closed: true });
+    // A captain nomination outlives registration — the nominee may answer it at any
+    // time — so it stays visible here. Everything else is closed (#1442).
+    const callerMembership = await prisma.seasonMembership.findUnique({
+      where: { seasonId_userId: { seasonId: season.id, userId: session.user.id } },
+      select: { id: true },
+    });
+    const nominations = callerMembership
+      ? await prisma.crewProposal.findMany({
+        where: {
+          seasonId: season.id,
+          proposerMembershipId: null,
+          status: "pending",
+          members: { some: { seasonMembershipId: callerMembership.id } },
+        },
+        include: proposalInclude,
+        orderBy: { createdAt: "desc" },
+      })
+      : [];
+    return Response.json({
+      proposals: nominations.map((proposal) => serializeProposal(proposal, callerMembership?.id)),
+      candidates: [],
+      canPropose: false,
+      canReview: authz.isAdmin,
+      closed: true,
+    });
   }
 
   const callerMembership = await prisma.seasonMembership.findUnique({
@@ -183,9 +185,19 @@ export const GET: APIRoute = async ({ params, request }) => {
     return Response.json({ proposals: [], candidates: [], canPropose: false, canReview: false });
   }
 
-  const [proposals, candidates, assignedMemberships, seasonMemberships, eventPlayers] = await Promise.all([
+  const [proposals, candidates, assignedMemberships, seasonMemberships, eventPlayers, captainCrew] = await Promise.all([
     prisma.crewProposal.findMany({
-      where: authz.isAdmin ? { seasonId: season.id } : { seasonId: season.id, proposerMembershipId: callerMembership?.id },
+      where: authz.isAdmin
+        ? { seasonId: season.id }
+        : {
+          seasonId: season.id,
+          // A participant sees their own proposals plus any captain nomination
+          // naming them (#1442).
+          OR: [
+            { proposerMembershipId: callerMembership?.id },
+            { proposerMembershipId: null, members: { some: { seasonMembershipId: callerMembership?.id } } },
+          ],
+        },
       include: proposalInclude,
       orderBy: { createdAt: "desc" },
     }),
@@ -207,6 +219,21 @@ export const GET: APIRoute = async ({ params, request }) => {
       select: { userId: true, name: true, gamesPlayed: true },
       orderBy: { gamesPlayed: "desc" },
     }),
+    // The caller's own crew, so a captain can propose roster changes to it (#1442).
+    callerMembership
+      ? prisma.crew.findFirst({
+        where: { seasonId: season.id, captainMembershipId: callerMembership.id },
+        select: {
+          id: true,
+          name: true,
+          memberships: {
+            where: { status: "active", eventPlayer: { eventId: season.eventId } },
+            select: { id: true, eventPlayer: { select: { name: true } } },
+            orderBy: { joinedAt: "asc" },
+          },
+        },
+      })
+      : Promise.resolve(null),
   ]);
   const assignedUserIds = new Set(assignedMemberships.map((membership) => membership.userId));
   const withdrawnUserIds = new Set(seasonMemberships.filter((membership) => membership.status === "withdrawn").map((membership) => membership.userId));
@@ -216,12 +243,19 @@ export const GET: APIRoute = async ({ params, request }) => {
     .map((player) => ({ userId: player.userId, name: player.name, gamesPlayed: player.gamesPlayed }));
 
   return Response.json({
-    proposals: proposals.map(serializeProposal),
+    proposals: proposals.map((proposal) => serializeProposal(proposal, callerMembership?.id)),
     candidates: [
       ...candidates.map((membership) => ({ membershipId: membership.id, eventPlayerId: membership.eventPlayer.id, userId: membership.eventPlayer.userId, name: membership.eventPlayer.name })),
       ...externalEventCandidates,
     ],
     excludedUserIds: assignedMemberships.map((membership) => membership.userId),
+    captainOf: captainCrew
+      ? {
+        crewId: captainCrew.id,
+        crewName: captainCrew.name,
+        members: captainCrew.memberships.map((membership) => ({ membershipId: membership.id, name: membership.eventPlayer.name })),
+      }
+      : null,
     proposerMembershipId: isParticipant ? callerMembership?.id : null,
     canPropose: isParticipant,
     canReview: authz.isAdmin,
@@ -237,7 +271,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const season = await getSeasonForEvent(params.seasonId ?? "", params.id ?? "");
   if (!season) return Response.json({ error: "Season not found." }, { status: 404 });
 
-  let body: { action?: unknown; email?: unknown; token?: unknown; name?: unknown; members?: unknown; membershipIds?: unknown };
+  let body: { action?: unknown; email?: unknown; token?: unknown; name?: unknown; members?: unknown; membershipIds?: unknown; crewId?: unknown; membershipId?: unknown; targetCrewId?: unknown };
   try {
     const parsed: unknown = await request.json();
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return Response.json({ error: "Invalid JSON." }, { status: 400 });
@@ -261,7 +295,66 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const authz = await authorizeSeasonRequest(season, session, request);
   if (!authz.allowed) return Response.json({ error: "Event access required." }, { status: 403 });
-  if (!isSeasonRegistrationOpen(season)) return Response.json({ error: "Season registration is closed." }, { status: 409 });
+  // A captain nomination outlives registration (#1442): the owner may replace a
+  // pending or an accepted captain at any point in the season, and the nominee
+  // answers whenever they see it. Every roster proposal still needs the window.
+  if (body.action !== "captain" && !isSeasonRegistrationOpen(season)) {
+    return Response.json({ error: "Season registration is closed." }, { status: 409 });
+  }
+
+  if (body.action === "captain") {
+    if (!authz.isAdmin) return Response.json({ error: "Only the event owner or an admin can nominate a captain." }, { status: 403 });
+    const crewId = typeof body.crewId === "string" ? body.crewId.trim() : "";
+    const membershipId = typeof body.membershipId === "string" ? body.membershipId.trim() : "";
+    if (!crewId || !membershipId) return Response.json({ error: "A crew and a participant are required." }, { status: 400 });
+    try {
+      const proposal = await prisma.$transaction(async (tx) => {
+        const crew = await tx.crew.findFirst({ where: { id: crewId, seasonId: season.id }, select: { id: true, name: true } });
+        if (!crew) throw new ProposalInputError(400, "Crew not found in this Season.");
+        const nominee = await tx.seasonMembership.findFirst({
+          where: { id: membershipId, seasonId: season.id, crewId: crew.id, status: "active", eventPlayer: { eventId: season.eventId } },
+          select: { id: true, userId: true, eventPlayer: { select: { name: true } } },
+        });
+        if (!nominee) throw new ProposalInputError(400, "The captain must be an active participant of that Crew.");
+        // Replacing a pending nomination: the newest one is the live offer.
+        await tx.crewProposal.updateMany({
+          where: { seasonId: season.id, targetCrewId: crew.id, proposerMembershipId: null, status: "pending" },
+          data: { status: "rejected", rejectionReason: "Replaced by a new captain nomination.", reviewedByUserId: session.user.id, reviewedAt: new Date() },
+        });
+        return tx.crewProposal.create({
+          data: {
+            seasonId: season.id,
+            kind: "add",
+            targetCrewId: crew.id,
+            name: crew.name,
+            proposedByUserId: session.user.id,
+            members: { create: [{ seasonMembershipId: nominee.id }] },
+          },
+          include: proposalInclude,
+        });
+      });
+      // The nominee must learn about the offer even when they made it
+      // themselves — nothing else would tell them (#1558).
+      const nomineeRow = await prisma.seasonMembership.findUnique({
+        where: { id: membershipId },
+        select: { userId: true, eventPlayer: { select: { name: true } } },
+      });
+      if (nomineeRow?.userId) {
+        const crewRow = await prisma.crew.findUnique({ where: { id: crewId }, select: { name: true } });
+        await notifyCaptainNominated({
+          eventId: season.eventId,
+          seasonId: season.id,
+          crewName: crewRow?.name ?? "",
+          nomineeUserId: nomineeRow.userId,
+          nomineeName: nomineeRow.eventPlayer.name,
+        });
+      }
+      return Response.json({ proposal: serializeProposal(proposal) }, { status: 201 });
+    } catch (error) {
+      if (error instanceof ProposalInputError) return Response.json({ error: error.message }, { status: error.status });
+      throw error;
+    }
+  }
 
   const proposerMembership = await prisma.seasonMembership.findUnique({
     where: { seasonId_userId: { seasonId: season.id, userId: session.user.id } },
@@ -320,6 +413,63 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ invited: true, email, token: invite.token }, { status: 202 });
   }
 
+  // A crew's captain proposes player changes for that crew; the owner reviews them
+  // like any other proposal (#1442). Captains act only on their own crew.
+  if (body.action === "add" || body.action === "remove") {
+    const kind = body.action;
+    const crewId = typeof body.targetCrewId === "string" ? body.targetCrewId.trim() : "";
+    const membershipIds = Array.isArray(body.membershipIds)
+      ? body.membershipIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+      : null;
+    if (!crewId) return Response.json({ error: "A crew is required." }, { status: 400 });
+    if (!membershipIds || membershipIds.length === 0 || membershipIds.length > 5) {
+      return Response.json({ error: "Select between 1 and 5 participants." }, { status: 400 });
+    }
+    const crew = await prisma.crew.findFirst({ where: { id: crewId, seasonId: season.id }, select: { id: true, name: true, captainMembershipId: true } });
+    if (!crew) return Response.json({ error: "Crew not found in this Season." }, { status: 400 });
+    if (crew.captainMembershipId !== proposerMembership.id) {
+      return Response.json({ error: "Only this Crew's captain can propose a player change." }, { status: 403 });
+    }
+    if (kind === "remove" && membershipIds.includes(proposerMembership.id)) {
+      return Response.json({ error: "A captain cannot propose to remove themselves." }, { status: 409 });
+    }
+
+    try {
+      const proposal = await prisma.$transaction(async (tx) => {
+        const memberships = await tx.seasonMembership.findMany({
+          where: {
+            id: { in: membershipIds },
+            seasonId: season.id,
+            status: "active",
+            eventPlayer: { eventId: season.eventId },
+            ...(kind === "add" ? { crewId: null } : { crewId: crew.id }),
+          },
+          select: { id: true },
+        });
+        if (memberships.length !== membershipIds.length) {
+          throw new ProposalInputError(409, kind === "add"
+            ? "Only active, unassigned participants can be added to a Crew."
+            : "Only participants of this Crew can be removed.");
+        }
+        return tx.crewProposal.create({
+          data: {
+            seasonId: season.id,
+            kind,
+            targetCrewId: crew.id,
+            proposerMembershipId: proposerMembership.id,
+            name: crew.name,
+            members: { create: membershipIds.map((seasonMembershipId) => ({ seasonMembershipId, action: kind })) },
+          },
+          include: proposalInclude,
+        });
+      });
+      return Response.json({ proposal: serializeProposal(proposal) }, { status: 201 });
+    } catch (error) {
+      if (error instanceof ProposalInputError) return Response.json({ error: error.message }, { status: error.status });
+      throw error;
+    }
+  }
+
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name || name.length > 50) return Response.json({ error: "Crew names must be between 1 and 50 characters." }, { status: 400 });
   const memberInputs = parseMemberInputs(body);
@@ -341,8 +491,10 @@ export const POST: APIRoute = async ({ params, request }) => {
 
       const [existingCrews, existingProposal, overlappingProposal] = await Promise.all([
         tx.crew.findMany({ where: { seasonId: season.id }, select: { id: true, name: true } }),
-        tx.crewProposal.findFirst({ where: { seasonId: season.id, proposerMembershipId: proposerMembership.id, status: "pending" }, select: { id: true } }),
-        tx.crewProposalMember.findFirst({ where: { seasonMembershipId: { in: membershipIds }, proposal: { seasonId: season.id, status: "pending" } }, select: { id: true } }),
+        // Kind-scoped: a captain's add/remove (or a captain nomination) is neither
+        // blocked by these guards nor allowed to block a member's create proposal.
+        tx.crewProposal.findFirst({ where: { seasonId: season.id, proposerMembershipId: proposerMembership.id, kind: "create", status: "pending" }, select: { id: true } }),
+        tx.crewProposalMember.findFirst({ where: { seasonMembershipId: { in: membershipIds }, proposal: { seasonId: season.id, kind: "create", status: "pending" } }, select: { id: true } }),
       ]);
       if (existingCrews.some((crew) => crew.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new ProposalInputError(409, "A Crew with this name already exists.");
       if (existingProposal) throw new ProposalInputError(409, "You already have a pending Crew proposal.");

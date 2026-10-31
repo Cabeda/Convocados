@@ -6,14 +6,14 @@
  * processes them in parallel batches.
  *
  * Environment variables:
- *   APP_URL          - Web app base URL (e.g. https://convocados.fly.dev)
+ *   APP_URL          - Web app base URL (e.g. https://convocados.cabeda.dev)
  *   SCHEDULER_SECRET - Shared secret for internal API auth
  *   CONCURRENCY      - Max parallel job processing (default: 3)
  */
 
 import { setTimeout } from "node:timers/promises";
 
-const APP_URL = process.env.APP_URL ?? "https://convocados.fly.dev";
+const APP_URL = process.env.APP_URL ?? "https://convocados.cabeda.dev";
 const SCHEDULER_SECRET = process.env.SCHEDULER_SECRET;
 const CRON_SECRET = process.env.CRON_SECRET ?? SCHEDULER_SECRET;
 const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? "3", 10);

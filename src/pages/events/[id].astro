@@ -8,7 +8,7 @@ import { buildEventSummary, type EventSummary } from "../../lib/eventSummary";
 
 const { id } = Astro.params;
 
-const host = Astro.request.headers.get("x-forwarded-host") ?? Astro.request.headers.get("host") ?? "convocados.fly.dev";
+const host = Astro.request.headers.get("x-forwarded-host") ?? Astro.request.headers.get("host") ?? "convocados.cabeda.dev";
 const proto = Astro.request.headers.get("x-forwarded-proto") ?? "https";
 const canonicalUrl = `${proto}://${host}/events/${id}`;
 

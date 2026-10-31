@@ -4,6 +4,7 @@ import {
 } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";
 import { useT } from "~/lib/useT";
+import { apiRequest } from "~/lib/api/client";
 
 interface Props {
   eventId: string;
@@ -22,16 +23,11 @@ export function PasswordPrompt({ eventId, title, onUnlocked }: Props) {
     setError(false);
     setLoading(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/access/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+      await apiRequest("POST /api/events/{id}/access/verify", {
+        params: { id: eventId },
+        body: { password },
       });
-      if (res.ok) {
-        onUnlocked();
-      } else {
-        setError(true);
-      }
+      onUnlocked();
     } catch {
       setError(true);
     } finally {

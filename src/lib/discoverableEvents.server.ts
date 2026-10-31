@@ -10,6 +10,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db.server";
+import { filterCancelledCurrentGames } from "./currentGame.server";
 
 /**
  * A discovery-listed Event with its non-archived Player count.
@@ -182,7 +183,8 @@ export async function findDiscoverableUpcomingEvents(opts: {
     orderBy: { dateTime: "asc" },
     take: Math.max(take, RANK_POOL),
   });
-  const joinable = events
+  const notCancelled = await filterCancelledCurrentGames(events);
+  const joinable = notCancelled
     .filter((e) => e.maxPlayers - e._count.players > 0)
     .map(mapDiscoverableEvent);
   return rankDiscover(joinable, origin, preferredSports).slice(0, take);

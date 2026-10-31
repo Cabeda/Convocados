@@ -22,7 +22,8 @@ import { shareFor, perPlayerShare } from "./gameCost";
 import { summarizePayments } from "./paymentSummary";
 import { systemUserId, ensureSystemUserId } from "./payerIdentity.server";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
-import { parsePaymentMethods, effectivePaymentMethodsRaw } from "./paymentMethods";
+import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
+import { enqueueNotification } from "./notificationQueue.server";
 import { isGameEnded } from "./gameStatus";
 import { fireWebhooks } from "./webhook.server";
 
@@ -335,13 +336,10 @@ async function fireGamePayerSet(
   game: { id: string; dateTime: Date; status: string },
   payer: { eventPlayerId: string | null; externalName: string | null },
 ): Promise<void> {
-  const [event, eventCost] = await Promise.all([
-    prisma.event.findUnique({ where: { id: eventId }, select: { durationMinutes: true } }),
-    prisma.eventCost.findUnique({
-      where: { eventId },
-      select: { paymentMethods: true, tempPaymentMethods: true },
-    }),
-  ]);
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { durationMinutes: true },
+  });
   if (!event) return;
 
   // A cancelled game never happened — never ask anyone to pay for it. "Ended"
@@ -368,18 +366,71 @@ async function fireGamePayerSet(
   // No cost → nothing to pay. Never send a "pay €0" instruction to the group.
   if (effective.total <= 0) return;
 
+  // One resolver decides where the money goes (ADR 0055): temp override →
+  // the Payer's own details when shared → the Event's → nothing.
+  const { methods: paymentMethods } = await resolvePaymentDetails(eventId, game.id);
+
   fireWebhooks(eventId, "game_payer_set", {
     gameId: game.id,
     dateTime: game.dateTime.toISOString(),
     payerName,
     payerEventPlayerId: payer.eventPlayerId ?? null,
     payerUserId,
-    paymentMethods: parsePaymentMethods(
-      effectivePaymentMethodsRaw(eventCost?.tempPaymentMethods, eventCost?.paymentMethods),
-    ),
+    paymentMethods,
     amountPerPlayer: perPlayerShare(effective.total, effective.maxPlayers),
     currency: effective.currency,
   }).catch(() => {});
+}
+
+
+/**
+ * Tell the incoming and outgoing Payer, and nobody else (#1551). Best-effort: a
+ * notification never fails the payment config change.
+ */
+async function notifyPayerChange(
+  eventId: string,
+  previousEventPlayerId: string | null,
+  nextEventPlayerId: string | null,
+  nextExternalName: string | null,
+): Promise<void> {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { title: true } });
+  if (!event) return;
+
+  const ids = [previousEventPlayerId, nextEventPlayerId].filter((id): id is string => !!id);
+  const players = ids.length
+    ? await prisma.eventPlayer.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, userId: true },
+      })
+    : [];
+  const byId = new Map(players.map((p) => [p.id, p]));
+
+  const incoming = nextEventPlayerId ? byId.get(nextEventPlayerId) : null;
+  const outgoing = previousEventPlayerId ? byId.get(previousEventPlayerId) : null;
+  const incomingName = incoming?.name ?? nextExternalName ?? null;
+  const url = `/events/${eventId}`;
+
+  if (incoming?.userId && incoming.userId !== outgoing?.userId) {
+    await enqueueNotification(eventId, "payer_assigned", {
+      title: event.title,
+      key: "payerAssignedBody",
+      params: { title: event.title },
+      url,
+      spotsLeft: 0,
+      recipientUserIds: [incoming.userId],
+    });
+  }
+
+  if (outgoing?.userId && outgoing.userId !== incoming?.userId && incomingName) {
+    await enqueueNotification(eventId, "payer_changed", {
+      title: event.title,
+      key: "payerChangedBody",
+      params: { name: incomingName, title: event.title },
+      url,
+      spotsLeft: 0,
+      recipientUserIds: [outgoing.userId],
+    });
+  }
 }
 
 /** Set a game's payment mode + payer. Tracked requires exactly one payer ref. */
@@ -431,6 +482,8 @@ export async function setPaymentConfig(
         paymentMode: "tracked",
         payerEventPlayerId: config.payerEventPlayerId ?? null,
         payerExternalName,
+        // Setting a payer ends any stand-down: the role is held again.
+        payerStoodDownAt: null,
       },
     });
     await syncGamePaymentsTx(tx, gameId, eventId);
@@ -444,6 +497,12 @@ export async function setPaymentConfig(
   const payerChanged =
     nextEventPlayerId !== (game.payerEventPlayerId ?? null) ||
     payerExternalName !== (game.payerExternalName ?? null);
+  if (payerChanged) {
+    await notifyPayerChange(eventId, game.payerEventPlayerId, nextEventPlayerId, payerExternalName).catch(
+      () => {},
+    );
+  }
+
   if ((nextEventPlayerId || payerExternalName) && payerChanged) {
     await fireGamePayerSet(
       eventId,

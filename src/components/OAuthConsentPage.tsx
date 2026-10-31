@@ -18,6 +18,7 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import LockIcon from "@mui/icons-material/Lock";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 /** Map scope strings to i18n keys */
 const SCOPE_I18N_MAP: Record<string, string> = {
@@ -57,9 +58,12 @@ export default function OAuthConsentPage() {
   // Fetch client info on mount
   useEffect(() => {
     if (!clientId) return;
-    fetch(`/api/auth/oauth2/public-client?client_id=${encodeURIComponent(clientId)}`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
+    apiRequest("GET /api/auth/oauth2/public-client", {
+      query: { client_id: clientId },
+      init: { credentials: "include" },
+    })
+      .then((body) => {
+        const data = body as { client_name?: string; logo_uri?: string | null } | undefined;
         if (data) setClientInfo({ name: data.client_name ?? clientId, icon: data.logo_uri ?? null });
         else setClientInfo({ name: clientId, icon: null });
       })
@@ -74,26 +78,25 @@ export default function OAuthConsentPage() {
       // consent endpoint reads it back from the body — without it there is no
       // request to consent to, and the approval fails.
       const oauthQuery = window.location.search.replace(/^\?/, "");
-      const res = await fetch("/api/auth/oauth2/consent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ accept, oauth_query: oauthQuery }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error_description ?? body.message ?? body.error ?? "Consent request failed");
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
+      const data = (await apiRequest("POST /api/auth/oauth2/consent", {
+        body: { accept, oauth_query: oauthQuery },
+        init: { credentials: "include" },
+      })) as { url?: string };
       // The AS answers with the URL the browser must continue to: the client's
       // redirect URI carrying the authorization code.
       if (data.url) {
         window.location.href = data.url;
       }
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (e) {
+      const body = (e instanceof ApiError ? e.payload : undefined) as
+        | { error_description?: string; message?: string; error?: string }
+        | undefined;
+      setError(
+        body?.error_description ??
+          body?.message ??
+          body?.error ??
+          (e instanceof ApiError ? "Consent request failed" : "Network error. Please try again."),
+      );
       setLoading(false);
     }
   }

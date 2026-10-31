@@ -412,6 +412,8 @@
     <string name="proposal_proposed_by">Vorgeschlagen von %1$s</string>
     <string name="your_crew_proposals">Deine Vorschläge</string>
     <string name="approve_proposal">Genehmigen</string>
+    <string name="captain_nomination">Kapitäns-Nominierung — %1$s</string>
+    <string name="accept_captaincy">Kapitänsamt annehmen</string>
     <string name="reject_proposal">Ablehnen</string>
     <string name="rejection_reason">Ablehnungsgrund (optional)</string>
     <string name="proposal_status_pending">Ausstehend</string>
@@ -526,6 +528,7 @@
     <string name="season_cancel">Saison absagen</string>
     <string name="season_reopen">Saison erneut öffnen</string>
     <string name="crew_league">Crew-Liga</string>
+    <string name="crew_captain">Kapitän: %1$s</string>
     <string name="crews">Crews</string>
     <string name="season_enroll_recent">Neue Spieler einschreiben</string>
     <string name="season_recommend_crews">Crews empfehlen</string>

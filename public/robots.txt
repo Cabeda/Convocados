@@ -15,4 +15,4 @@ Disallow: /auth/forgot-password
 Disallow: /auth/reset-password
 Disallow: /dashboard
 
-Sitemap: https://convocados.fly.dev/sitemap.xml
+Sitemap: https://convocados.cabeda.dev/sitemap.xml

@@ -4,6 +4,7 @@ import {
   Alert, Autocomplete, Button, Card, CardContent, Chip, Divider, Stack, TextField, Typography,
 } from "@mui/material";
 import { useT } from "~/lib/useT";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface Candidate {
   membershipId?: string;
@@ -20,6 +21,14 @@ interface Proposal {
   proposerName: string;
   memberNames: string[];
   rejectionReason?: string | null;
+  targetCrewName?: string | null;
+  captainNomination?: boolean;
+  awaitingMyAcceptance?: boolean;
+}
+
+interface CrewChangeTarget {
+  membershipId: string;
+  name: string;
 }
 
 interface ProposalResponse {
@@ -29,6 +38,7 @@ interface ProposalResponse {
   candidates: Candidate[];
   excludedUserIds?: string[];
   proposals: Proposal[];
+  captainOf?: { crewId: string; crewName: string; members: CrewChangeTarget[] } | null;
 }
 
 function candidateKey(candidate: Candidate) {
@@ -60,25 +70,30 @@ export default function CrewProposalPanel({
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [invited, setInvited] = useState(false);
+  const [acceptedCrew, setAcceptedCrew] = useState<string | null>(null);
+  const [crewChangeTarget, setCrewChangeTarget] = useState<CrewChangeTarget | null>(null);
+  const [crewChangeSent, setCrewChangeSent] = useState(false);
 
-  const endpoint = `/api/events/${eventId}/seasons/${seasonId}/crew-proposals`;
   const load = useCallback(async () => {
     try {
-      const response = await fetch(endpoint);
-      const nextData = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) return;
-        throw new Error(nextData.error ?? t("crewProposalError"));
+      let proposalData: ProposalResponse;
+      try {
+        proposalData = (await apiRequest(
+          "GET /api/events/{id}/seasons/{seasonId}/crew-proposals",
+          { params: { id: eventId, seasonId } },
+        )) as ProposalResponse;
+      } catch (loadError) {
+        // 401/403 means "no proposal to show", not an error to surface.
+        if (loadError instanceof ApiError && (loadError.status === 401 || loadError.status === 403)) return;
+        throw loadError instanceof ApiError ? new Error(loadError.message) : loadError;
       }
-      const proposalData = nextData as ProposalResponse;
       setData(proposalData);
       if (proposalData.proposerMembershipId) {
         const proposer = proposalData.candidates.find((candidate) => candidate.membershipId === proposalData.proposerMembershipId);
         if (proposer) setSelectedCandidates((current) => current.length > 0 ? current : [proposer]);
       }
       if (proposalData.canPropose) {
-        const coPlayersResponse = await fetch("/api/me/co-players");
-        const coPlayersData = await coPlayersResponse.json().catch(() => ({})) as { players?: Array<{ name: string; userId?: string | null; coPlayCount?: number }> };
+        const coPlayersData = (await apiRequest("GET /api/me/co-players").catch(() => ({}))) as { players?: Array<{ name: string; userId?: string | null; coPlayCount?: number }> };
         const coPlayerCandidates = (coPlayersData.players ?? [])
           .filter((candidate) => candidate.userId)
           .map((candidate) => ({ name: candidate.name, userId: candidate.userId, gamesPlayed: candidate.coPlayCount }));
@@ -87,7 +102,7 @@ export default function CrewProposalPanel({
     } catch (loadError: unknown) {
       setError(loadError instanceof Error ? loadError.message : t("crewProposalError"));
     }
-  }, [endpoint, t]);
+  }, [eventId, seasonId, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -102,7 +117,10 @@ export default function CrewProposalPanel({
     return [...byKey.values()];
   }, [data?.candidates, data?.excludedUserIds, externalCandidates]);
 
-  if (!data || (!data.canPropose && !data.canReview && data.proposals.length === 0)) return null;
+  // A short or malformed payload must hide the panel, not crash the page: the
+  // page now mounts it for every non-terminal season (#1442), so its fetch runs
+  // on surfaces where it has nothing to say.
+  if (!data || (!data.canPropose && !data.canReview && !data.captainOf && (data.proposals?.length ?? 0) === 0)) return null;
 
   const statusLabel = (status: string) => ({
     pending: t("proposalStatusPending"),
@@ -122,13 +140,10 @@ export default function CrewProposalPanel({
     setInvited(false);
     setInvitedEmail("");
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "invite", email }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(result.error ?? t("crewProposalError")); return; }
+      const result = (await apiRequest(
+        "POST /api/events/{id}/seasons/{seasonId}/crew-proposals",
+        { params: { id: eventId, seasonId }, body: { action: "invite", email } },
+      )) as { candidate?: Candidate };
       if (result.candidate) {
         const candidate = result.candidate as Candidate;
         setExternalCandidates((current) => [...current, candidate]);
@@ -138,8 +153,8 @@ export default function CrewProposalPanel({
         setInvited(true);
       }
       setInviteEmail("");
-    } catch {
-      setError(t("crewProposalError"));
+    } catch (inviteError) {
+      setError(inviteError instanceof ApiError ? inviteError.message : t("crewProposalError"));
     } finally {
       setBusy(null);
     }
@@ -150,21 +165,21 @@ export default function CrewProposalPanel({
     setError(null);
     setSubmitted(false);
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          members: selectedCandidates.map(({ membershipId, userId }) => membershipId ? { membershipId } : { userId }),
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(result.error ?? t("crewProposalError")); return; }
+      const result = (await apiRequest(
+        "POST /api/events/{id}/seasons/{seasonId}/crew-proposals",
+        {
+          params: { id: eventId, seasonId },
+          body: {
+            name: name.trim(),
+            members: selectedCandidates.map(({ membershipId, userId }) => membershipId ? { membershipId } : { userId: userId ?? undefined }),
+          },
+        },
+      )) as { proposal: Proposal };
       setData((current) => current ? { ...current, proposals: [result.proposal, ...current.proposals] } : current);
       setName("");
       setSubmitted(true);
-    } catch {
-      setError(t("crewProposalError"));
+    } catch (submitError) {
+      setError(submitError instanceof ApiError ? submitError.message : t("crewProposalError"));
     } finally {
       setBusy(null);
     }
@@ -174,20 +189,61 @@ export default function CrewProposalPanel({
     setBusy(proposal.id);
     setError(null);
     try {
-      const response = await fetch(`${endpoint}/${proposal.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          decision,
-          rejectionReason: decision === "reject" ? rejectionReasons[proposal.id] ?? "" : undefined,
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(result.error ?? t("crewProposalError")); return; }
+      await apiRequest(
+        "PATCH /api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}",
+        {
+          params: { id: eventId, seasonId, proposalId: proposal.id },
+          body: {
+            decision,
+            rejectionReason: decision === "reject" ? rejectionReasons[proposal.id] ?? "" : undefined,
+          },
+        },
+      );
       await load();
       if (decision === "approve") await onCrewApproved?.();
-    } catch {
-      setError(t("crewProposalError"));
+    } catch (decideError) {
+      setError(decideError instanceof ApiError ? decideError.message : t("crewProposalError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** A captain proposes an add or a remove on their own crew; the owner reviews it. */
+  const proposeCrewChange = async (action: "add" | "remove") => {
+    if (!captainCrew || !crewChangeTarget) return;
+    setBusy(action);
+    setError(null);
+    setCrewChangeSent(false);
+    try {
+      await apiRequest(
+        "POST /api/events/{id}/seasons/{seasonId}/crew-proposals",
+        {
+          params: { id: eventId, seasonId },
+          body: { action, targetCrewId: captainCrew.crewId, membershipIds: [crewChangeTarget.membershipId] },
+        },
+      );
+      setCrewChangeTarget(null);
+      setCrewChangeSent(true);
+    } catch (changeError) {
+      setError(changeError instanceof ApiError ? changeError.message : t("crewProposalError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const acceptCaptaincy = async (proposal: Proposal) => {
+    setBusy(proposal.id);
+    setError(null);
+    try {
+      await apiRequest(
+        "PATCH /api/events/{id}/seasons/{seasonId}/crew-proposals/{proposalId}",
+        { params: { id: eventId, seasonId, proposalId: proposal.id }, body: { decision: "accept" } },
+      );
+      setAcceptedCrew(proposal.targetCrewName ?? proposal.name);
+      await load();
+      await onCrewApproved?.();
+    } catch (acceptError) {
+      setError(acceptError instanceof ApiError ? acceptError.message : t("crewProposalError"));
     } finally {
       setBusy(null);
     }
@@ -200,12 +256,67 @@ export default function CrewProposalPanel({
     ? [proposer, ...selectedCandidates]
     : selectedCandidates;
   const reviewProposals = data.proposals;
+  const captainOffers = data.proposals.filter((proposal) => proposal.awaitingMyAcceptance);
+  const captainCrew = data.captainOf ?? null;
+  const addableCandidates: CrewChangeTarget[] = (data.candidates ?? []).flatMap((candidate) =>
+    candidate.membershipId ? [{ membershipId: candidate.membershipId, name: candidate.name }] : []);
+  const crewChangeOptions = [...addableCandidates, ...(captainCrew?.members ?? [])];
+  const pickedId = crewChangeTarget?.membershipId;
+  const canAddPicked = !!pickedId && addableCandidates.some((candidate) => candidate.membershipId === pickedId);
+  const canRemovePicked = !!pickedId && !!captainCrew?.members.some((member) => member.membershipId === pickedId);
 
   return (
     <Stack spacing={2}>
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
       {submitted && <Alert severity="success">{t("proposalSubmitted")}</Alert>}
       {invited && <Alert severity="success">{t("inviteSent", { name: invitedEmail })}</Alert>}
+      {acceptedCrew && <Alert severity="success">{t("captainAccepted", { crew: acceptedCrew })}</Alert>}
+
+      {captainOffers.length > 0 && (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h6">{t("captainNominationTitle")}</Typography>
+              {captainOffers.map((proposal) => (
+                <Stack key={proposal.id} spacing={1}>
+                  <Typography fontWeight={600}>{t("captainNominationFor", { crew: proposal.targetCrewName ?? proposal.name })}</Typography>
+                  <Typography variant="body2" color="text.secondary">{t("proposalProposedBy", { name: proposal.proposerName })}</Typography>
+                  <Button variant="contained" onClick={() => void acceptCaptaincy(proposal)} disabled={busy !== null} sx={{ alignSelf: "flex-start" }}>
+                    {t("acceptCaptaincy")}
+                  </Button>
+                </Stack>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
+      {captainCrew && (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={2}>
+              <BoxHeading title={t("captainToolsTitle")} description={t("captainToolsFor", { crew: captainCrew.crewName })} />
+              <Autocomplete<CrewChangeTarget, false, false, false>
+                options={crewChangeOptions}
+                value={crewChangeTarget}
+                onChange={(_, next) => setCrewChangeTarget(next)}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.membershipId === value.membershipId}
+                renderInput={(params) => <TextField {...params} label={t("captainPlayerName")} size="small" />}
+              />
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" onClick={() => void proposeCrewChange("add")} disabled={busy !== null || !canAddPicked}>
+                  {t("captainAddPlayer")}
+                </Button>
+                <Button variant="outlined" color="error" onClick={() => void proposeCrewChange("remove")} disabled={busy !== null || !canRemovePicked}>
+                  {t("captainRemovePlayer")}
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+      {crewChangeSent && <Alert severity="success">{t("captainChangeSubmitted")}</Alert>}
 
       {data.canPropose && (
         <Card variant="outlined">
@@ -262,7 +373,9 @@ export default function CrewProposalPanel({
               {reviewProposals.length === 0 ? <Typography color="text.secondary">{t("noPendingProposals")}</Typography> : reviewProposals.map((proposal) => (
                 <Stack key={proposal.id} spacing={1.5}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-                    <Typography variant="subtitle1" fontWeight={600}>{proposal.name}</Typography>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      {proposal.captainNomination ? t("captainNominationFor", { crew: proposal.targetCrewName ?? proposal.name }) : proposal.name}
+                    </Typography>
                     <Chip size="small" label={statusLabel(proposal.status)} />
                   </Stack>
                   <Typography color="text.secondary">{proposal.memberNames.join(", ")}</Typography>
@@ -275,9 +388,12 @@ export default function CrewProposalPanel({
                       size="small"
                     />
                     <Stack direction="row" spacing={1}>
-                      <Button variant="contained" aria-label={t("approveProposalFor", { name: proposal.name })} onClick={() => void decide(proposal, "approve")} disabled={busy !== null}>
-                        {t("approveProposal")}
-                      </Button>
+                      {/* A captain nomination is approved by the nominee, not reviewed here. */}
+                      {!proposal.captainNomination && (
+                        <Button variant="contained" aria-label={t("approveProposalFor", { name: proposal.name })} onClick={() => void decide(proposal, "approve")} disabled={busy !== null}>
+                          {t("approveProposal")}
+                        </Button>
+                      )}
                       <Button variant="outlined" color="error" aria-label={t("rejectProposalFor", { name: proposal.name })} onClick={() => void decide(proposal, "reject")} disabled={busy !== null}>
                         {t("rejectProposal")}
                       </Button>

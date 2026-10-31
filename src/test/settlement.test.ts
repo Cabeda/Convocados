@@ -658,6 +658,46 @@ describe("settlement API routes", () => {
     expect(json.updated).toBe(3);
   });
 
+  it("bulk settle route settles the current game and a past game of the same event", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const past = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() - 7 * 86400_000), status: "played" },
+    });
+    const players = await prisma.eventPlayer.findMany({ where: { eventId: event.id } });
+    for (let i = 0; i < players.length; i++) {
+      await prisma.gameParticipant.create({ data: { gameId: past.id, eventPlayerId: players[i].id, order: i } });
+    }
+    await syncGamePayments(past.id, event.id);
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const currentRes = await bulkSettle(ctx({ id: event.id }, { gameId: game.id }, "PUT"));
+    expect(currentRes.status).toBe(200);
+    expect((await currentRes.json()).updated).toBe(3);
+
+    const pastRes = await bulkSettle(ctx({ id: event.id }, { gameId: past.id }, "PUT"));
+    expect(pastRes.status).toBe(200);
+    expect((await pastRes.json()).updated).toBe(3);
+
+    expect(await prisma.gamePayment.count({ where: { gameId: game.id, status: "paid" } })).toBe(3);
+    expect(await prisma.gamePayment.count({ where: { gameId: past.id, status: "paid" } })).toBe(3);
+  });
+
+  it("bulk settle route rejects a gameId from another event and leaves that event's payments untouched", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    const victim = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    await syncGamePayments(victim.game.id, victim.event.id);
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const res = await bulkSettle(ctx({ id: event.id }, { gameId: victim.game.id }, "PUT"));
+    expect(res.status).toBe(400);
+
+    const victimRows = await prisma.gamePayment.findMany({ where: { gameId: victim.game.id } });
+    expect(victimRows).toHaveLength(3);
+    expect(victimRows.every((r) => r.status === "pending")).toBe(true);
+  });
+
   it("config route rejects a game from another event", async () => {
     const { event } = await seedEvent({ cost: 60 });
     const other = await prisma.event.create({ data: { title: "Other", location: "X", dateTime: new Date() } });
@@ -754,6 +794,93 @@ describe("game_payer_set webhook (#1359)", () => {
         currency: "EUR",
       }),
     );
+  });
+
+  it("sends the payer's own shared details instead of the event's", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana-shared");
+    await prisma.user.update({
+      where: { id: "user-ana-shared" },
+      data: {
+        sharePaymentDetails: true,
+        paymentDetails: JSON.stringify([{ type: "revolut_tag", value: "ana" }]),
+      },
+    });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ paymentMethods: [{ type: "revolut_tag", value: "ana" }] }),
+    );
+  });
+
+  it("keeps the event's details when the payer has not consented", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana-private");
+    await prisma.user.update({
+      where: { id: "user-ana-private" },
+      data: {
+        sharePaymentDetails: false,
+        paymentDetails: JSON.stringify([{ type: "revolut_tag", value: "ana" }]),
+      },
+    });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "game_payer_set",
+      expect.objectContaining({ paymentMethods: [{ type: "mbway", value: "912345678" }] }),
+    );
+  });
+
+  it("tells the incoming payer they are collecting", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana-notified");
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: event.id, type: "payer_assigned" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(job).not.toBeNull();
+    const payload = JSON.parse(job!.payload);
+    expect(payload.recipientUserIds).toEqual(["user-ana-notified"]);
+    expect(payload.key).toBe("payerAssignedBody");
+  });
+
+  it("tells the displaced payer who took over", async () => {
+    const { event, game } = await seedEndedGameWithMethods();
+    await linkUser("Ana", "user-ana-first");
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id }, "PATCH"),
+    );
+
+    const other = await prisma.eventPlayer.findFirstOrThrow({ where: { name: { not: "Ana" } } });
+    await linkUser(other.name, "user-other-takes");
+    await setConfig(
+      ctx({ id: event.id }, { gameId: game.id, mode: "tracked", payerEventPlayerId: other.id }, "PATCH"),
+    );
+
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: event.id, type: "payer_changed" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(job).not.toBeNull();
+    expect(JSON.parse(job!.payload).recipientUserIds).toEqual(["user-ana-first"]);
   });
 
   it("carries the payer's account id when the payer is linked", async () => {

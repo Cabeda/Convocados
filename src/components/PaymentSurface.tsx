@@ -6,8 +6,10 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useT } from "~/lib/useT";
 import { useEventCost } from "~/lib/useEventCost";
+import { PayerCard } from "./PayerCard";
 import { formatMoney, formatShortDate, toCents, type PaymentStatus } from "~/lib/money";
 import { perPlayerShare } from "~/lib/gameCost";
+import { apiRequest } from "~/lib/api/client";
 
 interface DebtorLine {
   gameId: string;
@@ -55,8 +57,10 @@ export function PaymentSurface({
 
   const load = useCallback(async () => {
     try {
-      const sumRes = await fetch(`/api/events/${eventId}/payments/settlement`);
-      if (sumRes.ok) setSummary(await sumRes.json());
+      const summaryBody = await apiRequest("GET /api/events/{id}/payments/settlement", {
+        params: { id: eventId },
+      });
+      setSummary(summaryBody as SettlementSummary);
     } catch { /* ignore */ }
   }, [eventId]);
 
@@ -83,18 +87,15 @@ export function PaymentSurface({
     setReporting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/payments/settlement/self-report`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameId: line.gameId, eventPlayerId: summary.viewerEventPlayerId }),
+      await apiRequest("POST /api/events/{id}/payments/settlement/self-report", {
+        params: { id: eventId },
+        body: { gameId: line.gameId, eventPlayerId: summary.viewerEventPlayerId },
       });
-      if (!res.ok) setError(t("paymentsFailed"));
-      await load();
     } catch {
       setError(t("paymentsFailed"));
-    } finally {
-      setReporting(false);
     }
+    await load();
+    setReporting(false);
   };
 
   return (
@@ -119,6 +120,8 @@ export function PaymentSurface({
             {t("postGameGoToPayments")}
           </Button>
         </Box>
+
+        <PayerCard eventId={eventId} />
 
         {!canEdit && myDebt && (
           <Box sx={{ px: 0.5, pb: 0.5 }}>

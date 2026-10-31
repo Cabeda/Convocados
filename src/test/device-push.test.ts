@@ -11,6 +11,12 @@ import {
 const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
 const DESKTOP_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)";
 
+const jsonResponse = (body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+
 function stubBrowser(opts: {
   userAgent: string;
   permission: "default" | "granted" | "denied";
@@ -129,7 +135,7 @@ describe("enableDevicePush", () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       calls.push(url);
       if (url === "/api/push/vapid-public-key") {
-        return new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 });
+        return jsonResponse({ publicKey: "AQAB" });
       }
       return new Response("{}", { status: 200 });
     }));
@@ -156,7 +162,7 @@ describe("enableDevicePush", () => {
 
   it("does not re-prompt when permission is already granted", async () => {
     stubBrowser({ userAgent: DESKTOP_UA, permission: "granted", matchMediaMatches: false });
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ publicKey: "AQAB" })));
 
     const result = await enableDevicePush();
 
@@ -274,7 +280,7 @@ describe("enableDevicePush — unsupported and error paths", () => {
         throw new Error("subscription failed");
       }),
     });
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ publicKey: "AQAB" })));
 
     const result = await enableDevicePush();
 
@@ -294,7 +300,7 @@ describe("enableDevicePush — unsupported and error paths", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       if (url === "/api/push/vapid-public-key") {
-        return new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 });
+        return jsonResponse({ publicKey: "AQAB" });
       }
       if (url === "/api/push/subscribe") {
         return new Response("server error", { status: 500 });
@@ -314,7 +320,7 @@ describe("enableDevicePush — unsupported and error paths", () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       calls.push(url);
       if (url === "/api/push/vapid-public-key") {
-        return new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 });
+        return jsonResponse({ publicKey: "AQAB" });
       }
       return new Response("{}", { status: 200 });
     }));

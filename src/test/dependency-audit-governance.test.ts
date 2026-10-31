@@ -157,9 +157,16 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 const snapshotsAt = read("pnpm-lock.yaml").lastIndexOf("\nsnapshots:");
 const graph = snapshotsAt === -1 ? "" : read("pnpm-lock.yaml").slice(snapshotsAt);
 
-/** The version pnpm resolved for a package, or null when it left the graph. */
-const resolvedVersion = (name: string) =>
-  new RegExp(`^ {2}'?${escapeRegExp(name)}@([^'\\n]*)'?:$`, "m").exec(graph)?.[1] ?? null;
+/** Every version pnpm resolved for a package; peer contexts can pin several. */
+// A leaf snapshot has no dependency block, so pnpm writes `pkg@1.2.3: {}` —
+// without the empty-body suffix this missed every dependency-free package
+// (zod among them) and reported it as "left the graph".
+const resolvedVersions = (name: string) =>
+  [
+    ...graph.matchAll(
+      new RegExp(`^ {2}'?${escapeRegExp(name)}@([^'\\n]*)'?:(?: \\{\\})?$`, "gm"),
+    ),
+  ].map((match) => match[1]);
 
 /** One package's snapshot block, so a scan for a dependency stays inside it. */
 const snapshotBlock = (name: string) => {
@@ -198,6 +205,19 @@ function overrideResolves(advisory: AuditAdvisory, overrides: Record<string, str
     const floor = overrideFloor(String(value));
     return floor !== null && compareVersions(floor, ceiling) > 0;
   });
+}
+
+/**
+ * Whether an override pins *every* resolved copy past the vulnerable range.
+ * A 4.x-only override leaves a 3.x peer copy open, so `overrideResolves` alone
+ * would wrongly call the advisory resolved.
+ */
+function overrideResolvesEveryCopy(advisory: AuditAdvisory, overrides: Record<string, string>): boolean {
+  if (!overrideResolves(advisory, overrides)) return false;
+  const ceiling = vulnerableCeiling(advisory.vulnerableRange);
+  if (ceiling === null) return false;
+  const versions = resolvedVersions(advisory.package);
+  return versions.length > 0 && versions.every((version) => compareVersions(version, ceiling) > 0);
 }
 
 /** How an advisory is accounted for, or "none" when nobody has decided anything. */
@@ -274,7 +294,7 @@ describe("dependency audit governance (GH-1126)", () => {
         `${ghsa} is ${advisory!.severity}, not high — drop the ignore and resolve it instead`,
       ).toBe(true);
       expect(
-        overrideResolves(advisory!, overrides),
+        overrideResolvesEveryCopy(advisory!, overrides),
         `${advisory!.package} is already pinned past the vulnerable range — drop the ignore and let the override resolve it`,
       ).toBe(false);
     }
@@ -324,15 +344,15 @@ describe("dependency audit governance (GH-1126)", () => {
     // ...and it has to be true of the graph, or the reason is a fiction.
     expect(lockfileDependsOn("@puppeteer/browsers", "extract-zip")).toBe(true);
     for (const advisory of all) {
-      const resolved = resolvedVersion(advisory.package);
-      expect(resolved, `${advisory.package} left the graph — is the exemption stale?`).toBeTruthy();
+      const versions = resolvedVersions(advisory.package);
+      expect(versions.length, `${advisory.package} left the graph — is the exemption stale?`).toBeGreaterThan(0);
       const ceiling = vulnerableCeiling(advisory.vulnerableRange);
       expect(ceiling, `unhandled vulnerable_version_range: ${advisory.vulnerableRange}`).toBeTruthy();
-      // The lockfile still resolves inside the vulnerable range, which is why
-      // the exemption exists: nothing has moved it out.
+      // The lockfile still resolves at least one vulnerable copy, which is why
+      // the exemption exists: nothing has moved every copy out.
       expect(
-        compareVersions(resolved!, ceiling!) <= 0,
-        `${advisory.package} resolves ${resolved}, outside ${advisory.vulnerableRange} — ` +
+        versions.some((version) => compareVersions(version, ceiling!) <= 0),
+        `${advisory.package} resolves ${versions.join(", ")}, all outside ${advisory.vulnerableRange} — ` +
           "the advisory should no longer be open",
       ).toBe(true);
     }

@@ -13,10 +13,16 @@ afterEach(() => {
 });
 
 const fetchMock = vi.fn();
+// apiRequest reads the content-type header; these tests stub only the parsed body.
+const jsonFetch = ((...args: Parameters<typeof fetch>) =>
+  Promise.resolve(fetchMock(...args)).then((res) => ({
+    headers: { get: () => "application/json" },
+    ...res,
+  }))) as typeof fetch;
 
 beforeEach(() => {
   fetchMock.mockReset();
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", jsonFetch);
 });
 
 describe("RecurrencePrompt", () => {

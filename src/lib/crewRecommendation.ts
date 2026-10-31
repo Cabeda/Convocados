@@ -20,7 +20,7 @@ export interface CrewRecommendation {
 }
 
 const MIN_CREW_SIZE = 3;
-const MAX_CREW_SIZE = 5;
+export const MAX_CREW_SIZE = 5;
 // Weight applied per player displaced from their previous-season Crew during
 // the balance optimizer. Rating imbalance is measured in (rating diff)^2, so
 // a few hundred per displaced player keeps "small changes" the tie-breaker

@@ -15,11 +15,13 @@ import AddCircleIcon from "@mui/icons-material/AddCircle";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { apiRequest, ApiError } from "~/lib/api/client";
 import { useSession } from "~/lib/auth.client";
 import { computeSkillUpdates, type SkillUpdate } from "~/lib/skill";
 import { hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scoring";
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
+import type { EventData } from "./event/types";
 import { HistoryCardFull, TennisScoreBand, type HistoryCardFullEntry } from "./HistoryCardFull";
 import { deriveEventPermissions } from "~/lib/eventView";
 
@@ -137,10 +139,9 @@ function AddHistoricalGameDialog({
     ];
 
     try {
-      const res = await fetch(`/api/events/${eventId}/history`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const newEntry = (await apiRequest("POST /api/events/{id}/history", {
+        params: { id: eventId },
+        body: {
           dateTime: new Date(dateTime).toISOString(),
           teamOneName,
           teamTwoName,
@@ -148,23 +149,15 @@ function AddHistoricalGameDialog({
             ? { scoreSets }
             : { scoreOne: parseInt(scoreOne, 10), scoreTwo: parseInt(scoreTwo, 10) }),
           teamsSnapshot,
-        }),
-      });
-
-      if (!res.ok) {
-        const json = await res.json();
-        setError(json.error || t("errorCreatingPastGame"));
-        setSaving(false);
-        return;
-      }
-
-      const newEntry = await res.json();
+        },
+      })) as HistoryEntry;
       onSuccess(newEntry);
       onClose();
-    } catch {
-      setError(t("errorCreatingPastGame"));
+    } catch (error) {
+      setError(error instanceof ApiError && error.message ? error.message : t("errorCreatingPastGame"));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const getAvailableSuggestions = (teamIdx: number) => {
@@ -365,14 +358,17 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const isOwner = deriveEventPermissions(session?.user?.id ?? null, { ownerId, isPublic, isAdmin }).isOwner;
 
   const load = useCallback(async () => {
-    const [evRes, histRes, costRes] = await Promise.all([
-      fetch(`/api/events/${eventId}`),
-      fetch(`/api/events/${eventId}/history`),
-      fetch(`/api/events/${eventId}/cost`).catch(() => null),
+    const [evBody, histBody, costBody] = await Promise.all([
+      apiRequest("GET /api/events/{id}", { params: { id: eventId } }).catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }),
+      apiRequest("GET /api/events/{id}/history", { params: { id: eventId } }),
+      apiRequest("GET /api/events/{id}/cost", { params: { id: eventId } }).catch(() => null),
     ]);
-    if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
-    const ev = await evRes.json();
-    const hist = await histRes.json();
+    if (!evBody) { setNotFound(true); setLoading(false); return; }
+    const ev = evBody as EventData;
+    const hist = histBody as { data: HistoryEntry[]; nextCursor: string | null; hasMore: boolean };
     setTitle(ev.title);
     setTeamOneName(ev.teamOneName ?? "Team A");
     setTeamTwoName(ev.teamTwoName ?? "Team B");
@@ -388,9 +384,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setHistory(hist.data);
     setNextCursor(hist.nextCursor);
     setHasMore(hist.hasMore);
-    if (costRes && costRes.ok) {
-      const costJson = await costRes.json();
-      setCost(costJson);
+    if (costBody) {
+      setCost(costBody as NonNullable<typeof cost>);
     }
     setLoading(false);
 
@@ -398,9 +393,11 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     // Combine current event players with historical players for suggestions
     const currentPlayers = (ev.players ?? []).map((p: { name: string; image?: string | null }) => ({ name: p.name, gamesPlayed: -1, userId: null, image: p.image ?? null })); // -1 indicates current player
     Promise.all([
-      fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
-      fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([kp, ratings]) => {
+      apiRequest("GET /api/events/{id}/known-players", { params: { id: eventId } }).catch(() => ({ players: [] })),
+      apiRequest("GET /api/events/{id}/ratings", { params: { id: eventId } }).catch(() => ({ data: [] })),
+    ]).then(([kpBody, ratingsBody]) => {
+      const kp = kpBody as { players: Array<{ name: string; gamesPlayed: number; userId?: string | null; image?: string | null }> };
+      const ratings = ratingsBody as { data: Array<{ name: string; rating: number; gamesPlayed: number }> };
       // Combine current players with historical players, deduping by name
       const allPlayersMap = new Map<string, { name: string; gamesPlayed: number; userId: string | null; image: string | null }>();
       // Current players first (they get priority)
@@ -423,8 +420,10 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
-    const res = await fetch(`/api/events/${eventId}/history?cursor=${nextCursor}`);
-    const page = await res.json();
+    const page = (await apiRequest("GET /api/events/{id}/history", {
+      params: { id: eventId },
+      query: { cursor: nextCursor },
+    })) as { data: HistoryEntry[]; nextCursor: string | null; hasMore: boolean };
     setHistory((prev) => [...prev, ...page.data]);
     setNextCursor(page.nextCursor);
     setHasMore(page.hasMore);

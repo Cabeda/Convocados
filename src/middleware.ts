@@ -1,6 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { applySecurityHeaders as addSecurityHeaders } from "~/lib/securityHeaders";
 import { isTrackableAppOpen } from "~/lib/appOpen";
+import { canonicalHostRedirect as decideCanonicalRedirect } from "~/lib/canonicalHost.mjs";
 
 /**
  * Security middleware: CSRF protection + security headers (CSP, etc.)
@@ -28,51 +29,32 @@ const BYPASS_PREFIXES = [
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
- * If the request arrived on a non-canonical host, return a redirect Response
- * to the canonical host (preserving path + query); otherwise null.
- *
- * Canonical host comes from BETTER_AUTH_URL. The public host is derived from
- * proxy headers (Fly terminates TLS and proxies to localhost:3000, so url.host
- * is the internal address, not what the user typed).
- *
- * - GET/HEAD → 301 (permanent, cacheable)
- * - other methods → 308 (permanent, preserves method + body)
- * Localhost / hostless requests are never redirected (dev + non-browser).
+ * Middleware adapter for the shared rule in `~/lib/canonicalHost.mjs`, which
+ * `scripts/server.mjs` also applies before Astro. That wrapper catches
+ * prerendered pages, static files and route-cache hits (middleware never sees
+ * them); this copy covers dynamic routes in dev and without the wrapper.
  */
 function canonicalHostRedirect(request: Request, url: URL): Response | null {
-  const canonicalUrl = process.env.BETTER_AUTH_URL;
-  if (!canonicalUrl) return null;
+  const headers: Record<string, string> = Object.fromEntries(request.headers);
+  // A constructed Request has no Host header; fall back to the URL's host so
+  // the rule still has a public host to compare (production always sets one).
+  headers.host ??= url.host;
 
-  // Never redirect the health-check endpoint: Fly's internal HTTP check hits
-  // /api/health with a non-public Host (machine IP / *.internal), which would
-  // otherwise be redirected and fail the check, aborting deploys.
-  if (url.pathname === "/api/health") return null;
+  const decision = decideCanonicalRedirect({
+    method: request.method,
+    url: `${url.pathname}${url.search}`,
+    headers,
+  });
+  if (!decision) return null;
 
-  let canonicalHost: string;
-  try {
-    canonicalHost = new URL(canonicalUrl).host;
-  } catch {
-    return null;
-  }
-
-  // If the canonical host is localhost (dev/test), don't redirect anything —
-  // we'd otherwise bounce real traffic to localhost.
-  const canonicalLower = canonicalHost.toLowerCase();
-  if (canonicalLower.startsWith("localhost") || canonicalLower.startsWith("127.0.0.1")) return null;
-
-  const publicHost = (request.headers.get("x-forwarded-host")
-    ?? request.headers.get("host")
-    ?? url.host).toLowerCase();
-
-  if (!publicHost) return null;
-  // Never redirect local dev or the internal proxy address.
-  if (publicHost.startsWith("localhost") || publicHost.startsWith("127.0.0.1")) return null;
-  if (publicHost === canonicalLower) return null;
-
-  const proto = (request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")) || "https";
-  const location = `${proto === "http" ? "https" : proto}://${canonicalHost}${url.pathname}${url.search}`;
-  const status = request.method === "GET" || request.method === "HEAD" ? 301 : 308;
-  return new Response(null, { status, headers: { Location: location } });
+  // `no-store` keeps browsers from heuristically caching the 301. The route
+  // cache is handled by the caller, which opts out before returning.
+  return addSecurityHeaders(
+    new Response(null, {
+      status: decision.status,
+      headers: { Location: decision.location, "Cache-Control": decision.cacheControl },
+    }),
+  );
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -85,7 +67,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // canonical host (BETTER_AUTH_URL) and the cookie lands on the wrong domain,
   // leaving the user on the main page logged out.
   const canonicalRedirect = canonicalHostRedirect(request, url);
-  if (canonicalRedirect) return canonicalRedirect;
+  if (canonicalRedirect) {
+    // A host redirect must never enter the route cache. The cache is keyed by
+    // path (not host), so a redirect stored from a convocados.fly.dev request is
+    // served back to convocados.cabeda.dev and points at itself — every event
+    // link opened on the old host loops with ERR_TOO_MANY_REDIRECTS.
+    context.cache?.set(false);
+    return canonicalRedirect;
+  }
 
   // Safe methods don't need CSRF protection
   if (SAFE_METHODS.has(request.method)) {

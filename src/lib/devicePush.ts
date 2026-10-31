@@ -10,6 +10,7 @@
  * follow button reason about device state the same way.
  */
 import { isIos as uaIsIos, isStandalone as resolveStandalone } from "./pushPrompt";
+import { apiRequest, ApiError } from "./api/client";
 
 export type DevicePushState =
   /** No Push API in this browser at all. */
@@ -132,22 +133,27 @@ export async function enableDevicePush(): Promise<DevicePushResult> {
 
     const reg = await navigator.serviceWorker.register("/sw.js");
     await navigator.serviceWorker.ready;
-    const keyRes = await fetch("/api/push/vapid-public-key");
-    const { publicKey } = await keyRes.json();
+    const { publicKey } = (await apiRequest("GET /api/push/vapid-public-key")) as {
+      publicKey: string;
+    };
     const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: base64UrlToUint8Array(publicKey),
     });
-    const res = await fetch("/api/push/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...sub.toJSON(), locale: navigator.language }),
-    });
-    if (!res.ok) {
+    try {
+      const subscription = sub.toJSON() as {
+        endpoint: string;
+        keys: { p256dh: string; auth: string };
+      };
+      await apiRequest("POST /api/push/subscribe", {
+        body: { ...subscription, locale: navigator.language },
+      });
+    } catch (e) {
+      if (!(e instanceof ApiError)) throw e;
       // The server never recorded it — roll back so the device doesn't show
       // "on" while no push can actually be delivered.
       await sub.unsubscribe().catch(() => {});
-      throw new Error("Failed to register push subscription");
+      throw e;
     }
     return { ok: true, state: "on" };
   } catch {
@@ -165,10 +171,11 @@ export async function disableDevicePush(): Promise<boolean> {
     // Browser first: once unsubscribed this device can no longer receive, so a
     // later server failure cannot leave the UI stuck on "on".
     await sub.unsubscribe();
-    await fetch("/api/push/subscribe", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: sub.endpoint }),
+    // The route's answer does not gate the teardown; only a failed request does.
+    await apiRequest("DELETE /api/push/subscribe", {
+      body: { endpoint: sub.endpoint },
+    }).catch((e) => {
+      if (!(e instanceof ApiError)) throw e;
     });
     return true;
   } catch {

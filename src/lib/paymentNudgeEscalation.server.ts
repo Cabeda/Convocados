@@ -18,6 +18,7 @@ import { sendPushToUser } from "./push.server";
 import { getNotificationPrefs, wantsPaymentReminderPush } from "./notificationPrefs.server";
 import { effectiveGameCost } from "./settlement.server";
 import { fireWebhooks } from "./webhook.server";
+import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 import { createLogger } from "./logger.server";
 import { formatMoney, toCents } from "./money";
 
@@ -100,6 +101,9 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     const gamePayments = gamesById.get(event.currentGameId)?.payments ?? [];
     // Per-Game override → EventCost template → EUR (settlement's rule).
     const currency = (await effectiveGameCost(event.currentGameId, event.id)).currency;
+    // Where the money goes, resolved once per event (ADR 0055) so every nudge
+    // in this run names the same account the announcement did.
+    const { methods: paymentMethods } = await resolvePaymentDetails(event.id, event.currentGameId);
     const totalPayments = gamePayments.length;
     const paidCount = gamePayments.filter((p) => p.status === "paid").length;
 
@@ -141,6 +145,9 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
           stage,
           amountCents: Math.round(payment.amount * 100),
           currency,
+          // Absent, not empty, when nothing is known: a subscriber must never
+          // render "pay via []" for an event nobody configured.
+          ...(paymentMethods.length > 0 ? { paymentMethods } : {}),
           ...(event.showDebtorNames ? { playerName: payment.playerName } : {}),
         }).catch(() => {});
 

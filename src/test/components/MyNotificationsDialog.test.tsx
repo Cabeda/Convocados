@@ -69,10 +69,13 @@ function stubFetch(overrides: { follow?: Record<string, unknown>; pushSubscribeS
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method, body: init?.body });
     if (url.includes("/api/events/") && url.endsWith("/follow")) {
-      return new Response(JSON.stringify({ following: true, isPlayer: true, pushEnabled: true, ...overrides.follow }), { status: 200 });
+      return new Response(JSON.stringify({ following: true, isPlayer: true, pushEnabled: true, ...overrides.follow }), { status: 200, headers: { "Content-Type": "application/json" } });
     }
     if (url === "/api/push/vapid-public-key") {
-      return new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 });
+      return new Response(JSON.stringify({ publicKey: "AQAB" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
     if (url === "/api/push/subscribe" && (init?.method ?? "GET") === "POST" && overrides.pushSubscribeStatus) {
       return new Response("boom", { status: overrides.pushSubscribeStatus });

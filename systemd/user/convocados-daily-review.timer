@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the Convocados daily senior review once a day
+
+[Timer]
+# Morning, before the owner starts the day. Persistent catches up after the Pi
+# has been off; the jitter avoids a thundering herd of provider calls at :30.
+OnCalendar=*-*-* 07:30:00
+RandomizedDelaySec=15m
+AccuracySec=1m
+Persistent=true
+Unit=convocados-daily-review.service
+
+[Install]
+WantedBy=timers.target

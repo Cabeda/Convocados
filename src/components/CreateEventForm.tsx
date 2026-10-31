@@ -23,6 +23,7 @@ import { isPlaytomicSport } from "~/lib/playtomic";
 import { inferCity } from "~/lib/city";
 import { getRandomTitle, type TitleLocale } from "~/lib/randomTitles";
 import { COMMON_TIMEZONES, detectTimezone, fromDateTimeLocalValue, dateFormatTag } from "~/lib/timezones";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 const DAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
 const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
@@ -136,13 +137,13 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
     }
 
     const body = {
-      title: fd.get("title"),
+      title: String(fd.get("title") ?? ""),
       location: location || "",
       city,
       dateTime: fromDateTimeLocalValue(dateTime, timezone),
       timezone,
-      teamOneName: fd.get("teamOneName"),
-      teamTwoName: fd.get("teamTwoName"),
+      teamOneName: String(fd.get("teamOneName") ?? ""),
+      teamTwoName: String(fd.get("teamTwoName") ?? ""),
       maxPlayers: parsedMaxPlayers,
       sport,
       isRecurring,
@@ -152,15 +153,11 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
       ...(locationCoord ? { latitude: locationCoord.lat, longitude: locationCoord.lon } : {}),
     };
 
-    const res = await fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const json = await res.json();
-
-    if (!res.ok) {
-      setError(json.error ?? t("somethingWentWrong"));
+    let json: { id: string };
+    try {
+      json = (await apiRequest("POST /api/events", { body })) as { id: string };
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("somethingWentWrong"));
       setSubmitting(false);
       return;
     }
@@ -171,10 +168,9 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
       const parsedCost = parseFloat(costTotal);
       if (!isNaN(parsedCost) && parsedCost > 0) {
         try {
-          await fetch(`/api/events/${json.id}/cost`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ totalAmount: parsedCost, currency: costCurrency }),
+          await apiRequest("PUT /api/events/{id}/cost", {
+            params: { id: json.id },
+            body: { totalAmount: parsedCost, currency: costCurrency },
           });
         } catch {
           // ignore — cost can be set later on the event page

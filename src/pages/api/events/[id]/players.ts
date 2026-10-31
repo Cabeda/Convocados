@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { isGameEnded } from "../../../../lib/gameStatus";
+import { isCurrentGameCancelled } from "../../../../lib/currentGame.server";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { activeRosterEventPlayerById } from "../../../../lib/rosterChange.server";
 import { applyRosterChange, resetInviteRateLimitStores } from "../../../../lib/applyRosterChange.server";
@@ -53,6 +54,13 @@ export const POST: APIRoute = async ({ params, request }) => {
       { error: "This is an open pickup — claim it first." },
       { status: 409 },
     );
+  }
+
+  // Cancelling the current Game freezes the roster for that occurrence. A
+  // recurring Event has already advanced to its next Game, so this only trips
+  // while the cancelled occurrence is still current.
+  if (await isCurrentGameCancelled(event.currentGameId)) {
+    return Response.json({ error: "This game has been cancelled." }, { status: 409 });
   }
 
   // Once the game has ended, the roster is frozen on the event page — players

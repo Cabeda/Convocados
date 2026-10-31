@@ -165,6 +165,7 @@
 |------------|:---:|:-------:|:-------:|
 | Web Push | ✅ | ❌ | ❌ |
 | Fcm Push | ❌ | ✅ | ❌ |
+| In App Feed | ✅ | ✅ | ❌ |
 | Notification Preferences | ✅ | ✅ | ❌ |
 
 ### Sharing

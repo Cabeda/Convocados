@@ -29,6 +29,7 @@ const CHEAP_GATES: Array<{ name: string; pattern: RegExp }> = [
   { name: "tests with coverage", pattern: /vitest run --coverage/ },
   { name: "route coverage", pattern: /route-coverage\.sh|test:route-coverage/ },
   { name: "feature parity", pattern: /check:feature-parity/ },
+  { name: "generated api client", pattern: /check:api-client/ },
   { name: "play listing", pattern: /check:play-listing\b/ },
   { name: "play screenshots", pattern: /check:play-screenshots\b/ },
   { name: "dependency audit", pattern: /pnpm audit\b/ },

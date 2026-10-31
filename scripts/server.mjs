@@ -12,12 +12,18 @@
  * manifest, so the path only exists on the CI runner, never in the image.
  * Injecting at the HTTP layer is independent of build paths.
  *
+ * The same layer decides the canonical-host redirect: Astro middleware never
+ * sees prerendered pages, static files or route-cache hits, so a request to the
+ * retired `convocados.fly.dev` host could be answered with that host as its
+ * origin. `createRequestHandler` redirects every request instead, before Astro.
+ *
  * The header map is emitted at build time by
  * `src/integrations/staticSecurityHeaders.ts`, which shares its source of truth
  * with the middleware (`src/lib/securityHeaders.ts`) used for dynamic routes.
  */
 import fs from "node:fs";
 import http from "node:http";
+import { createRequestHandler } from "./server-handler.mjs";
 
 // Must be set before the Astro entry is imported, otherwise it starts its own
 // server and this wrapper never sees the requests.
@@ -35,19 +41,9 @@ const { handler } = await import(
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
-const server = http.createServer((req, res) => {
-  // Node routes both explicit res.writeHead() and the implicit header flush in
-  // res.end() through this method, so overriding it covers every response —
-  // static files, SSR pages and API routes alike.
-  const writeHead = res.writeHead.bind(res);
-  res.writeHead = (...args) => {
-    for (const [key, value] of Object.entries(securityHeaders)) {
-      if (!res.hasHeader(key)) res.setHeader(key, value);
-    }
-    return writeHead(...args);
-  };
-  handler(req, res);
-});
+const server = http.createServer(
+  createRequestHandler({ handler, securityHeaders }),
+);
 
 server.listen(port, host, () => {
   console.log(

@@ -474,6 +474,8 @@
     <string name="proposal_proposed_by">Proposed by %1$s</string>
     <string name="your_crew_proposals">Your Crew proposals</string>
     <string name="approve_proposal">Approve</string>
+    <string name="captain_nomination">Captain nomination — %1$s</string>
+    <string name="accept_captaincy">Accept captaincy</string>
     <string name="reject_proposal">Reject</string>
     <string name="rejection_reason">Rejection reason (optional)</string>
     <string name="proposal_status_pending">Pending</string>
@@ -485,6 +487,7 @@
     <string name="season_cancel">Cancel Season</string>
     <string name="season_reopen">Reopen Season</string>
     <string name="crew_league">Crew league</string>
+    <string name="crew_captain">Captain: %1$s</string>
     <string name="crews">Crews</string>
     <string name="season_enroll_recent">Enroll recent players</string>
     <string name="season_recommend_crews">Recommend crews</string>

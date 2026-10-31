@@ -8,10 +8,11 @@ function mockFetch(routes: Record<string, unknown>) {
   vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
     const u = String(url);
     const body = routes[u];
+    const headers = new Headers({ "Content-Type": "application/json" });
     if (body === undefined) {
-      return Promise.resolve({ ok: false, status: 404, json: async () => ({ error: "not found" }) });
+      return Promise.resolve({ ok: false, status: 404, headers, json: async () => ({ error: "not found" }) });
     }
-    return Promise.resolve({ ok: true, status: 200, json: async () => body });
+    return Promise.resolve({ ok: true, status: 200, headers, json: async () => body });
   }));
 }
 

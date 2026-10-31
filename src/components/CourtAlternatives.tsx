@@ -16,6 +16,7 @@ import MapIcon from "@mui/icons-material/Map";
 import ListIcon from "@mui/icons-material/ViewList";
 import { useT } from "~/lib/useT";
 import { formatMoney, toCents } from "~/lib/money";
+import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface CourtAlternative {
   tenantId: string;
@@ -148,17 +149,19 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
     setError(null);
     setSearched(true);
     try {
-      const params = new URLSearchParams({ radius: String(radius), startTime, endTime });
-      if (indoor === "indoor") params.set("indoor", "true");
-      else if (indoor === "outdoor") params.set("indoor", "false");
-      if (includeBooked) params.set("includeBooked", "true");
-
-      const res = await fetch(`/api/events/${eventId}/court-alternatives?${params}`);
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? t("courtAlternativesError")); return; }
+      const data = (await apiRequest("GET /api/events/{id}/court-alternatives", {
+        params: { id: eventId },
+        query: {
+          radius,
+          startTime,
+          endTime,
+          indoor: indoor === "indoor" ? true : indoor === "outdoor" ? false : undefined,
+          includeBooked: includeBooked || undefined,
+        },
+      })) as { alternatives?: CourtAlternative[] };
       setAlternatives(data.alternatives ?? []);
-    } catch {
-      setError(t("courtAlternativesError"));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("courtAlternativesError"));
     } finally {
       setLoading(false);
     }
@@ -166,53 +169,45 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
 
   const toggleWatch = useCallback(async (enabled: boolean) => {
     try {
-      const res = await fetch(`/api/events/${eventId}/court-alternatives`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(enabled ? { enabled: true, radius, indoor: indoor === "indoor" ? true : indoor === "outdoor" ? false : null } : { enabled: false }),
+      await apiRequest("PUT /api/events/{id}/court-alternatives", {
+        params: { id: eventId },
+        body: enabled
+          ? { enabled: true, radius, indoor: indoor === "indoor" ? true : indoor === "outdoor" ? false : null }
+          : { enabled: false },
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
       setWatchEnabled(enabled);
-    } catch {
-      setError(t("courtAlternativesError"));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("courtAlternativesError"));
     }
   }, [eventId, radius, indoor, t]);
 
   const handleSwitch = useCallback(async (adjustTime: boolean) => {
     if (!switchTarget) return;
     setSwitching(true);
+    const body: { location: string; dateTime?: string } = {
+      location: `${switchTarget.tenantName}, ${switchTarget.address ?? ""}`.trim(),
+    };
+    if (adjustTime) {
+      body.dateTime = `${switchTarget.slotDate}T${switchTarget.slotTime}:00`;
+    }
     try {
-      const body: Record<string, unknown> = {
-        location: `${switchTarget.tenantName}, ${switchTarget.address ?? ""}`.trim(),
-      };
-      if (adjustTime) {
-        body.dateTime = `${switchTarget.slotDate}T${switchTarget.slotTime}:00`;
-      }
-      const res = await fetch(`/api/events/${eventId}/switch-court`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        setSwitchTarget(null);
-        window.location.reload();
-      }
-    } finally {
+      await apiRequest("POST /api/events/{id}/switch-court", { params: { id: eventId }, body });
+      setSwitchTarget(null);
+      window.location.reload();
+    } catch { /* the dialog stays open when the switch is refused */ }
+    finally {
       setSwitching(false);
     }
   }, [eventId, switchTarget]);
 
   const createWatch = useCallback(async (alt: CourtAlternative) => {
     setWatchingResourceId(alt.resourceId);
+    // dayOfWeek derived from the searched date (event's date)
+    const dayOfWeek = new Date(`${alt.slotDate}T00:00:00Z`).getUTCDay();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     try {
-      // dayOfWeek derived from the searched date (event's date)
-      const dayOfWeek = new Date(`${alt.slotDate}T00:00:00Z`).getUTCDay();
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const res = await fetch(`/api/court-watches`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await apiRequest("POST /api/court-watches", {
+        body: {
           sport,
           tenantId: alt.tenantId,
           tenantName: alt.tenantName,
@@ -222,16 +217,11 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
           startTime,
           endTime,
           timezone,
-        }),
+        },
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? t("courtAlternativesError"));
-        return;
-      }
       setWatchedResourceIds((prev) => new Set(prev).add(alt.resourceId));
-    } catch {
-      setError(t("courtAlternativesError"));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("courtAlternativesError"));
     } finally {
       setWatchingResourceId(null);
     }

@@ -34,6 +34,15 @@ export default tseslint.config(
     },
   },
 
+  // The canonical-host rule runs in the Node HTTP wrapper and in middleware, so
+  // it needs the Node globals the rest of src/ does not.
+  {
+    files: ["src/lib/canonicalHost.mjs"],
+    languageOptions: {
+      globals: { process: "readonly", URL: "readonly" },
+    },
+  },
+
   // ── TypeScript recommended ──────────────────────────────────────────────────
   ...tseslint.configs.recommended,
 

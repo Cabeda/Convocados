@@ -53,6 +53,19 @@ describe("POST /api/mcp — stateless transport", () => {
     expect(Array.isArray(body.result.tools)).toBe(true);
   });
 
+  it("advertises only the capabilities it serves", async () => {
+    // A capability in `initialize` with no handler behind it (resources/list
+    // answered -32601) makes strict clients treat the connector as degraded —
+    // ChatGPT dropped every tool until we stopped advertising it.
+    const req = makeRequest({ jsonrpc: "2.0", id: 1, method: "initialize", params: {
+      protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "test", version: "1" },
+    } });
+    const res = await POST(ctx(req));
+    const body: any = await res.json();
+    expect(Object.keys(body.result.capabilities)).toEqual(["tools"]);
+    expect(body.result.instructions).toMatch(/timezone/i);
+  });
+
   it("every listed tool carries a title and the directory's hints", async () => {
     // The Claude directory flags submissions whose tools lack a title or an
     // annotation, so a new tool without them must fail here, not in review.
@@ -81,6 +94,11 @@ describe("POST /api/mcp — stateless transport", () => {
       readOnlyHint: false,
       destructiveHint: false,
     });
+    // The model needs the format spelled out, or it passes a UTC time for a
+    // local kickoff and the game lands an hour or two off.
+    const create = byName.get("convocados_create_event") as any;
+    expect(create.description).toMatch(/ISO 8601/);
+    expect(create.description).toMatch(/timezone/i);
   });
 
   it("rejects an unknown protocol version header", async () => {
