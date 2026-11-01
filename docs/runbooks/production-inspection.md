@@ -104,6 +104,9 @@ curl -s https://convocados.cabeda.dev/api/health | jq
 ```
 
 Reports DB mode/size, Litestream status, and `scheduler: { running, failedJobs }`.
+`litestream.enabled` is false when `BACKUPS_ENABLED=false`; that is an explicit
+no-off-host-backup posture, not a replication failure, and health does not mark it
+degraded for it.
 
 ## Related
 

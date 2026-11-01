@@ -67,6 +67,19 @@ describe("scripts/start.sh startup recovery", () => {
     expect(existsSync(join(dataDir, "db.sqlite"))).toBe(false);
   });
 
+  it("skips restore and replication when BACKUPS_ENABLED=false", () => {
+    // The final exec is `node scripts/server.mjs`; stub it so the test does not
+    // start the real app. No DB exists, so the backup/migration node checks do
+    // not run.
+    stub("node", "exit 0");
+
+    const output = runStart({ BACKUPS_ENABLED: "false" });
+
+    expect(output).toContain("Backups disabled (BACKUPS_ENABLED=false)");
+    expect(output).not.toContain("attempting restore from R2");
+    expect(output).not.toContain("Starting app with Litestream replication");
+  });
+
   it("checkpoints the WAL before the pre-migration backup", () => {
     const dbPath = join(dataDir, "db.sqlite");
     const db = new Database(dbPath);

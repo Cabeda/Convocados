@@ -8,12 +8,16 @@ APP_DIR="${APP_DIR:-/app}"
 DB="$DATA_DIR/db.sqlite"
 PRISMA_BIN="${PRISMA_BIN:-$APP_DIR/node_modules/.bin/prisma}"
 DATABASE_URL="${DATABASE_URL:-file:$DB}"
-export DATA_DIR APP_DIR DB PRISMA_BIN DATABASE_URL
+# Explicit kill switch for the off-host backup path. Default true preserves the
+# existing behaviour; set false when R2 is known to be unavailable so the app
+# does not attempt a restore or run a replica that cannot succeed.
+BACKUPS_ENABLED="${BACKUPS_ENABLED:-true}"
+export DATA_DIR APP_DIR DB PRISMA_BIN DATABASE_URL BACKUPS_ENABLED
 
 cd "$APP_DIR"
 
 # ── Restore from R2 if DB is missing ─────────────────────────────────────────
-if [ ! -f "$DB" ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
+if [ "$BACKUPS_ENABLED" = "true" ] && [ ! -f "$DB" ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
   echo "[startup] Database not found, attempting restore from R2..."
   restore_output="$(litestream restore -config "$APP_DIR/litestream.yml" -if-replica-exists "$DB" 2>&1)" && restore_status=0 || restore_status=$?
   if [ "$restore_status" -eq 0 ]; then
@@ -143,10 +147,14 @@ if ! "$PRISMA_BIN" migrate status >/tmp/migrate-status.log 2>&1; then
 fi
 
 # ── Start app ─────────────────────────────────────────────────────────────────
-if [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
+if [ "$BACKUPS_ENABLED" = "true" ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
   echo "[startup] Starting app with Litestream replication..."
   exec litestream replicate -exec "node scripts/server.mjs" -config "$APP_DIR/litestream.yml"
 else
-  echo "[startup] Starting app (no Litestream — LITESTREAM_REPLICA_BUCKET not set)..."
+  if [ "$BACKUPS_ENABLED" = "true" ]; then
+    echo "[startup] WARNING: BACKUPS_ENABLED=true but LITESTREAM_REPLICA_BUCKET is not set; starting without replication."
+  else
+    echo "[startup] Backups disabled (BACKUPS_ENABLED=false); starting without Litestream replication."
+  fi
   exec node scripts/server.mjs
 fi

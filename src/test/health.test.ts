@@ -5,6 +5,7 @@ import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 beforeEach(async () => {
+  delete process.env.BACKUPS_ENABLED;
   await prisma.schedulerHeartbeat.deleteMany();
   await prisma.scheduledJob.deleteMany();
   await prisma.player.deleteMany();
@@ -128,6 +129,7 @@ describe("GET /api/health", () => {
       const res = await getHealth(ctx());
       const body = await res.json();
       expect(body.litestream).toEqual({
+        enabled: true,
         running: true,
         status: "replicating",
         lastSyncAt: nowIso,
@@ -229,6 +231,32 @@ describe("GET /api/health", () => {
       uptime.mockRestore();
       process.env.NODE_ENV = oldNodeEnv;
       vi.doUnmock("node:child_process");
+    }
+  });
+
+  it("reports backups explicitly disabled without degrading", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    process.env.BACKUPS_ENABLED = "false";
+    await prisma.schedulerHeartbeat.upsert({
+      where: { id: "scheduler" },
+      create: { id: "scheduler", lastSeenAt: new Date() },
+      update: { lastSeenAt: new Date() },
+    });
+    try {
+      const res = await GET(ctx());
+      const body = await res.json();
+      expect(body.litestream).toEqual({
+        enabled: false,
+        running: false,
+        status: null,
+        lastSyncAt: null,
+        syncAgeSeconds: null,
+      });
+      expect(body.degraded).toBeUndefined();
+    } finally {
+      delete process.env.BACKUPS_ENABLED;
+      process.env.NODE_ENV = oldNodeEnv;
     }
   });
 

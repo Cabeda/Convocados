@@ -33,6 +33,26 @@ Before migrations, the script checkpoints the WAL
 live sidecars before restoring the backup, so newer frames cannot replay over the
 restored file.
 
+### Disabling backups explicitly
+
+When R2 itself is known to be unavailable (for example the account-level
+`NotEntitled` outage in #1487), set:
+
+```toml
+# fly.toml [env]
+BACKUPS_ENABLED = "false"
+```
+
+The app then boots without attempting a restore or running a replica that cannot
+succeed. `/api/health` reports `litestream: { enabled: false, ... }` and does not
+mark the service degraded for it; the local pre-migration backup still runs. This
+is a data-loss posture — there is no off-host copy — so make it an explicit,
+reviewed decision, not a default.
+
+To re-enable: set `BACKUPS_ENABLED = "true"` (or remove the line), confirm the
+`LITESTREAM_*` secrets are present and R2 is entitled, then deploy. Health should
+return `litestream.enabled: true` with a fresh `lastSyncAt`.
+
 ## Manual Recovery
 
 ### SSH into the Fly machine
