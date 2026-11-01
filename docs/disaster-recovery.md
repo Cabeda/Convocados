@@ -20,6 +20,39 @@ The startup script (`scripts/start.sh`) handles recovery automatically:
 
 This means a destroyed or fresh Fly machine will self-heal on first boot.
 
+If the restore exits non-zero — no permission (`NotEntitled`), a network error, or a
+bucket problem — the script prints Litestream's last lines and **continues with a
+fresh database** so the app still boots. That is a data-loss state: migrations
+recreate the schema, but the previous data is gone until the replica is reachable.
+Fix the cause before treating the instance as recovered.
+
+Before migrations, the script checkpoints the WAL
+(`PRAGMA wal_checkpoint(TRUNCATE)`) and copies the database to
+`db.sqlite.pre-migrate-backup`. If the checkpoint cannot run it preserves the
+`-wal`/`-shm` sidecars with the backup. The failed-migration recovery removes the
+live sidecars before restoring the backup, so newer frames cannot replay over the
+restored file.
+
+### Disabling backups explicitly
+
+When R2 itself is known to be unavailable (for example the account-level
+`NotEntitled` outage in #1487), set:
+
+```toml
+# fly.toml [env]
+BACKUPS_ENABLED = "false"
+```
+
+The app then boots without attempting a restore or running a replica that cannot
+succeed. `/api/health` reports `litestream: { enabled: false, ... }` and does not
+mark the service degraded for it; the local pre-migration backup still runs. This
+is a data-loss posture — there is no off-host copy — so make it an explicit,
+reviewed decision, not a default.
+
+To re-enable: set `BACKUPS_ENABLED = "true"` (or remove the line), confirm the
+`LITESTREAM_*` secrets are present and R2 is entitled, then deploy. Health should
+return `litestream.enabled: true` with a fresh `lastSyncAt`.
+
 ## Manual Recovery
 
 ### SSH into the Fly machine

@@ -1,24 +1,60 @@
 #!/bin/sh
 set -e
 
-DATABASE_URL="${DATABASE_URL:-file:/data/db.sqlite}"
-export DATABASE_URL
+# Testability: production uses /data and /app. The test harness points both at
+# a temp directory; nothing else in the script assumes the literal paths.
+DATA_DIR="${DATA_DIR:-/data}"
+APP_DIR="${APP_DIR:-/app}"
+DB="$DATA_DIR/db.sqlite"
+PRISMA_BIN="${PRISMA_BIN:-$APP_DIR/node_modules/.bin/prisma}"
+DATABASE_URL="${DATABASE_URL:-file:$DB}"
+# Explicit kill switch for the off-host backup path. Default true preserves the
+# existing behaviour; set false when R2 is known to be unavailable so the app
+# does not attempt a restore or run a replica that cannot succeed.
+BACKUPS_ENABLED="${BACKUPS_ENABLED:-true}"
+export DATA_DIR APP_DIR DB PRISMA_BIN DATABASE_URL BACKUPS_ENABLED
+
+cd "$APP_DIR"
 
 # ── Restore from R2 if DB is missing ─────────────────────────────────────────
-if [ ! -f /data/db.sqlite ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
+if [ "$BACKUPS_ENABLED" = "true" ] && [ ! -f "$DB" ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
   echo "[startup] Database not found, attempting restore from R2..."
-  litestream restore -config /app/litestream.yml -if-replica-exists /data/db.sqlite
-  if [ -f /data/db.sqlite ]; then
-    echo "[startup] Database restored from R2 backup"
+  restore_output="$(litestream restore -config "$APP_DIR/litestream.yml" -if-replica-exists "$DB" 2>&1)" && restore_status=0 || restore_status=$?
+  if [ "$restore_status" -eq 0 ]; then
+    if [ -f "$DB" ]; then
+      echo "[startup] Database restored from R2 backup"
+    else
+      echo "[startup] No replica found in R2 — starting with fresh database"
+    fi
   else
-    echo "[startup] No replica found in R2 — starting with fresh database"
+    # A missing replica exits 0 from litestream; a non-zero exit is an auth,
+    # permission or network failure. Losing the boot would turn a broken backup
+    # path into an outage, so log the cause and continue (the DB is recreated
+    # by migrations, and Litestream will retry replication).
+    echo "[startup] WARNING: Litestream restore failed (exit $restore_status); booting with a fresh database."
+    printf '%s\n' "$restore_output" | tail -5
+    echo "[startup] The line above is Litestream's cause (no replica, NotEntitled/permission, or network)."
   fi
 fi
 
 # ── Pre-migration backup ─────────────────────────────────────────────────────
-if [ -f /data/db.sqlite ]; then
-  cp /data/db.sqlite /data/db.sqlite.pre-migrate-backup
-  echo "[startup] Database backed up to /data/db.sqlite.pre-migrate-backup"
+if [ -f "$DB" ]; then
+  echo "[startup] Checkpointing WAL and backing up the database..."
+  checkpoint_output="$(node -e '
+    const Database = require(process.env.APP_DIR + "/node_modules/better-sqlite3");
+    const db = new Database(process.env.DB, { readonly: false });
+    try { db.pragma("wal_checkpoint(TRUNCATE)"); } finally { db.close(); }
+  ' 2>&1)" && checkpoint_status=0 || checkpoint_status=$?
+  if [ "$checkpoint_status" -ne 0 ]; then
+    echo "[startup] WARNING: WAL checkpoint failed (exit $checkpoint_status); preserving sidecars with the backup."
+    printf '%s\n' "$checkpoint_output" | tail -3
+  fi
+  cp "$DB" "$DB.pre-migrate-backup"
+  if [ "$checkpoint_status" -ne 0 ]; then
+    [ -f "$DB-wal" ] && cp "$DB-wal" "$DB.pre-migrate-backup-wal"
+    [ -f "$DB-shm" ] && cp "$DB-shm" "$DB.pre-migrate-backup-shm"
+  fi
+  echo "[startup] Database backed up to $DB.pre-migrate-backup"
 fi
 
 # ── Recover from failed migrations ───────────────────────────────────────────
@@ -34,11 +70,12 @@ fi
 # so the old require("@prisma/client") default .prisma/client/default no longer
 # exists in the image. These queries only touch raw SQL, so better-sqlite3 is
 # the right tool and is already a production dependency.
-if [ -f /data/db.sqlite ]; then
+if [ -f "$DB" ]; then
   echo "[startup] Checking for failed migrations and recovering in one shot..."
   node -e '
-    const Database = require("/app/node_modules/better-sqlite3");
-    const db = new Database("/data/db.sqlite", { readonly: false });
+    const Database = require(process.env.APP_DIR + "/node_modules/better-sqlite3");
+    const DB = process.env.DB;
+    const db = new Database(DB, { readonly: false });
     const cutoff = new Date(Date.now() - 120000).toISOString();
     try {
       const failed = db.prepare(
@@ -48,14 +85,26 @@ if [ -f /data/db.sqlite ]; then
         console.log(`[startup] WARNING: detected ${failed.length} failed migration(s) from a previous deploy`);
         console.log("[startup] Restoring database from pre-migration backup and marking as rolled back...");
         db.close();
-        // Restore from backup first to get a clean schema state
+        // Restore from backup first to get a clean schema state. The WAL and
+        // shm of the *live* file carry newer frames than the backup; replaying
+        // them onto the restored image would corrupt it, so drop them exactly
+        // as Litestream restore does. A backup taken after a failed
+        // checkpoint carries its own sidecars; restore those if present.
         const fs = require("fs");
-        if (fs.existsSync("/data/db.sqlite.pre-migrate-backup")) {
-          fs.copyFileSync("/data/db.sqlite.pre-migrate-backup", "/data/db.sqlite");
+        if (fs.existsSync(DB + ".pre-migrate-backup")) {
+          fs.rmSync(DB + "-wal", { force: true });
+          fs.rmSync(DB + "-shm", { force: true });
+          fs.copyFileSync(DB + ".pre-migrate-backup", DB);
+          if (fs.existsSync(DB + ".pre-migrate-backup-wal")) {
+            fs.copyFileSync(DB + ".pre-migrate-backup-wal", DB + "-wal");
+          }
+          if (fs.existsSync(DB + ".pre-migrate-backup-shm")) {
+            fs.copyFileSync(DB + ".pre-migrate-backup-shm", DB + "-shm");
+          }
           console.log("[startup] Database restored from pre-migrate backup");
         }
         // Mark failed migrations as rolled back so prisma migrate deploy retries them
-        const db2 = new Database("/data/db.sqlite", { readonly: false });
+        const db2 = new Database(DB, { readonly: false });
         const markRolledBack = db2.prepare(
           "UPDATE _prisma_migrations SET rolled_back_at = CURRENT_TIMESTAMP WHERE migration_name = ? AND finished_at IS NULL"
         );
@@ -82,7 +131,7 @@ fi
 echo "[startup] Running database migrations..."
 
 # Run migrations — if this fails, the deploy fails and Fly keeps the old machine.
-./node_modules/.bin/prisma migrate deploy
+"$PRISMA_BIN" migrate deploy
 
 # ── Post-migration verification ──────────────────────────────────────────────
 # Defense-in-depth check: confirm the DB schema matches the migration files
@@ -91,17 +140,21 @@ echo "[startup] Running database migrations..."
 # operator notices. See src/lib/schemaCheck.server.ts for the library version
 # exposed at GET /api/health/migration.
 echo "[startup] Verifying schema is in sync with migrations directory..."
-if ! ./node_modules/.bin/prisma migrate status >/tmp/migrate-status.log 2>&1; then
+if ! "$PRISMA_BIN" migrate status >/tmp/migrate-status.log 2>&1; then
   echo "[startup] WARNING: schema drift detected after migrate deploy:"
   cat /tmp/migrate-status.log
   echo "[startup] App will start, but endpoints touching missing tables will fail."
 fi
 
 # ── Start app ─────────────────────────────────────────────────────────────────
-if [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
+if [ "$BACKUPS_ENABLED" = "true" ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
   echo "[startup] Starting app with Litestream replication..."
-  exec litestream replicate -exec "node scripts/server.mjs" -config /app/litestream.yml
+  exec litestream replicate -exec "node scripts/server.mjs" -config "$APP_DIR/litestream.yml"
 else
-  echo "[startup] Starting app (no Litestream — LITESTREAM_REPLICA_BUCKET not set)..."
+  if [ "$BACKUPS_ENABLED" = "true" ]; then
+    echo "[startup] WARNING: BACKUPS_ENABLED=true but LITESTREAM_REPLICA_BUCKET is not set; starting without replication."
+  else
+    echo "[startup] Backups disabled (BACKUPS_ENABLED=false); starting without Litestream replication."
+  fi
   exec node scripts/server.mjs
 fi

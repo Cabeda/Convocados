@@ -17,6 +17,11 @@ primary_region = "cdg"
   NODE_ENV = "production"
   BETTER_AUTH_URL = "https://convocados.cabeda.dev"
   EMAIL_FROM = "Convocados <noreply@cabeda.dev>"
+  # R2 is disabled at the account level (#1487). This makes "no off-host
+  # backups" an explicit, visible decision: start.sh skips restore/replication
+  # and /api/health reports litestream.enabled=false (not degraded).
+  # When R2 is re-enabled, set this to "true" (or remove the line) and deploy.
+  BACKUPS_ENABLED = "false"
 
 [http_service]
   internal_port = 3000

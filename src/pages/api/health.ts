@@ -61,57 +61,65 @@ export const GET: APIRoute = async () => {
     // `litestream list` reads the daemon's last successful sync from the
     // control socket (enabled in litestream.yml).
     if (process.env.NODE_ENV === "production") {
-      let running = false;
-      const { execSync } = await import("node:child_process");
-      try {
-        execSync("pgrep -x litestream", { timeout: 1000, stdio: "ignore" });
-        running = true;
-      } catch {
-        // pgrep exits non-zero when no process matches
-      }
-
-      let status: string | null = null;
-      let lastSyncAt: string | null = null;
-      let syncAgeSeconds: number | null = null;
-      try {
-        const output = execSync(`litestream list -json -socket ${LITESTREAM_SOCKET}`, {
-          timeout: 1500,
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-        });
-        const parsed = JSON.parse(output) as {
-          databases?: Array<{ path?: string; status?: string; last_sync_at?: string }>;
-        };
-        const databases = Array.isArray(parsed.databases) ? parsed.databases : [];
-        const database = databases.find((row) => row.path === resolveDbPath()) ?? databases[0];
-        if (database) {
-          status = typeof database.status === "string" ? database.status : null;
-          lastSyncAt = typeof database.last_sync_at === "string" ? database.last_sync_at : null;
-          if (lastSyncAt) {
-            const ageMs = Date.now() - new Date(lastSyncAt).getTime();
-            if (Number.isFinite(ageMs)) syncAgeSeconds = Math.max(0, Math.floor(ageMs / 1000));
-          }
+      const backupsEnabled = (process.env.BACKUPS_ENABLED ?? "true").toLowerCase() !== "false";
+      if (!backupsEnabled) {
+        // A known-disabled backup path is not a degraded one: the operator set
+        // this explicitly (fly.toml) while R2 is unavailable.
+        response.litestream = { enabled: false, running: false, status: null, lastSyncAt: null, syncAgeSeconds: null };
+      } else {
+        let running = false;
+        const { execSync } = await import("node:child_process");
+        try {
+          execSync("pgrep -x litestream", { timeout: 1000, stdio: "ignore" });
+          running = true;
+        } catch {
+          // pgrep exits non-zero when no process matches
         }
-      } catch {
-        // Socket not enabled yet (old deploy) or daemon still starting; the
-        // process check above still reports what it can.
-      }
-      response.litestream = { running, status, lastSyncAt, syncAgeSeconds };
-      // A replica that has never recorded a successful sync after a full day of
-      // uptime is a failing replica, not a quiet one. The R2 outage in #1487
-      // keeps `status: replicating` with no `last_sync_at`.
-      const neverSynced =
-        running &&
-        status === "replicating" &&
-        lastSyncAt === null &&
-        process.uptime() > LITESTREAM_STALE_SECONDS;
-      if (
-        !running ||
-        (status !== null && status !== "replicating") ||
-        (syncAgeSeconds !== null && syncAgeSeconds > LITESTREAM_STALE_SECONDS) ||
-        neverSynced
-      ) {
-        response.degraded = true;
+
+        let status: string | null = null;
+        let lastSyncAt: string | null = null;
+        let syncAgeSeconds: number | null = null;
+        try {
+          const output = execSync(`litestream list -json -socket ${LITESTREAM_SOCKET}`, {
+            timeout: 1500,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+          });
+          const parsed = JSON.parse(output) as {
+            databases?: Array<{ path?: string; status?: string; last_sync_at?: string }>;
+          };
+          const databases = Array.isArray(parsed.databases) ? parsed.databases : [];
+          const database = databases.find((row) => row.path === resolveDbPath()) ?? databases[0];
+          if (database) {
+            status = typeof database.status === "string" ? database.status : null;
+            lastSyncAt = typeof database.last_sync_at === "string" ? database.last_sync_at : null;
+            if (lastSyncAt) {
+              const ageMs = Date.now() - new Date(lastSyncAt).getTime();
+              if (Number.isFinite(ageMs)) syncAgeSeconds = Math.max(0, Math.floor(ageMs / 1000));
+            }
+          }
+        } catch {
+          // Socket not enabled yet (old deploy) or daemon still starting; the
+          // process check above still reports what it can.
+        }
+        response.litestream = { enabled: true, running, status, lastSyncAt, syncAgeSeconds };
+        // A replica that has never recorded a successful sync after a full day of
+        // uptime is a failing replica, not a quiet one. The R2 outage in #1487
+        // keeps `status: replicating` with no `last_sync_at`.
+        const neverSynced =
+          running &&
+          status === "replicating" &&
+          lastSyncAt === null &&
+          process.uptime() > LITESTREAM_STALE_SECONDS;
+        if (
+          !running ||
+          (status !== null && status !== "replicating") ||
+          (syncAgeSeconds !== null && syncAgeSeconds > LITESTREAM_STALE_SECONDS) ||
+          neverSynced
+        ) {
+          response.degraded = true;
+        }
+
       }
 
       // Check the scheduler heartbeat — a stale one means reminders are stuck.
