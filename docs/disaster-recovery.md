@@ -20,6 +20,19 @@ The startup script (`scripts/start.sh`) handles recovery automatically:
 
 This means a destroyed or fresh Fly machine will self-heal on first boot.
 
+If the restore exits non-zero — no permission (`NotEntitled`), a network error, or a
+bucket problem — the script prints Litestream's last lines and **continues with a
+fresh database** so the app still boots. That is a data-loss state: migrations
+recreate the schema, but the previous data is gone until the replica is reachable.
+Fix the cause before treating the instance as recovered.
+
+Before migrations, the script checkpoints the WAL
+(`PRAGMA wal_checkpoint(TRUNCATE)`) and copies the database to
+`db.sqlite.pre-migrate-backup`. If the checkpoint cannot run it preserves the
+`-wal`/`-shm` sidecars with the backup. The failed-migration recovery removes the
+live sidecars before restoring the backup, so newer frames cannot replay over the
+restored file.
+
 ## Manual Recovery
 
 ### SSH into the Fly machine
