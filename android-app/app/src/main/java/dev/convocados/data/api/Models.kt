@@ -680,6 +680,34 @@ data class SettlementActionRequest(val gameId: String, val eventPlayerId: String
 @Serializable
 data class SettlementBulkRequest(val gameId: String)
 
+/**
+ * Who is collecting for the current Game and what the viewer may do about it
+ * (ADR 0055). Mirrors `GET /api/events/{id}/payments/payer`.
+ */
+@Serializable
+data class PayerState(
+    val gameId: String? = null,
+    val mode: String = "tracked",
+    val hasCost: Boolean = false,
+    val payerName: String? = null,
+    val isPayer: Boolean = false,
+    val isRosterPlayer: Boolean = false,
+    val canClaim: Boolean = false,
+    val payerDetailsUrl: String? = null,
+    val vacant: Boolean = false,
+)
+
+@Serializable
+data class PayerGameRequest(val gameId: String? = null)
+
+@Serializable
+data class PaymentConfigRequest(
+    val gameId: String? = null,
+    val mode: String,
+    val payerEventPlayerId: String? = null,
+    val payerExternalName: String? = null,
+)
+
 @Serializable
 data class SetInitialRatingResponse(
     val ok: Boolean = true,

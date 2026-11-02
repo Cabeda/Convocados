@@ -131,6 +131,7 @@
 | Mark Paid | ✅ | ✅ | ❌ |
 | Cost Override | ✅ | ❌ | ❌ |
 | Payer Check In | ✅ | ✅ | ❌ |
+| Payer Control | ✅ | ✅ | ❌ |
 
 ### Event Settings
 

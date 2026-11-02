@@ -328,6 +328,13 @@
     <string name="payments_report_sent">Report sent</string>
     <string name="payments_status_pending">Pending</string>
     <string name="payments_settle_all">Settle all</string>
+    <string name="payer_card_collecting">%1$s is collecting</string>
+    <string name="payer_card_vacant">Nobody\'s collecting yet</string>
+    <string name="payer_card_claim">I\'ll collect</string>
+    <string name="payer_card_stand_down">I can\'t this week</string>
+    <string name="payer_card_take_over">Take over from %1$s</string>
+    <string name="payer_card_take_over_title">Take over collecting?</string>
+    <string name="payer_card_take_over_body">%1$s is collecting. Take over?</string>
     <string name="set_custom_cost">Set custom cost</string>
     <string name="custom_cost_for">Custom cost for %1$s</string>
     <string name="amount">Amount</string>

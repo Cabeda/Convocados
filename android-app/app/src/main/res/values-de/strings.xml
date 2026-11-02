@@ -292,6 +292,13 @@
     <string name="payments_report_sent">Sendung melden</string>
     <string name="payments_status_pending">Ausstehend</string>
     <string name="payments_settle_all">Alles verrechnen</string>
+    <string name="payer_card_collecting">%1$s sammelt ein</string>
+    <string name="payer_card_vacant">Noch sammelt niemand ein</string>
+    <string name="payer_card_claim">Ich sammle ein</string>
+    <string name="payer_card_stand_down">Diese Woche nicht</string>
+    <string name="payer_card_take_over">%1$s ablösen</string>
+    <string name="payer_card_take_over_title">Sammlung übernehmen?</string>
+    <string name="payer_card_take_over_body">%1$s sammelt ein. Übernehmen?</string>
     <string name="set_custom_cost">Eigenen Betrag festlegen</string>
     <string name="custom_cost_for">Eigener Betrag für %1$s</string>
     <string name="amount">Betrag</string>

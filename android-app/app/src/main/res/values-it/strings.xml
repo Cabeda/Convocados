@@ -292,6 +292,13 @@
     <string name="payments_report_sent">Segnala invio</string>
     <string name="payments_status_pending">In sospeso</string>
     <string name="payments_settle_all">Salda tutto</string>
+    <string name="payer_card_collecting">%1$s sta incassando</string>
+    <string name="payer_card_vacant">Nessuno sta ancora incassando</string>
+    <string name="payer_card_claim">Incasso io</string>
+    <string name="payer_card_stand_down">Questa settimana no</string>
+    <string name="payer_card_take_over">Sostituisci %1$s</string>
+    <string name="payer_card_take_over_title">Assumere la riscossione?</string>
+    <string name="payer_card_take_over_body">%1$s sta incassando. Assumere?</string>
     <string name="set_custom_cost">Imposta costo personalizzato</string>
     <string name="custom_cost_for">Costo personalizzato per %1$s</string>
     <string name="amount">Importo</string>

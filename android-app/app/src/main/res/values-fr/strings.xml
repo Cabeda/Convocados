@@ -292,6 +292,13 @@
     <string name="payments_report_sent">Signaler l\'envoi</string>
     <string name="payments_status_pending">En attente</string>
     <string name="payments_settle_all">Tout régler</string>
+    <string name="payer_card_collecting">%1$s encaisse</string>
+    <string name="payer_card_vacant">Personne n\'encaisse encore</string>
+    <string name="payer_card_claim">J\'encaisse</string>
+    <string name="payer_card_stand_down">Pas cette semaine</string>
+    <string name="payer_card_take_over">Remplacer %1$s</string>
+    <string name="payer_card_take_over_title">Prendre la collecte ?</string>
+    <string name="payer_card_take_over_body">%1$s collecte. Prendre sa place ?</string>
     <string name="set_custom_cost">Définir un coût personnalisé</string>
     <string name="custom_cost_for">Coût personnalisé pour %1$s</string>
     <string name="amount">Montant</string>

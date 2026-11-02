@@ -77,6 +77,7 @@ import dev.convocados.ui.components.MatchEventPlayer
 import dev.convocados.ui.components.MatchEventsSection
 import dev.convocados.ui.screen.courts.PLAYTOMIC_SPORTS
 import dev.convocados.ui.screen.history.TennisSetEditor
+import dev.convocados.ui.screen.payments.PayerCard
 import dev.convocados.ui.screen.games.formatEventDateInTz
 import dev.convocados.ui.screen.games.formatRelativeDate
 import dev.convocados.ui.screen.games.sportEmoji
@@ -1345,6 +1346,7 @@ fun EventDetailScreen(
                                         }
                                     }
                                 }
+                                PayerCard(eventId, modifier = Modifier.padding(top = 10.dp))
                                 Column(Modifier.padding(top = 14.dp)) {
                                     LinearProgressIndicator(progress = { fillFraction }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = when {
                                         fillFraction >= 1f -> MaterialTheme.colorScheme.error
