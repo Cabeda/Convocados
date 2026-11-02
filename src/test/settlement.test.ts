@@ -21,6 +21,7 @@ vi.mock("~/lib/webhook.server", () => ({
 }));
 
 import { fireWebhooks } from "~/lib/webhook.server";
+import { getOutstandingBalance } from "~/lib/balance.server";
 
 import {
   syncGamePayments,
@@ -189,6 +190,44 @@ describe("syncGamePayments", () => {
 
     const others = await prisma.gamePayment.findMany({ where: { gameId: game.id, status: "pending" } });
     expect(others).toHaveLength(2);
+  });
+
+  it("credits the payer's own share and moves the credit with the role", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await linkUser("Ana", "ana-settlement");
+    await linkUser("Bruno", "bruno-settlement");
+    await syncGamePayments(game.id, event.id);
+
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    const bruno = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Bruno" } });
+
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    expect((await getOutstandingBalance(event.id, "Ana")).amount).toBe(0);
+    expect((await getOutstandingBalance(event.id, "Bruno")).amount).toBe(6);
+
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: bruno.id });
+    expect((await getOutstandingBalance(event.id, "Ana")).amount).toBe(6);
+    expect((await getOutstandingBalance(event.id, "Bruno")).amount).toBe(0);
+  });
+
+  it("reverses the charge debits and payer credit when the game goes untracked", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await linkUser("Ana", "ana-settlement");
+    await linkUser("Bruno", "bruno-settlement");
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    await setPaymentConfig(event.id, game.id, { mode: "untracked" });
+
+    expect((await getOutstandingBalance(event.id, "Ana")).amount).toBe(0);
+    expect((await getOutstandingBalance(event.id, "Bruno")).amount).toBe(0);
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, eventInstanceId: game.id, reason: "per_game_share" },
+    })).toBe(0);
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, eventInstanceId: game.id, markedById: "payer-auto" },
+    })).toBe(0);
   });
 
   it("archives rows for participants who leave", async () => {
