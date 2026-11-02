@@ -89,7 +89,7 @@
 | Manual Drag Assign | ✅ | ✅ | ❌ |
 | View Teams | ✅ | ✅ | ✅ |
 | Field View | ✅ | ❌ | ❌ |
-| Player Positions | ✅ | ❌ | ❌ |
+| Player Positions | ✅ | ✅ | ❌ |
 
 ### Score Tracking
 

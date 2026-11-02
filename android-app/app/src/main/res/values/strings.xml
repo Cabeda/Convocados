@@ -62,6 +62,12 @@
     <string name="suggested_players">Suggested players</string>
     <string name="suggested_players_games">Suggested players for your games</string>
     <string name="add_player_placeholder">Add player name</string>
+    <string name="position_label">Position</string>
+    <string name="position_gk">Goalkeeper</string>
+    <string name="position_def">Defender</string>
+    <string name="position_mid">Midfielder</string>
+    <string name="position_fwd">Forward</string>
+    <string name="position_none">—</string>
     <string name="add_button">Add</string>
     <string name="add_player_confirm_title">Add %1$s?</string>
     <string name="add_player_confirm_desc">Add %1$s to %2$s?</string>

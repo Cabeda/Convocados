@@ -45,6 +45,12 @@
     <string name="suggested_players">Jugadores sugeridos</string>
     <string name="suggested_players_games">Jugadores sugeridos para tus juegos</string>
     <string name="add_player_placeholder">Añadir nombre del jugador</string>
+    <string name="position_label">Posición</string>
+    <string name="position_gk">Portero</string>
+    <string name="position_def">Defensa</string>
+    <string name="position_mid">Centrocampista</string>
+    <string name="position_fwd">Delantero</string>
+    <string name="position_none">—</string>
     <string name="add_button">Añadir</string>
     <string name="add_player_confirm_title">¿Añadir a %1$s?</string>
     <string name="add_player_confirm_desc">¿Añadir a %1$s a %2$s?</string>

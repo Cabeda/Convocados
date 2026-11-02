@@ -133,10 +133,26 @@ class EventRepository @Inject constructor(
         link: Boolean,
         email: String? = null,
         idempotencyKey: String? = null,
+        position: String? = null,
     ): Result<String?> = try {
-        val response = api.addPlayer(eventId, name, link, email, idempotencyKey)
+        val response = api.addPlayer(
+            eventId = eventId,
+            name = name,
+            linkToAccount = link,
+            email = email,
+            position = position,
+            idempotencyKey = idempotencyKey,
+        )
         refreshEventDetail(eventId)
         Result.success(response.resolvedName)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun setPlayerPosition(eventId: String, name: String, position: String?): Result<Unit> = try {
+        api.setPlayerPosition(eventId, name, position)
+        refreshEventDetail(eventId)
+        Result.success(Unit)
     } catch (e: Exception) {
         Result.failure(e)
     }
