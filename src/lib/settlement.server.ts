@@ -62,11 +62,15 @@ export interface EffectiveCost {
 }
 
 /** Effective cost + mode for a game. mode defaults to tracked (null column). */
-export async function effectiveGameCost(gameId: string, eventId: string): Promise<EffectiveCost> {
+export async function effectiveGameCost(
+  gameId: string,
+  eventId: string,
+  db: Pick<typeof prisma, "game" | "eventCost" | "event"> = prisma,
+): Promise<EffectiveCost> {
   const [game, eventCost, event] = await Promise.all([
-    prisma.game.findUnique({ where: { id: gameId }, select: { costTotalAmount: true, costCurrency: true, paymentMode: true } }),
-    prisma.eventCost.findUnique({ where: { eventId }, select: { totalAmount: true, currency: true } }),
-    prisma.event.findUnique({ where: { id: eventId }, select: { maxPlayers: true } }),
+    db.game.findUnique({ where: { id: gameId }, select: { costTotalAmount: true, costCurrency: true, paymentMode: true } }),
+    db.eventCost.findUnique({ where: { eventId }, select: { totalAmount: true, currency: true } }),
+    db.event.findUnique({ where: { id: eventId }, select: { maxPlayers: true } }),
   ]);
   return {
     total: game?.costTotalAmount ?? eventCost?.totalAmount ?? 0,
@@ -187,7 +191,7 @@ export async function isGameParticipant(eventId: string, gameId: string, userId:
  */
 async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: string): Promise<void> {
   const [effective, game, participants, event] = await Promise.all([
-    effectiveGameCost(gameId, eventId),
+    effectiveGameCost(gameId, eventId, db),
     db.game.findUnique({ where: { id: gameId }, select: { payerEventPlayerId: true, status: true, dateTime: true } }),
     db.gameParticipant.findMany({
       where: activeParticipantsWhere(gameId),
