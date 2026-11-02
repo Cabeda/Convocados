@@ -4,7 +4,9 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 import { GET as getCost } from "~/pages/api/events/[id]/cost";
 import { GET as getPayments } from "~/pages/api/events/[id]/payments";
+import { POST as postRsvp } from "~/pages/api/events/[id]/rsvp";
 import { GET as getUserProfile } from "~/pages/api/users/[id]/index";
+import { hashPassword, buildAccessCookie } from "~/lib/eventAccess";
 import { validateWebhookUrl } from "~/lib/webhookUrl";
 
 let ownerId = "";
@@ -28,7 +30,11 @@ async function seedUserWithToken(prefix: string) {
   return { userId, token };
 }
 
-async function seedEvent(ownerId: string | null, isPublic: boolean) {
+async function seedEvent(
+  ownerId: string | null,
+  isPublic: boolean,
+  overrides: { accessPassword?: string; withGame?: boolean } = {},
+) {
   const event = await prisma.event.create({
     data: {
       title: "Finance Event",
@@ -38,17 +44,25 @@ async function seedEvent(ownerId: string | null, isPublic: boolean) {
       teamTwoName: "B",
       ownerId,
       isPublic,
+      accessPassword: overrides.accessPassword ?? null,
     },
   });
   await prisma.eventCost.create({
     data: { eventId: event.id, totalAmount: 100, currency: "EUR" },
   });
+  if (overrides.withGame) {
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() + 86_400_000), status: "upcoming" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  }
   return event;
 }
 
-function ctx(params: Record<string, string>, token?: string, method = "GET") {
+function ctx(params: Record<string, string>, token?: string, method = "GET", cookie?: string) {
   const headers: Record<string, string> = {};
   if (token) headers.authorization = `Bearer ${token}`;
+  if (cookie) headers.cookie = cookie;
   const request = new Request("http://localhost/api/test", { method, headers });
   return { request, params, url: new URL(request.url) } as any;
 }
@@ -117,6 +131,61 @@ describe("GET /api/events/[id]/payments authorization", () => {
   it("allows the owner and rejects anonymous", async () => {
     const event = await seedEvent(ownerId, false);
     expect((await getPayments(ctx({ id: event.id }, ownerToken))).status).toBe(200);
+    expect((await getPayments(ctx({ id: event.id }))).status).toBe(403);
+  });
+});
+
+function rsvpCtx(id: string, token: string) {
+  return {
+    params: { id },
+    url: new URL("http://localhost/api/test"),
+    request: new Request("http://localhost/api/test", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ status: "yes" }),
+    }),
+  } as any;
+}
+
+describe("password-locked Event finance reads (#1619)", () => {
+  it("denies /cost and /payments to a second user who RSVP'd without the password", async () => {
+    const event = await seedEvent(ownerId, false, {
+      accessPassword: hashPassword("secret"),
+      withGame: true,
+    });
+
+    const rsvp = await postRsvp(rsvpCtx(event.id, otherToken));
+    expect(rsvp.status).toBe(200);
+    const player = await prisma.eventPlayer.findFirst({ where: { eventId: event.id, userId: otherId } });
+    expect(player).not.toBeNull();
+
+    expect((await getCost(ctx({ id: event.id }, otherToken))).status).toBe(403);
+    expect((await getPayments(ctx({ id: event.id }, otherToken))).status).toBe(403);
+  });
+
+  it("admits the owner, an invitee, an Event admin and the access-cookie holder", async () => {
+    const event = await seedEvent(ownerId, false, { accessPassword: hashPassword("secret") });
+    const { token: cookieToken } = await seedUserWithToken("cookie");
+
+    expect((await getCost(ctx({ id: event.id }, ownerToken))).status).toBe(200);
+
+    await prisma.eventInvite.create({ data: { eventId: event.id, userId: otherId } });
+    expect((await getCost(ctx({ id: event.id }, otherToken))).status).toBe(200);
+    expect((await getPayments(ctx({ id: event.id }, otherToken))).status).toBe(200);
+
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: participantId } });
+    expect((await getPayments(ctx({ id: event.id }, participantToken))).status).toBe(200);
+
+    const cookie = buildAccessCookie(null, event.id, event.accessPassword!);
+    expect((await getCost(ctx({ id: event.id }, cookieToken, "GET", cookie))).status).toBe(200);
+    expect((await getPayments(ctx({ id: event.id }, cookieToken, "GET", cookie))).status).toBe(200);
+  });
+
+  it("denies anonymous reads on an ownerless UNLISTED Event that kept its password", async () => {
+    // Deleting the owner's account clears ownerId but leaves accessPassword, so
+    // the ownerless-unlisted link grant must not admit the locked Event.
+    const event = await seedEvent(null, false, { accessPassword: hashPassword("secret") });
+    expect((await getCost(ctx({ id: event.id }))).status).toBe(403);
     expect((await getPayments(ctx({ id: event.id }))).status).toBe(403);
   });
 });
