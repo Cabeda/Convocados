@@ -83,23 +83,33 @@ describe("POST /api/mcp — stateless transport", () => {
     for (const tool of tools) {
       expect(tool.title, `${tool.name} title`).toBeTruthy();
       expect(tool.description, `${tool.name} description`).toBeTruthy();
-      if (tool.annotations?.readOnlyHint === true) {
-        expect(tool.annotations.destructiveHint, `${tool.name} read tool must not be destructive`).toBeUndefined();
+      // OpenAI's listing scanner requires all three hints as explicit booleans.
+      expect(tool.annotations, `${tool.name} annotations`).toBeDefined();
+      expect(typeof tool.annotations.readOnlyHint, `${tool.name} readOnlyHint`).toBe("boolean");
+      expect(typeof tool.annotations.destructiveHint, `${tool.name} destructiveHint`).toBe("boolean");
+      expect(typeof tool.annotations.openWorldHint, `${tool.name} openWorldHint`).toBe("boolean");
+      if (tool.annotations.readOnlyHint === true) {
+        expect(tool.annotations.destructiveHint, `${tool.name} read tool must not be destructive`).toBe(false);
       } else {
-        expect(tool.annotations?.readOnlyHint, `${tool.name} readOnlyHint`).toBe(false);
-        expect(typeof tool.annotations?.destructiveHint, `${tool.name} destructiveHint`).toBe("boolean");
+        expect(tool.annotations.readOnlyHint, `${tool.name} readOnlyHint`).toBe(false);
       }
     }
     // Additive stays non-destructive; removing or overwriting is not.
     const byName = new Map(tools.map((t) => [t.name, t]));
-    expect((byName.get("convocados_list_my_games") as any).annotations).toEqual({ readOnlyHint: true });
+    expect((byName.get("convocados_list_my_games") as any).annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    });
     expect((byName.get("convocados_cancel_event") as any).annotations).toEqual({
       readOnlyHint: false,
       destructiveHint: true,
+      openWorldHint: false,
     });
     expect((byName.get("convocados_create_event") as any).annotations).toEqual({
       readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: false,
     });
     // The model needs the format spelled out, or it passes a UTC time for a
     // local kickoff and the game lands an hour or two off.
