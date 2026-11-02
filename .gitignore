@@ -117,3 +117,6 @@ src/lib/__generated__/
 
 # Factory handoff: the agent's bundle and summary, delivered by the next job
 .factory-handoff/
+
+# Demo recording output (local only)
+tmp/demo-video/

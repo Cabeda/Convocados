@@ -21,7 +21,7 @@ import {
   type WalletTx,
 } from "./wallet";
 import { summarizePayments } from "./paymentSummary";
-import { resolveLinkedUserId } from "./payerIdentity.server";
+import { resolveLinkedUserId, isSystemUserId } from "./payerIdentity.server";
 import { occurrencePaymentRolls } from "./paymentRoll.server";
 
 export interface PlayerBalance {
@@ -288,7 +288,12 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
       const balanceCents = computeMoneyBalance(txs, OUTSTANDING_CLEARING_REASONS);
       if (balanceCents <= 0) continue; // no debt
       const gamesOwed = countGamesOwed(txs, OUTSTANDING_CLEARING_REASONS, legacyIds);
-      const playerName = userToName.get(userId) ?? userId;
+      // A name-only player's money sits on a synthetic `system:<eventId>:<name>`
+      // ledger id; showing that id to an organizer (or an MCP client) leaks
+      // internal keys where a person's name belongs.
+      const playerName =
+        userToName.get(userId) ??
+        (isSystemUserId(userId) ? userId.replace(/^system:[^:]+:/, "") : userId);
       balances.push({
         playerName,
         amount: Math.round(balanceCents) / 100,

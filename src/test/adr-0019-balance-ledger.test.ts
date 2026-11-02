@@ -13,7 +13,8 @@ import {
   OUTSTANDING_CLEARING_REASONS,
   type WalletTx,
 } from "~/lib/wallet";
-import { getOutstandingBalance } from "~/lib/balance.server";
+import { getOutstandingBalance, getEventBalanceSummary } from "~/lib/balance.server";
+import { ensureSystemUserId } from "~/lib/payerIdentity.server";
 import { PUT as putCost } from "~/pages/api/events/[id]/cost";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
@@ -131,7 +132,6 @@ describe("getOutstandingBalance ledger vs legacy routing", () => {
 });
 
 // ─── Test 3: Cost scope "this_game" ────────────────────────────────────────
-
 describe("PUT /api/events/[id]/cost scope=this_game", () => {
   it("sets Game.costTotalAmount without changing EventCost.totalAmount", async () => {
     const event = await prisma.event.create({
@@ -153,5 +153,26 @@ describe("PUT /api/events/[id]/cost scope=this_game", () => {
     // Template unchanged
     const template = await prisma.eventCost.findUnique({ where: { eventId: event.id } });
     expect(template?.totalAmount).toBe(50);
+  });
+});
+
+// ─── Test 4: balance names ─────────────────────────────────────────────────
+
+describe("getEventBalanceSummary names", () => {
+  it("shows a name-only player's own name, not their synthetic ledger id", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Name Test", location: "L", dateTime: new Date(), maxPlayers: 5 },
+    });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ghost" } });
+    const systemId = await ensureSystemUserId(event.id, "Ghost");
+    await prisma.walletTransaction.create({
+      data: {
+        eventId: event.id, userId: systemId, amountCents: 500, currency: "EUR",
+        direction: "debit", gameUnits: 0, reason: "per_game_share", eventInstanceId: event.id,
+      },
+    });
+
+    const summary = await getEventBalanceSummary(event.id);
+    expect(summary.balances.map((b) => b.playerName)).toEqual(["Ghost"]);
   });
 });
