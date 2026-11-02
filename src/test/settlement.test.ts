@@ -22,6 +22,7 @@ vi.mock("~/lib/webhook.server", () => ({
 
 import { fireWebhooks } from "~/lib/webhook.server";
 import { getOutstandingBalance } from "~/lib/balance.server";
+import { resolvePaymentDetails } from "~/lib/paymentDetailsResolve.server";
 
 import {
   syncGamePayments,
@@ -31,6 +32,7 @@ import {
   bulkSettleGame,
   selfReportSent,
   getSettlementSummary,
+  getGameSettlement,
   getWrapUpGameSettlement,
   shareFor,
   isGameParticipant,
@@ -228,6 +230,33 @@ describe("syncGamePayments", () => {
     expect(await prisma.walletTransaction.count({
       where: { eventId: event.id, eventInstanceId: game.id, markedById: "payer-auto" },
     })).toBe(0);
+  });
+
+  it("treats a stood-down payer as Vacant in every money surface", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await linkUser("Ana", "ana-settlement");
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    await prisma.user.update({
+      where: { id: "ana-settlement" },
+      data: {
+        paymentDetails: JSON.stringify([{ type: "mbway", value: "912345678" }]),
+        sharePaymentDetails: true,
+      },
+    });
+    await prisma.game.update({ where: { id: game.id }, data: { payerStoodDownAt: new Date() } });
+
+    const summary = await getSettlementSummary(event.id, { role: "owner" });
+    expect(summary.games[0]?.payerName).toBeNull();
+    expect(summary.people.some((p) => p.name === "Ana" && p.owedToAmount > 0)).toBe(false);
+
+    const current = await getGameSettlement(event.id, game.id);
+    expect(current!.payerName).toBeNull();
+    expect(current!.payerIsPlayer).toBe(false);
+
+    const details = await resolvePaymentDetails(event.id, game.id);
+    expect(details.source).not.toBe("payer");
   });
 
   it("archives rows for participants who leave", async () => {

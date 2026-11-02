@@ -32,6 +32,7 @@ export type NotificationJobType =
   | "payment_self_reported"
   | "payer_assigned"
   | "payer_changed"
+  | "payer_vacant"
   | "recruitment"
   | "few_spots_left"
   | "player_invited"

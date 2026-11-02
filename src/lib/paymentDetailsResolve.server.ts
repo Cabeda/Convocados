@@ -25,7 +25,7 @@ export async function resolvePaymentDetails(
   const [game, eventCost] = await Promise.all([
     prisma.game.findUnique({
       where: { id: gameId },
-      select: { payerEventPlayerId: true },
+      select: { payerEventPlayerId: true, payerStoodDownAt: true },
     }),
     prisma.eventCost.findUnique({
       where: { eventId },
@@ -38,7 +38,7 @@ export async function resolvePaymentDetails(
     return { methods: temp, source: "temp_override" };
   }
 
-  if (game?.payerEventPlayerId) {
+  if (game?.payerEventPlayerId && !game.payerStoodDownAt) {
     const payer = await prisma.eventPlayer.findUnique({
       where: { id: game.payerEventPlayerId },
       select: { userId: true },

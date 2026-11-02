@@ -1748,6 +1748,7 @@ adminPickupsDetected: "Pickups detetados",
   payerCardStandDown: "Esta semana não posso",
   payerCardError: "Não funcionou. Tenta outra vez.",
   payerCardJoinToCollect: "Junta-te à lista para cobrar",
+  payerVacantBody: "Ainda ninguém está a cobrar por {title}. Abre o jogo para assumir.",
   // ADR 0055 — payer notifications
   payerAssignedBody: "Estás a receber para {title}. O grupo vê os teus dados de pagamento se os partilhares.",
   payerChangedBody: "{name} está a receber para {title} em vez de ti.",

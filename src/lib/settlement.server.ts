@@ -31,6 +31,20 @@ export { shareFor } from "./gameCost";
 
 export type PaymentMode = "tracked" | "untracked";
 
+/**
+ * The payer a money surface should present. A stand-down keeps
+ * payerEventPlayerId for history (and for the owner to ask them back) but
+ * vacates the role: no name, no details, no credit.
+ */
+function effectivePayerName(game: {
+  payerStoodDownAt?: Date | null;
+  payerEventPlayer?: { name: string } | null;
+  payerExternalName?: string | null;
+}): string | null {
+  if (game.payerStoodDownAt) return null;
+  return game.payerEventPlayer?.name ?? game.payerExternalName ?? null;
+}
+
 /** One player's payment row in a game view. */
 export interface SettlementRow {
   eventPlayerId: string;
@@ -402,6 +416,9 @@ async function fireGamePayerSet(
   });
   if (!event) return;
 
+  const current = await prisma.game.findUnique({ where: { id: game.id }, select: { payerStoodDownAt: true } });
+  if (current?.payerStoodDownAt) return; // role is Vacant; never publish withdrawn details
+
   // A cancelled game never happened — never ask anyone to pay for it. "Ended"
   // means played, or past kickoff + duration (and not cancelled).
   if (game.status === "cancelled") return;
@@ -491,6 +508,38 @@ async function notifyPayerChange(
       recipientUserIds: [outgoing.userId],
     });
   }
+}
+
+/**
+ * The Payer withdrew for one Game. Keep payerEventPlayerId for history and for
+ * the owner to ask them back, but tell the people who can act that the role is
+ * Vacant. Best-effort, like notifyPayerChange.
+ */
+export async function notifyPayerStandDown(eventId: string, previousEventPlayerId: string | null): Promise<void> {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { title: true, ownerId: true },
+  });
+  if (!event) return;
+  const [admins, outgoing] = await Promise.all([
+    prisma.eventAdmin.findMany({ where: { eventId }, select: { userId: true } }),
+    previousEventPlayerId
+      ? prisma.eventPlayer.findUnique({ where: { id: previousEventPlayerId }, select: { userId: true } })
+      : Promise.resolve(null),
+  ]);
+  const recipients = [...new Set([
+    ...(event.ownerId ? [event.ownerId] : []),
+    ...admins.map((a) => a.userId),
+  ])].filter((id) => id !== outgoing?.userId);
+  if (recipients.length === 0) return;
+  await enqueueNotification(eventId, "payer_vacant", {
+    title: event.title,
+    key: "payerVacantBody",
+    params: { title: event.title },
+    url: `/events/${eventId}`,
+    spotsLeft: 0,
+    recipientUserIds: recipients,
+  });
 }
 
 /** Set a game's payment mode + payer. Tracked requires exactly one payer ref. */
@@ -849,9 +898,9 @@ export async function getSettlementSummary(
       : game.payments;
     if (activeRows.length === 0) continue; // no tracked payments → nothing to settle
 
-    const payerName = game.payerEventPlayer?.name ?? game.payerExternalName;
-    const payerIsPlayer = !!game.payerEventPlayer;
-    const payerEventPlayerId = game.payerEventPlayer?.id ?? null;
+    const payerName = effectivePayerName(game);
+    const payerIsPlayer = !!payerName && !!game.payerEventPlayer;
+    const payerEventPlayerId = game.payerStoodDownAt ? null : (game.payerEventPlayer?.id ?? null);
 
     const debtors = activeRows.filter((r) => r.status === "pending" || r.status === "sent");
     const unsettled = debtors.length > 0;
@@ -1021,13 +1070,19 @@ export async function getGameSettlement(eventId: string, gameId: string): Promis
     ? participants.filter((p) => lineup.has(p.eventPlayer.name))
     : participants.filter((p) => p.order < maxPlayers);
 
+  const payerName = effectivePayerName(game);
   return {
     gameId: game.id,
     mode: (game.paymentMode as PaymentMode | null) ?? "tracked",
-    payerName: game.payerEventPlayer?.name ?? game.payerExternalName,
-    payerIsPlayer: !!game.payerEventPlayer,
+    payerName,
+    payerIsPlayer: !!payerName && !!game.payerEventPlayer,
     hasCost: total > 0,
-    rows: buildSettlementRows(game, charged, total, maxPlayers),
+    rows: buildSettlementRows(
+      payerName ? game : { ...game, payerEventPlayerId: null },
+      charged,
+      total,
+      maxPlayers,
+    ),
   };
 }
 
@@ -1103,17 +1158,18 @@ export async function getWrapUpGameSettlement(eventId: string): Promise<WrapUpGa
   );
   if (activeRows.length === 0) return null;
 
+  const wrapPayerName = effectivePayerName(game);
   return {
     gameId: game.id,
     mode,
-    payerName: game.payerEventPlayer?.name ?? game.payerExternalName,
-    payerIsPlayer: !!game.payerEventPlayer,
+    payerName: wrapPayerName,
+    payerIsPlayer: !!wrapPayerName && !!game.payerEventPlayer,
     rows: activeRows.map((p) => ({
       eventPlayerId: p.eventPlayerId,
       name: p.eventPlayer.name,
       amount: p.amount,
       status: p.status,
-      isPayer: payerId === p.eventPlayerId,
+      isPayer: !!wrapPayerName && payerId === p.eventPlayerId,
     })),
   };
 }
