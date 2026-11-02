@@ -228,21 +228,36 @@ export async function deliverReminder(eventId: string, type: ReminderType): Prom
   await Promise.allSettled(
     players.map((player) =>
       emailLimit(async () => {
-        if (!player.userId || !player.user?.email) return;
+        const email = player.user?.email;
+        if (!player.userId || !email) return;
         try {
           const prefs = await getNotificationPrefs(player.userId);
           if (!wantsEmailReminder(prefs, type)) return;
-          await sendReminder(player.user.email, {
-            eventTitle: event.title,
-            dateTime: event.dateTime.toISOString(),
-            location: event.location,
-            spotsLeft,
-            eventUrl: `${APP_URL}/events/${event.id}`,
-            reminderType: type,
-          });
+          const send = () =>
+            sendReminder(email, {
+              eventTitle: event.title,
+              dateTime: event.dateTime.toISOString(),
+              location: event.location,
+              spotsLeft,
+              eventUrl: `${APP_URL}/events/${event.id}`,
+              reminderType: type,
+            });
+          try {
+            await send();
+          } catch {
+            // One immediate retry for a transient provider error. It is the
+            // same recipient and the same email; push/webhook stay deduped by
+            // the ReminderLog gate in the caller.
+            try {
+              await send();
+            } catch (err) {
+              emailFailures++;
+              log.error({ email, eventId: event.id, type, err }, "Failed to send email reminder after retry");
+            }
+          }
         } catch (err) {
           emailFailures++;
-          log.error({ email: player.user.email, eventId: event.id, type, err }, "Failed to send email reminder");
+          log.error({ email, eventId: event.id, type, err }, "Failed to prepare email reminder");
         }
       }),
     ),
