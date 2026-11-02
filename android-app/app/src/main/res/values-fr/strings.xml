@@ -529,6 +529,12 @@
     <string name="crew_captain">Capitaine : %1$s</string>
     <string name="captain_nomination">Proposition de capitaine — %1$s</string>
     <string name="accept_captaincy">Accepter le capitanat</string>
+    <string name="captain_tools">Outils du capitaine</string>
+    <string name="captain_tools_for">Proposez des changements d\'effectif pour %1$s. L\'organisateur examine chacun.</string>
+    <string name="captain_select_player">Choisir un joueur</string>
+    <string name="captain_add_player">Ajouter un joueur</string>
+    <string name="captain_remove_player">Retirer un joueur</string>
+    <string name="captain_change_submitted">Envoyé à l\'organisateur pour approbation.</string>
     <string name="crews">Crews</string>
     <string name="season_enroll_recent">Inscrire les joueurs récents</string>
     <string name="season_recommend_crews">Recommander des crews</string>

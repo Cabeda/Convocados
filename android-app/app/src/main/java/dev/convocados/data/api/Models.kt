@@ -1218,10 +1218,24 @@ data class CrewProposalCandidate(
 )
 
 @Serializable
+data class CrewCaptainMember(
+    val membershipId: String = "",
+    val name: String = "",
+)
+
+@Serializable
+data class CrewCaptain(
+    val crewId: String = "",
+    val crewName: String = "",
+    val members: List<CrewCaptainMember> = emptyList(),
+)
+
+@Serializable
 data class CrewProposalsResponse(
     val proposals: List<CrewProposal> = emptyList(),
     val candidates: List<CrewProposalCandidate> = emptyList(),
     val excludedUserIds: List<String> = emptyList(),
+    val captainOf: CrewCaptain? = null,
     val proposerMembershipId: String? = null,
     val canPropose: Boolean = false,
     val canReview: Boolean = false,
@@ -1231,6 +1245,14 @@ data class CrewProposalsResponse(
 @Serializable
 data class SubmitCrewProposalRequest(
     val name: String,
+    val membershipIds: List<String>,
+)
+
+/** A captain's add/drop proposal for their own crew (#1553). */
+@Serializable
+data class SubmitCrewChangeRequest(
+    val action: String,
+    val targetCrewId: String,
     val membershipIds: List<String>,
 )
 

@@ -414,6 +414,12 @@
     <string name="approve_proposal">Aprobar</string>
     <string name="captain_nomination">Nominación de capitán — %1$s</string>
     <string name="accept_captaincy">Aceptar capitanía</string>
+    <string name="captain_tools">Herramientas del capitán</string>
+    <string name="captain_tools_for">Propón cambios de plantilla para %1$s. El organizador revisa cada uno.</string>
+    <string name="captain_select_player">Seleccionar jugador</string>
+    <string name="captain_add_player">Añadir jugador</string>
+    <string name="captain_remove_player">Quitar jugador</string>
+    <string name="captain_change_submitted">Enviado al organizador para su aprobación.</string>
     <string name="reject_proposal">Rechazar</string>
     <string name="rejection_reason">Motivo del rechazo (opcional)</string>
     <string name="proposal_status_pending">Pendiente</string>
