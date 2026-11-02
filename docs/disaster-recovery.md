@@ -28,10 +28,13 @@ Fix the cause before treating the instance as recovered.
 
 Before migrations, the script checkpoints the WAL
 (`PRAGMA wal_checkpoint(TRUNCATE)`) and copies the database to
-`db.sqlite.pre-migrate-backup`. If the checkpoint cannot run it preserves the
-`-wal`/`-shm` sidecars with the backup. The failed-migration recovery removes the
-live sidecars before restoring the backup, so newer frames cannot replay over the
-restored file.
+`db.sqlite.pre-migrate-backup`. A boot that still has a migration from a previous
+deploy pending skips that copy, so the recovery restores the pre-deploy image
+rather than overwriting it with the failed one. If the checkpoint cannot run it
+preserves the `-wal`/`-shm` sidecars with the backup. The failed-migration
+recovery removes the live sidecars before restoring the backup, so newer frames
+cannot replay over the restored file, and it only logs a restore when the backup
+actually differs from the live database.
 
 ### Disabling backups explicitly
 

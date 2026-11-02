@@ -142,4 +142,72 @@ describe("scripts/start.sh startup recovery", () => {
       backup.close();
     }
   });
+
+  it("keeps the pre-deploy backup when a failed migration restores it", () => {
+    const dbPath = join(dataDir, "db.sqlite");
+    const db = new Database(dbPath);
+    db.exec(`
+      CREATE TABLE t (keep TEXT);
+      INSERT INTO t (keep) VALUES ('good');
+      CREATE TABLE _prisma_migrations (
+        id TEXT PRIMARY KEY,
+        checksum TEXT NOT NULL,
+        finished_at DATETIME,
+        migration_name TEXT NOT NULL,
+        logs TEXT,
+        rolled_back_at DATETIME,
+        started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        applied_steps_count INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    db.close();
+
+    // The copy a previous boot took, before the deploy that failed.
+    execFileSync("cp", [dbPath, `${dbPath}.pre-migrate-backup`]);
+
+    // The failed deploy: a column the backup does not have, plus an unfinished
+    // migration row. Copying the live file over the backup here is the bug.
+    const failed = new Database(dbPath);
+    failed.exec("ALTER TABLE t ADD COLUMN marker TEXT");
+    failed
+      .prepare(
+        `INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at)
+         VALUES ('m1', 'checksum', '20260101000000_boom', ?)`,
+      )
+      .run(new Date(Date.now() - 600_000).toISOString());
+    failed.close();
+
+    const output = runStart();
+
+    expect(output).toContain("keeping the existing pre-migrate backup");
+    expect(output).toContain("Database restored from pre-migrate backup");
+
+    const live = new Database(dbPath, { readonly: true });
+    try {
+      const columns = live.prepare("PRAGMA table_info(t)").all() as { name: string }[];
+      expect(columns.map((column) => column.name)).not.toContain("marker");
+    } finally {
+      live.close();
+    }
+  });
+
+  it("refreshes the backup on a boot with no failed migration", () => {
+    const dbPath = join(dataDir, "db.sqlite");
+    const db = new Database(dbPath);
+    db.exec("CREATE TABLE t (v TEXT); INSERT INTO t (v) VALUES ('fresh');");
+    db.close();
+
+    const stale = new Database(`${dbPath}.pre-migrate-backup`);
+    stale.exec("CREATE TABLE t (v TEXT); INSERT INTO t (v) VALUES ('stale');");
+    stale.close();
+
+    expect(runStart()).toContain("Database backed up");
+
+    const backup = new Database(`${dbPath}.pre-migrate-backup`, { readonly: true });
+    try {
+      expect((backup.prepare("SELECT v FROM t").get() as { v: string }).v).toBe("fresh");
+    } finally {
+      backup.close();
+    }
+  });
 });
