@@ -716,6 +716,89 @@ describe("settlement API routes", () => {
     expect(json.games[0].payerIsPlayer).toBe(false);
   });
 
+  it("PATCH config saves the chosen roster payer as the Event default when asked", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const res = await setConfig(
+      ctx(
+        { id: event.id },
+        { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id, saveAsDefault: true },
+        "PATCH",
+      ),
+    );
+    expect(res.status).toBe(200);
+
+    const fresh = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(fresh.defaultPayerEventPlayerId).toBe(ana.id);
+    expect(fresh.defaultPayerExternalName).toBeNull();
+  });
+
+  it("PATCH config saves an external payer as the Event default when asked", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const res = await setConfig(
+      ctx(
+        { id: event.id },
+        { gameId: game.id, mode: "tracked", payerExternalName: "Venue staff", saveAsDefault: true },
+        "PATCH",
+      ),
+    );
+    expect(res.status).toBe(200);
+
+    const fresh = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(fresh.defaultPayerExternalName).toBe("Venue staff");
+    expect(fresh.defaultPayerEventPlayerId).toBeNull();
+  });
+
+  it("PATCH config refuses to save both payer kinds as the Event default", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const res = await setConfig(
+      ctx(
+        { id: event.id },
+        {
+          gameId: game.id,
+          mode: "tracked",
+          payerEventPlayerId: ana.id,
+          payerExternalName: "Venue staff",
+          saveAsDefault: true,
+        },
+        "PATCH",
+      ),
+    );
+    expect(res.status).toBe(400);
+
+    const fresh = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(fresh.defaultPayerEventPlayerId).toBeNull();
+    expect(fresh.defaultPayerExternalName).toBeNull();
+  });
+
+  it("PATCH config only lets the owner save the Event default", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    mockGetSession.mockResolvedValue({ user: { id: "admin-settlement", name: "Admin" } });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true, session: null });
+
+    const res = await setConfig(
+      ctx(
+        { id: event.id },
+        { gameId: game.id, mode: "tracked", payerEventPlayerId: ana.id, saveAsDefault: true },
+        "PATCH",
+      ),
+    );
+    expect(res.status).toBe(403);
+
+    const fresh = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(fresh.defaultPayerEventPlayerId).toBeNull();
+    const gameAfter = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
+    expect(gameAfter.payerEventPlayerId).toBeNull();
+  });
+
   it("PUT settle marks a share paid", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     await syncGamePayments(game.id, event.id);

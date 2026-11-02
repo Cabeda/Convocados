@@ -21,9 +21,13 @@ vi.mock("~/lib/priority.server", () => ({
 vi.mock("~/lib/autoConfirm.server", () => ({
   applyAutoConfirm: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("~/lib/settlement.server", () => ({
-  syncGamePayments: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock("~/lib/settlement.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/lib/settlement.server")>();
+  return {
+    ...actual,
+    syncGamePayments: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 const EVENT_INCLUDE = {
   teamResults: { include: { members: { orderBy: { order: "asc" as const } } } },
@@ -135,6 +139,47 @@ describe("advanceDueRecurringEvent", () => {
     await expect(deliverReminder(seeded.id, "24h")).resolves.toBe("delivered");
     await markReminderSent(seeded.id, "24h");
     expect(await prisma.reminderLog.count({ where: { eventId: seeded.id, type: "24h" } })).toBe(1);
+  });
+
+  it("seeds the new occurrence from the Event default payer", async () => {
+    const { event: seeded, game } = await seedRecurring();
+    const ana = await prisma.eventPlayer.create({
+      data: { eventId: seeded.id, name: "Ana" },
+    });
+    await prisma.event.update({
+      where: { id: seeded.id },
+      data: { defaultPayerEventPlayerId: ana.id },
+    });
+    const event = (await load(seeded.id))!;
+
+    expect(await advanceDueRecurringEvent(event)).toBe("advanced");
+
+    const fresh = await prisma.event.findUniqueOrThrow({ where: { id: seeded.id } });
+    const newGame = await prisma.game.findUniqueOrThrow({ where: { id: fresh.currentGameId! } });
+    expect(newGame.id).not.toBe(game.id);
+    expect(newGame.payerEventPlayerId).toBe(ana.id);
+    expect(newGame.payerExternalName).toBeNull();
+  });
+
+  it("carries an external Event default with the previous occurrence's paymentMode", async () => {
+    const { event: seeded, game } = await seedRecurring();
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { paymentMode: "untracked" },
+    });
+    await prisma.event.update({
+      where: { id: seeded.id },
+      data: { defaultPayerExternalName: "Venue staff" },
+    });
+    const event = (await load(seeded.id))!;
+
+    expect(await advanceDueRecurringEvent(event)).toBe("advanced");
+
+    const fresh = await prisma.event.findUniqueOrThrow({ where: { id: seeded.id } });
+    const newGame = await prisma.game.findUniqueOrThrow({ where: { id: fresh.currentGameId! } });
+    expect(newGame.payerExternalName).toBe("Venue staff");
+    expect(newGame.payerEventPlayerId).toBeNull();
+    expect(newGame.paymentMode).toBe("untracked");
   });
 
   it("returns not-due for a future occurrence and leaves state untouched", async () => {

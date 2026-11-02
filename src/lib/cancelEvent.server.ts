@@ -5,6 +5,7 @@ import { autoPriorityEnroll } from "./priority.server";
 import { cancelEventJobs, scheduleEventReminders } from "./scheduler.server";
 import { logEvent } from "./eventLog.server";
 import { postLedgerEntry } from "./ledger.server";
+import { seedGamePayer } from "./settlement.server";
 
 export interface CancelActor {
   id: string | null;
@@ -122,15 +123,16 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
       });
 
       if (claimed.count === 1) {
-        // Seed the replacement Game with the Event's default payer (ADR 0055) —
-        // a cancel used to drop the payer entirely.
+        // ADR 0055: the replacement Game inherits through the same chain as an
+        // advance — previous Game's payer, then the Event default — and keeps
+        // the cancelled Game's paymentMode.
+        const seed = await seedGamePayer(event, game.id);
         const newGame = await prisma.game.create({
           data: {
             eventId: event.id,
             dateTime: newDateTime,
             status: "upcoming",
-            payerEventPlayerId: event.defaultPayerEventPlayerId ?? null,
-            payerExternalName: event.defaultPayerExternalName ?? null,
+            ...seed,
           },
         });
 

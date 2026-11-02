@@ -64,6 +64,8 @@ async function seedEvent(overrides: Partial<{
   isRecurring: boolean;
   recurrenceRule: string | null;
   dateTime: Date;
+  defaultPayerEventPlayerId: string | null;
+  defaultPayerExternalName: string | null;
 }> = {}) {
   const data: any = {
     title: "Test Game",
@@ -73,6 +75,8 @@ async function seedEvent(overrides: Partial<{
     ownerId: overrides.ownerId ?? "user1",
     isRecurring: overrides.isRecurring ?? false,
     recurrenceRule: overrides.recurrenceRule ?? null,
+    defaultPayerEventPlayerId: overrides.defaultPayerEventPlayerId ?? null,
+    defaultPayerExternalName: overrides.defaultPayerExternalName ?? null,
   };
   return prisma.event.create({ data });
 }
@@ -200,6 +204,107 @@ describe("PUT /api/events/[id]/cancel", () => {
       where: { eventId: event.id, status: "cancelled" },
     });
     expect(cancelledHistory).not.toBeNull();
+  });
+
+  it("seeds the replacement game with the Event default payer", async () => {
+    await seedUser();
+    const future = new Date(Date.now() + 86400_000);
+    const event = await seedEvent({
+      ownerId: "user1",
+      isRecurring: true,
+      recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+      dateTime: future,
+    });
+    const ana = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Ana" },
+    });
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { defaultPayerEventPlayerId: ana.id },
+    });
+    await seedGame(event.id);
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    const res = await cancelGame(putCtx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    const newGame = await prisma.game.findFirstOrThrow({
+      where: { eventId: event.id, status: "upcoming" },
+    });
+    expect(newGame.payerEventPlayerId).toBe(ana.id);
+    expect(newGame.payerExternalName).toBeNull();
+  });
+
+  it("carries an external Event default with the previous Game's paymentMode", async () => {
+    await seedUser();
+    const future = new Date(Date.now() + 86400_000);
+    const event = await seedEvent({
+      ownerId: "user1",
+      isRecurring: true,
+      recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+      dateTime: future,
+      defaultPayerExternalName: "Venue staff",
+    });
+    const game = await seedGame(event.id);
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { paymentMode: "untracked" },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    const res = await cancelGame(putCtx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    const newGame = await prisma.game.findFirstOrThrow({
+      where: { eventId: event.id, status: "upcoming" },
+    });
+    expect(newGame.payerExternalName).toBe("Venue staff");
+    expect(newGame.payerEventPlayerId).toBeNull();
+    expect(newGame.paymentMode).toBe("untracked");
+  });
+
+  it("keeps the previous Game's active payer ahead of the Event default", async () => {
+    await seedUser();
+    const future = new Date(Date.now() + 86400_000);
+    const event = await seedEvent({
+      ownerId: "user1",
+      isRecurring: true,
+      recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+      dateTime: future,
+    });
+    const ana = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Ana" },
+    });
+    const bruno = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Bruno" },
+    });
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { defaultPayerEventPlayerId: ana.id },
+    });
+    const game = await seedGame(event.id);
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { payerEventPlayerId: bruno.id },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: bruno.id, order: 0 },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    const res = await cancelGame(putCtx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    const newGame = await prisma.game.findFirstOrThrow({
+      where: { eventId: event.id, status: "upcoming" },
+    });
+    expect(newGame.payerEventPlayerId).toBe(bruno.id);
   });
 
   it("returns error when game is already past", async () => {
