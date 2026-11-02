@@ -188,6 +188,31 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
   // Revert rows auto-settled as payer that are no longer the payer, then settle
   // the current player-payer. Runs for played games too (payer changes post-game).
   const applyPayer = async () => {
+    // The payer fronts the whole cost, including their own share. The charge
+    // debit exists for every lineup player (syncChargeDebits), so the payer's
+    // share needs a matching credit; otherwise they carry their own money as
+    // debt and the join gate blocks them. Revert the previous payer's credit
+    // before moving it, so the balance follows the role.
+    const previousPayerRows = await db.gamePayment.findMany({
+      where: {
+        gameId,
+        method: "payer",
+        ...(game?.payerEventPlayerId ? { eventPlayerId: { not: game.payerEventPlayerId } } : {}),
+      },
+      include: { eventPlayer: { select: { userId: true, name: true } } },
+    });
+    for (const row of previousPayerRows) {
+      const userId = row.eventPlayer.userId ?? systemUserId(eventId, row.eventPlayer.name);
+      await db.walletTransaction.deleteMany({
+        where: {
+          eventId,
+          eventInstanceId: gameId,
+          reason: "payment_received",
+          userId,
+          idempotencyKey: ledgerKey("received", eventId, userId, gameId),
+        },
+      });
+    }
     await db.gamePayment.updateMany({
       where: {
         gameId,
@@ -201,10 +226,45 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
         where: { gameId, eventPlayerId: game.payerEventPlayerId },
         data: { status: "paid", paidAt: new Date(), method: "payer" },
       });
+      const payerRow = await db.gamePayment.findUnique({
+        where: { gameId_eventPlayerId: { gameId, eventPlayerId: game.payerEventPlayerId } },
+        include: { eventPlayer: { select: { userId: true, name: true } } },
+      });
+      if (payerRow && payerRow.amount > 0) {
+        const userId = payerRow.eventPlayer.userId ?? (await ensureSystemUserId(eventId, payerRow.eventPlayer.name, db));
+        await postLedgerEntry(
+          {
+            eventId,
+            userId,
+            amountCents: Math.round(payerRow.amount * 100),
+            currency: effective.currency,
+            direction: "credit",
+            reason: "payment_received",
+            statusAfter: "paid",
+            eventInstanceId: gameId,
+            markedById: "payer-auto",
+            idempotencyKey: ledgerKey("received", eventId, userId, gameId),
+          },
+          db,
+        );
+      }
     }
   };
 
   if (mode === "untracked" || total <= 0) {
+    // The game no longer tracks money: remove the charge debits syncChargeDebits
+    // wrote and the payer's automatic credit, or the players keep a debt (and
+    // the payer a phantom credit) for a game that is no longer tracked.
+    await db.walletTransaction.deleteMany({
+      where: {
+        eventId,
+        eventInstanceId: gameId,
+        OR: [
+          { reason: "per_game_share", direction: "debit" },
+          { reason: "payment_received", direction: "credit", markedById: "payer-auto" },
+        ],
+      },
+    });
     await db.gamePayment.deleteMany({ where: { gameId } });
     return;
   }
@@ -458,6 +518,16 @@ export async function setPaymentConfig(
       prisma.game.update({
         where: { id: gameId },
         data: { paymentMode: "untracked", payerEventPlayerId: null, payerExternalName: null },
+      }),
+      prisma.walletTransaction.deleteMany({
+        where: {
+          eventId,
+          eventInstanceId: gameId,
+          OR: [
+            { reason: "per_game_share", direction: "debit" },
+            { reason: "payment_received", direction: "credit", markedById: "payer-auto" },
+          ],
+        },
       }),
       prisma.gamePayment.deleteMany({ where: { gameId } }),
     ]);
