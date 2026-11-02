@@ -284,16 +284,17 @@ describe("the reviewer is exempt only where it cannot review", () => {
 });
 
 describe("the CLA allowlist names the factory App exactly", () => {
-  // The factory's commits are authored by `convocados-factory[bot]`. A typo in
-  // the allowlist leaves that name unmatched and every factory PR's `cla`
-  // check red with "Committers of Pull Request number N have to sign the CLA"
-  // — a signature the bot cannot give (GH #1464).
+  // The App is `convocarados-factory` (its PRs are authored by
+  // `app/convocarados-factory`). A typo in the allowlist leaves that name
+  // unmatched and a PR authored by the App goes red with "Committers of Pull
+  // Request number N have to sign the CLA" — a signature the bot cannot give
+  // (GH #1464).
   it("exempts the identity that signs the factory's commits", () => {
     const raw = readFileSync(join(workflowsDir, "cla.yml"), "utf8");
     const allowlist = /allowlist:\s*"([^"]+)"/.exec(raw)?.[1] ?? "";
     expect(
       allowlist.split(",").map((name) => name.trim()),
-      "cla.yml must exempt the factory App by its exact commit-author name",
-    ).toContain("convocados-factory[bot]");
+      "cla.yml must exempt the factory App by its exact login",
+    ).toContain("convocarados-factory[bot]");
   });
 });

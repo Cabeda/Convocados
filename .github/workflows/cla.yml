@@ -3,6 +3,10 @@
 # Input names below must match contributor-assistant/github-action@v2.6.1's
 # action.yml exactly: an undeclared key aborts the action before it can read the
 # allowlist, so the maintainer exemption never applies (GH #1164).
+#
+# `issue_comment` fires for plain Issues as well as PRs. The job guard below
+# skips the Issue case, which the action cannot resolve and which used to fail
+# the whole run on every comment posted to an Issue (GH #1311 et al.).
 name: CLA
 
 on:
@@ -20,6 +24,11 @@ permissions:
 jobs:
   cla:
     runs-on: ubuntu-latest
+    # A comment on a plain Issue is not a signature and has no PR to resolve;
+    # the action throws "Could not resolve to a PullRequest with the number of N".
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      github.event.issue.pull_request != null
     # pull_request_target runs in the base-repo context; never check out or
     # execute PR-head code here.
     steps:
@@ -35,7 +44,10 @@ jobs:
           # into ...", PR merges) — without it every merge commit demands a
           # signature from an account that cannot sign, and the check fails on
           # main itself (post #1319).
-          allowlist: "Cabeda,GitHub,dependabot[bot],github-actions[bot],renovate[bot],convocados-factory[bot]"
+          # The factory App is `convocarados-factory` (see its PR author
+          # `app/convocarados-factory`); the account cannot sign, so the
+          # exemption has to spell it exactly.
+          allowlist: "Cabeda,GitHub,dependabot[bot],github-actions[bot],renovate[bot],convocarados-factory[bot]"
           custom-notsigned-prcomment: >
             Thanks for the contribution! Please read and sign the
             [Contributor License Agreement](https://github.com/Cabeda/Convocados/blob/main/CLA.md)
