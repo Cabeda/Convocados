@@ -212,6 +212,20 @@ describe("syncGamePayments", () => {
     expect((await getOutstandingBalance(event.id, "Bruno")).amount).toBe(0);
   });
 
+  it("creates rows when switching untracked → tracked in one call", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await setPaymentConfig(event.id, game.id, { mode: "untracked" });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows).toHaveLength(3);
+    const anaRow = rows.find((r) => r.eventPlayerId === ana.id);
+    expect(anaRow!.status).toBe("paid");
+    expect(anaRow!.method).toBe("payer");
+  });
+
   it("reverses the charge debits and payer credit when the game goes untracked", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     await linkUser("Ana", "ana-settlement");
