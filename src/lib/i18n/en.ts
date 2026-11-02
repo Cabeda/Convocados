@@ -1759,6 +1759,7 @@ adminPickupsDetected: "Pickups detected",
   payerCardClaim: "I'll collect",
   payerCardStandDown: "I can't this week",
   payerCardError: "That didn't work. Try again.",
+  payerCardJoinToCollect: "Join the list to collect",
   // ADR 0055 — payer notifications
   payerAssignedBody: "You are collecting for {title}. The group will see your payment details if you share them.",
   payerChangedBody: "{name} is collecting for {title} instead of you.",} as const;

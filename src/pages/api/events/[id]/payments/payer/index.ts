@@ -4,6 +4,8 @@ import { authenticateRequest } from "~/lib/authenticate.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { checkAccess } from "~/lib/eventAccess";
 import { canReadEventFinances } from "~/lib/eventReadAccess.server";
+import { checkEventAdmin } from "~/lib/auth.helpers.server";
+import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
 
 /**
  * GET /api/events/[id]/payments/payer
@@ -24,21 +26,24 @@ export const GET: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+  // Mirror the page gate: an Event admin or invitee is admitted without the
+  // password cookie (GET /events/[id] never asks them for it).
+  const [isAdmin, isInvited] = await Promise.all([
+    checkEventAdmin(eventId, userId),
+    prisma.eventInvite.count({ where: { eventId, userId } }).then((count) => count > 0),
+  ]);
   const access = checkAccess({
     eventOwnerId: event.ownerId,
     accessPassword: event.accessPassword,
     requestUserId: userId,
     cookieHeader: request.headers.get("cookie"),
     eventId: event.id,
-    isInvited: false,
+    isInvited: isInvited || isAdmin,
   });
   if (!access.granted) {
     return Response.json({ locked: true, error: "This event is locked." }, { status: 403 });
   }
-  // Ownerless unlisted Events are the link-is-the-capability flow (ADR 0035);
-  // everything else must pass the finances read seam.
-  const linkCapability = event.ownerId === null && !event.isPublic;
-  if (!linkCapability && !(await canReadEventFinances(request, event))) {
+  if (!(await canReadEventFinances(request, event))) {
     return Response.json({ error: "You cannot read this event's payments." }, { status: 403 });
   }
   if (!event.currentGameId) {
@@ -57,7 +62,10 @@ export const GET: APIRoute = async ({ params, request }) => {
       },
     }),
     prisma.eventCost.findUnique({ where: { eventId }, select: { totalAmount: true } }),
-    prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true } }),
+    prisma.gameParticipant.findFirst({
+      where: { ...activeParticipantsWhere(event.currentGameId), eventPlayer: { eventId, userId } },
+      select: { id: true },
+    }),
   ]);
 
   if (!game) {
@@ -66,6 +74,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const vacant = Boolean(game.payerStoodDownAt);
   const payerName = game.payerEventPlayer?.name ?? game.payerExternalName ?? null;
+  const canClaim = Boolean(me);
 
   return Response.json({
     gameId: game.id,
@@ -73,7 +82,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     hasCost: (cost?.totalAmount ?? 0) > 0,
     payerName,
     isPayer: !vacant && Boolean(payerName) && game.payerEventPlayer?.userId === userId,
-    isRosterPlayer: Boolean(me),
+    isRosterPlayer: canClaim,
+    canClaim,
     vacant,
   });
 };
