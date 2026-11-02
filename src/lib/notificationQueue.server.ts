@@ -289,6 +289,21 @@ async function _doDrain(): Promise<number> {
             await createInAppNotifications(audience, group.type, group.payload);
           } catch (err: unknown) {
             log.error({ eventId: group.eventId, err }, "Failed to process grouped notification");
+            // Spend the same retry budget as the individual branch: a failed
+            // collapsed send otherwise leaves processedAt stamped, failedAt
+            // null and no retry — a whole drain's joins silently lost.
+            for (const job of group.jobs) {
+              const nextRetry = job.retryCount + 1;
+              if (nextRetry >= MAX_RETRIES) {
+                await prisma.notificationJob
+                  .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null } })
+                  .catch(() => {});
+              } else {
+                await prisma.notificationJob
+                  .update({ where: { id: job.id }, data: { processedAt: null, retryCount: nextRetry } })
+                  .catch(() => {});
+              }
+            }
           }
         }),
       ),
