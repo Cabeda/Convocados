@@ -17,6 +17,8 @@ export const GET: APIRoute = async ({ request }) => {
     { loc: "/", priority: "1.0", changefreq: "daily" },
     { loc: "/public", priority: "0.9", changefreq: "hourly" },
     { loc: "/docs", priority: "0.5", changefreq: "weekly" },
+    { loc: "/privacy", priority: "0.3", changefreq: "yearly" },
+    { loc: "/terms", priority: "0.3", changefreq: "yearly" },
     { loc: "/llms.txt", priority: "0.3", changefreq: "weekly" },
   ];
 

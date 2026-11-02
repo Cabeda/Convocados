@@ -1,0 +1,147 @@
+---
+export const prerender = true;
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Terms of Service — Convocados"
+  description="The terms that apply when you use Convocados on the web, the Android apps, or through an AI assistant connected over MCP."
+>
+  <article class="legal">
+    <h1>Terms of Service</h1>
+    <p class="updated">Effective 2 November 2026</p>
+
+    <p>
+      Convocados is a game-organising app run by José Cabeda ("we", "us"). These terms
+      cover the website at <code>https://convocados.cabeda.dev</code>, the Android apps,
+      and the MCP server at <code>https://convocados.cabeda.dev/api/mcp</code>. By using
+      them you agree to these terms. How we handle personal data is described in the
+      <a href="/privacy">privacy policy</a>.
+    </p>
+
+    <h2>Your account</h2>
+    <p>
+      You need an account to create or join games. Give accurate details, keep your
+      credentials to yourself, and tell us if you think someone else has used your
+      account. You must be at least 16 years old. You are responsible for what happens
+      through your account, including actions an AI assistant takes with a token you
+      approved.
+    </p>
+
+    <h2>Acceptable use</h2>
+    <ul>
+      <li>Do not use Convocados to break the law, harass people, or post content you have
+        no right to share.</li>
+      <li>Do not attempt to access accounts, games or data you were not invited to, or to
+        bypass rate limits, authentication or authorisation.</li>
+      <li>Do not overload the service: no scraping, no automated bulk calls outside the
+        published API and MCP tools, and no reselling access.</li>
+    </ul>
+    <p>We may suspend or close an account that breaks these rules.</p>
+
+    <h2>Your content</h2>
+    <p>
+      You keep ownership of what you put into Convocados — game details, rosters, scores,
+      messages. You give us permission to store and show it to the people who can see the
+      game, which is what the app is for. Games, rosters, scores and ratings belong to the
+      group you played with: deleting your account detaches your entries but does not
+      erase the group's history, as described in the privacy policy.
+    </p>
+
+    <h2>Costs and payments</h2>
+    <p>
+      Convocados is free to use. When an organiser records what a player owes for a court
+      or a ball, that is a record between the people in the group: Convocados does not
+      process the payment, hold the money, or guarantee that anyone pays. Settle up
+      between yourselves.
+    </p>
+
+    <h2>AI assistants</h2>
+    <p>
+      You can connect an AI assistant (for example Claude or ChatGPT) over MCP. The
+      assistant acts with the permissions you approve on the consent screen, and write
+      actions only work for games you own or administer. Your use of the assistant is also
+      governed by that provider's terms; we are not responsible for what it does with what
+      you ask it.
+    </p>
+
+    <h2>Availability and changes</h2>
+    <p>
+      The service is offered as it is. We aim to keep it running and your data safe, but we
+      do not promise uninterrupted availability, and features may change or be removed. If
+      we make a material change to these terms we update this page and the date at the top;
+      continuing to use Convocados after that means you accept the new terms.
+    </p>
+
+    <h2>Ending your use</h2>
+    <p>
+      You can stop using Convocados at any time and delete your account in the app
+      (Profile → Delete account). We may suspend or end access if these terms are broken,
+      or if the service is discontinued. Provisions that by their nature survive — content
+      ownership, disclaimers, liability — survive.
+    </p>
+
+    <h2>Disclaimers and liability</h2>
+    <p>
+      Convocados helps a group organise a game; it does not run the game, the venue or the
+      payments. To the extent the law allows, we are not liable for indirect or
+      consequential losses, or for losses caused by an assistant acting on your
+      instructions. Nothing in these terms limits rights you have as a consumer under the
+      law that applies to you.
+    </p>
+
+    <h2>Governing law</h2>
+    <p>
+      These terms are governed by the law of Portugal, without affecting the consumer
+      protections of the country where you live.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions about these terms: <a href="mailto:cabeda@proton.me">cabeda@proton.me</a>,
+      or open an issue in the
+      <a href="https://github.com/Cabeda/Convocados/issues">public issue tracker</a>.
+    </p>
+  </article>
+</BaseLayout>
+
+<style>
+  .legal {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.65;
+    color-scheme: light dark;
+  }
+  .legal h1 {
+    font-size: 1.9rem;
+    margin: 0 0 4px;
+  }
+  .legal h2 {
+    font-size: 1.15rem;
+    margin: 32px 0 8px;
+  }
+  .legal .updated {
+    opacity: 0.65;
+    font-size: 0.9rem;
+    margin-top: 0;
+  }
+  .legal ul {
+    padding-left: 22px;
+  }
+  .legal li {
+    margin: 6px 0;
+  }
+  .legal code {
+    font-size: 0.9em;
+  }
+  @media (prefers-color-scheme: dark) {
+    .legal {
+      color: #e6e6e6;
+    }
+    .legal a {
+      color: #7fc7a4;
+    }
+  }
+</style>
