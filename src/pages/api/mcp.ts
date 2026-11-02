@@ -222,11 +222,17 @@ export const POST: APIRoute = async ({ request }) => {
       title: t.title,
       description: t.description,
       inputSchema: t.inputSchema,
-      // Directory requirement: a read tool declares readOnlyHint, a write tool
-      // declares destructiveHint. Reviewers reject listings without them.
+      // Directory requirement: every hint must be an explicit boolean, or the
+      // listing scanner reports it as missing. Read tools are non-destructive;
+      // write tools are never read-only. openWorldHint is false because these
+      // tools only touch the Convocados data store, not external systems.
       annotations: t.readOnly
-        ? { readOnlyHint: true }
-        : { readOnlyHint: false, destructiveHint: t.destructive === true },
+        ? { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+        : {
+            readOnlyHint: false,
+            destructiveHint: t.destructive === true,
+            openWorldHint: false,
+          },
       // ChatGPT derives its linking UI from per-tool `securitySchemes`: without
       // it, a protected tool is treated as anonymous and never prompts the
       // user to connect (developers.openai.com/plugins/build/auth).
