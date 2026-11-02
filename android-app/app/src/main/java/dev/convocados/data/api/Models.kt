@@ -38,6 +38,8 @@ data class Player(
     val userId: String? = null,
     val image: String? = null,
     val createdAt: String = "",
+    /** GK / DEF / MID / FWD, or null when the event has not asked for positions. */
+    val position: String? = null,
 )
 
 @Serializable

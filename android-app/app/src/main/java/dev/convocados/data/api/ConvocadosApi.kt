@@ -116,15 +116,20 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         name: String,
         linkToAccount: Boolean = true,
         email: String? = null,
+        position: String? = null,
         idempotencyKey: String? = null,
     ): AddPlayerResponse {
-        val body = AddPlayerRequest(name, linkToAccount, email)
+        val body = AddPlayerRequest(name, linkToAccount, email, position)
         return if (idempotencyKey != null) {
             client.postWithHeader("/api/events/$eventId/players", "Idempotency-Key", idempotencyKey, body)
         } else {
             client.post("/api/events/$eventId/players", body)
         }
     }
+
+    /** Set or clear one roster row's position (#1448). Owner/admin only on the server. */
+    suspend fun setPlayerPosition(eventId: String, name: String, position: String?): OkResponse =
+        client.patch("/api/events/$eventId/players", SetPlayerPositionRequest(name, position))
 
     suspend fun removePlayer(eventId: String, playerId: String): RemovePlayerResponse =
         client.delete("/api/events/$eventId/players", RemovePlayerRequest(playerId))
@@ -528,7 +533,8 @@ data class CreateEventRequest(
     val longitude: Double? = null,
 )
 
-@Serializable data class AddPlayerRequest(val name: String, val linkToAccount: Boolean = true, val email: String? = null)
+@Serializable data class AddPlayerRequest(val name: String, val linkToAccount: Boolean = true, val email: String? = null, val position: String? = null)
+@Serializable data class SetPlayerPositionRequest(val name: String, val position: String?)
 @Serializable data class RemovePlayerRequest(val playerId: String)
 @Serializable data class ClaimPlayerRequest(val playerId: String)
 @Serializable data class TitleRequest(val title: String)

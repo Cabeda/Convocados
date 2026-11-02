@@ -253,6 +253,34 @@ class EventDetailViewModelTest {
         assertTrue(k1 != k2)
     }
 
+    @Test
+    fun `addPlayer carries the chosen position`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { repository.addPlayer(eventId, "P", true, null, any(), "MID") } coAnswers { Result.success(null as String?) }
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.addPlayer(eventId, "P", position = "MID")
+        advanceUntilIdle()
+
+        coVerify { repository.addPlayer(eventId, "P", true, null, any(), "MID") }
+    }
+
+    @Test
+    fun `setPlayerPosition calls repository with the chosen position`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { repository.setPlayerPosition(eventId, "New Player", "GK") } coAnswers { Result.success(Unit) }
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.setPlayerPosition(eventId, "New Player", "GK")
+        advanceUntilIdle()
+
+        coVerify { repository.setPlayerPosition(eventId, "New Player", "GK") }
+    }
+
     @Ignore("MockK cannot handle kotlin.Result inline class — ClassCastException at runtime (pre-existing)")
     @Test
     fun `removePlayer calls repository`() = runTest {
