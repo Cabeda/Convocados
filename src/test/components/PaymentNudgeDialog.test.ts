@@ -50,7 +50,7 @@ describe("PaymentNudgeDialog", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       if (url.includes("/balance")) {
         return Promise.resolve({
-          ok: true,
+          ok: true, headers: { get: () => "application/json" },
           json: () => Promise.resolve({
             enforcement: "nudge",
             threshold: 0,
@@ -61,7 +61,7 @@ describe("PaymentNudgeDialog", () => {
       }
       if (url.includes("/cost")) {
         return Promise.resolve({
-          ok: true,
+          ok: true, headers: { get: () => "application/json" },
           json: () => Promise.resolve({
             totalAmount: 100,
             currency: "EUR",
@@ -92,6 +92,56 @@ describe("PaymentNudgeDialog", () => {
     // The MUI Dialog renders a backdrop with role="presentation"
     const backdrop = document.querySelector(".MuiBackdrop-root") ?? document.querySelector(".MuiDialog-root");
     expect(backdrop).toBeInTheDocument();
+  });
+
+  it("renders the payer's resolved methods instead of the event's", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url.includes("/balance")) {
+        return Promise.resolve({
+          ok: true, headers: { get: () => "application/json" },
+          json: () => Promise.resolve({
+            callerBalance: { playerName: "Alex", amount: 12.5, gamesOwed: 2, streak: 3 },
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true, headers: { get: () => "application/json" },
+        json: () => Promise.resolve({
+          totalAmount: 100,
+          currency: "EUR",
+          effectivePaymentMethods: JSON.stringify([{ type: "mbway", value: "911111111" }]),
+          resolvedPaymentMethods: [{ type: "mbway", value: "912345678" }],
+          payerName: "Ana",
+        }),
+      });
+    }));
+
+    renderDialog({ open: true });
+
+    await waitFor(() => expect(screen.getByText(/912/)).toBeInTheDocument());
+    expect(screen.queryByText(/911/)).not.toBeInTheDocument();
+  });
+
+  it("says nobody is collecting when the Game has no payer", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url.includes("/balance")) {
+        return Promise.resolve({ ok: true, headers: { get: () => "application/json" }, json: () => Promise.resolve({ callerBalance: null }) });
+      }
+      return Promise.resolve({
+        ok: true, headers: { get: () => "application/json" },
+        json: () => Promise.resolve({
+          totalAmount: 100,
+          currency: "EUR",
+          effectivePaymentMethods: null,
+          resolvedPaymentMethods: [],
+          payerName: null,
+        }),
+      });
+    }));
+
+    renderDialog({ open: true });
+
+    await waitFor(() => expect(screen.getByText("paymentsUnassignedPayer")).toBeInTheDocument());
   });
 
   it("calls onJoin when 'Join later' is clicked", async () => {

@@ -882,6 +882,41 @@ describe("GET /cost without override returns defaults as effective", () => {
     expect(cost.effectivePaymentDetails).toBe("Default info");
   });
 
+  it("resolves the Game payer's shared methods for the crew", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "mbway", value: "911111111" }],
+    }));
+    const user = await prisma.user.create({
+      data: { id: "payer-cost", name: "Alice", email: "payer-cost@test.com" },
+    });
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId, name: "Alice", userId: user.id },
+    });
+    const game = await prisma.game.create({
+      data: {
+        eventId,
+        dateTime: new Date(Date.now() + 86400_000),
+        status: "upcoming",
+        payerEventPlayerId: ep.id,
+      },
+    });
+    await prisma.event.update({ where: { id: eventId }, data: { currentGameId: game.id } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        paymentDetails: JSON.stringify([{ type: "mbway", value: "912345678" }]),
+        sharePaymentDetails: true,
+      },
+    });
+
+    const cost = await (await getCost(ctx({ id: eventId }))).json();
+    expect(cost.payerName).toBe("Alice");
+    expect(cost.paymentSource).toBe("payer");
+    expect(cost.resolvedPaymentMethods).toEqual([{ type: "mbway", value: "912345678" }]);
+  });
+
   it("returns override as effective even when no default payment methods are set", async () => {
     const eventId = await seedEvent(["Alice"]);
     // Set cost WITHOUT any default payment methods

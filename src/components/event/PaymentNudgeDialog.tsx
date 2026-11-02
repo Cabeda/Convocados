@@ -6,7 +6,7 @@ import {
 } from "@mui/material";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import { useT } from "~/lib/useT";
-import { parsePaymentMethods } from "~/lib/paymentMethods";
+import { parsePaymentMethods, type PaymentMethod } from "~/lib/paymentMethods";
 import { perPlayerShare } from "~/lib/gameCost";
 import { formatMoney, toCents } from "~/lib/money";
 import { PaymentMethodsList } from "~/components/PaymentMethodsList";
@@ -36,6 +36,7 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
   const [paymentMethods, setPaymentMethods] = useState<ReturnType<typeof parsePaymentMethods>>([]);
   const [costCurrency, setCostCurrency] = useState("EUR");
   const [perPlayer, setPerPlayer] = useState(0);
+  const [payerName, setPayerName] = useState<string | null>(null);
 
   const fetchBalance = useCallback(async () => {
     try {
@@ -47,12 +48,15 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
       if (cost) {
         const eventCost = cost as {
           effectivePaymentMethods?: string | null;
+          resolvedPaymentMethods?: string | PaymentMethod[] | null;
+          payerName?: string | null;
           currency?: string;
           maxPlayers?: number;
           totalAmount: number;
         };
-        const methods = parsePaymentMethods(eventCost.effectivePaymentMethods);
+        const methods = parsePaymentMethods(eventCost.resolvedPaymentMethods ?? eventCost.effectivePaymentMethods);
         setPaymentMethods(methods);
+        setPayerName(eventCost.payerName ?? null);
         setCostCurrency(eventCost.currency ?? "EUR");
         // Per-player price = total / required playing slots (maxPlayers).
         const maxPlayers = eventCost.maxPlayers ?? 1;
@@ -93,8 +97,14 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
               games: String(balance?.gamesOwed ?? 0),
             })}
           </Typography>
-          {paymentMethods.length > 0 && (
+          {paymentMethods.length > 0 ? (
             <PaymentMethodsList methods={paymentMethods} amount={perPlayer} currency={costCurrency} />
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              {payerName
+                ? t("paymentMethodsNotShared", { name: payerName })
+                : t("paymentsUnassignedPayer")}
+            </Typography>
           )}
           {aggregate && aggregate.totalCount > 0 && (
             <Typography variant="body2" color="text.secondary">

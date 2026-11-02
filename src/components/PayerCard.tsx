@@ -12,6 +12,7 @@ interface PayerState {
   isPayer: boolean;
   isRosterPlayer: boolean;
   canClaim?: boolean;
+  payerDetailsUrl?: string | null;
   vacant: boolean;
 }
 
@@ -88,6 +89,11 @@ export function PayerCard({ eventId }: { eventId: string }) {
             {state.isPayer && (
               <Button size="small" onClick={() => act("stand-down")} disabled={busy}>
                 {t("payerCardStandDown")}
+              </Button>
+            )}
+            {state.isPayer && state.payerDetailsUrl && (
+              <Button size="small" component="a" href={state.payerDetailsUrl}>
+                {t("payerCardAddDetails")}
               </Button>
             )}
             {!state.isPayer && state.isRosterPlayer && (

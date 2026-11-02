@@ -37,7 +37,7 @@ export function CostSection({ eventId, isManager, maxPlayers }: { eventId: strin
   // Per-player price = total / required playing slots (maxPlayers). Fixed for
   // the event — it does not change with the number of players in the list.
   const share = cost.totalAmount > 0 && maxPlayers > 0 ? perPlayerShare(cost.totalAmount, maxPlayers) : null;
-  const methods = parsePaymentMethods(cost.effectivePaymentMethods);
+  const methods = parsePaymentMethods(cost.resolvedPaymentMethods ?? cost.effectivePaymentMethods);
 
   return (
     <Paper sx={{ p: 2, mt: 2 }}>
@@ -58,7 +58,15 @@ export function CostSection({ eventId, isManager, maxPlayers }: { eventId: strin
         ) : (
           <Typography variant="body2" color="text.secondary">{t("postGameNoCostSet")}</Typography>
         )}
-        {methods.length > 0 && <PaymentMethodsList methods={methods} />}
+        {methods.length > 0 ? (
+          <PaymentMethodsList methods={methods} />
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            {cost.payerName
+              ? t("paymentMethodsNotShared", { name: cost.payerName })
+              : t("paymentsUnassignedPayer")}
+          </Typography>
+        )}
       </Stack>
 
       <CostEditorDialog

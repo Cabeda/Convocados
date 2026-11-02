@@ -7,6 +7,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { summarizePayments } from "../../../../lib/paymentSummary";
 import { setEventCost } from "../../../../lib/eventCost.server";
 import { effectivePaymentMethodsRaw } from "../../../../lib/paymentMethods";
+import { resolvePaymentDetails } from "../../../../lib/paymentDetailsResolve.server";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -63,11 +64,40 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const hasOverride = !!(eventCost.tempPaymentMethods || eventCost.tempPaymentDetails);
 
+  // The crew pays the Payer, not the organizer. Resolve the same account the
+  // game_payer_set/nudge payload uses; a game with no payer (or a stood-down
+  // one) shows "nobody is collecting" instead of falling back to the Event's
+  // organizer account.
+  let payerName: string | null = null;
+  let resolvedPaymentMethods: unknown[] = [];
+  let paymentSource = "none";
+  if (event.currentGameId) {
+    const game = await prisma.game.findUnique({
+      where: { id: event.currentGameId },
+      select: {
+        payerStoodDownAt: true,
+        payerExternalName: true,
+        payerEventPlayer: { select: { name: true } },
+      },
+    });
+    payerName = game && !game.payerStoodDownAt
+      ? (game.payerEventPlayer?.name ?? game.payerExternalName ?? null)
+      : null;
+    if (payerName) {
+      const resolved = await resolvePaymentDetails(event.id, event.currentGameId);
+      resolvedPaymentMethods = resolved.methods;
+      paymentSource = resolved.source;
+    }
+  }
+
   return Response.json({
     ...eventCost,
     hasOverride,
     maxPlayers: event.maxPlayers,
     effectivePaymentMethods: effectivePaymentMethodsRaw(eventCost.tempPaymentMethods, eventCost.paymentMethods),
+    resolvedPaymentMethods,
+    payerName,
+    paymentSource,
     effectivePaymentDetails: eventCost.tempPaymentDetails ?? eventCost.paymentDetails ?? null,
     createdAt: eventCost.createdAt.toISOString(),
     updatedAt: eventCost.updatedAt.toISOString(),

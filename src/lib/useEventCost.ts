@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiRequest } from "~/lib/api/client";
+import type { PaymentMethod } from "~/lib/paymentMethods";
 
 /** The event cost fields the client UI reads from `GET /api/events/[id]/cost`. */
 export interface EventCostData {
@@ -7,6 +8,10 @@ export interface EventCostData {
   currency: string;
   paymentMethods: string | null;
   effectivePaymentMethods: string | null;
+  /** Resolved for the current Game's Payer; see GET /cost. */
+  resolvedPaymentMethods?: PaymentMethod[] | null;
+  payerName?: string | null;
+  paymentSource?: string;
 }
 
 /**
