@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { advanceDueRecurringEvent } from "~/lib/advanceOccurrence.server";
 import { POST as cronAdvance } from "~/pages/api/cron/advance-recurring";
+import { deliverReminder, markReminderSent } from "~/lib/reminders.server";
 import { fireWebhooks } from "~/lib/webhook.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
@@ -100,6 +101,7 @@ beforeEach(async () => {
 describe("advanceDueRecurringEvent", () => {
   it("advances a due occurrence: date, game pointer, snapshots, flags, re-armed reminders, webhook", async () => {
     const { event: seeded, game } = await seedRecurring();
+    await prisma.reminderLog.create({ data: { eventId: seeded.id, type: "24h" } });
     const event = (await load(seeded.id))!;
 
     const result = await advanceDueRecurringEvent(event);
@@ -127,6 +129,12 @@ describe("advanceDueRecurringEvent", () => {
       "game_reset",
       expect.objectContaining({ newDateTime: expect.any(String) }),
     );
+
+    // The new occurrence starts with no sent reminders and can deliver.
+    expect(await prisma.reminderLog.count({ where: { eventId: seeded.id } })).toBe(0);
+    await expect(deliverReminder(seeded.id, "24h")).resolves.toBe("delivered");
+    await markReminderSent(seeded.id, "24h");
+    expect(await prisma.reminderLog.count({ where: { eventId: seeded.id, type: "24h" } })).toBe(1);
   });
 
   it("returns not-due for a future occurrence and leaves state untouched", async () => {

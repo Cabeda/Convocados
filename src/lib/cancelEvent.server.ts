@@ -138,6 +138,9 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
           where: { id: event.id },
           data: { currentGameId: newGame.id },
         });
+        // A cancelled recurring Game advances to a new occurrence; the
+        // per-Event reminder log would otherwise mute the replacement.
+        await prisma.reminderLog.deleteMany({ where: { eventId: event.id } });
 
         const eventCost = await prisma.eventCost.findUnique({ where: { eventId: event.id } });
         if (eventCost) {

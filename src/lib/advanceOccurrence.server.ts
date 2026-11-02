@@ -178,6 +178,10 @@ export async function advanceDueRecurringEvent(
     ...event.teamResults.map((tr) =>
       prisma.teamMember.deleteMany({ where: { teamResultId: tr.id } }),
     ),
+    // ReminderLog is keyed per Event/type, not per occurrence. Without this
+    // delete the new Game inherits the old one's "already sent" rows and every
+    // reminder channel stays muted for the rest of the series.
+    prisma.reminderLog.deleteMany({ where: { eventId: event.id } }),
     prisma.event.update({
       where: { id: event.id },
       data: {
