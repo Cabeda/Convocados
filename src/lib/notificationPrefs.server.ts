@@ -78,6 +78,8 @@ export function wantsPushForJobType(prefs: NotificationPrefs, type: Notification
     case "payer_assigned":
     case "payer_changed":
       return prefs.playerActivityPush;
+    case "payer_vacant":
+      return prefs.eventDetailsPush;
     case "event_details":
     case "game_cancelled":
     case "game_invite":

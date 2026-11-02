@@ -1700,6 +1700,7 @@ adminPickupsDetected: "Pickups détectés",
   payerCardStandDown: "Pas cette semaine",
   payerCardError: "Ça n'a pas marché. Réessaie.",
   payerCardJoinToCollect: "Rejoins la liste pour collecter",
+  payerVacantBody: "Personne ne collecte pour {title} pour l'instant. Ouvre le jeu pour prendre le rôle.",
   // ADR 0055 — payer notifications
   payerAssignedBody: "Tu encaisses pour {title}. Le groupe verra tes coordonnées de paiement si tu les partages.",
   payerChangedBody: "{name} encaisse pour {title} à ta place.",

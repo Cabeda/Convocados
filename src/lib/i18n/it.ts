@@ -1700,6 +1700,7 @@ adminPickupsDetected: "Pickup rilevati",
   payerCardStandDown: "Questa settimana no",
   payerCardError: "Non ha funzionato. Riprova.",
   payerCardJoinToCollect: "Unisciti alla lista per incassare",
+  payerVacantBody: "Nessuno sta incassando per {title}. Apri la partita per assumere il ruolo.",
   // ADR 0055 — payer notifications
   payerAssignedBody: "Stai incassando per {title}. Il gruppo vedrà i tuoi dati di pagamento se li condividi.",
   payerChangedBody: "{name} sta incassando per {title} al posto tuo.",

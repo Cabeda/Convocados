@@ -5,6 +5,7 @@ import { insufficientScopeChallenge } from "~/lib/mcp/protocol";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { authorizeEventMutation } from "~/lib/eventAuthz.server";
+import { notifyPayerStandDown } from "~/lib/settlement.server";
 
 /**
  * POST /api/events/[id]/payments/payer/stand-down
@@ -74,6 +75,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     where: { id: gameId },
     data: { payerStoodDownAt: game.payerStoodDownAt ?? new Date() },
   });
+  await notifyPayerStandDown(eventId, game.payerEventPlayerId).catch(() => {});
 
   return Response.json({ ok: true, gameId, vacant: true });
 };

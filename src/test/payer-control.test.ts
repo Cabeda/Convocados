@@ -223,6 +223,18 @@ describe("POST payer/stand-down", () => {
     expect(updated!.payerStoodDownAt).toBeInstanceOf(Date);
   });
 
+  it("enqueues a vacant-role notification for the owner", async () => {
+    const { event, ana } = await seed();
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+
+    await standDown(CTX(event.id));
+
+    const job = await testPrisma.notificationJob.findFirst({
+      where: { eventId: event.id, type: "payer_vacant" },
+    });
+    expect(job).toBeTruthy();
+  });
+
   it("refuses a roster player who is not the payer", async () => {
     const { event, outsider } = await seed();
     const outsiderPlayer = await testPrisma.eventPlayer.findFirst({
