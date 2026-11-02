@@ -189,22 +189,28 @@ Steps 2 and 3 are where the risk is, and they are deliberately cheap.
 | Role | Trigger | Does | Never |
 |---|---|---|---|
 | **Factory** | Issue labelled `ready-for-agent` | Implements, gates, opens the Change, iterates on red | Merge, release, self-label |
-| **Reviewer** | Any open PR a human branch can trigger it on | Independent review; pushes fixes to `factory/*` | Approve, touch a human branch |
+| **Reviewer** | Any non-draft PR whose run can mint its App token (not Dependabot, not a fork) | Independent review; pushes fixes to `factory/*` | Approve, touch a human branch |
 | **Sweeper** | Schedule (30 min) | Files one evidenced Issue per stuck open Change; comments once | Edit code, push, adopt work, queue anything |
 | **Explorer** | Schedule / dependency event | Files well-evidenced Issues (Design, Bugs, Security, Performance) | Write code, self-label |
 | **Sentinel** | Unhealthy production signals | Files the incident, drafts the postmortem, pages the human | Remediate anything |
 
-**Reach, and the two gaps in it.** Two limits are structural rather than matters of policy, so
+**Reach, and the gaps in it.** These limits are structural rather than matters of policy, so
 they are recorded here rather than discovered later:
 
 - A `pull_request` workflow runs the workflow files **on the Change's own branch**, so a Change
   opened before a workflow existed never triggers it.
-- A run started by **Dependabot** receives no repository secrets and a read-only `GITHUB_TOKEN`, so
-  no role that mints an App token can run on a machine-authored Change.
+- A run started by **Dependabot**, or by a **fork**, receives no repository secrets and a
+  read-only `GITHUB_TOKEN`, so no role that mints an App token can run on it. `factory-reviewer.yml`
+  **skips** those runs instead of failing them: a check that can never go green teaches nobody
+  anything. The skip means the Review is *absent*, never *passed* — the reverse is what a green
+  check would claim.
+- A **draft** is skipped until `ready_for_review`. `opened` fires on drafts too, so an unfinished
+  Change paid for a full review and then paid again for the same answer.
 
 Together those mean the Reviewer does **not** reach every open Change: it misses machine-authored
-ones, and any Change predating a workflow. The Sweeper exists for that ground — it runs on a
-schedule, where secrets are available, and reports what it finds as Issues rather than reviews.
+and forked ones, drafts, and any Change predating a workflow. The Sweeper exists for that ground —
+it runs on a schedule, where secrets are available, and reports what it finds as Issues rather
+than reviews.
 
 **Budgets.** 3 Attempts per gate, 6 per Issue, 500k tokens per Issue, 5M per day. Exceeding
 any budget ends the run as **Blocked**, with the evidence attached.

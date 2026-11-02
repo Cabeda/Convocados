@@ -237,10 +237,10 @@ describe("factory workflows cannot escalate", () => {
 });
 
 describe("the reviewer is exempt only where it cannot review", () => {
-  // A Dependabot-triggered run receives no repository secrets, so the App token
-  // step fails and the role is red on every version bump — the same constraint
-  // the sweeper dodges by running on a schedule. Drafts pay for a review and
-  // then pay again on `ready_for_review`.
+  // A run started by a Dependabot PR or a fork receives no repository secrets,
+  // so the App token step fails and the role is red on Changes it could never
+  // review — the same constraint the sweeper dodges by running on a schedule.
+  // Drafts pay for a review at `opened` and then pay again at `ready_for_review`.
   const reviewerJobIf = () => {
     const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
       jobs?: Record<string, { if?: string }>;
@@ -248,16 +248,24 @@ describe("the reviewer is exempt only where it cannot review", () => {
     return doc.jobs?.reviewer?.if ?? "";
   };
 
-  it("skips Dependabot, whose runs have no App key, and drafts", () => {
+  it("skips the secretless runs and drafts", () => {
     const condition = reviewerJobIf();
     expect(condition).toContain("github.event.pull_request.user.login != 'dependabot[bot]'");
+    expect(condition).toContain(
+      "github.event.pull_request.head.repo.full_name == github.repository",
+    );
     expect(condition).toContain("!github.event.pull_request.draft");
   });
 
-  it("still reviews factory Changes", () => {
-    // The exemption must name Dependabot exactly. `factory/*` Changes are
-    // authored by the factory App, and they are this role's main customer.
-    expect(reviewerJobIf()).not.toMatch(/user\.login\s*(?:!=|==)\s*'app\//);
+  it("still reaches factory Changes", () => {
+    // The only author filter may be the Dependabot one. `factory/*` Changes are
+    // opened as `<app>[bot]`, so a bot-wide filter — `contains(login, 'bot')`, or
+    // naming `convocados-factory[bot]` — would silently exempt this role's main
+    // customer. The tests above only prove the exemptions exist; this proves they
+    // did not swallow it.
+    const condition = reviewerJobIf();
+    expect(condition, "no bot-wide author filter").not.toMatch(/contains\s*\([^)]*user\.login/);
+    expect(condition, "the factory App is not exempted by name").not.toContain("convocados-factory");
   });
 });
 
