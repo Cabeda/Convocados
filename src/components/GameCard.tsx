@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/purity -- Date-based display logic mirrors EventHeader. */
 import { useMemo } from "react";
 import { Paper, Typography, Stack, Box, Chip } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
@@ -29,7 +30,7 @@ export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast
   const isPast = useMemo(() => dimPast && date < new Date(), [dimPast, date]);
   const isArchived = !!game.archivedAt;
   const rule = useMemo(() => parseRecurrenceRule(game.recurrenceRule ?? null), [game.recurrenceRule]);
-  const displayDate = useMemo(() => (rule && date < new Date() ? nextOccurrence(date, rule, new Date()) : date), [rule, date]);
+  const displayDate = useMemo(() => (rule && date < new Date() ? nextOccurrence(date, rule, new Date(), game.timezone || "UTC") : date), [rule, date]);
   const recurrenceDesc = rule ? describeRecurrenceRule(rule, locale) : null;
   const dateLabel = rule && date < new Date()
     ? `${t("nextGame")}: ${formatDateInTz(displayDate, locale, game.timezone || "UTC", {

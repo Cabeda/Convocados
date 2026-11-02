@@ -1,4 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
+/* eslint-disable @eslint-react/purity -- Date-based display logic. */
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Container, Typography, Stack, Box, Button,
@@ -139,7 +140,7 @@ function UpNextCard({ game, locale, t }: { game: UpNextGame; locale: Locale; t: 
   const countdown = useCountdown(date, t("gameTime"));
   const sportPreset = getSportPreset(game.sport);
   const rule = parseRecurrenceRule(game.recurrenceRule ?? null);
-  const displayDate = rule && date < new Date() ? nextOccurrence(date, rule, new Date()) : date;
+  const displayDate = rule && date < new Date() ? nextOccurrence(date, rule, new Date(), game.timezone || "UTC") : date;
   const recurrenceDesc = rule ? describeRecurrenceRule(rule, locale) : null;
   return (
     <Paper
@@ -232,7 +233,7 @@ function DiscoverCard({ game, locale, t }: { game: DiscoverGame; locale: Locale;
   const isFull = game.spotsLeft === 0;
   const sportPreset = getSportPreset(game.sport);
   const rule = parseRecurrenceRule(game.recurrenceRule ?? null);
-  const displayDate = rule && date < new Date() ? nextOccurrence(date, rule, new Date()) : date;
+  const displayDate = rule && date < new Date() ? nextOccurrence(date, rule, new Date(), game.timezone || "UTC") : date;
   const recurrenceDesc = rule ? describeRecurrenceRule(rule, locale) : null;
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: 2.5, height: "100%", display: "flex", flexDirection: "column", gap: 1 }}>

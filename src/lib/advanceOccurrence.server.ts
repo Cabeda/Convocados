@@ -44,7 +44,7 @@ export async function advanceDueRecurringEvent(
   if (!rule) return "not-due";
 
   const currentNextResetAt = event.nextResetAt;
-  const newDateTime = nextOccurrence(event.dateTime, rule, now);
+  const newDateTime = nextOccurrence(event.dateTime, rule, now, event.timezone);
   const newNextResetAt = new Date(newDateTime.getTime() + event.durationMinutes * 60 * 1000);
 
   // Atomically claim the reset — only one concurrent caller gets count=1.

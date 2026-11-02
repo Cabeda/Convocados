@@ -27,6 +27,11 @@ import { formatDateInTz } from "~/lib/timezones";
 import { parseRecurrenceRule, describeRecurrenceRule } from "~/lib/recurrence";
 import { apiRequest, ApiError } from "~/lib/api/client";
 
+function recurrenceLabel(ruleJson: string | null | undefined, locale: Locale) {
+  const rule = parseRecurrenceRule(ruleJson ?? null);
+  return rule ? describeRecurrenceRule(rule, locale) : null;
+}
+
 interface PublicEvent {
   id: string;
   title: string;
@@ -85,7 +90,7 @@ function CardView({ events, locale, t }: {
         const date = new Date(ev.dateTime);
         const isFull = ev.spotsLeft === 0;
         const sportPreset = getSportPreset(ev.sport);
-        const recurrenceDesc = ev.recurrenceRule ? describeRecurrenceRule(parseRecurrenceRule(ev.recurrenceRule)!, locale) : null;
+        const recurrenceDesc = recurrenceLabel(ev.recurrenceRule, locale);
         return (
           <Grid key={ev.id} size={{ xs: 12, sm: 6 }}>
             <Paper
@@ -230,7 +235,7 @@ function TableView({ events, locale, t }: {
             const date = new Date(ev.dateTime);
             const isFull = ev.spotsLeft === 0;
             const sportPreset = getSportPreset(ev.sport);
-            const recurrenceDesc = ev.recurrenceRule ? describeRecurrenceRule(parseRecurrenceRule(ev.recurrenceRule)!, locale) : null;
+            const recurrenceDesc = recurrenceLabel(ev.recurrenceRule, locale);
             return (
               <TableRow key={ev.id} hover>
                 <TableCell>

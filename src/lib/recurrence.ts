@@ -1,4 +1,5 @@
 import { createT, type Locale } from "./i18n";
+import { fromDateTimeLocalValue } from "./timezones";
 
 export interface RecurrenceRule {
   freq: "daily" | "weekly" | "monthly" | "yearly";
@@ -23,11 +24,49 @@ export function serializeRecurrenceRule(rule: RecurrenceRule): string {
   return JSON.stringify(rule);
 }
 
-export function nextOccurrence(base: Date, rule: RecurrenceRule, after: Date): Date {
+/** Convert an instant to a "civil pseudo-Date" whose UTC fields are the
+ *  wall-clock fields of that instant in [tz]. Recurrence arithmetic then runs
+ *  in civil time (so a weekly game stays at 19:00 local across DST), while the
+ *  final result is converted back to a real instant with the offset in force on
+ *  that day. */
+function toCivilPseudo(date: Date, tz: string): Date {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz || "UTC",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  const hour = get("hour") === "24" ? "00" : get("hour");
+  return new Date(Date.UTC(
+    Number(get("year")), Number(get("month")) - 1, Number(get("day")),
+    Number(hour), Number(get("minute")), Number(get("second")),
+  ));
+}
+
+/** Convert a civil pseudo-Date (UTC fields = wall clock) back to a real
+ *  instant in [tz], honouring the offset (incl. DST) in force that day. */
+function civilPseudoToInstant(pseudo: Date, tz: string): Date {
+  const y = pseudo.getUTCFullYear();
+  const m = String(pseudo.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(pseudo.getUTCDate()).padStart(2, "0");
+  const h = String(pseudo.getUTCHours()).padStart(2, "0");
+  const min = String(pseudo.getUTCMinutes()).padStart(2, "0");
+  const localValue = `${y}-${m}-${d}T${h}:${min}`;
+  return new Date(fromDateTimeLocalValue(localValue, tz || "UTC"));
+}
+
+export function nextOccurrence(base: Date, rule: RecurrenceRule, after: Date, timezone?: string): Date {
+  const tz = timezone || "UTC";
+  const baseCivil = toCivilPseudo(base, tz);
+  const afterMs = after.getTime();
+
+  const toInstant = (civil: Date) => civilPseudoToInstant(civil, tz);
+
   if (rule.freq === "daily") {
-    const result = new Date(base);
-    while (result <= after) result.setDate(result.getDate() + rule.interval);
-    return result;
+    const result = new Date(baseCivil);
+    while (toInstant(result).getTime() <= afterMs) result.setUTCDate(result.getUTCDate() + rule.interval);
+    return toInstant(result);
   }
 
   if (rule.freq === "weekly") {
@@ -36,43 +75,44 @@ export function nextOccurrence(base: Date, rule: RecurrenceRule, after: Date): D
       : [];
 
     if (days.length === 0) {
-      const result = new Date(base);
-      while (result <= after) result.setDate(result.getDate() + 7 * rule.interval);
-      return result;
+      const result = new Date(baseCivil);
+      while (toInstant(result).getTime() <= afterMs) result.setUTCDate(result.getUTCDate() + 7 * rule.interval);
+      return toInstant(result);
     }
 
     if (days.length === 1) {
-      const result = new Date(base);
+      const result = new Date(baseCivil);
       const targetDay = DAY_MAP[days[0]];
-      const diff = (targetDay - result.getDay() + 7) % 7;
-      result.setDate(result.getDate() + diff);
-      while (result <= after) result.setDate(result.getDate() + 7 * rule.interval);
-      return result;
+      const diff = (targetDay - result.getUTCDay() + 7) % 7;
+      result.setUTCDate(result.getUTCDate() + diff);
+      while (toInstant(result).getTime() <= afterMs) result.setUTCDate(result.getUTCDate() + 7 * rule.interval);
+      return toInstant(result);
     }
 
     // Multiple days: return the nearest upcoming occurrence across all selected days
     let best: Date | null = null;
     for (const day of days) {
-      const candidate = new Date(base);
+      const candidate = new Date(baseCivil);
       const targetDay = DAY_MAP[day];
-      const diff = (targetDay - candidate.getDay() + 7) % 7;
-      candidate.setDate(candidate.getDate() + diff);
-      while (candidate <= after) candidate.setDate(candidate.getDate() + 7 * rule.interval);
-      if (!best || candidate < best) best = candidate;
+      const diff = (targetDay - candidate.getUTCDay() + 7) % 7;
+      candidate.setUTCDate(candidate.getUTCDate() + diff);
+      while (toInstant(candidate).getTime() <= afterMs) candidate.setUTCDate(candidate.getUTCDate() + 7 * rule.interval);
+      const candInst = toInstant(candidate);
+      if (!best || candInst.getTime() < best.getTime()) best = candInst;
     }
-    return best ?? new Date(base);
+    return best ?? toInstant(new Date(baseCivil));
   }
 
   if (rule.freq === "yearly") {
-    const result = new Date(base);
-    while (result <= after) result.setFullYear(result.getFullYear() + rule.interval);
-    return result;
+    const result = new Date(baseCivil);
+    while (toInstant(result).getTime() <= afterMs) result.setUTCFullYear(result.getUTCFullYear() + rule.interval);
+    return toInstant(result);
   }
 
   // monthly
-  const result = new Date(base);
-  while (result <= after) result.setMonth(result.getMonth() + rule.interval);
-  return result;
+  const result = new Date(baseCivil);
+  while (toInstant(result).getTime() <= afterMs) result.setUTCMonth(result.getUTCMonth() + rule.interval);
+  return toInstant(result);
 }
 
 export function describeRecurrenceRule(rule: RecurrenceRule, locale: Locale = "en"): string {
