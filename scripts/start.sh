@@ -12,12 +12,31 @@ DATABASE_URL="${DATABASE_URL:-file:$DB}"
 # existing behaviour; set false when R2 is known to be unavailable so the app
 # does not attempt a restore or run a replica that cannot succeed.
 BACKUPS_ENABLED="${BACKUPS_ENABLED:-true}"
-export DATA_DIR APP_DIR DB PRISMA_BIN DATABASE_URL BACKUPS_ENABLED
+
+# Normalize the switch once, here, and export the answer the app reads. Before
+# this, start.sh enabled replication only on the exact string "true" while
+# /api/health disabled only on "false" (case-insensitive), so BACKUPS_ENABLED=1
+# or TRUE reported a replica that was not running. BACKUPS_ACTIVE also folds in
+# the replica bucket: without it start.sh cannot replicate either.
+case "$(printf '%s' "$BACKUPS_ENABLED" | tr '[:upper:]' '[:lower:]')" in
+  true) BACKUPS_ENABLED_NORMALIZED=true ;;
+  *) BACKUPS_ENABLED_NORMALIZED=false ;;
+esac
+BACKUPS_ACTIVE=false
+if [ "$BACKUPS_ENABLED_NORMALIZED" = "true" ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
+  BACKUPS_ACTIVE=true
+fi
+
+# Boot marker for /api/health: a schema applied after this timestamp was
+# created this boot, i.e. the volume was empty when the machine started.
+APP_BOOT_AT="$(date +%s)"
+export DATA_DIR APP_DIR DB PRISMA_BIN DATABASE_URL BACKUPS_ENABLED \
+  BACKUPS_ENABLED_NORMALIZED BACKUPS_ACTIVE APP_BOOT_AT
 
 cd "$APP_DIR"
 
 # ── Restore from R2 if DB is missing ─────────────────────────────────────────
-if [ "$BACKUPS_ENABLED" = "true" ] && [ ! -f "$DB" ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
+if [ "$BACKUPS_ACTIVE" = "true" ] && [ ! -f "$DB" ]; then
   echo "[startup] Database not found, attempting restore from R2..."
   restore_output="$(litestream restore -config "$APP_DIR/litestream.yml" -if-replica-exists "$DB" 2>&1)" && restore_status=0 || restore_status=$?
   if [ "$restore_status" -eq 0 ]; then
@@ -35,6 +54,13 @@ if [ "$BACKUPS_ENABLED" = "true" ] && [ ! -f "$DB" ] && [ -n "$LITESTREAM_REPLIC
     printf '%s\n' "$restore_output" | tail -5
     echo "[startup] The line above is Litestream's cause (no replica, NotEntitled/permission, or network)."
   fi
+fi
+
+# ── Fresh-database detection ─────────────────────────────────────────────────
+# One greppable line so a lost volume is visible in the deploy output, not only
+# in /api/health after players notice the games are gone.
+if [ ! -f "$DB" ]; then
+  echo "[startup] FRESH_DATABASE: no database at $DB after restore; migrations will create an empty schema."
 fi
 
 # ── Pre-migration backup ─────────────────────────────────────────────────────
@@ -147,14 +173,14 @@ if ! "$PRISMA_BIN" migrate status >/tmp/migrate-status.log 2>&1; then
 fi
 
 # ── Start app ─────────────────────────────────────────────────────────────────
-if [ "$BACKUPS_ENABLED" = "true" ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
+if [ "$BACKUPS_ACTIVE" = "true" ]; then
   echo "[startup] Starting app with Litestream replication..."
   exec litestream replicate -exec "node scripts/server.mjs" -config "$APP_DIR/litestream.yml"
 else
-  if [ "$BACKUPS_ENABLED" = "true" ]; then
+  if [ "$BACKUPS_ENABLED_NORMALIZED" = "true" ]; then
     echo "[startup] WARNING: BACKUPS_ENABLED=true but LITESTREAM_REPLICA_BUCKET is not set; starting without replication."
   else
-    echo "[startup] Backups disabled (BACKUPS_ENABLED=false); starting without Litestream replication."
+    echo "[startup] Backups disabled (BACKUPS_ENABLED=$BACKUPS_ENABLED); starting without Litestream replication."
   fi
   exec node scripts/server.mjs
 fi

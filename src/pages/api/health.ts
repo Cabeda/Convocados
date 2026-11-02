@@ -16,9 +16,34 @@ const SCHEDULER_STALE_MS = 3 * 60 * 1000;
 const LITESTREAM_STALE_SECONDS = 24 * 60 * 60;
 const LITESTREAM_SOCKET = "/var/run/litestream.sock";
 
+/** A migration applied this recently, with no events, is the shape a DB
+ * recreated by `migrate deploy` leaves behind. Widen only with evidence. */
+const FRESH_DB_WINDOW_MS = 60 * 60 * 1000;
+
 function resolveDbPath(): string {
   const url = process.env.DATABASE_URL || "file:./prisma/dev.db";
   return url.replace(/^file:/, "");
+}
+
+/** start.sh exports APP_BOOT_AT as epoch seconds; tests and other callers may
+ * pass milliseconds. Fall back to this process's start when it is absent. */
+function resolveBootAt(): number {
+  const raw = process.env.APP_BOOT_AT;
+  const parsed = raw ? Number(raw) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed < 1e12 ? parsed * 1000 : parsed;
+  }
+  return Date.now() - process.uptime() * 1000;
+}
+
+/** `_prisma_migrations` timestamps are ISO text from Prisma, but raw SQLite
+ * writers can leave a space-separated UTC string. */
+function parseMigrationTimestamp(value: unknown): Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value !== "string" || value.length === 0) return null;
+  const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export const GET: APIRoute = async () => {
@@ -46,6 +71,23 @@ export const GET: APIRoute = async () => {
       // WAL file may not exist yet (no writes since open); 0 is accurate then
     }
 
+    // Provenance: a migrated-schema-but-empty database is what a lost volume
+    // looks like. `oldestMigrationAt` proves when the schema was first applied;
+    // comparing it with the boot marker start.sh exports distinguishes a fresh
+    // database from an established one that merely got a new migration.
+    const oldestResult = await prisma.$queryRawUnsafe(
+      "SELECT MIN(started_at) AS oldestMigrationAt FROM _prisma_migrations",
+    ) as { oldestMigrationAt: string | null }[];
+    const oldestMigrationAt = parseMigrationTimestamp(oldestResult[0]?.oldestMigrationAt);
+    const eventCount = await prisma.event.count();
+    const createdThisBoot =
+      oldestMigrationAt !== null && oldestMigrationAt.getTime() >= resolveBootAt();
+    const migrationAgeMs =
+      oldestMigrationAt === null ? null : Date.now() - oldestMigrationAt.getTime();
+    const freshDatabase =
+      createdThisBoot ||
+      (eventCount === 0 && migrationAgeMs !== null && migrationAgeMs < FRESH_DB_WINDOW_MS);
+
     const response: Record<string, unknown> = {
       status: "ok",
       db: {
@@ -54,18 +96,37 @@ export const GET: APIRoute = async () => {
         pageCount: Number(Object.values(pageCountResult[0] ?? {})[0] ?? 0),
         freelistCount: Number(Object.values(freelistResult[0] ?? {})[0] ?? 0),
         walSizeBytes,
+        createdThisBoot,
+        oldestMigrationAt: oldestMigrationAt?.toISOString() ?? null,
       },
     };
+
+    // Body-only: a 503 removes the instance from Fly's load balancer, and the
+    // scheduler polls through that URL. An empty-but-migrated DB is a signal
+    // for a human, not a reason to take the app out of rotation.
+    if (freshDatabase) {
+      response.degraded = true;
+    }
 
     // In production, check Litestream. Process-up is not replication-current:
     // `litestream list` reads the daemon's last successful sync from the
     // control socket (enabled in litestream.yml).
     if (process.env.NODE_ENV === "production") {
-      const backupsEnabled = (process.env.BACKUPS_ENABLED ?? "true").toLowerCase() !== "false";
-      if (!backupsEnabled) {
+      // start.sh normalizes BACKUPS_ENABLED and also folds in whether a
+      // replica bucket exists. Read its flags instead of re-parsing the raw
+      // switch, so the two can never disagree.
+      const backupsRequested = process.env.BACKUPS_ENABLED_NORMALIZED === "true";
+      const backupsActive = process.env.BACKUPS_ACTIVE === "true";
+      if (!backupsRequested) {
         // A known-disabled backup path is not a degraded one: the operator set
         // this explicitly (fly.toml) while R2 is unavailable.
         response.litestream = { enabled: false, running: false, status: null, lastSyncAt: null, syncAgeSeconds: null };
+      } else if (!backupsActive) {
+        // Requested but impossible: start.sh warns and boots without a replica
+        // because LITESTREAM_REPLICA_BUCKET is missing. That is a
+        // misconfiguration, not an intentional disable.
+        response.litestream = { enabled: false, running: false, status: null, lastSyncAt: null, syncAgeSeconds: null };
+        response.degraded = true;
       } else {
         let running = false;
         const { execSync } = await import("node:child_process");
