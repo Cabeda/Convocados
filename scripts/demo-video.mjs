@@ -4,9 +4,10 @@
  * reviewer's own case list: five positive cases, three negative ones, each one
  * a real JSON-RPC call to the deployed MCP endpoint with the result on screen.
  *
- * Nothing is mocked. The calls go over HTTPS to production with an API key
- * minted for the demo account, and the roster write it makes is then shown in
- * the browser, so the video proves the call changed what a person sees.
+ * Nothing is mocked. The recording registers an OAuth client the way a connector
+ * backend does, walks the real consent screen, exchanges the code for a token,
+ * and makes every case call with that token. The roster write it makes is then
+ * shown in the browser, so the video proves the call changed what a person sees.
  *
  *   REVIEWER_EMAIL=... REVIEWER_PASSWORD=... node scripts/demo-video.mjs
  *
@@ -14,6 +15,8 @@
  */
 import { chromium } from "@playwright/test";
 import { mkdirSync, renameSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { createServer } from "node:http";
 import path from "node:path";
 
 const BASE = process.env.BASE_URL ?? "https://convocados.cabeda.dev";
@@ -23,39 +26,74 @@ const OUT_DIR = path.resolve("tmp/demo-video");
 const MP4 = path.join(OUT_DIR, "convocados-mcp-demo.mp4");
 const W = 1280;
 const H = 720;
+const SCOPES = [
+  "read:profile", "read:events", "write:events", "create:events",
+  "manage:players", "read:ratings", "read:history", "manage:teams", "manage:payments",
+];
 
 if (!EMAIL || !PASSWORD) {
   console.error("REVIEWER_EMAIL and REVIEWER_PASSWORD are required.");
   process.exit(2);
 }
 
-async function signInOverHttp() {
-  const res = await fetch(`${BASE}/api/auth/sign-in/email`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: BASE },
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-  });
-  if (!res.ok) throw new Error(`sign-in failed (${res.status})`);
-  return (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
-}
+/**
+ * Register an OAuth client the way a connector backend does (dynamic client
+ * registration), so the recording can show the real consent screen instead of
+ * an API key. The redirect is a loopback HTTPS listener this script owns.
+ */
+// A native client may use a loopback HTTP redirect; a "web" client may not.
+const REDIRECT = "http://127.0.0.1:4567/callback";
 
-async function mintApiKey(cookie) {
-  // A key is cheaper to drive than the OAuth consent round-trip, and the MCP
-  // endpoint accepts both (src/lib/authenticate.server.ts).
-  const res = await fetch(`${BASE}/api/me/api-keys`, {
+async function registerClient() {
+  const res = await fetch(`${BASE}/api/auth/oauth2/register`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      name: "demo-video",
-      scopes: [
-        "read:profile", "read:events", "write:events", "create:events",
-        "manage:players", "read:ratings", "read:history", "manage:teams", "manage:payments",
-      ],
+      client_name: "ChatGPT (custom connector)",
+      application_type: "native",
+      redirect_uris: [REDIRECT],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+      scope: SCOPES.join(" "),
     }),
   });
-  if (!res.ok) throw new Error(`api key creation failed (${res.status}): ${await res.text()}`);
+  if (!res.ok) throw new Error(`client registration failed (${res.status}): ${await res.text()}`);
   const body = await res.json();
-  return body.key ?? body.apiKey ?? body.token;
+  return body.client_id ?? body.clientId;
+}
+
+/** Loopback listener that receives the authorization code after consent. */
+let codeResolve;
+const codePromise = new Promise((r) => { codeResolve = r; });
+
+function startCallbackServer() {
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", REDIRECT);
+    const code = url.searchParams.get("code");
+    if (code) codeResolve(code);
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end("<h2>Authorization received.</h2>");
+  });
+  server.listen(4567, "127.0.0.1");
+  return server;
+}
+
+async function exchangeCode(code, verifier, clientId) {
+  const res = await fetch(`${BASE}/api/auth/oauth2/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT,
+      client_id: clientId,
+      code_verifier: verifier,
+    }),
+  });
+  if (!res.ok) throw new Error(`token exchange failed (${res.status}): ${await res.text()}`);
+  const body = await res.json();
+  return body.access_token;
 }
 
 let rpcId = 0;
@@ -116,38 +154,24 @@ function slide({ title, subtitle = "", rows = [], mono = false, tone = "neutral"
 async function main() {
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const cookie = await signInOverHttp();
-  const key = await mintApiKey(cookie);
-  if (!key) throw new Error("no API key in the response");
+  // tools/list is anonymous, so the title card can carry the real count before
+  // any credential exists.
+  const toolList = await mcp(null, "tools/list", undefined, undefined, { auth: false });
 
-  // Everything the cases need, fetched before the browser opens so the video
-  // only has to show results.
-  const toolList = await mcp(key, "tools/list");
-  const games = unwrap((await mcp(key, "tools/call", "convocados_list_my_games")).result);
-  const owned = games.owned ?? [];
-  const monday = owned.find((g) => /Monday 5-a-side/.test(g.title)) ?? owned[0];
-  const sunday = owned.find((g) => /Sunday Football/.test(g.title));
-  if (!monday) throw new Error(`no demo games on this account: ${pretty(games)}`);
-
-  const whoami = await mcp(key, "tools/call", "convocados_whoami");
-  const players = await mcp(key, "tools/call", "convocados_list_players", { eventId: monday.id });
-  const balance = await mcp(key, "tools/call", "convocados_get_balance", { eventId: monday.id });
-  const ratings = sunday
-    ? await mcp(key, "tools/call", "convocados_get_ratings", { eventId: sunday.id })
-    : null;
-  const history = sunday
-    ? await mcp(key, "tools/call", "convocados_get_history", { eventId: sunday.id })
-    : null;
-
-  // Negative cases: no token, unknown id, invalid input.
-  const noAuth = await mcp(null, "tools/call", "convocados_list_my_games", {}, { auth: false });
-  const unknownGame = await mcp(key, "tools/call", "convocados_get_game", {
-    eventId: "does-not-exist",
+  const clientId = await registerClient();
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const state = randomBytes(8).toString("hex");
+  const authorizeUrl = `${BASE}/api/auth/oauth2/authorize?` + new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: REDIRECT,
+    scope: SCOPES.join(" "),
+    state,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
   });
-  const badInput = await mcp(key, "tools/call", "convocados_add_player", {
-    eventId: monday.id,
-    name: "",
-  });
+  const callbackServer = startCallbackServer();
 
   const browser = await chromium.launch();
   const context = await browser.newContext({
@@ -182,6 +206,57 @@ async function main() {
   // ── The account's games
   await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
   await wait(2800);
+
+  // ── Connecting the app: the same consent screen a custom connector shows
+  await page.goto(authorizeUrl, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("text=/Authorize|Allow/i", { timeout: 20_000 }).catch(() => {});
+  await wait(4200);
+  await page.getByRole("button", { name: /^allow$/i }).click().catch(async () => {
+    await page.getByRole("button", { name: /allow/i }).first().click();
+  });
+  const code = await Promise.race([
+    codePromise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("no authorization code")), 30_000)),
+  ]);
+  const key = await exchangeCode(code, verifier, clientId);
+  await page.setContent(slide({
+    title: "Connected — OAuth 2.1 + PKCE",
+    subtitle: "The consent screen above is the step ChatGPT's custom connector shows",
+    rows: [
+      { k: "Client", body: `ChatGPT (custom connector) — ${clientId}` },
+      { k: "Scopes granted", body: esc(SCOPES.join("\n")) },
+      { k: "Access token", body: `${String(key).slice(0, 12)}… (Bearer, used for every call below)` },
+    ],
+    mono: true,
+  }));
+  await wait(4600);
+
+  // Everything the cases need, fetched now that the token exists.
+  const games = unwrap((await mcp(key, "tools/call", "convocados_list_my_games")).result);
+  const owned = games.owned ?? [];
+  const monday = owned.find((g) => /Monday 5-a-side/.test(g.title)) ?? owned[0];
+  const sunday = owned.find((g) => /Sunday Football/.test(g.title));
+  if (!monday) throw new Error(`no demo games on this account: ${pretty(games)}`);
+
+  const whoami = await mcp(key, "tools/call", "convocados_whoami");
+  const players = await mcp(key, "tools/call", "convocados_list_players", { eventId: monday.id });
+  const balance = await mcp(key, "tools/call", "convocados_get_balance", { eventId: monday.id });
+  const ratings = sunday
+    ? await mcp(key, "tools/call", "convocados_get_ratings", { eventId: sunday.id })
+    : null;
+  const history = sunday
+    ? await mcp(key, "tools/call", "convocados_get_history", { eventId: sunday.id })
+    : null;
+
+  // Negative cases: no token, unknown id, invalid input.
+  const noAuth = await mcp(null, "tools/call", "convocados_list_my_games", {}, { auth: false });
+  const unknownGame = await mcp(key, "tools/call", "convocados_get_game", {
+    eventId: "does-not-exist",
+  });
+  const badInput = await mcp(key, "tools/call", "convocados_add_player", {
+    eventId: monday.id,
+    name: "",
+  });
 
   // ── Case 1: the token acts as the expected account
   await page.setContent(slide({
@@ -326,6 +401,7 @@ async function main() {
 
   await context.close();
   await browser.close();
+  callbackServer.close();
 
   const recorded = await page.video()?.path();
   if (!recorded) throw new Error("Playwright recorded no video");
