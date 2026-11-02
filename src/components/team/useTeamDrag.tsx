@@ -5,6 +5,8 @@ import { movePlayer } from "~/lib/teams";
 
 export const PLAYER_ARRIVAL_DURATION_MS = 650;
 export const TEAM_SHUFFLE_DURATION_MS = 700;
+/** Movement below this many pixels counts as a tap, not a drag. */
+const TAP_MOVE_THRESHOLD_PX = 6;
 
 /**
  * Shared keyframes for the team list/field motion (player arrival, shuffle
@@ -48,6 +50,11 @@ interface UseTeamDragOptions {
     x: number,
     y: number,
   ) => { updated: Imatch[]; destinationTeam: string } | null;
+  /**
+   * Called instead of a drop when a press ends without travelling past the tap
+   * threshold. Lets a view offer one-tap moves without losing its drag.
+   */
+  onTap?: (drag: TeamDragState) => void;
 }
 
 /**
@@ -55,13 +62,15 @@ interface UseTeamDragOptions {
  * drop-zone refs, the floating drag ghost, arrival/shuffle motion flags, and
  * commits player moves via {@link movePlayer}.
  */
-export function useTeamDrag({ matches, onResultChange, shuffleKey = 0, resolveMove }: UseTeamDragOptions) {
+export function useTeamDrag({ matches, onResultChange, shuffleKey = 0, resolveMove, onTap }: UseTeamDragOptions) {
   const [drag, setDrag] = useState<TeamDragState | null>(null);
   const [activeDropZone, setActiveDropZone] = useState<string | null>(null);
   const [playerMotion, setPlayerMotion] = useState<{ name: string; destinationTeam: string } | null>(null);
   const [isShuffling, setIsShuffling] = useState(false);
   const previousShuffleKey = useRef<number | null>(null);
   const zonesRef = useRef<Record<string, HTMLElement | null>>({});
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragMovedRef = useRef(false);
 
   useEffect(() => {
     if (!playerMotion) return;
@@ -81,6 +90,8 @@ export function useTeamDrag({ matches, onResultChange, shuffleKey = 0, resolveMo
   }, [shuffleKey]);
 
   const cancelDrag = useCallback(() => {
+    dragStartRef.current = null;
+    dragMovedRef.current = false;
     setDrag(null);
     setActiveDropZone(null);
   }, []);
@@ -102,6 +113,8 @@ export function useTeamDrag({ matches, onResultChange, shuffleKey = 0, resolveMo
       e.currentTarget.setPointerCapture(e.pointerId);
     }
     e.preventDefault();
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    dragMovedRef.current = false;
     setDrag({ name: playerName, team: teamName, ghostX: e.clientX, ghostY: e.clientY });
     setActiveDropZone(null);
   }, []);
@@ -109,6 +122,10 @@ export function useTeamDrag({ matches, onResultChange, shuffleKey = 0, resolveMo
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!drag) return;
     e.preventDefault();
+    const start = dragStartRef.current;
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) >= TAP_MOVE_THRESHOLD_PX) {
+      dragMovedRef.current = true;
+    }
     setDrag((d) => (d ? { ...d, ghostX: e.clientX, ghostY: e.clientY } : null));
     setActiveDropZone(zoneAtPoint(e.clientX, e.clientY));
   }, [drag, zoneAtPoint]);
@@ -116,14 +133,23 @@ export function useTeamDrag({ matches, onResultChange, shuffleKey = 0, resolveMo
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (!drag) return;
 
+    const start = dragStartRef.current;
+    const travelled = start ? Math.hypot(e.clientX - start.x, e.clientY - start.y) : Infinity;
+    const isTap = !dragMovedRef.current && travelled < TAP_MOVE_THRESHOLD_PX;
+
+    if (onTap && isTap) {
+      onTap(drag);
+      cancelDrag();
+      return;
+    }
+
     if (resolveMove) {
       const resolved = resolveMove(drag, e.clientX, e.clientY);
       if (resolved) {
         setPlayerMotion({ name: drag.name, destinationTeam: resolved.destinationTeam });
         onResultChange(resolved.updated);
       }
-      setDrag(null);
-      setActiveDropZone(null);
+      cancelDrag();
       return;
     }
 
@@ -135,9 +161,8 @@ export function useTeamDrag({ matches, onResultChange, shuffleKey = 0, resolveMo
       setPlayerMotion({ name: drag.name, destinationTeam });
       onResultChange(updated);
     }
-    setDrag(null);
-    setActiveDropZone(null);
-  }, [drag, matches, zoneAtPoint, onResultChange, resolveMove]);
+    cancelDrag();
+  }, [drag, matches, zoneAtPoint, onResultChange, resolveMove, onTap, cancelDrag]);
 
   useEffect(() => {
     if (!drag) return;

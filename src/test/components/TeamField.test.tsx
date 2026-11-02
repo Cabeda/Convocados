@@ -126,6 +126,66 @@ describe("TeamField", () => {
     expect(red.players.find((p) => p.name === "Alice")!.slot).toBe(1);
   });
 
+  it("moves a player to the other half's first free slot with one tap and undoes it", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamFieldHarness onResultChange={onResultChange} />);
+
+    const alice = screen.getByTestId("field-player-Alice");
+    fireEvent.pointerDown(alice, {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerUp(screen.getByTestId("team-field"), {
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+
+    expect(onResultChange).toHaveBeenCalledTimes(1);
+    const moved = onResultChange.mock.calls[0][0] as Imatch[];
+    expect(moved.find((m) => m.team === "Blue")!.players.map((p) => p.name)).toEqual(["Carol"]);
+    const red = moved.find((m) => m.team === "Red")!;
+    expect(red.players.map((p) => p.name)).toEqual(["Bob", "Alice"]);
+    expect(red.players.find((p) => p.name === "Alice")!.slot).toBe(1);
+    expect(screen.getByText("Alice moved to Red")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Undo"));
+
+    expect(onResultChange).toHaveBeenCalledTimes(2);
+    const restored = onResultChange.mock.calls[1][0] as Imatch[];
+    expect(restored.find((m) => m.team === "Blue")!.players.map((p) => p.name)).toEqual([
+      "Alice",
+      "Carol",
+    ]);
+    expect(restored.find((m) => m.team === "Red")!.players.map((p) => p.name)).toEqual(["Bob"]);
+  });
+
+  it("does not tap-move when the pointer moved far enough to start a drag", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamFieldHarness onResultChange={onResultChange} />);
+
+    fireEvent.pointerDown(screen.getByTestId("field-player-Alice"), {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(screen.getByTestId("team-field"), {
+      pointerId: 1,
+      clientX: 40,
+      clientY: 10,
+    });
+    fireEvent.pointerUp(screen.getByTestId("team-field"), {
+      pointerId: 1,
+      clientX: 12,
+      clientY: 10,
+    });
+
+    expect(onResultChange).not.toHaveBeenCalled();
+  });
+
   it("does not move a player dropped back on their own half", () => {
     const onResultChange = vi.fn();
     renderWithTheme(<TeamFieldHarness onResultChange={onResultChange} />);
