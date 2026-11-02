@@ -6,7 +6,7 @@
  * Drift between Android and the spec fails CI immediately.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { openApiSpec } from "../lib/openapi";
 
@@ -85,4 +85,29 @@ describe("API Contract: Android ↔ OpenAPI spec", () => {
       }
     });
   }
+});
+
+describe("OpenAPI spec to route parity", () => {
+  const pagesDir = resolve(__dirname, "../../src/pages");
+
+  /** `/api/events/{id}` → src/pages/api/events/[id].ts or .../index.ts */
+  function routeFile(specPath: string): string | null {
+    const segments = specPath
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => segment.replace(/^\{(.+)\}$/, "[$1]"));
+    const base = resolve(pagesDir, ...segments);
+    const candidates = [`${base}.ts`, resolve(base, "index.ts")];
+    return candidates.find((candidate) => existsSync(candidate)) ?? null;
+  }
+
+  it("has a route file for every described path", () => {
+    // The better-auth catch-all is handled by the auth integration, not a file.
+    const missing = Object.keys(openApiSpec.paths).filter(
+      // better-auth serves every /api/auth/* operation through its catch-all,
+      // which is the single allowlist entry this test permits.
+      (path) => !path.startsWith("/api/auth/") && routeFile(path) === null,
+    );
+    expect(missing).toEqual([]);
+  });
 });

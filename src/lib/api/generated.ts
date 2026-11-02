@@ -499,11 +499,6 @@ export interface ApiOperations {
       id: string;
     };
   };
-  "PUT /api/events/{id}/max-players": {
-    params: {
-      id: string;
-    };
-  };
   "GET /api/events/{id}/priority": {
     params: {
       id: string;
@@ -1202,7 +1197,6 @@ export interface ApiOperations {
       confirm: true;
     };
   };
-  "GET /.well-known/openid-configuration": Record<string, never>;
   "GET /api/auth/oauth2/public-client": {
     query: {
       client_id: string;

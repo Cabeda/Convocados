@@ -749,14 +749,6 @@ export const openApiSpec = {
         responses: { "200": { description: "Post-game status" } },
       },
     },
-    "/api/events/{id}/max-players": {
-      put: {
-        summary: "Update max players for an event",
-        tags: ["Events"],
-        parameters: [eventIdParam],
-        responses: { "200": { description: "Max players updated" }, ...errorResponses },
-      },
-    },
     "/api/events/{id}/priority": {
       get: {
         summary: "Get Priority settings, enrollments and eligible players",
@@ -1993,14 +1985,6 @@ export const openApiSpec = {
     },
 
     // ── OAuth 2.1 ─────────────────────────────────────────────────────────
-    "/.well-known/openid-configuration": {
-      get: {
-        summary: "OpenID Connect discovery document",
-        tags: ["OAuth"],
-        security: anonymous,
-        responses: { "200": { description: "OIDC metadata" } },
-      },
-    },
     "/api/auth/oauth2/public-client": {
       get: {
         summary: "Public OAuth client metadata for the consent screen",

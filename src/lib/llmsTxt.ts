@@ -78,7 +78,6 @@ export function buildLlmsTxt(baseUrl = ""): string {
     "",
     `- \`${origin}/api/openapi.json\` — OpenAPI 3.1 contract for every endpoint`,
     `- \`${origin}/api/mcp\` — MCP 2026-07-28 stateless tools (requires OAuth 2.1; not anonymous)`,
-    `- \`${origin}/.well-known/openid-configuration\` — OpenID Connect discovery`,
     "",
     "## Rules",
     "",

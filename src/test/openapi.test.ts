@@ -76,7 +76,6 @@ describe("OpenAPI spec", () => {
       "/api/users/{id}/calendar.ics",
       "/api/invite/{token}",
       "/api/push/vapid-public-key",
-      "/.well-known/openid-configuration",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",
     ];
