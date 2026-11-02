@@ -27,8 +27,9 @@ jobs:
     #     Nothing is lost: a bump's review is the gates, and the mission lens has
     #     nothing to judge in a version string.
     #   * Forks — the same secretless run, for the same reason. This is a reach
-    #     gap, not a policy: a forked Change goes unreviewed, and the Sweeper is
-    #     the ground that covers it (docs/factory/README.md → Reach).
+    #     gap, not a policy: a forked Change goes unreviewed. The Sweeper flags a
+    #     *stale* one from its schedule; an active, green fork PR gets no factory
+    #     attention at all (docs/factory/README.md → Reach).
     #   * Drafts — `opened` fires on a draft too, so an unfinished Change paid
     #     for a full review and then paid again on `ready_for_review`.
     # Name Dependabot exactly, not "any bot": `factory/*` Changes are authored by

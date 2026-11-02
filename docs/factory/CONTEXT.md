@@ -82,10 +82,12 @@ re-running them is not review. It holds no approval authority: its job is to arg
 comment and to fix what it can on a factory branch.
 
 It watches every open Change **it can reach**, including human-authored ones, because a
-review that only inspects machine work is a rubber stamp. Reach is bounded by two facts rather
-than by judgement: a workflow runs from the Change's own branch, so a Change predating it never
-triggers a review; and a Dependabot-started run has no repository secrets, so no role that mints a
-token can run on a machine-authored Change. The Sweeper covers that ground from a schedule.
+review that only inspects machine work is a rubber stamp. Reach is bounded by facts about the
+event rather than by judgement: a workflow runs from the Change's own branch, so a Change
+predating it never triggers a review; a run started by Dependabot **or a fork** receives no
+repository secrets, so no role that mints a token can run on it; and a draft is skipped until it
+is marked ready. The Sweeper covers that ground from a schedule, but only once a Change is stuck
+— an active, green fork PR is out of reach entirely.
 _Avoid_: approver, gatekeeper, QA, linter
 
 ## Hard Block

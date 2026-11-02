@@ -210,7 +210,8 @@ they are recorded here rather than discovered later:
 Together those mean the Reviewer does **not** reach every open Change: it misses machine-authored
 and forked ones, drafts, and any Change predating a workflow. The Sweeper exists for that ground —
 it runs on a schedule, where secrets are available, and reports what it finds as Issues rather
-than reviews.
+than reviews — but it flags a Change only once it is stuck (red, or untouched for a day), so an
+**active, green fork PR gets no factory attention at all**.
 
 **Budgets.** 3 Attempts per gate, 6 per Issue, 500k tokens per Issue, 5M per day. Exceeding
 any budget ends the run as **Blocked**, with the evidence attached.

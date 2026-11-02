@@ -257,15 +257,29 @@ describe("the reviewer is exempt only where it cannot review", () => {
     expect(condition).toContain("!github.event.pull_request.draft");
   });
 
-  it("still reaches factory Changes", () => {
-    // The only author filter may be the Dependabot one. `factory/*` Changes are
-    // opened as `<app>[bot]`, so a bot-wide filter — `contains(login, 'bot')`, or
-    // naming `convocados-factory[bot]` — would silently exempt this role's main
-    // customer. The tests above only prove the exemptions exist; this proves they
-    // did not swallow it.
-    const condition = reviewerJobIf();
-    expect(condition, "no bot-wide author filter").not.toMatch(/contains\s*\([^)]*user\.login/);
-    expect(condition, "the factory App is not exempted by name").not.toContain("convocados-factory");
+  it("compares the author login exactly once, and only against Dependabot", () => {
+    const comparisons = [
+      ...reviewerJobIf().matchAll(
+        /github\.event\.pull_request\.user\.login\s*(?:[!=]==?)\s*['"]([^'"]+)['"]/g,
+      ),
+    ].map((m) => m[1]);
+    // An allowlist (`== 'Cabeda'`), a second exemption, or a bot-wide filter all
+    // exempt `convocados-factory[bot]` — this role's main customer. Banning two
+    // spellings was not enough; an extra comparison passes with one of them.
+    expect(comparisons).toEqual(["dependabot[bot]"]);
+    expect(reviewerJobIf(), "no bot-wide author filter").not.toMatch(
+      /contains\s*\([^)]*user\.login/,
+    );
+  });
+
+  it("keeps ready_for_review, the only event that reaches a skipped draft", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      on?: unknown;
+    } & Record<string, unknown>;
+    const trigger = (doc.on ?? doc["true"]) as { pull_request?: { types?: string[] } } | undefined;
+    // Drop this event and every draft is skipped at opened/synchronize/reopened
+    // and never reviewed at all — silently, since nothing else would fail.
+    expect(trigger?.pull_request?.types ?? []).toContain("ready_for_review");
   });
 });
 
