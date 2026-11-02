@@ -9,8 +9,14 @@ vi.mock("~/lib/authenticate.server", () => ({
   }),
 }));
 
+vi.mock("~/lib/logger.server", () => {
+  const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
+  return { logger, createLogger: () => logger };
+});
+
 import { authenticateRequest } from "~/lib/authenticate.server";
 import { TOOLS } from "~/lib/mcp/tools";
+import { logger } from "~/lib/logger.server";
 // Import after mock
 const { POST, GET } = await import("~/pages/api/mcp");
 
@@ -188,6 +194,57 @@ describe("POST /api/mcp — stateless transport", () => {
     expect(res.status).toBe(200);
     const body: any = await res.json();
     expect(Array.isArray(body.result.tools)).toBe(true);
+    // The JSON-RPC method is logged because the HTTP trace cannot tell a
+    // connector ping from a tool call.
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ mcp: "tools/list", auth: "none" }),
+      "mcp message",
+    );
+  });
+
+  it("logs the method for an anonymous initialize", async () => {
+    mockAuth.mockResolvedValue(null);
+    vi.mocked(logger.info).mockClear();
+    const req = makeRequest({
+      jsonrpc: "2.0", id: 1, method: "initialize",
+      params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "c", version: "1" } },
+    });
+    const res = await POST(ctx(req));
+    expect(res.status).toBe(200);
+    // initialize vs ping is the whole question for a connector that never calls
+    // a tool, so the discriminator must be pinned.
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ mcp: "initialize", clientProtocol: "2025-11-25" }),
+      "mcp message",
+    );
+  });
+
+  it("logs a message it rejects on the protocol header too", async () => {
+    vi.mocked(logger.info).mockClear();
+    const req = makeRequest(
+      { jsonrpc: "2.0", id: 7, method: "tools/list", params: {} },
+      { "MCP-Protocol-Version": "1999-01-01" },
+    );
+    const res = await POST(ctx(req));
+    expect(res.status).toBe(400);
+    // A rejected message must not look like silence in the log.
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ mcp: "tools/list" }),
+      "mcp message",
+    );
+  });
+
+  it("truncates client-supplied fields so a payload cannot inflate the log", async () => {
+    vi.mocked(logger.info).mockClear();
+    const req = makeRequest({
+      jsonrpc: "2.0", id: 1, method: "x".repeat(500), params: { name: "y".repeat(500) },
+    });
+    await POST(ctx(req));
+    const logged = vi.mocked(logger.info).mock.calls.find(([, msg]) => msg === "mcp message")?.[0] as
+      | { mcp?: string; tool?: string }
+      | undefined;
+    expect(logged?.mcp).toHaveLength(64);
+    expect(logged?.tool).toHaveLength(64);
   });
 
   it("tools/list returns deterministic list with cache hints when authenticated", async () => {

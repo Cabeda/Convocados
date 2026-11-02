@@ -150,6 +150,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
       mcpVersion: request.headers.get("mcp-protocol-version") ?? undefined,
       accept: request.headers.get("accept") ?? undefined,
       userAgent: request.headers.get("user-agent") ?? undefined,
+      // Correlates this hop with the route's own `mcp message` line.
+      requestId: request.headers.get("fly-request-id") ?? undefined,
     };
     // The gate runs first: tracing must never be a way around CSRF.
     const rejection = SAFE_METHODS.has(request.method) ? null : csrfRejection(request, url);

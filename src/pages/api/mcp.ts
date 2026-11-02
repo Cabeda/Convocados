@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { authenticateRequest, requireScope, type AuthContext } from "../../lib/authenticate.server";
 import { checkApiRateLimit, extractIp } from "../../lib/apiRateLimit.server";
+import { logger } from "../../lib/logger.server";
 import { TOOLS } from "../../lib/mcp/tools";
 import { McpError } from "../../lib/mcp/errors";
 import {
@@ -116,6 +117,26 @@ export const POST: APIRoute = async ({ request }) => {
 
   const id = body?.id ?? null;
   const method = body?.method as string | undefined;
+  const mcpMethod = request.headers.get("Mcp-Method");
+
+  // Which JSON-RPC message arrived. The middleware trace names the HTTP hop,
+  // but a client that pings `initialize` and never lists tools looks identical
+  // to one whose tool list is rejected unless the method is visible. Logged
+  // before the header checks below, because a rejected message is exactly the
+  // case that must not look like silence. Client-supplied fields are truncated:
+  // `initialize` and `ping` are unmetered, so their payloads are attacker-sized.
+  const clip = (value: unknown, max: number) =>
+    typeof value === "string" ? value.slice(0, max) : undefined;
+  logger.info(
+    {
+      mcp: clip(method, 64) ?? clip(mcpMethod, 64) ?? "unknown",
+      tool: clip(body?.params?.name, 64),
+      clientProtocol: clip(body?.params?.protocolVersion, 32),
+      auth: request.headers.get("authorization") ? "bearer" : "none",
+      requestId: request.headers.get("fly-request-id") ?? undefined,
+    },
+    "mcp message",
+  );
 
   // ── Optional headers (legacy stateless routing). Never required. ─────────
   const headerVersion = request.headers.get("MCP-Protocol-Version");
@@ -128,7 +149,6 @@ export const POST: APIRoute = async ({ request }) => {
   if (!headerVersion && metaVersion && !isSupportedVersion(metaVersion)) {
     return jsonRpcError(id, -32600, `Unsupported MCP-Protocol-Version: ${metaVersion}`);
   }
-  const mcpMethod = request.headers.get("Mcp-Method");
   if (mcpMethod && method && mcpMethod !== method) {
     return jsonRpcError(id, -32600, `Mcp-Method mismatch: header "${mcpMethod}" != body method "${method}"`);
   }
