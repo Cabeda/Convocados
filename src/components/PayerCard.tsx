@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Chip, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from "@mui/material";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import { useT } from "~/lib/useT";
 import { apiRequest } from "~/lib/api/client";
@@ -27,6 +27,7 @@ export function PayerCard({ eventId }: { eventId: string }) {
   const [state, setState] = useState<PayerState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [takeoverOpen, setTakeoverOpen] = useState(false);
 
   const load = useCallback(
     () =>
@@ -67,13 +68,15 @@ export function PayerCard({ eventId }: { eventId: string }) {
           <>
             <Typography variant="body2" color="text.secondary">{t("payerCardVacant")}</Typography>
             {state.isRosterPlayer && (
-              <Chip
+              <Button
                 size="small"
-                color="primary"
-                label={t("payerCardClaim")}
+                variant="outlined"
                 onClick={() => !busy && act("claim")}
-                clickable
-              />
+                disabled={busy}
+                sx={{ minHeight: 44 }}
+              >
+                {t("payerCardClaim")}
+              </Button>
             )}
             {!state.isRosterPlayer && (
               <Typography variant="caption" color="text.secondary">
@@ -97,14 +100,42 @@ export function PayerCard({ eventId }: { eventId: string }) {
               </Button>
             )}
             {!state.isPayer && state.isRosterPlayer && (
-              <Button size="small" onClick={() => act("claim")} disabled={busy}>
-                {t("payerCardClaim")}
+              <Button
+                size="small"
+                onClick={() => setTakeoverOpen(true)}
+                disabled={busy}
+                sx={{ minHeight: 44 }}
+              >
+                {t("payerCardTakeOver", { name: state.payerName })}
               </Button>
             )}
           </>
         )}
       </Stack>
       {error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}
+
+      <Dialog open={takeoverOpen} onClose={() => setTakeoverOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t("payerCardTakeOverTitle")}</DialogTitle>
+        <DialogContent>
+          <Typography>{t("payerCardTakeOverBody", { name: state.payerName ?? "" })}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTakeoverOpen(false)} disabled={busy}>
+            {t("payerCardCancel")}
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={busy}
+            onClick={() => {
+              setTakeoverOpen(false);
+              void act("claim");
+            }}
+          >
+            {t("payerCardTakeOverConfirm")}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
