@@ -20,7 +20,7 @@ import { getDefaultDurationMinutes } from "../sports";
 import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
 import { fromDateTimeLocalValue } from "../timezones";
 import { cancelCurrentGame, CancelError } from "../cancelEvent.server";
-import { upsertRsvp } from "../rsvp.server";
+import { upsertRsvp, RsvpIdentityConflictError } from "../rsvp.server";
 import { enqueueRsvpAnswerNotification } from "../rsvp-notifications.server";
 import { enqueuePushSetupHintSafe } from "../pushSetupHint";
 import { getNotificationPrefs } from "../notificationPrefs.server";
@@ -508,7 +508,15 @@ async function rsvp(args: Record<string, unknown>, ctx: AuthContext) {
   }
 
   const typedStatus = status as "yes" | "no" | "maybe";
-  const result = await upsertRsvp(eventId, ctx.userId, typedStatus);
+  let result: Awaited<ReturnType<typeof upsertRsvp>>;
+  try {
+    result = await upsertRsvp(eventId, ctx.userId, typedStatus);
+  } catch (err) {
+    if (err instanceof RsvpIdentityConflictError) {
+      throw new McpError(err.message, -32001, 409);
+    }
+    throw err;
+  }
 
   bestEffort(enqueueRsvpAnswerNotification({
     eventId,

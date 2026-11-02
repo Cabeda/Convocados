@@ -123,6 +123,26 @@ describe("POST /api/events/[id]/rsvp", () => {
     expect(count).toBe(1);
   });
 
+  it("returns 409 and does not relink a claimed roster identity", async () => {
+    const ev = await seedEvent(7 * 86400_000);
+    const victim = await testPrisma.user.create({
+      data: { id: "victim", name: "Ana", email: "victim@t.com", emailVerified: true },
+    });
+    await testPrisma.user.create({
+      data: { id: "attacker", name: "Ana", email: "attacker@t.com", emailVerified: true },
+    });
+    const claimed = await testPrisma.eventPlayer.create({
+      data: { eventId: ev.id, name: "Ana", userId: victim.id },
+    });
+
+    const user = { user: { id: "attacker", name: "Ana" } };
+    const res = await rsvpPost(ctx(ev.id, { status: "yes" }, user));
+    expect(res.status).toBe(409);
+
+    const row = await testPrisma.eventPlayer.findUnique({ where: { id: claimed.id } });
+    expect(row!.userId).toBe(victim.id);
+  });
+
   it("refuses after kickoff", async () => {
     const ev = await seedEvent(-60_000);
     await testPrisma.user.create({ data: { id: "u1", name: "U", email: "u1@t.com", emailVerified: true } });
