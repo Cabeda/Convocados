@@ -222,6 +222,8 @@ export const POST: APIRoute = async ({ request }) => {
       title: t.title,
       description: t.description,
       inputSchema: t.inputSchema,
+      ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
+      ...(t.meta ? { _meta: t.meta } : {}),
       // Directory requirement: every hint must be an explicit boolean, or the
       // listing scanner reports it as missing. Read tools are non-destructive;
       // write tools are never read-only. openWorldHint is false because these
@@ -291,10 +293,16 @@ export const POST: APIRoute = async ({ request }) => {
 
     try {
       const data = await tool.handler(args, authCtx ?? ANONYMOUS_CTX);
-      return jsonRpcResult(id, {
+      const result: Record<string, unknown> = {
         ...modernFields,
         content: [{ type: "text" as const, text: JSON.stringify(data) }],
-      });
+      };
+      // A declared output schema is a structured result: send the same object
+      // in both places so a client reading either sees one profile.
+      if (tool.outputSchema && data && typeof data === "object") {
+        result.structuredContent = data;
+      }
+      return jsonRpcResult(id, result);
     } catch (err: unknown) {
       if (err instanceof McpError) {
         return jsonRpcError(id, err.code, err.message, err.data, err.status);

@@ -174,6 +174,36 @@ describe("convocados_whoami", () => {
     expect(output(call)).toContain(USER.email);
   });
 
+  it("exposes a stable opaque id and a nickname for the connected profile", async () => {
+    const data = JSON.parse(output(await run("convocados_whoami", {})));
+    expect(data.id).toBe(USER.id);
+    expect(data.nickname).toBe(USER.name);
+  });
+
+  it("returns structuredContent matching the text JSON", async () => {
+    const call = await run("convocados_whoami", {});
+    expect(call.json.result.structuredContent).toEqual(JSON.parse(output(call)));
+  });
+
+  it("is marked as the OpenAI profile tool with its output schema", async () => {
+    mockAuth.mockResolvedValue({ userId: USER.id, scopes: ["*"], authMethod: "oauth" } as never);
+    const res = await POST({
+      request: rpcRequest({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    } as never);
+    const tools = (await res.json() as any).result.tools;
+    const whoamiTool = tools.find((t: any) => t.name === "convocados_whoami");
+    expect(whoamiTool._meta?.["openai/profile"]).toBe(true);
+    expect(tools.filter((t: any) => t._meta?.["openai/profile"]).map((t: any) => t.name))
+      .toEqual(["convocados_whoami"]);
+
+    const schema = whoamiTool.outputSchema;
+    expect(schema.type).toBe("object");
+    for (const key of ["id", "name", "email", "nickname"]) {
+      expect(schema.properties, `outputSchema declares ${key}`).toHaveProperty(key);
+    }
+    expect(schema.required).toEqual(expect.arrayContaining(["id", "name", "email", "nickname"]));
+  });
+
   it("reports the granted scopes so a caller can see what it may do", async () => {
     const call = await run("convocados_whoami", {}, ["read:profile", "write:events"]);
     expect(failed(call)).toBe(false);
