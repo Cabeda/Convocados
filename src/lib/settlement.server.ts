@@ -232,21 +232,43 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
       });
       if (payerRow && payerRow.amount > 0) {
         const userId = payerRow.eventPlayer.userId ?? (await ensureSystemUserId(eventId, payerRow.eventPlayer.name, db));
-        await postLedgerEntry(
-          {
-            eventId,
-            userId,
-            amountCents: Math.round(payerRow.amount * 100),
-            currency: effective.currency,
-            direction: "credit",
-            reason: "payment_received",
-            statusAfter: "paid",
-            eventInstanceId: gameId,
-            markedById: "payer-auto",
-            idempotencyKey: ledgerKey("received", eventId, userId, gameId),
-          },
-          db,
-        );
+        // The credit only ever mirrors an existing charge debit: an archived
+        // (uncharged) payer row or a played game whose debits were wiped has
+        // no debit to match, and crediting it would offset the payer's real
+        // debt from other games in the join gate. Reconcile both directions —
+        // a credit posted while charged must go when the debit is reversed.
+        const chargeDebit = await db.walletTransaction.findFirst({
+          where: { eventId, eventInstanceId: gameId, userId, reason: "per_game_share", direction: "debit" },
+          select: { id: true },
+        });
+        if (chargeDebit) {
+          await postLedgerEntry(
+            {
+              eventId,
+              userId,
+              amountCents: Math.round(payerRow.amount * 100),
+              currency: effective.currency,
+              direction: "credit",
+              reason: "payment_received",
+              statusAfter: "paid",
+              eventInstanceId: gameId,
+              markedById: "payer-auto",
+              idempotencyKey: ledgerKey("received", eventId, userId, gameId),
+            },
+            db,
+          );
+        } else {
+          await db.walletTransaction.deleteMany({
+            where: {
+              eventId,
+              eventInstanceId: gameId,
+              userId,
+              reason: "payment_received",
+              markedById: "payer-auto",
+              idempotencyKey: ledgerKey("received", eventId, userId, gameId),
+            },
+          });
+        }
       }
     }
   };

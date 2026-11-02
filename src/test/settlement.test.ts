@@ -230,6 +230,50 @@ describe("syncGamePayments", () => {
     })).toBe(0);
   });
 
+  it("does not credit a payer share that is no longer charged (archived row)", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await linkUser("Ana", "ana-settlement");
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    // Ana drops out of the lineup: her row archives and her charge debit is
+    // reversed, so there is no share left for a payer credit to match.
+    await prisma.gameParticipant.updateMany({
+      where: { gameId: game.id, eventPlayerId: ana.id },
+      data: { archivedAt: new Date() },
+    });
+    await syncGamePayments(game.id, event.id);
+
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, eventInstanceId: game.id, markedById: "payer-auto" },
+    })).toBe(0);
+    expect((await getOutstandingBalance(event.id, "Ana")).amount).toBe(0);
+  });
+
+  it("does not credit the payer on a played game with no charge debits", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await linkUser("Ana", "ana-settlement");
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    // Untracking wipes the charge debits; re-tracking after the game is played
+    // cannot re-charge (played games freeze), so a payer credit would stand
+    // alone and offset Ana's real debt from other games.
+    await setPaymentConfig(event.id, game.id, { mode: "untracked" });
+    await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, eventInstanceId: game.id, reason: "per_game_share", direction: "debit" },
+    })).toBe(0);
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, eventInstanceId: game.id, markedById: "payer-auto" },
+    })).toBe(0);
+    expect((await getOutstandingBalance(event.id, "Ana")).amount).toBe(0);
+  });
+
   it("archives rows for participants who leave", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     await syncGamePayments(game.id, event.id);
