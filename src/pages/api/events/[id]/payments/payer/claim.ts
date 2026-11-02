@@ -52,9 +52,14 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const game = await prisma.game.findUnique({
     where: { id: gameId },
-    select: { paymentMode: true },
+    select: { paymentMode: true, status: true },
   });
   if (!game) return Response.json({ error: "Game not found." }, { status: 404 });
+  if (game.status === "cancelled") {
+    // A cancelled game has no cost to collect: its shares were archived and
+    // its charges reversed. Claiming must never revive a reversal.
+    return Response.json({ error: "This game was cancelled; there is no cost to collect." }, { status: 400 });
+  }
   if (game.paymentMode === "untracked") {
     // Claiming must not turn an untracked game into a tracked one (no payment
     // rows, no ledger debits); there is no payer role to take.

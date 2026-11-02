@@ -200,6 +200,10 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     }),
     db.event.findUnique({ where: { id: eventId }, select: { id: true, currentGameId: true } }),
   ]);
+  // A cancelled game's shares were archived and its charges reversed at
+  // cancellation (ADR 0009). No roster, cost or config sync may revive them.
+  if (game?.status === "cancelled") return;
+
   const { total, mode, maxPlayers } = effective;
   const share = shareFor(total, participants.length, maxPlayers);
 

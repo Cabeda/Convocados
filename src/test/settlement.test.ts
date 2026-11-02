@@ -273,6 +273,20 @@ describe("syncGamePayments", () => {
     expect(details.source).not.toBe("payer");
   });
 
+  it("does nothing for a cancelled game, so a reversal is never un-archived", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const archivedAt = new Date();
+    await prisma.gamePayment.updateMany({ where: { gameId: game.id }, data: { archivedAt } });
+    await prisma.game.update({ where: { id: game.id }, data: { status: "cancelled" } });
+
+    await syncGamePayments(game.id, event.id);
+
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.archivedAt !== null)).toBe(true);
+  });
+
   it("archives rows for participants who leave", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     await syncGamePayments(game.id, event.id);

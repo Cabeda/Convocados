@@ -83,10 +83,21 @@ export async function processOrganizerDigests(): Promise<DigestResult> {
       let sentPayments = 0;
       if (event.currentGameId) {
         pendingPayments = await prisma.gamePayment.count({
-          where: { gameId: event.currentGameId, status: "pending", archivedAt: null },
+          where: {
+            gameId: event.currentGameId,
+            status: "pending",
+            archivedAt: null,
+            // A cancelled game never incurs a payment obligation (ADR 0009).
+            game: { status: { not: "cancelled" } },
+          },
         });
         sentPayments = await prisma.gamePayment.count({
-          where: { gameId: event.currentGameId, status: "sent", archivedAt: null },
+          where: {
+            gameId: event.currentGameId,
+            status: "sent",
+            archivedAt: null,
+            game: { status: { not: "cancelled" } },
+          },
         });
       }
 
