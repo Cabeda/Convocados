@@ -3,6 +3,7 @@ package dev.convocados.ui.screen.event
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -131,6 +132,9 @@ fun TeamFieldView(
                         }
                     },
                     onDragCancel = { drag = null },
+                    onPlayerTap = { name ->
+                        playerIds[name]?.let { pid -> onMove(pid, name, tapMovesToTeamOne(teamIndex)) }
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -151,6 +155,7 @@ private fun TeamHalf(
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
+    onPlayerTap: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val slotCount = formation.slots.size
@@ -197,6 +202,7 @@ private fun TeamHalf(
                     onDrag = onDrag,
                     onDragEnd = onDragEnd,
                     onDragCancel = onDragCancel,
+                    onTap = { onPlayerTap(placed.member.name) },
                     modifier = Modifier.align(BiasAlignment(2f * xFraction - 1f, 2f * yFraction - 1f)),
                 )
             }
@@ -223,6 +229,7 @@ private fun TeamHalf(
                         onDrag = onDrag,
                         onDragEnd = onDragEnd,
                         onDragCancel = onDragCancel,
+                        onTap = { onPlayerTap(member.name) },
                     )
                 }
             }
@@ -241,20 +248,26 @@ private fun PlayerToken(
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
+    onTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Drag first so a real drag consumes the gesture; a tap never crosses touch
+    // slop, so it falls through to the tap detector and moves the player to the
+    // other half's first free slot.
     val dragModifier = if (draggable) {
-        Modifier.pointerInput(name) {
-            detectDragGestures(
-                onDragStart = { onDragStart() },
-                onDrag = { change, delta ->
-                    change.consume()
-                    onDrag(delta)
-                },
-                onDragEnd = { onDragEnd() },
-                onDragCancel = { onDragCancel() },
-            )
-        }
+        Modifier
+            .pointerInput(name) {
+                detectDragGestures(
+                    onDragStart = { onDragStart() },
+                    onDrag = { change, delta ->
+                        change.consume()
+                        onDrag(delta)
+                    },
+                    onDragEnd = { onDragEnd() },
+                    onDragCancel = { onDragCancel() },
+                )
+            }
+            .pointerInput(name) { detectTapGestures(onTap = { onTap() }) }
     } else {
         Modifier
     }
@@ -289,3 +302,6 @@ private fun PlayerToken(
         }
     }
 }
+
+/** A tap moves the player to the half they are not on: 0 -> team two, 1 -> team one. */
+internal fun tapMovesToTeamOne(teamIndex: Int): Boolean = teamIndex != 0
