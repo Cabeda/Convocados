@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button, Chip, Alert,
-  Divider, List, ListItem, ListItemText, CircularProgress,
+  Divider, List, ListItem, ListItemText, CircularProgress, Snackbar,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useT } from "~/lib/useT";
@@ -69,6 +69,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [configGame, setConfigGame] = useState<SettlementGame | null>(null);
+  const [undoBulk, setUndoBulk] = useState<{ gameId: string; eventPlayerIds: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -97,8 +98,10 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
     try {
       await run();
       await load();
+      return true;
     } catch {
       setError("failed");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -208,17 +211,23 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
                         size="small"
                         variant="contained"
                         disabled={busy}
-                        onClick={() =>
-                          isManager
-                            ? runAction(() => apiRequest("PUT /api/events/{id}/payments/settlement/bulk", {
-                                params: { id: eventId },
-                                body: { gameId: g.gameId },
-                              }))
-                            : runAction(() => apiRequest("POST /api/events/{id}/payments/payer-check-in/mark-all-paid", {
-                                params: { id: eventId },
-                                body: { gameId: g.gameId },
-                              }))
-                        }
+                        onClick={async () => {
+                          const ids = g.rows
+                            .filter((r) => r.status === "pending" || r.status === "sent")
+                            .map((r) => r.eventPlayerId);
+                          const ok = await runAction(() =>
+                            isManager
+                              ? apiRequest("PUT /api/events/{id}/payments/settlement/bulk", {
+                                  params: { id: eventId },
+                                  body: { gameId: g.gameId },
+                                })
+                              : apiRequest("POST /api/events/{id}/payments/payer-check-in/mark-all-paid", {
+                                  params: { id: eventId },
+                                  body: { gameId: g.gameId },
+                                }),
+                          );
+                          if (ok && ids.length > 0) setUndoBulk({ gameId: g.gameId, eventPlayerIds: ids });
+                        }}
                       >
                         {t("paymentsSettleAll")}
                       </Button>
@@ -309,6 +318,43 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
           ))}
         </Paper>
       )}
+
+      <Snackbar
+        open={!!undoBulk}
+        autoHideDuration={10000}
+        onClose={() => setUndoBulk(null)}
+        message={t("paymentsSettledAll")}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            disabled={busy}
+            onClick={async () => {
+              if (!undoBulk) return;
+              setBusy(true);
+              try {
+                await Promise.all(
+                  undoBulk.eventPlayerIds.map((eventPlayerId) =>
+                    apiRequest("DELETE /api/events/{id}/payments/settlement", {
+                      params: { id: eventId },
+                      body: { gameId: undoBulk.gameId, eventPlayerId },
+                    }),
+                  ),
+                );
+                setUndoBulk(null);
+                await load();
+              } catch {
+                setError("failed");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {t("undoRemove")}
+          </Button>
+        }
+      />
 
       <PaymentConfigDialog
         open={!!configGame}
