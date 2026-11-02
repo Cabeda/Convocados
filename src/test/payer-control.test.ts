@@ -208,6 +208,47 @@ describe("POST payer/claim", () => {
     expect(after!.paymentMode).toBe("untracked");
     expect(await testPrisma.gamePayment.count({ where: { gameId: game.id } })).toBe(0);
   });
+
+  it("refuses a cancelled Game and leaves every archived share archived", async () => {
+    const { event, game, ana, anaPlayer } = await seed();
+    await testPrisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 60, currency: "EUR" },
+    });
+    const bruno = await testPrisma.eventPlayer.create({
+      data: { id: `${game.id}-bruno`, eventId: event.id, name: "Bruno" },
+    });
+    const carla = await testPrisma.eventPlayer.create({
+      data: { id: `${game.id}-carla`, eventId: event.id, name: "Carla" },
+    });
+    await testPrisma.gameParticipant.createMany({
+      data: [
+        { gameId: game.id, eventPlayerId: bruno.id, order: 1 },
+        { gameId: game.id, eventPlayerId: carla.id, order: 2 },
+      ],
+    });
+    const archivedAt = new Date();
+    await testPrisma.gamePayment.createMany({
+      data: [
+        { gameId: game.id, eventPlayerId: anaPlayer.id, playerName: "Ana", amount: 6, status: "pending", archivedAt },
+        { gameId: game.id, eventPlayerId: bruno.id, playerName: "Bruno", amount: 6, status: "pending", archivedAt },
+        { gameId: game.id, eventPlayerId: carla.id, playerName: "Carla", amount: 6, status: "pending", archivedAt },
+      ],
+    });
+    await testPrisma.game.update({
+      where: { id: game.id },
+      data: { status: "cancelled", payerEventPlayerId: null },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+
+    const res = await claim(CTX(event.id));
+    expect(res.status).toBe(400);
+
+    const rows = await testPrisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.archivedAt !== null)).toBe(true);
+    const after = await testPrisma.game.findUnique({ where: { id: game.id } });
+    expect(after!.payerEventPlayerId).toBeNull();
+  });
 });
 
 describe("POST payer/stand-down", () => {

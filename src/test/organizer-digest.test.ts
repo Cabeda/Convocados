@@ -153,6 +153,31 @@ describe("processOrganizerDigests", () => {
     expect(body).toContain("1 to confirm");
   });
 
+  it("does not count a cancelled game's pending rows as outstanding", async () => {
+    const user = await seedUser();
+    const now = new Date();
+    const digestTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+    await prisma.notificationPreferences.create({
+      data: { userId: user.id, digestMode: true, digestTime },
+    });
+    const event = await seedEvent(user.id, { title: "Cancelled Game" });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "cancelled" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "A" } });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "A", amount: 5, status: "pending" },
+    });
+
+    const result = await processOrganizerDigests();
+
+    expect(result.sent).toContain(user.id);
+    const body: string = mockSendPush.mock.calls[0][2];
+    expect(body).not.toContain("pending");
+  });
+
   it("deduplicates events that are both owned and admin'd", async () => {
     const user = await seedUser();
     const now = new Date();
