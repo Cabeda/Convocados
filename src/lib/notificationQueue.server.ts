@@ -207,6 +207,28 @@ function isBusyError(err: unknown): boolean {
 }
 
 /**
+ * Release a claimed job after a failed send: reset `processedAt` so the next
+ * drain retries it, spending the row's retry budget, and dead-letter it
+ * (`failedAt`) once MAX_RETRIES is reached. Shared by the grouped and the
+ * individual path, so a collapsed send failure is retried instead of dropped:
+ * the claim stamps `processedAt` on every row before any push is attempted,
+ * and a catch that only logs leaves the batch permanently invisible (#1592).
+ */
+async function releaseFailedJob(job: { id: string; retryCount: number }): Promise<void> {
+  const nextRetry = job.retryCount + 1;
+  if (nextRetry >= MAX_RETRIES) {
+    await prisma.notificationJob
+      .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null } })
+      .catch(() => {});
+    log.error({ jobId: job.id }, "Notification job moved to dead-letter after max retries");
+  } else {
+    await prisma.notificationJob
+      .update({ where: { id: job.id }, data: { processedAt: null, retryCount: nextRetry } })
+      .catch(() => {});
+  }
+}
+
+/**
  * Claim up to BATCH_SIZE pending jobs in one transaction.
  *
  * Returns null instead of throwing when the lock was busy (#1346): the rows are
@@ -289,6 +311,12 @@ async function _doDrain(): Promise<number> {
             await createInAppNotifications(audience, group.type, group.payload);
           } catch (err: unknown) {
             log.error({ eventId: group.eventId, err }, "Failed to process grouped notification");
+            // Every job in the group was claimed (processedAt stamped) before
+            // the collapsed send: release them all so the next drain retries,
+            // and dead-letter at the cap — same budget as the single path.
+            for (const job of group.jobs) {
+              await releaseFailedJob(job);
+            }
           }
         }),
       ),
@@ -322,17 +350,7 @@ async function _doDrain(): Promise<number> {
             await createInAppNotifications(audience, type, payload);
           } catch (err: unknown) {
             log.error({ jobId: job.id, eventId: job.eventId, type: job.type, err }, "Failed to process notification job");
-            const nextRetry = job.retryCount + 1;
-            if (nextRetry >= MAX_RETRIES) {
-              await prisma.notificationJob
-                .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null } })
-                .catch(() => {});
-              log.error({ jobId: job.id }, "Notification job moved to dead-letter after max retries");
-            } else {
-              await prisma.notificationJob
-                .update({ where: { id: job.id }, data: { processedAt: null, retryCount: nextRetry } })
-                .catch(() => {});
-            }
+            await releaseFailedJob(job);
           }
         }),
       ),

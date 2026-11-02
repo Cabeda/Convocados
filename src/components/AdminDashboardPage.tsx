@@ -421,9 +421,11 @@ export default function AdminDashboardPage() {
 
                 <GrowthChart growthData={growthData} growthRange={growthRange} setGrowthRange={setGrowthRange} loadingGrowth={loadingGrowth} />
 
-                {/* Scheduler job failures — retrying (recoverable) and dead-lettered,
-                    with the recorded reason. Persisted on the row precisely so this
-                    is visible without production DB access. */}
+                {/* Scheduler and notification job failures — retrying (recoverable) and
+                    dead-lettered, with the recorded reason where one exists.
+                    Persisted on the row precisely so this is visible without
+                    production DB access (#1592: a lost collapsed notification now
+                    shows here next to the ScheduledJobs). */}
                 {stats.jobFailures.length > 0 && (
                   <Paper elevation={1} sx={{ p: 3 }}>
                     <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminJobFailures")}</Typography>
@@ -452,7 +454,8 @@ export default function AdminDashboardPage() {
                                 />
                               </TableCell>
                               <TableCell sx={{ fontFamily: "monospace", fontSize: 12, maxWidth: 480, overflowWrap: "anywhere" }}>
-                                {f.lastError}
+                                {/* NotificationJob rows carry no stored error text (#1592). */}
+                                {f.lastError ?? "—"}
                               </TableCell>
                             </TableRow>
                           ))}

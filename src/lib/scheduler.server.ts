@@ -132,7 +132,13 @@ export const FAILED_JOB_WINDOW_HOURS = 24;
 /** Dead-lettered jobs inside the window — surfaced via /api/health. */
 export async function countFailedJobs(now: Date = new Date()): Promise<number> {
   const since = new Date(now.getTime() - FAILED_JOB_WINDOW_HOURS * 3_600_000);
-  return prisma.scheduledJob.count({ where: { failedAt: { gte: since } } });
+  const [scheduled, notification] = await Promise.all([
+    prisma.scheduledJob.count({ where: { failedAt: { gte: since } } }),
+    // A collapsed NotificationJob dead-letters exactly like a ScheduledJob;
+    // counting only one table left a lost group with no counter anywhere (#1592).
+    prisma.notificationJob.count({ where: { failedAt: { gte: since } } }),
+  ]);
+  return scheduled + notification;
 }
 
 /**
@@ -141,25 +147,74 @@ export async function countFailedJobs(now: Date = new Date()): Promise<number> {
  * alone tells a human "something broke"; this tells them what and where, so
  * diagnosis does not need production DB access or logs that no longer exist.
  * `deadLettered` distinguishes the two: a retrying job may still recover.
+ *
+ * Both job tables are listed, dead-letters first, so a dead-lettered
+ * NotificationJob sits beside the ScheduledJob failures on the admin surface.
+ * NotificationJob carries no error text (no `lastError` column), so its rows
+ * come back with `lastError: null` — the row records the failure state.
  */
 export async function getRecentJobFailures(limit = 50) {
-  const rows = await prisma.scheduledJob.findMany({
-    where: { lastError: { not: null } },
-    // Dead-letters first (non-null failedAt), then retrying jobs (null sorts
-    // last under DESC); runAt breaks ties deterministically.
-    orderBy: [{ failedAt: "desc" }, { runAt: "desc" }],
-    take: limit,
-    select: {
-      id: true,
-      type: true,
-      eventId: true,
-      runAt: true,
-      retryCount: true,
-      failedAt: true,
-      lastError: true,
-    },
+  const [scheduled, notification] = await Promise.all([
+    prisma.scheduledJob.findMany({
+      where: { lastError: { not: null } },
+      // Dead-letters first (non-null failedAt), then retrying jobs (null sorts
+      // last under DESC); runAt breaks ties deterministically.
+      orderBy: [{ failedAt: "desc" }, { runAt: "desc" }],
+      take: limit,
+      select: {
+        id: true,
+        type: true,
+        eventId: true,
+        runAt: true,
+        retryCount: true,
+        failedAt: true,
+        lastError: true,
+      },
+    }),
+    prisma.notificationJob.findMany({
+      // Retryable state mirrors ScheduledJob's `lastError` filter: a row the
+      // drain released after a failure (processedAt null, retryCount spent) or
+      // one dead-lettered. A delivered row keeps processedAt and is not a
+      // failure, however many retries it took to deliver.
+      where: {
+        OR: [
+          { failedAt: { not: null } },
+          { AND: [{ retryCount: { gt: 0 } }, { processedAt: null }] },
+        ],
+      },
+      orderBy: [{ failedAt: "desc" }, { createdAt: "desc" }],
+      take: limit,
+      select: {
+        id: true,
+        type: true,
+        eventId: true,
+        retryCount: true,
+        failedAt: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const rows = [
+    ...scheduled.map((r) => ({ ...r, deadLettered: r.failedAt !== null })),
+    ...notification.map((r) => ({
+      id: r.id,
+      type: r.type,
+      eventId: r.eventId,
+      runAt: r.createdAt,
+      retryCount: r.retryCount,
+      failedAt: r.failedAt,
+      lastError: null as string | null,
+      deadLettered: r.failedAt !== null,
+    })),
+  ];
+
+  // One ordering across both tables: dead-letters first, then newest first.
+  rows.sort((a, b) => {
+    if (a.deadLettered !== b.deadLettered) return a.deadLettered ? -1 : 1;
+    return (b.failedAt?.getTime() ?? b.runAt.getTime()) - (a.failedAt?.getTime() ?? a.runAt.getTime());
   });
-  return rows.map((r) => ({ ...r, deadLettered: r.failedAt !== null }));
+  return rows.slice(0, limit);
 }
 
 /**
