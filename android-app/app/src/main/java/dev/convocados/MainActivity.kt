@@ -39,7 +39,9 @@ class MainActivity : AppCompatActivity() {
             tokenStore.setTokens(OAuthTokens(accessToken = token, refreshToken = "", expiresAt = System.currentTimeMillis() + 3600_000))
         }
 
-        deepLink = DeepLink.extract(intent)
+        // A pending invite survives activity recreation (rotation) while the
+        // user is signing in in another tab.
+        deepLink = savedInstanceState?.getString(STATE_DEEP_LINK) ?: DeepLink.extract(intent)
         lifecycleScope.launch {
             restoreCredentialCoordinator.restoreOrCreate(this@MainActivity)
         }
@@ -49,8 +51,19 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        deepLink = DeepLink.extract(intent)
+        // The OAuth callback arrives here after sign-in. Keep a pending invite
+        // instead of overwriting it with convocados://auth?code=...
+        deepLink = DeepLink.nextDeepLink(deepLink, DeepLink.extract(intent))
         // Increment version to trigger re-processing of the intent in ConvocadosRoot
         intentVersion++
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_DEEP_LINK, deepLink)
+    }
+
+    private companion object {
+        const val STATE_DEEP_LINK = "pending_deep_link"
     }
 }
