@@ -31,6 +31,75 @@ export { shareFor } from "./gameCost";
 
 export type PaymentMode = "tracked" | "untracked";
 
+/** The payer/mode a new Game inherits. Null paymentMode = the schema default ("tracked"). */
+export interface GamePayerSeed {
+  paymentMode: PaymentMode | null;
+  payerEventPlayerId: string | null;
+  payerExternalName: string | null;
+}
+
+/**
+ * Decide the payer and payment mode for a newly created Game (ADR 0055).
+ *
+ * One fallback chain for both creation paths — recurrence advance and cancel:
+ *   1. the previous Game's payer, while still an active participant of it;
+ *   2. the previous Game's external payer;
+ *   3. the Event's default linked player;
+ *   4. the Event's default external name.
+ *
+ * The previous Game's paymentMode travels with the seed, so an untracked
+ * occurrence stays untracked and a cancelled Game does not silently flip mode.
+ */
+export async function seedGamePayer(
+  event: {
+    id: string;
+    defaultPayerEventPlayerId: string | null;
+    defaultPayerExternalName: string | null;
+  },
+  previousGameId: string | null,
+): Promise<GamePayerSeed> {
+  let paymentMode: PaymentMode | null = null;
+  let payerEventPlayerId: string | null = null;
+  let payerExternalName: string | null = null;
+
+  if (previousGameId) {
+    const previous = await prisma.game.findUnique({
+      where: { id: previousGameId },
+      select: { paymentMode: true, payerEventPlayerId: true, payerExternalName: true },
+    });
+    paymentMode = (previous?.paymentMode as PaymentMode | null) ?? null;
+
+    if (previous?.payerEventPlayerId) {
+      const payerStillActive = await prisma.gameParticipant.findFirst({
+        where: {
+          ...activeParticipantsWhere(previousGameId),
+          eventPlayerId: previous.payerEventPlayerId,
+        },
+        select: { id: true },
+      });
+      if (payerStillActive) payerEventPlayerId = previous.payerEventPlayerId;
+    }
+    if (!payerEventPlayerId) {
+      payerExternalName = previous?.payerExternalName?.trim() || null;
+    }
+  }
+
+  if (!payerEventPlayerId && !payerExternalName) {
+    if (event.defaultPayerEventPlayerId) {
+      const defaultPlayer = await prisma.eventPlayer.findFirst({
+        where: { id: event.defaultPayerEventPlayerId, eventId: event.id },
+        select: { id: true },
+      });
+      if (defaultPlayer) payerEventPlayerId = defaultPlayer.id;
+    }
+    if (!payerEventPlayerId) {
+      payerExternalName = event.defaultPayerExternalName?.trim() || null;
+    }
+  }
+
+  return { paymentMode, payerEventPlayerId, payerExternalName };
+}
+
 /**
  * The payer a money surface should present. A stand-down keeps
  * payerEventPlayerId for history (and for the owner to ask them back) but

@@ -3,7 +3,7 @@ import { parseRecurrenceRule, nextOccurrence } from "./recurrence";
 import { fireWebhooks } from "./webhook.server";
 import { autoPriorityEnroll } from "./priority.server";
 import { cancelEventJobs, scheduleEventReminders } from "./scheduler.server";
-import { syncGamePayments } from "./settlement.server";
+import { seedGamePayer, syncGamePayments } from "./settlement.server";
 import { applyAutoConfirm } from "./autoConfirm.server";
 import { createLogger } from "./logger.server";
 
@@ -83,47 +83,16 @@ export async function advanceDueRecurringEvent(
       : null;
 
   // ADR 0016: mark old Game as played + create new Game + swap pointer.
-  // Payment overhaul: carry paymentMode to the next occurrence; carry the
-  // payer only if they were an active participant of the previous game.
+  // ADR 0055: one shared seed decides the payer/mode for a new Game — the
+  // previous occurrence first, then the Event default.
   const oldGameId = event.currentGameId;
-  let inheritMode: string | null = null;
-  let inheritPayerId: string | null = null;
-  let inheritExternalName: string | null = null;
-  if (oldGameId) {
-    const oldGame = await prisma.game.findUnique({
-      where: { id: oldGameId },
-      select: { paymentMode: true, payerEventPlayerId: true },
-    });
-    inheritMode = oldGame?.paymentMode ?? null;
-    if (oldGame?.payerEventPlayerId) {
-      const payerStillActive = await prisma.gameParticipant.findFirst({
-        where: { gameId: oldGameId, eventPlayerId: oldGame.payerEventPlayerId, archivedAt: null },
-        select: { id: true },
-      });
-      if (payerStillActive) inheritPayerId = oldGame.payerEventPlayerId;
-    }
-    if (!inheritPayerId) {
-      const previousExternal = await prisma.game.findUnique({
-        where: { id: oldGameId },
-        select: { payerExternalName: true },
-      });
-      inheritExternalName = previousExternal?.payerExternalName ?? null;
-    }
-  }
-  // Fall back to the Event's default payer (ADR 0055) so "the same person always
-  // pays" survives a roster change, a cancelled Game, or an external payer.
-  if (!inheritPayerId && !inheritExternalName) {
-    inheritPayerId = event.defaultPayerEventPlayerId ?? null;
-    inheritExternalName = event.defaultPayerExternalName ?? null;
-  }
+  const seed = await seedGamePayer(event, oldGameId);
   const newGame = await prisma.game.create({
     data: {
       eventId: event.id,
       dateTime: newDateTime,
       status: "upcoming",
-      paymentMode: inheritMode,
-      payerEventPlayerId: inheritPayerId,
-      payerExternalName: inheritExternalName,
+      ...seed,
     },
   });
   if (oldGameId) {

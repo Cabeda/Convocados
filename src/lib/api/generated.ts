@@ -594,6 +594,7 @@ export interface ApiOperations {
       mode: "tracked" | "untracked";
       payerEventPlayerId?: string;
       payerExternalName?: string;
+      saveAsDefault?: boolean;
     };
   };
   "GET /api/events/{id}/payments/payer": {

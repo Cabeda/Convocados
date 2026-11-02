@@ -886,12 +886,12 @@ export const openApiSpec = {
     },
     "/api/events/{id}/payments/config": {
       patch: {
-        summary: "Set a game's payment mode and payer",
+        summary: "Set a game's payment mode and payer; optionally save it as the Event default",
         tags: ["Payments"],
         parameters: [eventIdParam],
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, mode: { type: "string", enum: ["tracked", "untracked"] }, payerEventPlayerId: { type: "string" }, payerExternalName: { type: "string" } }, required: ["mode"] } } },
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, mode: { type: "string", enum: ["tracked", "untracked"] }, payerEventPlayerId: { type: "string" }, payerExternalName: { type: "string" }, saveAsDefault: { type: "boolean" } }, required: ["mode"] } } },
         },
         responses: { "200": { description: "Payment config saved" }, ...errorResponses },
       },
