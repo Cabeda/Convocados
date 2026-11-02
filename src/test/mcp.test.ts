@@ -182,9 +182,15 @@ describe("POST /api/mcp — stateless transport", () => {
     const res = await POST(ctx(req));
     expect(res.status).toBe(200);
     const body: any = await res.json();
-    expect(body.result.protocolVersion).toBe(PROTOCOL_VERSION);
+    // The modern DiscoverResult shape, field for field: a client that cannot
+    // find `supportedVersions` reports "action discovery failed" and never asks
+    // for the tool list (ChatGPT, 2026-11-02).
+    expect(body.result.resultType).toBe("complete");
+    expect(body.result.supportedVersions).toEqual(expect.arrayContaining([PROTOCOL_VERSION]));
     expect(body.result.capabilities.tools).toBeDefined();
-    expect(body.result.serverInfo.name).toBe("convocados");
+    expect(body.result._meta?.["io.modelcontextprotocol/serverInfo"].name).toBe("convocados");
+    expect(typeof body.result.ttlMs).toBe("number");
+    expect(body.result.cacheScope).toBe("public");
   });
 
   it("tools/list is anonymous (mixed authentication)", async () => {
@@ -262,9 +268,11 @@ describe("POST /api/mcp — stateless transport", () => {
     // deterministic order
     const names = body.result.tools.map((t: any) => t.name);
     expect(names).toEqual([...names].sort());
-    // cache hints per SEP-2549
-    expect(body.result._meta?.ttlMs).toBe(60000);
-    expect(body.result._meta?.cacheScope).toBe("global");
+    // Cache hints live at the top level of a modern result (MCP 2026-07-28),
+    // and `cacheScope` is `public` or `private` — not an invented "global".
+    expect(body.result.resultType).toBe("complete");
+    expect(body.result.ttlMs).toBe(60000);
+    expect(body.result.cacheScope).toBe("public");
     // convocados prefix
     expect(names.every((n: string) => n.startsWith("convocados_"))).toBe(true);
     // ChatGPT reads per-tool securitySchemes to know which tools need the

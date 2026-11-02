@@ -9,6 +9,7 @@ import {
   SERVER_INFO,
   SERVER_CAPABILITIES,
   SERVER_INSTRUCTIONS,
+  SUPPORTED_VERSIONS,
   isSupportedVersion,
   negotiateHandshakeVersion,
   wwwAuthenticate,
@@ -175,14 +176,29 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // ── Modern era: server/discover (no auth) ────────────────────────────────
+  // Only modern clients call this, so the result is always the modern
+  // DiscoverResult shape: `supportedVersions` + `_meta.serverInfo`, not the
+  // legacy `protocolVersion`/`serverInfo` pair. A client that cannot find
+  // `supportedVersions` reports "authentication succeeded, action discovery
+  // failed" and never asks for the tool list.
   if (effectiveMethod === "server/discover") {
     return jsonRpcResult(id, {
-      protocolVersion: MODERN_VERSION,
-      serverInfo: SERVER_INFO,
+      resultType: "complete",
+      supportedVersions: [...SUPPORTED_VERSIONS],
       capabilities: SERVER_CAPABILITIES,
+      _meta: { "io.modelcontextprotocol/serverInfo": SERVER_INFO },
       instructions: SERVER_INSTRUCTIONS,
+      ttlMs: 3_600_000,
+      cacheScope: "public",
     });
   }
+
+  // Caching hints live at the top level of a result (MCP 2026-07-28), and
+  // `resultType` is required on every modern result.
+  const isModernClient = headerVersion === MODERN_VERSION || metaVersion === MODERN_VERSION;
+  const modernFields = isModernClient
+    ? { resultType: "complete" as const, ttlMs: 60_000, cacheScope: "public" as const }
+    : {};
 
   const isToolsList = effectiveMethod === "tools/list";
   const isToolsCall = effectiveMethod === "tools/call";
@@ -220,8 +236,9 @@ export const POST: APIRoute = async ({ request }) => {
           : [{ type: "oauth2", scopes: [t.scope] }],
     }));
     return jsonRpcResult(id, {
+      ...modernFields,
       tools,
-      _meta: { ttlMs: 60000, cacheScope: "global" as const },
+      _meta: { ttlMs: 60000, cacheScope: "public" as const },
     });
   }
 
@@ -269,6 +286,7 @@ export const POST: APIRoute = async ({ request }) => {
     try {
       const data = await tool.handler(args, authCtx ?? ANONYMOUS_CTX);
       return jsonRpcResult(id, {
+        ...modernFields,
         content: [{ type: "text" as const, text: JSON.stringify(data) }],
       });
     } catch (err: unknown) {
