@@ -5,7 +5,9 @@ import android.net.Uri
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -180,6 +182,54 @@ class DeepLinkTest {
         assertEquals(
             "event/evt-abc",
             DeepLink.deepLinkToRoute("convocados://events/evt-abc?action=payroll"),
+        )
+    }
+
+    // ── invite link survives sign-in ─────────────────────────────────────────
+
+    @Test
+    fun `invite link is recognized over https and the convocados scheme`() {
+        assertTrue(DeepLink.isInviteLink("https://convocados.cabeda.dev/invite/tok-123"))
+        assertTrue(DeepLink.isInviteLink("convocados://invite/tok-123"))
+        assertTrue(DeepLink.isInviteLink("/invite/tok-123"))
+        assertFalse(DeepLink.isInviteLink("https://convocados.cabeda.dev/events/evt-1"))
+        assertFalse(DeepLink.isInviteLink("convocados://auth?code=abc"))
+        assertFalse(DeepLink.isInviteLink(null))
+    }
+
+    @Test
+    fun `pending invite survives the OAuth callback that completes sign-in`() {
+        val invite = "https://convocados.cabeda.dev/invite/tok-123"
+
+        val pending = DeepLink.nextDeepLink(invite, null)
+        val afterCallback = DeepLink.nextDeepLink(pending, "convocados://auth?code=abc")
+
+        assertEquals(invite, afterCallback)
+    }
+
+    @Test
+    fun `signed-out invite deep link resolves to the invite route after sign-in`() {
+        // Regression: AppNavigation's deep-link effect used to drop the link
+        // while signed out. The link must still be there when auth flips.
+        val invite = "https://convocados.cabeda.dev/invite/tok-123"
+        val afterSignIn = DeepLink.nextDeepLink(invite, "convocados://auth?code=abc")
+
+        assertEquals("invite/tok-123", DeepLink.deepLinkToRoute(afterSignIn!!))
+    }
+
+    @Test
+    fun `a later non-auth link replaces the pending deep link`() {
+        val invite = "https://convocados.cabeda.dev/invite/tok-123"
+        val event = "https://convocados.cabeda.dev/events/evt-1"
+
+        assertEquals(event, DeepLink.nextDeepLink(invite, event))
+    }
+
+    @Test
+    fun `auth callback is kept when nothing else is pending`() {
+        assertEquals(
+            "convocados://auth?code=abc",
+            DeepLink.nextDeepLink(null, "convocados://auth?code=abc"),
         )
     }
 }

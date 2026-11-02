@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
@@ -67,11 +68,17 @@ fun AppNavigation(
 ) {
     val navController = rememberNavController()
 
-    // While processing OAuth callback, don't navigate — show current screen
-    val startDestination = when {
-        processingAuth -> Route.Login.route // stay on login but don't re-navigate
-        isAuthenticated -> Route.Games.route
-        else -> Route.Login.route
+    // Fixed for the life of this composition. Recomputing it when
+    // isAuthenticated flipped rebuilt the NavHost graph and reset the back
+    // stack, which wiped a deep link that had just been honored — an invite
+    // opened while signed out died here after sign-in. Post-auth navigation is
+    // owned by the effects below, not by replumbing the graph (ADR-0012).
+    val startDestination = remember {
+        when {
+            processingAuth -> Route.Login.route // stay on login but don't re-navigate
+            isAuthenticated -> Route.Games.route
+            else -> Route.Login.route
+        }
     }
 
     val initialOpenPayment = DeepLink.shouldAutoOpenPayment(deepLink ?: "")
@@ -81,16 +88,34 @@ fun AppNavigation(
     LaunchedEffect(deepLink, isAuthenticated) {
         if (deepLink == null) return@LaunchedEffect
         if (!isAuthenticated && !(dev.convocados.BuildConfig.DEBUG && deepLink.contains("/demo"))) return@LaunchedEffect
-        val route = DeepLink.deepLinkToRoute(deepLink)
+        val route = DeepLink.deepLinkToRoute(deepLink) ?: return@LaunchedEffect
         val eventId = DeepLink.eventId(deepLink)
-        if (route != null) {
-            navController.navigate(if (eventId != null) Route.Games.route else route) { launchSingleTop = true }
+        // Arriving from sign-in: replace the Login wall with Games first, so
+        // Back from the deep-linked screen returns to the app, not sign-in.
+        val onLogin = navController.currentBackStackEntry?.destination?.route == Route.Login.route
+        if (eventId != null) {
+            navController.navigate(Route.Games.route) {
+                launchSingleTop = true
+                if (onLogin) popUpTo(Route.Login.route) { inclusive = true }
+            }
+            return@LaunchedEffect
         }
+        if (onLogin) {
+            navController.navigate(Route.Games.route) {
+                popUpTo(Route.Login.route) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+        navController.navigate(route) { launchSingleTop = true }
     }
 
     // Navigate to games when auth completes (after processingAuth flips to false)
     LaunchedEffect(isAuthenticated, processingAuth) {
         if (isAuthenticated && !processingAuth) {
+            // A pending deep link owns the post-auth destination (ADR-0012);
+            // sending Games here would race it, and the graph no longer resets
+            // to rescue the link.
+            if (DeepLink.deepLinkToRoute(deepLink ?: "") != null) return@LaunchedEffect
             val currentRoute = navController.currentBackStackEntry?.destination?.route
             if (currentRoute == Route.Login.route) {
                 navController.navigate(Route.Games.route) {

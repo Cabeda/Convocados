@@ -78,6 +78,34 @@ object DeepLink {
         else -> uri.path.orEmpty()
     }
 
+    /** True when [url] is the OAuth callback that completes sign-in. */
+    fun isAuthCallback(url: String?): Boolean {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        return uri.scheme == "convocados" && uri.host == "auth"
+    }
+
+    /** True when [url] targets the invite screen. */
+    fun isInviteLink(url: String?): Boolean {
+        if (url == null) return false
+        return deepLinkToRoute(url)?.startsWith(INVITE_ROUTE_PREFIX) == true
+    }
+
+    /**
+     * Pick the deep link to keep when the activity receives a new intent.
+     *
+     * Sign-in completes with a `convocados://auth?code=...` intent on the same
+     * activity. Overwriting a pending invite with it drops the token before
+     * the auth state flips, so the invite must win until it is honored
+     * (ADR-0012: the post-auth destination survives login).
+     */
+    fun nextDeepLink(current: String?, incoming: String?): String? = when {
+        incoming == null -> current
+        isAuthCallback(incoming) && isInviteLink(current) -> current
+        else -> incoming
+    }
+
+    private const val INVITE_ROUTE_PREFIX = "invite/"
+
     /**
      * Resolve a deep-link URL to a Compose [Route] path. Returns `null` when the
      * URL is not a navigation target (e.g. the OAuth callback, or an unknown host).
