@@ -35,6 +35,34 @@ export type PushPromptState = "default" | "granted" | "dismissed" | "denied";
 
 // ─── RSVP upsert + read ────────────────────────────────────────────────────
 
+/** Raised when RSVP would have to relink an existing EventPlayer identity to a
+ *  different account, or claim a guest slot outright. Linking an existing row
+ *  belongs to the deliberate claim route, never to a name-matched RSVP. */
+export class RsvpIdentityConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RsvpIdentityConflictError";
+  }
+}
+
+/** Create the EventPlayer for (event, name), but never overwrite an existing
+ *  row's userId. A guest row (userId null) is refused too: claiming it is the
+ *  claim route's job, keyed on the player id and guarded against races. */
+async function linkOrCreateEventPlayer(eventId: string, name: string, userId: string): Promise<string> {
+  const ep = await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId, name } },
+    create: { eventId, name, userId },
+    update: {},
+    select: { id: true, userId: true },
+  });
+  if (ep.userId === userId) return ep.id;
+  throw new RsvpIdentityConflictError(
+    ep.userId
+      ? "This display name is already linked to another account on this event."
+      : "This display name is already on the roster as a guest. Use the claim-player flow to link it.",
+  );
+}
+
 /** Resolve the EventPlayer for a linked user on an event. Creates one if missing (lazy). */
 export async function resolveEventPlayerId(eventId: string, userId: string): Promise<string> {
   // Try finding by userId first
@@ -49,22 +77,12 @@ export async function resolveEventPlayerId(eventId: string, userId: string): Pro
     select: { name: true },
   });
   if (player) {
-    const created = await prisma.eventPlayer.upsert({
-      where: { eventId_name: { eventId, name: player.name } },
-      create: { eventId, name: player.name, userId },
-      update: { userId },
-    });
-    return created.id;
+    return linkOrCreateEventPlayer(eventId, player.name, userId);
   }
   // Last resort: find by user's display name
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
   if (!user) throw new Error("User not found.");
-  const created = await prisma.eventPlayer.upsert({
-    where: { eventId_name: { eventId, name: user.name } },
-    create: { eventId, name: user.name, userId },
-    update: { userId },
-  });
-  return created.id;
+  return linkOrCreateEventPlayer(eventId, user.name, userId);
 }
 
 /** Idempotent RSVP upsert for a linked user. Resolves EventPlayer + currentGameId internally. */

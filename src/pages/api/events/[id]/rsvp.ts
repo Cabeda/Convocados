@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
-import { upsertRsvp, getRsvpForUser } from "~/lib/rsvp.server";
+import { upsertRsvp, getRsvpForUser, RsvpIdentityConflictError } from "~/lib/rsvp.server";
 import { isRsvpStatusValue } from "~/lib/rsvp";
 import { enqueueRsvpAnswerNotification } from "~/lib/rsvp-notifications.server";
 import { logEvent } from "~/lib/eventLog.server";
@@ -58,7 +58,15 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
-  const rsvp = await upsertRsvp(eventId, session.user.id, body.status);
+  let rsvp: Awaited<ReturnType<typeof upsertRsvp>>;
+  try {
+    rsvp = await upsertRsvp(eventId, session.user.id, body.status);
+  } catch (err) {
+    if (err instanceof RsvpIdentityConflictError) {
+      return Response.json({ error: err.message }, { status: 409 });
+    }
+    throw err;
+  }
 
   enqueueRsvpAnswerNotification({
     eventId,

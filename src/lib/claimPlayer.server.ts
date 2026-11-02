@@ -69,6 +69,13 @@ export async function claimPlayer(
           data: { userId, name: userName },
         });
         if (claimed.count === 0) throw new Error("CLAIM_RACE");
+        // Bind the unified roster identity too. RSVP resolves by userId and
+        // refuses to relink an unclaimed guest row by display name, so leaving
+        // the EventPlayer anonymous would strand the account that just claimed.
+        await tx.eventPlayer.updateMany({
+          where: { eventId, name: oldName, userId: null },
+          data: { userId, name: userName },
+        });
       } else {
         const claimed = await tx.eventPlayer.updateMany({
           where: { id: playerId, eventId, userId: null },

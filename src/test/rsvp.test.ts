@@ -103,6 +103,44 @@ describe("upsertRsvp", () => {
   });
 });
 
+describe("resolveEventPlayerId identity guard", () => {
+  it("refuses to relink a claimed EventPlayer when a second user RSVPs with the same display name", async () => {
+    const victim = await seedUser({ name: "Ana" });
+    const attacker = await seedUser({ name: "Ana" });
+    const event = await seedEvent(null);
+    const claimed = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Ana", userId: victim.id },
+    });
+
+    await expect(upsertRsvp(event.id, attacker.id, "yes")).rejects.toThrow(/already linked/i);
+
+    const row = await prisma.eventPlayer.findUnique({ where: { id: claimed.id } });
+    expect(row!.userId).toBe(victim.id);
+  });
+
+  it("does not silently relink a guest EventPlayer slot", async () => {
+    const user = await seedUser({ name: "Ana" });
+    const event = await seedEvent(null);
+    const guest = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+
+    await expect(upsertRsvp(event.id, user.id, "yes")).rejects.toThrow(/claim/i);
+
+    const row = await prisma.eventPlayer.findUnique({ where: { id: guest.id } });
+    expect(row!.userId).toBeNull();
+  });
+
+  it("still lets a legitimately linked user RSVP", async () => {
+    const user = await seedUser({ name: "Ana" });
+    const event = await seedEvent(null);
+    const linked = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Ana", userId: user.id },
+    });
+
+    const rsvp = await upsertRsvp(event.id, user.id, "yes");
+    expect(rsvp.eventPlayerId).toBe(linked.id);
+  });
+});
+
 describe("getRsvpForUser", () => {
   it("returns null when no row", async () => {
     const user = await seedUser();
