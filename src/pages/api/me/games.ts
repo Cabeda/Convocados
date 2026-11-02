@@ -30,6 +30,7 @@ export const GET: APIRoute = async ({ request }) => {
     maxPlayers: true,
     archivedAt: true,
     isRecurring: true,
+    recurrenceRule: true,
     currentGameId: true,
     teamOneName: true,
     teamTwoName: true,

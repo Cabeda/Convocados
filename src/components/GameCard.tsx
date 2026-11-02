@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/purity -- Date-based display logic mirrors EventHeader. */
 import { useMemo } from "react";
 import { Paper, Typography, Stack, Box, Chip } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
@@ -5,6 +6,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { detectLocale } from "~/lib/i18n";
 import { useT } from "~/lib/useT";
 import { formatDateInTz } from "~/lib/timezones";
+import { parseRecurrenceRule, describeRecurrenceRule, nextOccurrence } from "~/lib/recurrence";
 import { PayerCard } from "./PayerCard";
 
 export interface GameSummary {
@@ -17,6 +19,8 @@ export interface GameSummary {
   maxPlayers: number;
   playerCount: number;
   archivedAt?: string | null;
+  isRecurring?: boolean;
+  recurrenceRule?: string | null;
 }
 
 export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast?: boolean }) {
@@ -25,6 +29,16 @@ export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast
   const date = useMemo(() => new Date(game.dateTime), [game.dateTime]);
   const isPast = useMemo(() => dimPast && date < new Date(), [dimPast, date]);
   const isArchived = !!game.archivedAt;
+  const rule = useMemo(() => parseRecurrenceRule(game.recurrenceRule ?? null), [game.recurrenceRule]);
+  const displayDate = useMemo(() => (rule && date < new Date() ? nextOccurrence(date, rule, new Date(), game.timezone || "UTC") : date), [rule, date]);
+  const recurrenceDesc = rule ? describeRecurrenceRule(rule, locale) : null;
+  const dateLabel = rule && date < new Date()
+    ? `${t("nextGame")}: ${formatDateInTz(displayDate, locale, game.timezone || "UTC", {
+        weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+      })}`
+    : formatDateInTz(displayDate, locale, game.timezone || "UTC", {
+        weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+      });
   return (
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, opacity: isPast || isArchived ? 0.7 : 1 }}>
       <Stack spacing={1}>
@@ -55,9 +69,8 @@ export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <AccessTimeIcon fontSize="small" color="action" />
             <Typography variant="body2" color="text.secondary">
-              {formatDateInTz(date, locale, game.timezone || "UTC", {
-                weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-              })}
+              {dateLabel}
+              {recurrenceDesc && ` · ${recurrenceDesc}`}
             </Typography>
           </Box>
         </Stack>

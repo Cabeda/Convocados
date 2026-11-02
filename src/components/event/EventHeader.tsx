@@ -200,7 +200,7 @@ export function EventHeader({
         if (isCancelled) return t("gameCancelled");
         // For recurring events, show the actual next game date so new players know when to come
         if (rule) {
-          const nextDate = nextOccurrence(gameDate, rule, new Date());
+          const nextDate = nextOccurrence(gameDate, rule, new Date(), event.timezone);
           const nextFormatted = formatDateInTz(nextDate, locale, event.timezone, {
             weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
           });

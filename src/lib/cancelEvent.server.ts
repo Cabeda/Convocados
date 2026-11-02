@@ -113,7 +113,7 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
   if (event.isRecurring) {
     const rule = parseRecurrenceRule(event.recurrenceRule);
     if (rule) {
-      const newDateTime = nextOccurrence(event.dateTime, rule, event.dateTime);
+      const newDateTime = nextOccurrence(event.dateTime, rule, event.dateTime, event.timezone);
       const newNextResetAt = new Date(newDateTime.getTime() + event.durationMinutes * 60 * 1000);
 
       const claimed = await prisma.event.updateMany({

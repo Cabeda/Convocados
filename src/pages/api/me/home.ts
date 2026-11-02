@@ -25,6 +25,7 @@ const upNextSelect = {
   sport: true,
   maxPlayers: true,
   isRecurring: true,
+  recurrenceRule: true,
   currentGameId: true,
 } as const;
 
@@ -40,6 +41,7 @@ interface UpNextEvent {
   maxPlayers: number;
   playerCount: number;
   isRecurring: boolean;
+  recurrenceRule: string | null;
   status: string;
 }
 
@@ -106,6 +108,7 @@ export const GET: APIRoute = async ({ request }) => {
       maxPlayers: row.maxPlayers,
       playerCount: (await getRosterCapacity(row.id, row.maxPlayers, row.currentGameId)).totalCount,
       isRecurring: row.isRecurring,
+      recurrenceRule: row.recurrenceRule,
       status,
     })),
   );
@@ -153,7 +156,7 @@ export const GET: APIRoute = async ({ request }) => {
       eventPlayer: {
         select: {
           event: {
-            select: { id: true, title: true, location: true, dateTime: true, sport: true, ownerId: true },
+            select: { id: true, title: true, location: true, dateTime: true, sport: true, ownerId: true, recurrenceRule: true },
           },
         },
       },
@@ -171,6 +174,7 @@ export const GET: APIRoute = async ({ request }) => {
     dateTime: inv.eventPlayer.event.dateTime.toISOString(),
     sport: inv.eventPlayer.event.sport,
     invitedByName: inv.invitedBy.name,
+    recurrenceRule: inv.eventPlayer.event.recurrenceRule,
   }));
 
   // Direct adds: a manager put the viewer straight onto the roster (no invite,
@@ -192,7 +196,7 @@ export const GET: APIRoute = async ({ request }) => {
       createdAt: true,
       eventPlayer: {
         select: {
-          event: { select: { id: true, title: true, location: true, dateTime: true, sport: true } },
+          event: { select: { id: true, title: true, location: true, dateTime: true, sport: true, recurrenceRule: true } },
         },
       },
     },
@@ -207,6 +211,7 @@ export const GET: APIRoute = async ({ request }) => {
     location: p.eventPlayer.event.location,
     dateTime: p.eventPlayer.event.dateTime.toISOString(),
     sport: p.eventPlayer.event.sport,
+    recurrenceRule: p.eventPlayer.event.recurrenceRule,
   }));
 
   // Growth prompt (#1166): the viewer plays in an Event they don't own (proof
