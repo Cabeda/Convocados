@@ -78,7 +78,7 @@ export function normalizePaymentMethod(m: PaymentMethod): PaymentMethod {
 }
 
 /** Parse and normalize payment methods from a JSON string or array. Returns [] on invalid input. */
-export function parsePaymentMethods(raw: string | null | undefined): PaymentMethod[] {
+export function parsePaymentMethods(raw: string | PaymentMethod[] | null | undefined): PaymentMethod[] {
   if (!raw) return [];
   try {
     const arr = typeof raw === "string" ? JSON.parse(raw) : raw;

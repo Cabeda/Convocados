@@ -75,15 +75,27 @@ export const GET: APIRoute = async ({ params, request }) => {
   const vacant = Boolean(game.payerStoodDownAt);
   const payerName = game.payerEventPlayer?.name ?? game.payerExternalName ?? null;
   const canClaim = Boolean(me);
+  const isPayer = !vacant && Boolean(payerName) && game.payerEventPlayer?.userId === userId;
+  let payerDetailsUrl: string | null = null;
+  if (isPayer && userId) {
+    const profile = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { paymentDetails: true, sharePaymentDetails: true },
+    });
+    if (!profile?.sharePaymentDetails || !profile.paymentDetails) {
+      payerDetailsUrl = `/users/${userId}`;
+    }
+  }
 
   return Response.json({
     gameId: game.id,
     mode: game.paymentMode === "untracked" ? "untracked" : "tracked",
     hasCost: (cost?.totalAmount ?? 0) > 0,
     payerName,
-    isPayer: !vacant && Boolean(payerName) && game.payerEventPlayer?.userId === userId,
+    isPayer,
     isRosterPlayer: canClaim,
     canClaim,
+    payerDetailsUrl,
     vacant,
   });
 };
