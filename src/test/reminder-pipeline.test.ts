@@ -41,6 +41,8 @@ const { enqueueNotification } = await import("~/lib/notificationQueue.server");
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.mocked(sendReminder).mockReset();
+  vi.mocked(sendReminder).mockResolvedValue(undefined);
   resetRateLimitStore();
   resetApiRateLimitStore();
   await prisma.notificationPreferences.deleteMany();
@@ -141,9 +143,24 @@ describe("deliverReminder", () => {
     }
   });
 
+  it("retries one failed recipient once without re-sending the others", async () => {
+    const { event } = await seedEvent(24, "retry");
+    await seedPlayers(event, 1, "retry");
+    vi.mocked(sendReminder).mockRejectedValueOnce(new Error("transient provider error"));
+
+    try {
+      await expect(deliverReminder(event.id, "24h")).resolves.toBe("delivered");
+      // One failed attempt + its retry + the other recipient.
+      expect(sendReminder).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.mocked(sendReminder).mockResolvedValue(undefined);
+    }
+  });
+
   it("reports an email provider failure instead of claiming delivery", async () => {
     const { event } = await seedEvent(24, "fail");
-    vi.mocked(sendReminder).mockRejectedValueOnce(new Error("provider down"));
+    // Both attempts fail: this is the persistent-provider-error case.
+    vi.mocked(sendReminder).mockRejectedValue(new Error("provider down"));
     try {
       await expect(deliverReminder(event.id, "24h")).resolves.toBe("delivered-with-failures");
     } finally {
