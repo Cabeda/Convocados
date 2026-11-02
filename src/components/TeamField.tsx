@@ -1,6 +1,6 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
-  Box, Chip, Typography, alpha, useTheme, Stack, Avatar,
+  Box, Button, Chip, Snackbar, Typography, alpha, useTheme, Stack, Avatar,
   Select, MenuItem, FormControl,
 } from "@mui/material";
 import GroupsIcon from "@mui/icons-material/Groups";
@@ -66,6 +66,28 @@ export function TeamField({
   const formationFor = (team: Imatch) =>
     getFormation(sport, team.formation) ?? getDefaultFormation(sport);
 
+  const [undoMove, setUndoMove] = useState<{
+    message: string;
+    previous: Imatch[];
+    expected: Imatch[];
+  } | null>(null);
+
+  // A tap drops the player into the other half's first free slot, the same
+  // mobile-safe move the list view offers; a drag still lands on any slot.
+  const moveToOtherHalf = (playerName: string, fromTeam: string) => {
+    const target = layout.find((m) => m.team !== fromTeam);
+    if (!target) return;
+    const slot = firstFreeSlot(target.players, formationFor(target).slots.length) ?? 0;
+    const updated = placePlayer(layout, playerName, fromTeam, target.team, slot);
+    if (updated === layout) return;
+    setUndoMove({
+      message: t("playerMovedToTeam", { name: playerName, team: target.team }),
+      previous: layout,
+      expected: updated,
+    });
+    onResultChange(updated);
+  };
+
   const slotAtPoint = (x: number, y: number): { team: string; slot: number } | null => {
     for (const [key, el] of Object.entries(slotRefs.current)) {
       if (!el) continue;
@@ -107,6 +129,7 @@ export function TeamField({
       const updated = placePlayer(layout, activeDrag.name, activeDrag.team, teamHit, slot);
       return updated === layout ? null : { updated, destinationTeam: teamHit };
     },
+    onTap: (activeDrag) => moveToOtherHalf(activeDrag.name, activeDrag.team),
   });
 
   return (
@@ -440,6 +463,32 @@ export function TeamField({
           );
         })}
       </Box>
+      <Snackbar
+        open={!!undoMove}
+        autoHideDuration={6000}
+        onClose={() => setUndoMove(null)}
+        message={undoMove?.message ?? ""}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        // Sit above the page's 60s removal undo rather than behind it.
+        sx={{ bottom: { xs: 88, sm: 24 } }}
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              const undo = undoMove;
+              setUndoMove(null);
+              if (!undo) return;
+              // Only undo if the lineup is still the one the move produced.
+              // A randomize or another edit in between must survive.
+              if (JSON.stringify(layout) !== JSON.stringify(undo.expected)) return;
+              onResultChange(undo.previous);
+            }}
+          >
+            {t("undoRemove")}
+          </Button>
+        }
+      />
     </>
   );
 }
