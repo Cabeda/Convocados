@@ -15,6 +15,14 @@ export interface ToolDef {
   title: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /**
+   * Result contract. When set, `tools/list` advertises it as `outputSchema` and
+   * `tools/call` returns the same object as `structuredContent` alongside the
+   * text JSON. ChatGPT reads this for tools marked `openai/profile`.
+   */
+  outputSchema?: Record<string, unknown>;
+  /** Tool-level `_meta` advertised by `tools/list` (e.g. OpenAI's profile marker). */
+  meta?: Record<string, unknown>;
   scope: string;
   /** Read tools never touch state; set when the registry is assembled. */
   readOnly?: boolean;
@@ -132,6 +140,28 @@ async function getRatings(args: Record<string, unknown>, _ctx: AuthContext) {
 }
 
 /**
+ * Shape ChatGPT expects from a tool marked `openai/profile`: the stable user id
+ * plus the fields it uses to label and recognise the same account after a
+ * reconnect. Everything the handler returns is declared here, so the structured
+ * response can never drift from its contract.
+ */
+const PROFILE_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    id: { type: "string", description: "Stable opaque user ID" },
+    name: { type: "string", description: "Account display name" },
+    email: { type: "string", description: "Account email address" },
+    nickname: { type: "string", description: "Short label for the account" },
+    role: { type: "string", description: "Account role" },
+    emailVerified: { type: "boolean", description: "Whether the email is verified" },
+    authMethod: { type: "string", description: "How the request authenticated" },
+    grantedScopes: { type: "array", items: { type: "string" }, description: "Scopes granted to the token" },
+  },
+  required: ["id", "name", "email", "nickname"],
+  additionalProperties: false,
+};
+
+/**
  * Which account this token acts as. Not decoration: an MCP tool call mutates
  * real data, so the first thing to check when one behaves unexpectedly is
  * whether it ran as the account you expected. Deliberately returns no token,
@@ -144,9 +174,10 @@ async function whoami(_args: Record<string, unknown>, ctx: AuthContext) {
   });
   if (!user) throw new McpError("User not found", -32001, 404);
   return {
-    userId: user.id,
+    id: user.id,
     name: user.name,
     email: user.email,
+    nickname: user.name,
     role: user.role,
     emailVerified: user.emailVerified,
     authMethod: ctx.authMethod,
@@ -219,6 +250,8 @@ const READ_TOOLS: ToolDef[] = [
     description:
       "Return the account this MCP token acts as, plus the scopes it was granted. Self-service read-only; call it first when a write tool behaves unexpectedly, to confirm which user it ran as.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: PROFILE_OUTPUT_SCHEMA,
+    meta: { "openai/profile": true },
     scope: "read:profile",
     handler: whoami,
   },
