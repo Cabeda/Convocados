@@ -9,8 +9,14 @@ vi.mock("~/lib/authenticate.server", () => ({
   }),
 }));
 
+vi.mock("~/lib/logger.server", () => {
+  const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
+  return { logger, createLogger: () => logger };
+});
+
 import { authenticateRequest } from "~/lib/authenticate.server";
 import { TOOLS } from "~/lib/mcp/tools";
+import { logger } from "~/lib/logger.server";
 // Import after mock
 const { POST, GET } = await import("~/pages/api/mcp");
 
@@ -188,6 +194,12 @@ describe("POST /api/mcp — stateless transport", () => {
     expect(res.status).toBe(200);
     const body: any = await res.json();
     expect(Array.isArray(body.result.tools)).toBe(true);
+    // The JSON-RPC method is logged because the HTTP trace cannot tell a
+    // connector ping from a tool call.
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ mcp: "tools/list", auth: "none" }),
+      "mcp message",
+    );
   });
 
   it("tools/list returns deterministic list with cache hints when authenticated", async () => {

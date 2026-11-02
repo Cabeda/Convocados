@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { authenticateRequest, requireScope, type AuthContext } from "../../lib/authenticate.server";
 import { checkApiRateLimit, extractIp } from "../../lib/apiRateLimit.server";
+import { logger } from "../../lib/logger.server";
 import { TOOLS } from "../../lib/mcp/tools";
 import { McpError } from "../../lib/mcp/errors";
 import {
@@ -133,6 +134,20 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonRpcError(id, -32600, `Mcp-Method mismatch: header "${mcpMethod}" != body method "${method}"`);
   }
   const effectiveMethod = method ?? mcpMethod;
+
+  // Which JSON-RPC message arrived. The middleware trace names the HTTP hop,
+  // but a client that pings `initialize` and never lists tools looks identical
+  // to one whose tool list is rejected unless the method is visible.
+  logger.info(
+    {
+      mcp: effectiveMethod ?? "unknown",
+      tool: (body?.params?.name as string | undefined) ?? undefined,
+      clientProtocol: (body?.params?.protocolVersion as string | undefined) ?? undefined,
+      rpcId: id ?? undefined,
+      auth: request.headers.get("authorization") ? "bearer" : "none",
+    },
+    "mcp message",
+  );
 
   // ── Handshake era: initialize ────────────────────────────────────────────
   if (effectiveMethod === "initialize") {
