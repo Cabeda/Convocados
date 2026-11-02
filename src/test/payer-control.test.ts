@@ -4,9 +4,15 @@ import { PrismaClient } from "@prisma/client";
 const testPrisma = new PrismaClient();
 
 const mockGetSession = vi.fn();
+const mockCheckEventAdmin = vi.fn().mockResolvedValue(false);
 vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: (...args: any[]) => mockGetSession(...args),
   checkOwnership: async () => ({ isOwner: false, isAdmin: false, session: null }),
+  checkEventAdmin: (...args: any[]) => mockCheckEventAdmin(...args),
+}));
+const mockCanReadFinances = vi.fn().mockResolvedValue(true);
+vi.mock("~/lib/eventReadAccess.server", () => ({
+  canReadEventFinances: (...args: any[]) => mockCanReadFinances(...args),
 }));
 const mockAuthenticate = vi.fn();
 vi.mock("~/lib/authenticate.server", async (importOriginal) => {
@@ -100,6 +106,10 @@ beforeEach(async () => {
   mockGetSession.mockReset();
   mockAuthenticate.mockReset();
   mockAuthenticate.mockResolvedValue(null);
+  mockCheckEventAdmin.mockReset();
+  mockCheckEventAdmin.mockResolvedValue(false);
+  mockCanReadFinances.mockReset();
+  mockCanReadFinances.mockResolvedValue(true);
 });
 
 describe("POST payer/claim", () => {
@@ -306,5 +316,48 @@ describe("GET payer/index", () => {
     const allowed = await getPayer(GET_CTX(event.id, cookie));
     expect(allowed.status).toBe(200);
     expect((await allowed.json()).payerName).toBe("Ana");
+  });
+
+  it("reports isRosterPlayer false for an EventPlayer with no active GameParticipant", async () => {
+    const { event, outsider } = await seed();
+    await testPrisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Out", userId: outsider.id },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: outsider.id } });
+
+    const res = await getPayer(GET_CTX(event.id));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.isRosterPlayer).toBe(false);
+    expect(body.canClaim).toBe(false);
+  });
+
+  it("lets an Event admin read a locked payer card without the access cookie", async () => {
+    const { event, outsider } = await seed();
+    await testPrisma.event.update({
+      where: { id: event.id },
+      data: { accessPassword: hashPassword("secret") },
+    });
+    await testPrisma.eventAdmin.create({ data: { eventId: event.id, userId: outsider.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    mockGetSession.mockResolvedValue({ user: { id: outsider.id } });
+
+    const res = await getPayer(GET_CTX(event.id));
+    expect(res.status).toBe(200);
+    expect((await res.json()).gameId).toBeTruthy();
+  });
+
+  it("lets an invited roster player read a locked payer card without the access cookie", async () => {
+    const { event, ana } = await seed();
+    await testPrisma.event.update({
+      where: { id: event.id },
+      data: { accessPassword: hashPassword("secret") },
+    });
+    await testPrisma.eventInvite.create({ data: { eventId: event.id, userId: ana.id } });
+    mockGetSession.mockResolvedValue({ user: { id: ana.id } });
+
+    const res = await getPayer(GET_CTX(event.id));
+    expect(res.status).toBe(200);
+    expect((await res.json()).payerName).toBe("Ana");
   });
 });

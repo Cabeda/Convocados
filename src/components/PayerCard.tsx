@@ -11,6 +11,7 @@ interface PayerState {
   payerName: string | null;
   isPayer: boolean;
   isRosterPlayer: boolean;
+  canClaim?: boolean;
   vacant: boolean;
 }
 
@@ -72,6 +73,11 @@ export function PayerCard({ eventId }: { eventId: string }) {
                 onClick={() => !busy && act("claim")}
                 clickable
               />
+            )}
+            {!state.isRosterPlayer && (
+              <Typography variant="caption" color="text.secondary">
+                {t("payerCardJoinToCollect")}
+              </Typography>
             )}
           </>
         ) : (

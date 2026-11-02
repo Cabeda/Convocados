@@ -15,6 +15,10 @@ export async function canReadEventFinances(
   request: Request,
   event: { id: string; ownerId: string | null; isPublic: boolean },
 ): Promise<boolean> {
+  // An ownerless UNLISTED Event is the no-account management flow (ADR 0035):
+  // the link is the capability, whether the visitor is signed in or not.
+  if (event.ownerId === null && !event.isPublic) return true;
+
   const session = await getSession(request);
   if (!session?.user) {
     // Anonymous: only ownerless unlisted events (the link is the capability).

@@ -102,6 +102,15 @@ describe("GET /api/events/[id]/cost authorization", () => {
     const event = await seedEvent(null, true);
     expect((await getCost(ctx({ id: event.id }))).status).toBe(403);
   });
+
+  it("allows a signed-in non-participant on an ownerless UNLISTED event for both finance reads", async () => {
+    const event = await seedEvent(null, false);
+    const cost = await getCost(ctx({ id: event.id }, otherToken));
+    const payments = await getPayments(ctx({ id: event.id }, otherToken));
+    expect(cost.status).toBe(200);
+    expect(payments.status).toBe(200);
+    expect(cost.status).toBe(payments.status);
+  });
 });
 
 describe("GET /api/events/[id]/payments authorization", () => {
