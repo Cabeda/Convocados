@@ -38,23 +38,46 @@ if [ "$BACKUPS_ENABLED" = "true" ] && [ ! -f "$DB" ] && [ -n "$LITESTREAM_REPLIC
 fi
 
 # ── Pre-migration backup ─────────────────────────────────────────────────────
+# A boot that finds a failed migration must keep the copy taken before that
+# deploy: the live file already carries the failed migration, so copying it over
+# the backup makes the recovery below restore the database onto itself.
+failed_migrations=0
 if [ -f "$DB" ]; then
-  echo "[startup] Checkpointing WAL and backing up the database..."
-  checkpoint_output="$(node -e '
+  failed_migrations="$(node -e '
     const Database = require(process.env.APP_DIR + "/node_modules/better-sqlite3");
-    const db = new Database(process.env.DB, { readonly: false });
-    try { db.pragma("wal_checkpoint(TRUNCATE)"); } finally { db.close(); }
-  ' 2>&1)" && checkpoint_status=0 || checkpoint_status=$?
-  if [ "$checkpoint_status" -ne 0 ]; then
-    echo "[startup] WARNING: WAL checkpoint failed (exit $checkpoint_status); preserving sidecars with the backup."
-    printf '%s\n' "$checkpoint_output" | tail -3
+    const db = new Database(process.env.DB, { readonly: true, fileMustExist: true });
+    try {
+      const cutoff = new Date(Date.now() - 120000).toISOString();
+      const row = db.prepare(
+        "SELECT COUNT(*) AS n FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < ?"
+      ).get(cutoff);
+      console.log(row.n);
+    } finally { db.close(); }
+  ' 2>/dev/null)" || failed_migrations=0
+  case "$failed_migrations" in ''|*[!0-9]*) failed_migrations=0 ;; esac
+fi
+
+if [ -f "$DB" ]; then
+  if [ "$failed_migrations" -gt 0 ]; then
+    echo "[startup] Pending failed migration — keeping the existing pre-migrate backup"
+  else
+    echo "[startup] Checkpointing WAL and backing up the database..."
+    checkpoint_output="$(node -e '
+      const Database = require(process.env.APP_DIR + "/node_modules/better-sqlite3");
+      const db = new Database(process.env.DB, { readonly: false });
+      try { db.pragma("wal_checkpoint(TRUNCATE)"); } finally { db.close(); }
+    ' 2>&1)" && checkpoint_status=0 || checkpoint_status=$?
+    if [ "$checkpoint_status" -ne 0 ]; then
+      echo "[startup] WARNING: WAL checkpoint failed (exit $checkpoint_status); preserving sidecars with the backup."
+      printf '%s\n' "$checkpoint_output" | tail -3
+    fi
+    cp "$DB" "$DB.pre-migrate-backup"
+    if [ "$checkpoint_status" -ne 0 ]; then
+      [ -f "$DB-wal" ] && cp "$DB-wal" "$DB.pre-migrate-backup-wal"
+      [ -f "$DB-shm" ] && cp "$DB-shm" "$DB.pre-migrate-backup-shm"
+    fi
+    echo "[startup] Database backed up to $DB.pre-migrate-backup"
   fi
-  cp "$DB" "$DB.pre-migrate-backup"
-  if [ "$checkpoint_status" -ne 0 ]; then
-    [ -f "$DB-wal" ] && cp "$DB-wal" "$DB.pre-migrate-backup-wal"
-    [ -f "$DB-shm" ] && cp "$DB-shm" "$DB.pre-migrate-backup-shm"
-  fi
-  echo "[startup] Database backed up to $DB.pre-migrate-backup"
 fi
 
 # ── Recover from failed migrations ───────────────────────────────────────────
@@ -91,10 +114,17 @@ if [ -f "$DB" ]; then
         // as Litestream restore does. A backup taken after a failed
         // checkpoint carries its own sidecars; restore those if present.
         const fs = require("fs");
-        if (fs.existsSync(DB + ".pre-migrate-backup")) {
+        const backup = DB + ".pre-migrate-backup";
+        // Only restore when the backup actually differs: a no-op copy is how a
+        // clobbered backup reported success while the failed schema survived.
+        const differs = fs.existsSync(backup) && (
+          fs.statSync(backup).size !== fs.statSync(DB).size ||
+          !fs.readFileSync(backup).equals(fs.readFileSync(DB))
+        );
+        if (differs) {
           fs.rmSync(DB + "-wal", { force: true });
           fs.rmSync(DB + "-shm", { force: true });
-          fs.copyFileSync(DB + ".pre-migrate-backup", DB);
+          fs.copyFileSync(backup, DB);
           if (fs.existsSync(DB + ".pre-migrate-backup-wal")) {
             fs.copyFileSync(DB + ".pre-migrate-backup-wal", DB + "-wal");
           }
@@ -102,6 +132,10 @@ if [ -f "$DB" ]; then
             fs.copyFileSync(DB + ".pre-migrate-backup-shm", DB + "-shm");
           }
           console.log("[startup] Database restored from pre-migrate backup");
+        } else if (fs.existsSync(backup)) {
+          console.log("[startup] Pre-migrate backup is identical to the live database; nothing to restore");
+        } else {
+          console.log("[startup] WARNING: no pre-migrate backup to restore; keeping the current database");
         }
         // Mark failed migrations as rolled back so prisma migrate deploy retries them
         const db2 = new Database(DB, { readonly: false });
