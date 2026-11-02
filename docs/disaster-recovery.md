@@ -142,7 +142,7 @@ fly ssh console -C "litestream snapshots -config /app/litestream.yml"
 ## Monitoring
 
 - Check replication is active: `fly logs | grep litestream`
-- Health endpoint reports WAL mode and Litestream status: `curl https://convocados.fly.dev/api/health`
+- Health endpoint reports WAL mode and Litestream status: `curl https://convocados.cabeda.dev/api/health`
 
 ## Fly.io Secrets Reference
 

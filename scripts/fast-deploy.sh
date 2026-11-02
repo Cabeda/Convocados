@@ -42,4 +42,4 @@ docker push "$REGISTRY:$TAG"
 echo "→ Deploying..."
 flyctl deploy --image "$REGISTRY:$TAG" --app "$APP" --strategy immediate --wait-timeout 60s
 
-echo "✓ Deployed $TAG to https://convocados.fly.dev/"
+echo "✓ Deployed $TAG to https://convocados.cabeda.dev/"
