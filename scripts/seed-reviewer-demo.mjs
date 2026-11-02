@@ -195,7 +195,7 @@ async function main() {
       city: "Lisbon",
       dateTime: isoAt(6, 20),
       timezone: "Europe/Lisbon",
-      sport: "basketball-5v5",
+      sport: "basketball",
       maxPlayers: 10,
       teamOneName: "Home",
       teamTwoName: "Away",
