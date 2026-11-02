@@ -1596,6 +1596,7 @@ adminPickupsDetected: "Pickups detected",
   paymentsFailed: "Something went wrong. Try again.",
   paymentsUntrackedNote: "Each player pays their own share — no tracking for this game.",
   paymentsUnassignedPayer: "No payer set yet",
+  paymentsSettledAll: "All shares marked paid.",
   paymentMethodsNotShared: "{name} hasn't shared payment details yet",
   // Event-page payment surface (replaces the split-the-cost accordion)
   youOwe: "You owe {amount}",

@@ -81,6 +81,44 @@ describe("PaymentsPage settle-all affordance (#1236)", () => {
     expect(screen.queryByRole("button", { name: /mark all paid/i })).not.toBeInTheDocument();
   });
 
+  it("offers Undo after mark-all-paid and reverts each share", async () => {
+    const requests: Array<{ url: string; method?: string; body?: string }> = [];
+    vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(url);
+      requests.push({ url: u, method: init?.method, body: String(init?.body ?? "") });
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (u === SETTLEMENT_URL) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers,
+          json: async () => summary({
+            viewerRole: "owner",
+            games: [unsettledGame({
+              rows: [
+                { eventPlayerId: "ep-b", name: "Bob", amount: 6, status: "pending", isPayer: false },
+                { eventPlayerId: "ep-c", name: "Cara", amount: 6, status: "pending", isPayer: false },
+              ],
+            })],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, headers, json: async () => ({ ok: true, updated: 2 }) });
+    }));
+
+    renderWithTheme(<PaymentsPage eventId="e1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /mark all paid/i }));
+
+    expect(await screen.findByText("All shares marked paid.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /undo/i }));
+
+    await waitFor(() => {
+      const deletes = requests.filter((r) => r.method === "DELETE");
+      expect(deletes).toHaveLength(2);
+      expect(deletes.map((r) => JSON.parse(r.body!).eventPlayerId).sort()).toEqual(["ep-b", "ep-c"]);
+    });
+  });
+
   it("keeps the manager on the owner/admin settle-all route", async () => {
     mockFetch({ [SETTLEMENT_URL]: summary({ viewerRole: "owner", games: [unsettledGame({ viewerIsPayer: false })] }) });
     renderWithTheme(<PaymentsPage eventId="e1" />);
