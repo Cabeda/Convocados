@@ -292,6 +292,13 @@
     <string name="payments_report_sent">Reportar envío</string>
     <string name="payments_status_pending">Pendiente</string>
     <string name="payments_settle_all">Liquidar todo</string>
+    <string name="payer_card_collecting">%1$s está cobrando</string>
+    <string name="payer_card_vacant">Todavía nadie está cobrando</string>
+    <string name="payer_card_claim">Yo cobro</string>
+    <string name="payer_card_stand_down">Esta semana no puedo</string>
+    <string name="payer_card_take_over">Sustituir a %1$s</string>
+    <string name="payer_card_take_over_title">¿Asumir el cobro?</string>
+    <string name="payer_card_take_over_body">%1$s está cobrando. ¿Asumir?</string>
     <string name="set_custom_cost">Definir coste personalizado</string>
     <string name="custom_cost_for">Coste personalizado para %1$s</string>
     <string name="amount">Importe</string>

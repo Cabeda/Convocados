@@ -119,6 +119,7 @@ payments:
     mark-paid: { web: true, android: true, wearos: false }
     cost-override: { web: true, android: false, wearos: false }
     payer-check-in: { web: true, android: true, wearos: false }
+    payer-control: { web: true, android: true, wearos: false }
 
 event-settings:
   web: true

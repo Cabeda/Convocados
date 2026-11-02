@@ -277,6 +277,23 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun selfReportSent(eventId: String, gameId: String, eventPlayerId: String): OkResponse =
         client.post("/api/events/$eventId/payments/settlement/self-report", SettlementActionRequest(gameId, eventPlayerId))
 
+    // ── Payer control (ADR 0055) ───────────────────────────────────────────
+    /** Who is collecting for the current Game, and what the viewer may do. */
+    suspend fun fetchPayer(eventId: String): PayerState =
+        client.get("/api/events/$eventId/payments/payer")
+
+    /** Any active roster player may take the role for the current Game. */
+    suspend fun claimPayer(eventId: String, gameId: String? = null): OkResponse =
+        client.post("/api/events/$eventId/payments/payer/claim", PayerGameRequest(gameId))
+
+    /** The Payer withdraws for one Game, leaving the role Vacant. */
+    suspend fun standDownPayer(eventId: String, gameId: String? = null): OkResponse =
+        client.post("/api/events/$eventId/payments/payer/stand-down", PayerGameRequest(gameId))
+
+    /** Owner/admin sets the current Game's payment mode and payer. */
+    suspend fun setPaymentConfig(eventId: String, request: PaymentConfigRequest): OkResponse =
+        client.patch("/api/events/$eventId/payments/config", request)
+
     suspend fun updatePaymentStatus(eventId: String, playerName: String, status: String): OkResponse =
         client.put("/api/events/$eventId/payments", PaymentUpdateRequest(playerName, status))
 
