@@ -542,6 +542,12 @@
     <string name="crew_captain">Capitano: %1$s</string>
     <string name="captain_nomination">Nomina di capitano — %1$s</string>
     <string name="accept_captaincy">Accetta il ruolo di capitano</string>
+    <string name="captain_tools">Strumenti del capitano</string>
+    <string name="captain_tools_for">Proponi cambi di rosa per %1$s. L\'organizzatore li esamina.</string>
+    <string name="captain_select_player">Seleziona giocatore</string>
+    <string name="captain_add_player">Aggiungi giocatore</string>
+    <string name="captain_remove_player">Rimuovi giocatore</string>
+    <string name="captain_change_submitted">Inviato all\'organizzatore per approvazione.</string>
     <string name="crews">Crew</string>
     <string name="season_enroll_recent">Iscrivi giocatori recenti</string>
     <string name="season_recommend_crews">Consiglia crew</string>

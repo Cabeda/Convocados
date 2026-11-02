@@ -22,6 +22,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
 import dev.convocados.data.api.ApiException
 import dev.convocados.data.api.ConvocadosApi
+import dev.convocados.data.api.CrewCaptain
 import dev.convocados.data.api.CrewProposal
 import dev.convocados.data.api.CrewProposalCandidate
 import dev.convocados.data.api.CrewDraftInput
@@ -60,10 +61,15 @@ class SeasonDetailViewModel @Inject constructor(
     val canReview: StateFlow<Boolean> = _canReview
     private val _proposerMembershipId = MutableStateFlow<String?>(null)
     val proposerMembershipId: StateFlow<String?> = _proposerMembershipId
+    private val _captainOf = MutableStateFlow<CrewCaptain?>(null)
+    val captainOf: StateFlow<CrewCaptain?> = _captainOf
+    private val _crewChangeSent = MutableStateFlow(false)
+    val crewChangeSent: StateFlow<Boolean> = _crewChangeSent
 
     fun load(eventId: String, seasonId: String) {
         viewModelScope.launch {
             _loading.value = true
+            _crewChangeSent.value = false
             runCatching { api.fetchEvent(eventId) }.onSuccess { _canManage.value = it.isAdmin }
             runCatching { api.fetchSeasonDetail(eventId, seasonId) }
                 .onSuccess { _season.value = it.season }
@@ -139,7 +145,21 @@ class SeasonDetailViewModel @Inject constructor(
                 _canPropose.value = it.canPropose
                 _canReview.value = it.canReview
                 _proposerMembershipId.value = it.proposerMembershipId
+                _captainOf.value = it.captainOf
             }
+    }
+
+    fun submitCrewChange(eventId: String, seasonId: String, action: String, targetCrewId: String, membershipIds: List<String>) {
+        viewModelScope.launch {
+            _busy.value = true
+            runCatching { api.submitCrewChange(eventId, seasonId, action, targetCrewId, membershipIds) }
+                .onSuccess {
+                    _crewChangeSent.value = true
+                    loadProposals(eventId, seasonId)
+                }
+                .onFailure { _message.value = it.message }
+            _busy.value = false
+        }
     }
 
     fun submitProposal(eventId: String, seasonId: String, name: String, membershipIds: List<String>) {
@@ -187,6 +207,8 @@ fun SeasonDetailScreen(
     val proposalCandidates by viewModel.proposalCandidates.collectAsStateWithLifecycle()
     val canPropose by viewModel.canPropose.collectAsStateWithLifecycle()
     val canReview by viewModel.canReview.collectAsStateWithLifecycle()
+    val captainOf by viewModel.captainOf.collectAsStateWithLifecycle()
+    val crewChangeSent by viewModel.crewChangeSent.collectAsStateWithLifecycle()
     var showPropose by remember { mutableStateOf(false) }
     var proposalName by remember { mutableStateOf("") }
     val selectedMembers = remember { mutableStateListOf<String>() }
@@ -386,6 +408,25 @@ fun SeasonDetailScreen(
                     }
                 }
 
+                // Captain add/drop form (#1553). Only a participant who captains
+                // a crew in this Season receives `captainOf`; everyone else sees
+                // the screen unchanged.
+                if (captainOf != null) {
+                    item {
+                        CaptainCrewToolsSection(
+                            captain = captainOf,
+                            candidates = proposalCandidates,
+                            busy = busy,
+                            submitted = crewChangeSent,
+                            onSubmit = { action, membershipId ->
+                                captainOf?.let { captain ->
+                                    viewModel.submitCrewChange(eventId, seasonId, action, captain.crewId, listOf(membershipId))
+                                }
+                            },
+                        )
+                    }
+                }
+
                 // Members
                 if (s.activeMembers.isNotEmpty()) {
                     item { Text(stringResource(R.string.season_members), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
@@ -553,6 +594,98 @@ internal fun PendingCrewProposalCard(
                 if (canReview) {
                     OutlinedButton(onClick = onReject, enabled = !busy) { Text(stringResource(R.string.reject_proposal)) }
                 }
+            }
+        }
+    }
+}
+
+private data class CrewChangeTarget(val membershipId: String, val name: String)
+
+/**
+ * The captain's add/drop form (#1553, parity with the web panel from #1442).
+ * A null captain renders nothing, so a non-captain sees the screen unchanged.
+ */
+@Composable
+internal fun CaptainCrewToolsSection(
+    captain: CrewCaptain?,
+    candidates: List<CrewProposalCandidate>,
+    busy: Boolean,
+    submitted: Boolean,
+    onSubmit: (action: String, membershipId: String) -> Unit,
+) {
+    if (captain == null) return
+    CaptainCrewToolsCard(captain, candidates, busy, submitted, onSubmit)
+}
+
+@Composable
+internal fun CaptainCrewToolsCard(
+    captain: CrewCaptain,
+    candidates: List<CrewProposalCandidate>,
+    busy: Boolean,
+    submitted: Boolean,
+    onSubmit: (action: String, membershipId: String) -> Unit,
+) {
+    val addable = candidates.mapNotNull { candidate ->
+        candidate.membershipId?.takeIf { it.isNotBlank() }?.let { CrewChangeTarget(it, candidate.name) }
+    }
+    val removable = captain.members.map { CrewChangeTarget(it.membershipId, it.name) }
+    val options = (addable + removable).distinctBy { it.membershipId }
+    var selectedId by remember(captain.crewId) { mutableStateOf<String?>(null) }
+    var expanded by remember { mutableStateOf(false) }
+    val selected = options.firstOrNull { it.membershipId == selectedId }
+    val canAdd = selected != null && addable.any { it.membershipId == selected.membershipId }
+    val canRemove = selected != null && removable.any { it.membershipId == selected.membershipId }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.captain_tools),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.captain_tools_for, captain.crewName),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Box {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    enabled = !busy && options.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(selected?.name ?: stringResource(R.string.captain_select_player))
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    options.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.name) },
+                            onClick = {
+                                selectedId = option.membershipId
+                                expanded = false
+                            },
+                        )
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { selected?.let { onSubmit("add", it.membershipId) } },
+                    enabled = !busy && canAdd,
+                    modifier = Modifier.weight(1f),
+                ) { Text(stringResource(R.string.captain_add_player)) }
+                OutlinedButton(
+                    onClick = { selected?.let { onSubmit("remove", it.membershipId) } },
+                    enabled = !busy && canRemove,
+                    modifier = Modifier.weight(1f),
+                ) { Text(stringResource(R.string.captain_remove_player)) }
+            }
+            if (submitted) {
+                Text(
+                    stringResource(R.string.captain_change_submitted),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }

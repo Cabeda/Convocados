@@ -427,6 +427,12 @@
     <string name="approve_proposal">Genehmigen</string>
     <string name="captain_nomination">Kapitäns-Nominierung — %1$s</string>
     <string name="accept_captaincy">Kapitänsamt annehmen</string>
+    <string name="captain_tools">Kapitäns-Werkzeuge</string>
+    <string name="captain_tools_for">Schlage Kaderänderungen für %1$s vor. Der Organisator prüft jede.</string>
+    <string name="captain_select_player">Spieler auswählen</string>
+    <string name="captain_add_player">Spieler hinzufügen</string>
+    <string name="captain_remove_player">Spieler entfernen</string>
+    <string name="captain_change_submitted">Zur Genehmigung an den Organisator gesendet.</string>
     <string name="reject_proposal">Ablehnen</string>
     <string name="rejection_reason">Ablehnungsgrund (optional)</string>
     <string name="proposal_status_pending">Ausstehend</string>

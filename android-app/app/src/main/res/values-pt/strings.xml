@@ -459,6 +459,12 @@
     <string name="crew_captain">Capitão: %1$s</string>
     <string name="captain_nomination">Nomeação de capitão — %1$s</string>
     <string name="accept_captaincy">Aceitar capitania</string>
+    <string name="captain_tools">Ferramentas do capitão</string>
+    <string name="captain_tools_for">Propõe alterações de plantel para %1$s. O organizador revê cada uma.</string>
+    <string name="captain_select_player">Selecionar jogador</string>
+    <string name="captain_add_player">Adicionar jogador</string>
+    <string name="captain_remove_player">Remover jogador</string>
+    <string name="captain_change_submitted">Enviado ao organizador para aprovação.</string>
     <string name="crews">Equipas</string>
     <string name="season_enroll_recent">Inscrever jogadores recentes</string>
     <string name="season_recommend_crews">Recomendar equipas</string>

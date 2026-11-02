@@ -1,6 +1,8 @@
 package dev.convocados.ui.screen.seasons
 
 import dev.convocados.data.api.ConvocadosApi
+import dev.convocados.data.api.CrewCaptain
+import dev.convocados.data.api.CrewCaptainMember
 import dev.convocados.data.api.CrewProposal
 import dev.convocados.data.api.CrewProposalCandidate
 import dev.convocados.data.api.CrewProposalResponse
@@ -74,6 +76,71 @@ class SeasonDetailViewModelTest {
         assertTrue(vm.canPropose.value)
         assertFalse(vm.canReview.value)
         assertEquals("m1", vm.proposerMembershipId.value)
+    }
+
+    @Test
+    fun `load surfaces the crew a participant captains`() = runTest {
+        stubLoad(
+            CrewProposalsResponse(
+                captainOf = CrewCaptain(
+                    crewId = "crew-1",
+                    crewName = "North",
+                    members = listOf(CrewCaptainMember(membershipId = "m1", name = "Alice")),
+                ),
+            ),
+        )
+
+        val vm = SeasonDetailViewModel(api)
+        vm.load("e1", "s1")
+        advanceUntilIdle()
+
+        assertEquals("crew-1", vm.captainOf.value?.crewId)
+        assertEquals("North", vm.captainOf.value?.crewName)
+        assertEquals(listOf("m1"), vm.captainOf.value?.members?.map { it.membershipId })
+    }
+
+    @Test
+    fun `a participant who is not a captain has no captain crew`() = runTest {
+        stubLoad(CrewProposalsResponse(captainOf = null))
+
+        val vm = SeasonDetailViewModel(api)
+        vm.load("e1", "s1")
+        advanceUntilIdle()
+
+        assertEquals(null, vm.captainOf.value)
+    }
+
+    @Test
+    fun `submitCrewChange posts the action and target membership, then reloads`() = runTest {
+        stubLoad()
+        coEvery { api.submitCrewChange(any(), any(), any(), any(), any()) } returns CrewProposalResponse(CrewProposal(id = "p2", kind = "add"))
+
+        val vm = SeasonDetailViewModel(api)
+        vm.load("e1", "s1")
+        advanceUntilIdle()
+
+        vm.submitCrewChange("e1", "s1", "add", "crew-1", listOf("m9"))
+        advanceUntilIdle()
+
+        coVerify { api.submitCrewChange("e1", "s1", "add", "crew-1", listOf("m9")) }
+        coVerify(atLeast = 2) { api.fetchCrewProposals("e1", "s1") }
+        assertTrue(vm.crewChangeSent.value)
+    }
+
+    @Test
+    fun `submitCrewChange surfaces a rejection instead of claiming success`() = runTest {
+        stubLoad()
+        coEvery { api.submitCrewChange(any(), any(), any(), any(), any()) } throws RuntimeException("Only this Crew's captain can propose a player change.")
+
+        val vm = SeasonDetailViewModel(api)
+        vm.load("e1", "s1")
+        advanceUntilIdle()
+
+        vm.submitCrewChange("e1", "s1", "remove", "crew-1", listOf("m1"))
+        advanceUntilIdle()
+
+        assertEquals("Only this Crew's captain can propose a player change.", vm.message.value)
+        assertFalse(vm.crewChangeSent.value)
     }
 
     @Test

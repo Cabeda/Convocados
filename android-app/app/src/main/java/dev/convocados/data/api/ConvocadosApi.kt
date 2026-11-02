@@ -77,6 +77,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun submitCrewProposal(eventId: String, seasonId: String, name: String, membershipIds: List<String>): CrewProposalResponse =
         client.post("/api/events/$eventId/seasons/$seasonId/crew-proposals", SubmitCrewProposalRequest(name, membershipIds))
 
+    suspend fun submitCrewChange(eventId: String, seasonId: String, action: String, targetCrewId: String, membershipIds: List<String>): CrewProposalResponse =
+        client.post("/api/events/$eventId/seasons/$seasonId/crew-proposals", SubmitCrewChangeRequest(action, targetCrewId, membershipIds))
+
     suspend fun decideCrewProposal(eventId: String, seasonId: String, proposalId: String, decision: String, rejectionReason: String? = null): CrewProposalResponse =
         client.patch("/api/events/$eventId/seasons/$seasonId/crew-proposals/$proposalId", CrewProposalDecisionRequest(decision, rejectionReason))
 

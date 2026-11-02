@@ -489,6 +489,12 @@
     <string name="approve_proposal">Approve</string>
     <string name="captain_nomination">Captain nomination — %1$s</string>
     <string name="accept_captaincy">Accept captaincy</string>
+    <string name="captain_tools">Captain tools</string>
+    <string name="captain_tools_for">Propose roster changes for %1$s. The organizer reviews each one.</string>
+    <string name="captain_select_player">Select player</string>
+    <string name="captain_add_player">Add player</string>
+    <string name="captain_remove_player">Remove player</string>
+    <string name="captain_change_submitted">Sent to the organizer for approval.</string>
     <string name="reject_proposal">Reject</string>
     <string name="rejection_reason">Rejection reason (optional)</string>
     <string name="proposal_status_pending">Pending</string>
