@@ -54,7 +54,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
   </table>
 
   <h3>Example</h3>
-  <pre><code>{`curl -X POST https://convocados.fly.dev/api/events/EVENT_ID/webhooks \\
+  <pre><code>{`curl -X POST https://convocados.cabeda.dev/api/events/EVENT_ID/webhooks \\
   -H "Content-Type: application/json" \\
   -d '{
     "url": "https://example.com/webhook",
@@ -95,7 +95,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
   <p>Unsubscribe a webhook.</p>
 
   <h3>Example</h3>
-  <pre><code>{`curl -X DELETE https://convocados.fly.dev/api/events/EVENT_ID/webhooks/WEBHOOK_ID`}</code></pre>
+  <pre><code>{`curl -X DELETE https://convocados.cabeda.dev/api/events/EVENT_ID/webhooks/WEBHOOK_ID`}</code></pre>
 
   <h3>Response</h3>
   <pre><code>{`{ "ok": true }`}</code></pre>

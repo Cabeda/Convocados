@@ -15,7 +15,7 @@ import org.junit.runner.RunWith
  *
  * These tests require either:
  * - A local dev server at http://10.0.2.2:4321 (emulator) or http://localhost:4321 (device)
- * - Or the production server at https://convocados.fly.dev
+ * - Or the production server at https://convocados.cabeda.dev
  *
  * The backend URL is read from the instrumentation argument "backendUrl".
  * Run with:
@@ -24,7 +24,7 @@ import org.junit.runner.RunWith
  *
  * Or for production:
  *   ./gradlew :wear:connectedDebugAndroidTest \
- *       -Pandroid.testInstrumentationRunnerArguments.backendUrl=https://convocados.fly.dev
+ *       -Pandroid.testInstrumentationRunnerArguments.backendUrl=https://convocados.cabeda.dev
  *
  * You must also pass a valid access token:
  *   -Pandroid.testInstrumentationRunnerArguments.accessToken=<token>

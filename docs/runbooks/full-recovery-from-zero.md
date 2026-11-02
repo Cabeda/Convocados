@@ -162,7 +162,7 @@ You should see:
 ## Step 6: Verify health
 
 ```bash
-curl -s https://convocados.fly.dev/api/health | jq .
+curl -s https://convocados.cabeda.dev/api/health | jq .
 ```
 
 Expected output:

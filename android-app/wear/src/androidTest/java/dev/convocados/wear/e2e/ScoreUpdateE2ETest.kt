@@ -52,7 +52,7 @@ import org.junit.runner.RunWith
  * Run against production:
  *   ./gradlew :wear:connectedDebugAndroidTest \
  *       -Pandroid.testInstrumentationRunnerArguments.class=dev.convocados.wear.e2e.ScoreUpdateE2ETest \
- *       -Pandroid.testInstrumentationRunnerArguments.backendUrl=https://convocados.fly.dev \
+ *       -Pandroid.testInstrumentationRunnerArguments.backendUrl=https://convocados.cabeda.dev \
  *       -Pandroid.testInstrumentationRunnerArguments.testEmail=<your-email> \
  *       -Pandroid.testInstrumentationRunnerArguments.testPassword=<your-password>
  *
