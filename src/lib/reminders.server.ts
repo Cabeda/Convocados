@@ -228,12 +228,13 @@ export async function deliverReminder(eventId: string, type: ReminderType): Prom
   await Promise.allSettled(
     players.map((player) =>
       emailLimit(async () => {
-        if (!player.userId || !player.user?.email) return;
+        const email = player.user?.email;
+        if (!player.userId || !email) return;
         try {
           const prefs = await getNotificationPrefs(player.userId);
           if (!wantsEmailReminder(prefs, type)) return;
           const send = () =>
-            sendReminder(player.user.email!, {
+            sendReminder(email, {
               eventTitle: event.title,
               dateTime: event.dateTime.toISOString(),
               location: event.location,
@@ -251,12 +252,12 @@ export async function deliverReminder(eventId: string, type: ReminderType): Prom
               await send();
             } catch (err) {
               emailFailures++;
-              log.error({ email: player.user.email, eventId: event.id, type, err }, "Failed to send email reminder after retry");
+              log.error({ email, eventId: event.id, type, err }, "Failed to send email reminder after retry");
             }
           }
         } catch (err) {
           emailFailures++;
-          log.error({ email: player.user.email, eventId: event.id, type, err }, "Failed to prepare email reminder");
+          log.error({ email, eventId: event.id, type, err }, "Failed to prepare email reminder");
         }
       }),
     ),
