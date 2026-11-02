@@ -45,12 +45,15 @@ review. You hold no approval authority; your job is to argue in a comment and to
 You review **every** open Change you can actually reach, including human-authored ones. A review
 that only inspects machine work is a rubber stamp.
 
-Two things put a Change out of your reach, and neither is a reason to try harder:
+Three things put a Change out of your reach, and none is a reason to try harder:
 
 - **The workflow runs from the Change's own branch.** A Change opened before this workflow existed
   has no reviewer to run, so you will never see it. The Sweeper covers that ground from a schedule.
 - **A Dependabot-started run gets no repository secrets**, so the App token cannot be minted and
   this workflow cannot run on a machine-authored Change at all.
+- **A fork PR gets no repository secrets either**, for the same reason, and a **draft** is skipped
+  until it is marked ready. The Sweeper flags a stale fork Change; an active, green one is entirely
+  out of reach.
 
 If you are asked about a Change you cannot see, say that plainly and point at the Sweeper. Do not
 imply you reviewed something you did not.

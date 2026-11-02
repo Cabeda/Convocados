@@ -19,10 +19,28 @@ jobs:
     # The factory is inert until its identity exists: no App id and no model
     # means step 2 is not finished, and an unconfigured run is a red run that
     # teaches nobody anything. The wizard sets both, and that is the activation.
+    #
+    # Three exemptions, all facts about the event rather than conveniences:
+    #   * Dependabot — a run started by a Dependabot PR receives no repository
+    #     secrets, so `FACTORY_APP_KEY` is absent and the token step fails. That
+    #     is the same constraint the sweeper dodges by running on a schedule.
+    #     Nothing is lost: a bump's review is the gates, and the mission lens has
+    #     nothing to judge in a version string.
+    #   * Forks — the same secretless run, for the same reason. This is a reach
+    #     gap, not a policy: a forked Change goes unreviewed. The Sweeper flags a
+    #     *stale* one from its schedule; an active, green fork PR gets no factory
+    #     attention at all (docs/factory/README.md → Reach).
+    #   * Drafts — `opened` fires on a draft too, so an unfinished Change paid
+    #     for a full review and then paid again on `ready_for_review`.
+    # Name Dependabot exactly, not "any bot": `factory/*` Changes are authored by
+    # the factory App and must still be reviewed — they are this role's customer.
     if: >-
       vars.FACTORY_PAUSED != 'true' &&
       vars.FACTORY_APP_ID != '' &&
-      vars.FACTORY_MODEL != ''
+      vars.FACTORY_MODEL != '' &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft
     runs-on: ubuntu-latest
     # Backstop only. The wall clock that matters is on the agent step below: a
     # *job* timeout kills the job and no continue-on-error can absorb that,

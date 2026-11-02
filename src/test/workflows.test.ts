@@ -236,6 +236,53 @@ describe("factory workflows cannot escalate", () => {
   });
 });
 
+describe("the reviewer is exempt only where it cannot review", () => {
+  // A run started by a Dependabot PR or a fork receives no repository secrets,
+  // so the App token step fails and the role is red on Changes it could never
+  // review — the same constraint the sweeper dodges by running on a schedule.
+  // Drafts pay for a review at `opened` and then pay again at `ready_for_review`.
+  const reviewerJobIf = () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      jobs?: Record<string, { if?: string }>;
+    };
+    return doc.jobs?.reviewer?.if ?? "";
+  };
+
+  it("skips the secretless runs and drafts", () => {
+    const condition = reviewerJobIf();
+    expect(condition).toContain("github.event.pull_request.user.login != 'dependabot[bot]'");
+    expect(condition).toContain(
+      "github.event.pull_request.head.repo.full_name == github.repository",
+    );
+    expect(condition).toContain("!github.event.pull_request.draft");
+  });
+
+  it("compares the author login exactly once, and only against Dependabot", () => {
+    const comparisons = [
+      ...reviewerJobIf().matchAll(
+        /github\.event\.pull_request\.user\.login\s*(?:[!=]==?)\s*['"]([^'"]+)['"]/g,
+      ),
+    ].map((m) => m[1]);
+    // An allowlist (`== 'Cabeda'`), a second exemption, or a bot-wide filter all
+    // exempt `convocados-factory[bot]` — this role's main customer. Banning two
+    // spellings was not enough; an extra comparison passes with one of them.
+    expect(comparisons).toEqual(["dependabot[bot]"]);
+    expect(reviewerJobIf(), "no bot-wide author filter").not.toMatch(
+      /contains\s*\([^)]*user\.login/,
+    );
+  });
+
+  it("keeps ready_for_review, the only event that reaches a skipped draft", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      on?: unknown;
+    } & Record<string, unknown>;
+    const trigger = (doc.on ?? doc["true"]) as { pull_request?: { types?: string[] } } | undefined;
+    // Drop this event and every draft is skipped at opened/synchronize/reopened
+    // and never reviewed at all — silently, since nothing else would fail.
+    expect(trigger?.pull_request?.types ?? []).toContain("ready_for_review");
+  });
+});
+
 describe("the CLA allowlist names the factory App exactly", () => {
   // The factory's commits are authored by `convocados-factory[bot]`. A typo in
   // the allowlist leaves that name unmatched and every factory PR's `cla`
