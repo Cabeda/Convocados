@@ -29,6 +29,7 @@ import { apiRequest } from "~/lib/api/client";
 import { useCountdown } from "./event/useCountdown";
 import { getSportPreset } from "~/lib/sports";
 import { formatDateInTz } from "~/lib/timezones";
+import { parseRecurrenceRule, describeRecurrenceRule, nextOccurrence } from "~/lib/recurrence";
 import { formatMoney, toCents } from "~/lib/money";
 import { detectLocale, type Locale, type TFunction } from "~/lib/i18n";
 import { GameCard, type GameSummary } from "./GameCard";
@@ -47,6 +48,7 @@ interface UpNextGame {
   maxPlayers: number;
   playerCount: number;
   isRecurring: boolean;
+  recurrenceRule?: string | null;
   status: string;
 }
 
@@ -62,6 +64,7 @@ interface DiscoverGame {
   playerCount: number;
   spotsLeft: number;
   isRecurring: boolean;
+  recurrenceRule?: string | null;
   source?: string;
   ownerId?: string | null;
 }
@@ -135,6 +138,9 @@ function UpNextCard({ game, locale, t }: { game: UpNextGame; locale: Locale; t: 
   const isLive = game.status === "in_progress";
   const countdown = useCountdown(date, t("gameTime"));
   const sportPreset = getSportPreset(game.sport);
+  const rule = parseRecurrenceRule(game.recurrenceRule ?? null);
+  const displayDate = rule && date < new Date() ? nextOccurrence(date, rule, new Date()) : date;
+  const recurrenceDesc = rule ? describeRecurrenceRule(rule, locale) : null;
   return (
     <Paper
       elevation={2}
@@ -161,7 +167,10 @@ function UpNextCard({ game, locale, t }: { game: UpNextGame; locale: Locale; t: 
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <AccessTimeIcon fontSize="small" color="action" />
             <Typography variant="body2" color="text.secondary">
-              {formatKickoff(date, locale, game.timezone)}
+              {rule && date < new Date()
+                ? `${t("nextGame")}: ${formatKickoff(displayDate, locale, game.timezone)}`
+                : formatKickoff(displayDate, locale, game.timezone)}
+              {recurrenceDesc && ` · ${recurrenceDesc}`}
             </Typography>
           </Box>
           {game.location && (
@@ -222,6 +231,9 @@ function ActionCard({ action, locale, t }: { action: HomeAction; locale: Locale;
 function DiscoverCard({ game, locale, t }: { game: DiscoverGame; locale: Locale; t: TFunction }) {  const date = new Date(game.dateTime);
   const isFull = game.spotsLeft === 0;
   const sportPreset = getSportPreset(game.sport);
+  const rule = parseRecurrenceRule(game.recurrenceRule ?? null);
+  const displayDate = rule && date < new Date() ? nextOccurrence(date, rule, new Date()) : date;
+  const recurrenceDesc = rule ? describeRecurrenceRule(rule, locale) : null;
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: 2.5, height: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
       <Typography variant="subtitle1" fontWeight={700} noWrap>
@@ -233,7 +245,10 @@ function DiscoverCard({ game, locale, t }: { game: DiscoverGame; locale: Locale;
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <AccessTimeIcon fontSize="small" color="action" />
           <Typography variant="body2" color="text.secondary">
-            {formatKickoff(date, locale, game.timezone ?? "UTC")}
+            {rule && date < new Date()
+              ? `${t("nextGame")}: ${formatKickoff(displayDate, locale, game.timezone ?? "UTC")}`
+              : formatKickoff(displayDate, locale, game.timezone ?? "UTC")}
+            {recurrenceDesc && ` · ${recurrenceDesc}`}
           </Typography>
         </Box>
         {game.location && (

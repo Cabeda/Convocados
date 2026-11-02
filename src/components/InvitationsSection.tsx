@@ -7,6 +7,7 @@ import { useT } from "~/lib/useT";
 import { apiRequest } from "~/lib/api/client";
 import type { Locale } from "~/lib/i18n";
 import { formatDateInTz } from "~/lib/timezones";
+import { parseRecurrenceRule, describeRecurrenceRule } from "~/lib/recurrence";
 
 export interface HomeInvitation {
   id: string;
@@ -17,6 +18,7 @@ export interface HomeInvitation {
   dateTime: string;
   sport: string;
   invitedByName: string;
+  recurrenceRule?: string | null;
 }
 
 export interface HomeRosterAdd {
@@ -26,6 +28,7 @@ export interface HomeRosterAdd {
   location: string;
   dateTime: string;
   sport: string;
+  recurrenceRule?: string | null;
 }
 
 interface Props {
@@ -115,7 +118,7 @@ export function InvitationsSection({ invitations, rosterAdds, locale = "en" }: P
             </Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 0.5, mb: 1.5, flexWrap: "wrap", gap: 0.5 }}>
               {invitation.location && <Chip size="small" label={invitation.location} variant="outlined" />}
-              <Chip size="small" label={dateFor(invitation.dateTime)} variant="outlined" />
+              <Chip size="small" label={`${dateFor(invitation.dateTime)}${invitation.recurrenceRule ? ` · ${describeRecurrenceRule(parseRecurrenceRule(invitation.recurrenceRule)!, locale)}` : ""}`} variant="outlined" />
             </Stack>
             <Stack direction="row" spacing={1}>
               <Button
@@ -159,7 +162,7 @@ export function InvitationsSection({ invitations, rosterAdds, locale = "en" }: P
             </Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 0.5, mb: 1.5, flexWrap: "wrap", gap: 0.5 }}>
               {add.location && <Chip size="small" label={add.location} variant="outlined" />}
-              <Chip size="small" label={dateFor(add.dateTime)} variant="outlined" />
+              <Chip size="small" label={`${dateFor(add.dateTime)}${add.recurrenceRule ? ` · ${describeRecurrenceRule(parseRecurrenceRule(add.recurrenceRule)!, locale)}` : ""}`} variant="outlined" />
             </Stack>
             <Stack direction="row" spacing={1}>
               <Button size="small" variant="contained" href={`/events/${add.eventId}`}>

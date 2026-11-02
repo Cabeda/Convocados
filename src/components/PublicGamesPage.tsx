@@ -24,6 +24,7 @@ import { detectLocale, type Locale, type TFunction } from "~/lib/i18n";
 import { getSportPreset } from "~/lib/sports";
 import { normalizeCity } from "~/lib/city";
 import { formatDateInTz } from "~/lib/timezones";
+import { parseRecurrenceRule, describeRecurrenceRule } from "~/lib/recurrence";
 import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface PublicEvent {
@@ -40,6 +41,7 @@ interface PublicEvent {
   playerCount: number;
   spotsLeft: number;
   isRecurring: boolean;
+  recurrenceRule?: string | null;
   source?: string;
   ownerId?: string | null;
   playtomicTenantName?: string | null;
@@ -83,6 +85,7 @@ function CardView({ events, locale, t }: {
         const date = new Date(ev.dateTime);
         const isFull = ev.spotsLeft === 0;
         const sportPreset = getSportPreset(ev.sport);
+        const recurrenceDesc = ev.recurrenceRule ? describeRecurrenceRule(parseRecurrenceRule(ev.recurrenceRule)!, locale) : null;
         return (
           <Grid key={ev.id} size={{ xs: 12, sm: 6 }}>
             <Paper
@@ -117,7 +120,7 @@ function CardView({ events, locale, t }: {
                   {ev.isRecurring && (
                     <Chip
                       icon={<EventRepeatIcon />}
-                      label={t("recurring")}
+                      label={recurrenceDesc ?? t("recurring")}
                       size="small"
                       variant="outlined"
                       color="secondary"
@@ -150,6 +153,7 @@ function CardView({ events, locale, t }: {
                       weekday: "short", month: "short", day: "numeric",
                       hour: "2-digit", minute: "2-digit",
                     })}
+                    {recurrenceDesc && ` · ${recurrenceDesc}`}
                   </Typography>
                 </Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -226,6 +230,7 @@ function TableView({ events, locale, t }: {
             const date = new Date(ev.dateTime);
             const isFull = ev.spotsLeft === 0;
             const sportPreset = getSportPreset(ev.sport);
+            const recurrenceDesc = ev.recurrenceRule ? describeRecurrenceRule(parseRecurrenceRule(ev.recurrenceRule)!, locale) : null;
             return (
               <TableRow key={ev.id} hover>
                 <TableCell>
@@ -267,7 +272,7 @@ function TableView({ events, locale, t }: {
                   {isOpenPickup(ev) ? (
                     <Chip icon={<PublicIcon />} label={t("openPickupBadge")} size="small" color="primary" />
                   ) : ev.isRecurring ? (
-                    <Chip icon={<EventRepeatIcon />} label={t("recurring")} size="small" color="secondary" variant="outlined" />
+                    <Chip icon={<EventRepeatIcon />} label={recurrenceDesc ?? t("recurring")} size="small" color="secondary" variant="outlined" />
                   ) : (
                     <Typography variant="body2" color="text.secondary">{t("oneOff")}</Typography>
                   )}
