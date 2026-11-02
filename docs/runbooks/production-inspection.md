@@ -106,7 +106,16 @@ curl -s https://convocados.cabeda.dev/api/health | jq
 Reports DB mode/size, Litestream status, and `scheduler: { running, failedJobs }`.
 `litestream.enabled` is false when `BACKUPS_ENABLED=false`; that is an explicit
 no-off-host-backup posture, not a replication failure, and health does not mark it
-degraded for it.
+degraded for it. The app reads the normalized `BACKUPS_ENABLED_NORMALIZED` /
+`BACKUPS_ACTIVE` flags that `start.sh` exports, so the two cannot disagree.
+
+`db.createdThisBoot` is true when the schema was applied after this boot started,
+and `db.oldestMigrationAt` is the earliest `_prisma_migrations` timestamp. Health
+sets `degraded: true` when the database was created this boot, or when it has no
+Events and its oldest migration is under an hour old — the shape a lost volume
+leaves after `prisma migrate deploy` recreates an empty schema. The status stays
+`ok` on purpose: a 503 would remove the instance from Fly's load balancer and the
+scheduler polls through that URL.
 
 ## Related
 

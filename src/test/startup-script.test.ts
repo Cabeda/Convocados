@@ -80,6 +80,41 @@ describe("scripts/start.sh startup recovery", () => {
     expect(output).not.toContain("Starting app with Litestream replication");
   });
 
+  it("prints one greppable line when no database exists at boot", () => {
+    stub("node", "exit 0");
+
+    const output = runStart({ BACKUPS_ENABLED: "false" });
+
+    expect(output).toContain("FRESH_DATABASE");
+    expect(output.match(/FRESH_DATABASE/g)).toHaveLength(1);
+  });
+
+  it("exports the normalized backup switch that health reads", () => {
+    // With the switch on, start.sh execs through Litestream; the stub prints
+    // the exported values so the test can see what the app would receive.
+    stub(
+      "litestream",
+      'echo "NORMALIZED=$BACKUPS_ENABLED_NORMALIZED ACTIVE=$BACKUPS_ACTIVE"',
+    );
+
+    const output = runStart({ BACKUPS_ENABLED: "TRUE" });
+
+    expect(output).toContain("NORMALIZED=true");
+    expect(output).toContain("ACTIVE=true");
+  });
+
+  it("exports BACKUPS_ACTIVE=false when the switch is not true", () => {
+    stub(
+      "node",
+      'echo "NORMALIZED=$BACKUPS_ENABLED_NORMALIZED ACTIVE=$BACKUPS_ACTIVE"',
+    );
+
+    const output = runStart({ BACKUPS_ENABLED: "1" });
+
+    expect(output).toContain("NORMALIZED=false");
+    expect(output).toContain("ACTIVE=false");
+  });
+
   it("checkpoints the WAL before the pre-migration backup", () => {
     const dbPath = join(dataDir, "db.sqlite");
     const db = new Database(dbPath);

@@ -5,7 +5,19 @@ import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 beforeEach(async () => {
+  // start.sh exports the normalized switch that health reads; tests do not run
+  // start.sh, so simulate a production boot with replication available.
   delete process.env.BACKUPS_ENABLED;
+  delete process.env.APP_BOOT_AT;
+  process.env.BACKUPS_ENABLED_NORMALIZED = "true";
+  process.env.BACKUPS_ACTIVE = "true";
+  // Treat the worker DB as an established install by default: the shared test
+  // DB is migrated moments before each run, which is the fresh-install shape.
+  // The fresh-database cases below reset these timestamps deliberately.
+  await prisma.$executeRawUnsafe(
+    "UPDATE _prisma_migrations SET started_at = ?",
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+  );
   await prisma.schedulerHeartbeat.deleteMany();
   await prisma.scheduledJob.deleteMany();
   await prisma.player.deleteMany();
@@ -43,6 +55,86 @@ describe("GET /api/health", () => {
     expect(typeof body.db.pageCount).toBe("number");
     expect(typeof body.db.freelistCount).toBe("number");
     expect(typeof body.db.walSizeBytes).toBe("number");
+  });
+
+  it("degrades a freshly migrated database and reports boot metadata", async () => {
+    // The schema was applied after this boot started, and there are no events:
+    // this is the shape a recreated volume leaves behind.
+    const startedAt = new Date().toISOString();
+    process.env.APP_BOOT_AT = String(Date.now() - 60_000);
+    await prisma.$executeRawUnsafe(
+      "UPDATE _prisma_migrations SET started_at = ?",
+      startedAt,
+    );
+
+    const res = await GET(ctx());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.db.createdThisBoot).toBe(true);
+    expect(typeof body.db.oldestMigrationAt).toBe("string");
+    expect(new Date(body.db.oldestMigrationAt).getTime()).toBe(new Date(startedAt).getTime());
+    expect(body.degraded).toBe(true);
+  });
+
+  it("parses a space-separated migration timestamp and a seconds boot marker", async () => {
+    // Raw SQLite writers can leave `started_at` as "YYYY-MM-DD HH:MM:SS", and
+    // start.sh exports APP_BOOT_AT in epoch seconds.
+    process.env.APP_BOOT_AT = String(Math.floor(Date.now() / 1000));
+    await prisma.$executeRawUnsafe(
+      "UPDATE _prisma_migrations SET started_at = '2020-01-01 00:00:00'",
+    );
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.db.oldestMigrationAt).toBe("2020-01-01T00:00:00.000Z");
+    expect(body.db.createdThisBoot).toBe(false);
+    expect(body.degraded).toBeUndefined();
+  });
+
+  it("treats an unreadable migration timestamp as unknown rather than fresh", async () => {
+    await prisma.$executeRawUnsafe(
+      "UPDATE _prisma_migrations SET started_at = 'not-a-timestamp'",
+    );
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.db.oldestMigrationAt).toBeNull();
+    expect(body.db.createdThisBoot).toBe(false);
+    expect(body.degraded).toBeUndefined();
+  });
+
+  it("degrades an empty database whose migration is under an hour old", async () => {
+    // Boot started after the migration ran (release_command ordering), so the
+    // created-this-boot flag is false and the empty-Event / young-migration
+    // rule is the only signal left.
+    const startedAt = new Date(Date.now() - 60_000).toISOString();
+    process.env.APP_BOOT_AT = String(Date.now());
+    await prisma.$executeRawUnsafe(
+      "UPDATE _prisma_migrations SET started_at = ?",
+      startedAt,
+    );
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.db.createdThisBoot).toBe(false);
+    expect(body.degraded).toBe(true);
+  });
+
+  it("stays healthy when a young migration still has events", async () => {
+    const startedAt = new Date(Date.now() - 60_000).toISOString();
+    process.env.APP_BOOT_AT = String(Date.now());
+    await prisma.$executeRawUnsafe(
+      "UPDATE _prisma_migrations SET started_at = ?",
+      startedAt,
+    );
+    await prisma.event.create({
+      data: { title: "Still here", location: "Lisbon", dateTime: new Date() },
+    });
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.db.createdThisBoot).toBe(false);
+    expect(body.degraded).toBeUndefined();
   });
 
   it("does not include litestream in non-production env", async () => {
@@ -237,7 +329,8 @@ describe("GET /api/health", () => {
   it("reports backups explicitly disabled without degrading", async () => {
     const oldNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
-    process.env.BACKUPS_ENABLED = "false";
+    process.env.BACKUPS_ENABLED_NORMALIZED = "false";
+    process.env.BACKUPS_ACTIVE = "false";
     await prisma.schedulerHeartbeat.upsert({
       where: { id: "scheduler" },
       create: { id: "scheduler", lastSeenAt: new Date() },
@@ -256,6 +349,58 @@ describe("GET /api/health", () => {
       expect(body.degraded).toBeUndefined();
     } finally {
       delete process.env.BACKUPS_ENABLED;
+      process.env.BACKUPS_ENABLED_NORMALIZED = "true";
+      process.env.BACKUPS_ACTIVE = "true";
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("follows the normalized flags, not the raw BACKUPS_ENABLED", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    // start.sh normalizes the switch; health must not re-parse the raw value
+    // with a different rule and report replication that is not running.
+    process.env.BACKUPS_ENABLED_NORMALIZED = "false";
+    process.env.BACKUPS_ACTIVE = "false";
+    process.env.BACKUPS_ENABLED = "true";
+    await prisma.schedulerHeartbeat.upsert({
+      where: { id: "scheduler" },
+      create: { id: "scheduler", lastSeenAt: new Date() },
+      update: { lastSeenAt: new Date() },
+    });
+    try {
+      const res = await GET(ctx());
+      const body = await res.json();
+      expect(body.litestream.enabled).toBe(false);
+      expect(body.degraded).toBeUndefined();
+    } finally {
+      delete process.env.BACKUPS_ENABLED;
+      process.env.BACKUPS_ENABLED_NORMALIZED = "true";
+      process.env.BACKUPS_ACTIVE = "true";
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("degrades when backups are requested but the replica bucket is missing", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    // start.sh exports BACKUPS_ACTIVE=false when LITESTREAM_REPLICA_BUCKET is
+    // absent; that is a misconfiguration, not the explicit kill switch.
+    process.env.BACKUPS_ENABLED_NORMALIZED = "true";
+    process.env.BACKUPS_ACTIVE = "false";
+    await prisma.schedulerHeartbeat.upsert({
+      where: { id: "scheduler" },
+      create: { id: "scheduler", lastSeenAt: new Date() },
+      update: { lastSeenAt: new Date() },
+    });
+    try {
+      const res = await GET(ctx());
+      const body = await res.json();
+      expect(body.litestream.enabled).toBe(false);
+      expect(body.degraded).toBe(true);
+    } finally {
+      process.env.BACKUPS_ENABLED_NORMALIZED = "true";
+      process.env.BACKUPS_ACTIVE = "true";
       process.env.NODE_ENV = oldNodeEnv;
     }
   });
