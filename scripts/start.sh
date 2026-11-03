@@ -73,11 +73,17 @@ if [ -f "$DB" ]; then
     const Database = require(process.env.APP_DIR + "/node_modules/better-sqlite3");
     const db = new Database(process.env.DB, { readonly: true, fileMustExist: true });
     try {
-      const cutoff = new Date(Date.now() - 120000).toISOString();
-      const row = db.prepare(
-        "SELECT COUNT(*) AS n FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < ?"
-      ).get(cutoff);
-      console.log(row.n);
+      const cutoffMs = Date.now() - 120000;
+      const rows = db.prepare(
+        "SELECT started_at FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL"
+      ).all();
+      let n = 0;
+      for (const r of rows) {
+        const ts = String(r.started_at).replace(" ", "T");
+        const ms = Date.parse(ts.endsWith("Z") ? ts : ts + "Z");
+        if (Number.isFinite(ms) && ms < cutoffMs) n++;
+      }
+      console.log(n);
     } finally { db.close(); }
   ' 2>/dev/null)" || failed_migrations=0
   case "$failed_migrations" in ''|*[!0-9]*) failed_migrations=0 ;; esac
@@ -125,11 +131,16 @@ if [ -f "$DB" ]; then
     const Database = require(process.env.APP_DIR + "/node_modules/better-sqlite3");
     const DB = process.env.DB;
     const db = new Database(DB, { readonly: false });
-    const cutoff = new Date(Date.now() - 120000).toISOString();
+    const cutoffMs = Date.now() - 120000;
     try {
-      const failed = db.prepare(
-        "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < ?"
-      ).all(cutoff);
+      const allUnfinished = db.prepare(
+        "SELECT migration_name, started_at FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL"
+      ).all();
+      const failed = allUnfinished.filter((r) => {
+        const ts = String(r.started_at).replace(" ", "T");
+        const ms = Date.parse(ts.endsWith("Z") ? ts : ts + "Z");
+        return Number.isFinite(ms) && ms < cutoffMs;
+      });
       if (failed.length > 0) {
         console.log(`[startup] WARNING: detected ${failed.length} failed migration(s) from a previous deploy`);
         console.log("[startup] Restoring database from pre-migration backup and marking as rolled back...");
