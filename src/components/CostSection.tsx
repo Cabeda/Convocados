@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Paper, Typography, Box, Stack, Button, Dialog, DialogTitle, DialogContent,
   DialogActions, TextField, Select, MenuItem, FormControl, InputLabel,
-  IconButton, Alert,
+  IconButton, Alert, Checkbox, FormControlLabel,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
@@ -19,6 +19,7 @@ import { formatMoney, toCents } from "~/lib/money";
 import { perPlayerShare } from "~/lib/gameCost";
 import { apiRequest } from "~/lib/api/client";
 import { PaymentMethodsList } from "./PaymentMethodsList";
+import { getMethodTypeLabel } from "~/lib/paymentMethods";
 
 const CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
 
@@ -31,6 +32,11 @@ export function CostSection({ eventId, isManager, maxPlayers }: { eventId: strin
   const t = useT();
   const { cost, load } = useEventCost(eventId);
   const [open, setOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMethods, setAddMethods] = useState<PaymentMethod[]>([{ type: "mbway", value: "" }]);
+  const [saveToProfile, setSaveToProfile] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   if (!cost) return null;
 
@@ -61,13 +67,95 @@ export function CostSection({ eventId, isManager, maxPlayers }: { eventId: strin
         {methods.length > 0 ? (
           <PaymentMethodsList methods={methods} />
         ) : (
-          <Typography variant="body2" color="text.secondary">
-            {cost.payerName
-              ? t("paymentMethodsNotShared", { name: cost.payerName })
-              : t("paymentsUnassignedPayer")}
-          </Typography>
+          <Stack spacing={0.5}>
+            <Typography variant="body2" color="text.secondary">
+              {cost.payerName
+                ? t("paymentMethodsNotShared", { name: cost.payerName })
+                : t("paymentsUnassignedPayer")}
+            </Typography>
+            {cost.payerName && cost.viewerIsPayer && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => {
+                  setAddMethods([{ type: "mbway", value: "" }]);
+                  setSaveToProfile(true);
+                  setAddError(null);
+                  setAddOpen(true);
+                }}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                {t("payerAddMethods")}
+              </Button>
+            )}
+          </Stack>
         )}
       </Stack>
+
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t("payerAddMethodsTitle", { name: cost?.payerName ?? "" })}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {addMethods.map((m, idx) => (
+              <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <Select
+                    value={m.type}
+                    onChange={(e) => setAddMethods((prev) => prev.map((x, i) => (i === idx ? { ...x, type: e.target.value as PaymentMethodType } : x)))}
+                  >
+                    {PAYMENT_METHOD_TYPES.map((pt) => (
+                      <MenuItem key={pt} value={pt}>{getMethodTypeLabel(pt)}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  size="small"
+                  value={m.value}
+                  onChange={(e) => setAddMethods((prev) => prev.map((x, i) => (i === idx ? { ...x, value: e.target.value } : x)))}
+                  sx={{ flex: 1 }}
+                />
+                <IconButton size="small" onClick={() => setAddMethods((prev) => prev.filter((_, i) => i !== idx))} aria-label={t("paymentsRemove")}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            ))}
+            <Button size="small" variant="text" startIcon={<AddIcon />} onClick={() => setAddMethods((prev) => [...prev, { type: "mbway", value: "" }])} sx={{ alignSelf: "flex-start" }}>
+              {t("addPaymentMethod")}
+            </Button>
+            <FormControlLabel
+              control={<Checkbox checked={saveToProfile} onChange={(e) => setSaveToProfile(e.target.checked)} />}
+              label={t("payerSaveToProfile")}
+            />
+            <Typography variant="caption" color="text.secondary">{t("payerSaveToProfileDesc")}</Typography>
+            {addError && <Alert severity="error">{addError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddOpen(false)} disabled={adding}>{t("payerCardCancel")}</Button>
+          <Button
+            variant="contained"
+            disabled={adding || addMethods.every((m) => !m.value.trim())}
+            onClick={async () => {
+              setAdding(true);
+              setAddError(null);
+              try {
+                const clean = addMethods.filter((m) => m.value.trim());
+                await apiRequest("PUT /api/me/payment-details", {
+                  body: { paymentDetails: clean, sharePaymentDetails: saveToProfile },
+                });
+                setAddOpen(false);
+                await load();
+              } catch (err) {
+                setAddError(err instanceof Error ? err.message : t("myPaymentDetailsSaveError"));
+              } finally {
+                setAdding(false);
+              }
+            }}
+          >
+            {t("payerAddMethodsSave")}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <CostEditorDialog
         open={open}

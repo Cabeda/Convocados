@@ -12,6 +12,7 @@ export interface EventCostData {
   resolvedPaymentMethods?: PaymentMethod[] | null;
   payerName?: string | null;
   paymentSource?: string;
+  viewerIsPayer?: boolean;
 }
 
 /**

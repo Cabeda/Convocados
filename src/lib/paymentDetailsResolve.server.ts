@@ -43,19 +43,24 @@ export async function resolvePaymentDetails(
       where: { id: game.payerEventPlayerId },
       select: { userId: true },
     });
-    const payerUser = payer?.userId
-      ? await prisma.user.findUnique({
-          where: { id: payer.userId },
-          select: { paymentDetails: true, sharePaymentDetails: true },
-        })
-      : null;
-    // Consent gates publication: details on a profile are not consent to
-    // broadcast them to an Event's subscriber URLs.
-    if (payerUser?.sharePaymentDetails) {
-      const own = parsePaymentMethods(payerUser.paymentDetails);
-      if (own.length > 0) {
-        return { methods: own, source: "payer" };
+    // A linked payer who has not shared (or has no) details must not silently
+    // inherit the organizer's account: the UI asks them to add their own. An
+    // external name has no profile to store against, so it keeps the Event's
+    // organizer details as the collection account.
+    if (payer?.userId) {
+      const payerUser = await prisma.user.findUnique({
+        where: { id: payer.userId },
+        select: { paymentDetails: true, sharePaymentDetails: true },
+      });
+      // Consent gates publication: details on a profile are not consent to
+      // broadcast them to an Event's subscriber URLs.
+      if (payerUser?.sharePaymentDetails) {
+        const own = parsePaymentMethods(payerUser.paymentDetails);
+        if (own.length > 0) {
+          return { methods: own, source: "payer" };
+        }
       }
+      return { methods: [], source: "none" };
     }
   }
 

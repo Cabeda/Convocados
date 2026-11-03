@@ -95,11 +95,10 @@ describe("resolvePaymentDetails", () => {
     expect(resolved.methods).toEqual([{ type: "revolut_tag", value: "ana" }]);
   });
 
-  it("falls back to the event details when the payer has not consented", async () => {
+  it("does not inherit the organizer account when a linked payer has not shared", async () => {
     const { eventId, gameId } = await seed({ event: EVENT, payerDetails: PAYER, shared: false });
     const resolved = await resolvePaymentDetails(eventId, gameId);
-    expect(resolved.source).toBe("event");
-    expect(resolved.methods).toEqual([{ type: "mbway", value: "911111111" }]);
+    expect(resolved).toEqual({ methods: [], source: "none" });
   });
 
   it("falls back when the payer is an external name with no account", async () => {
