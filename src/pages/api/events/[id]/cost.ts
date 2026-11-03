@@ -2,6 +2,8 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
+import { getSession } from "../../../../lib/auth.helpers.server";
+import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { summarizePayments } from "../../../../lib/paymentSummary";
@@ -49,6 +51,9 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+  const authCtx = await authenticateRequest(request);
+  const userId = authCtx?.userId ?? (await getSession(request))?.user?.id ?? null;
+
   if (!(await canReadEventFinances(request, event))) {
     return Response.json({ error: "Only event participants can view costs." }, { status: 403 });
   }
@@ -71,13 +76,14 @@ export const GET: APIRoute = async ({ params, request }) => {
   let payerName: string | null = null;
   let resolvedPaymentMethods: unknown[] = [];
   let paymentSource = "none";
+  let viewerIsPayer = false;
   if (event.currentGameId) {
     const game = await prisma.game.findUnique({
       where: { id: event.currentGameId },
       select: {
         payerStoodDownAt: true,
         payerExternalName: true,
-        payerEventPlayer: { select: { name: true } },
+        payerEventPlayer: { select: { name: true, userId: true } },
       },
     });
     payerName = game && !game.payerStoodDownAt
@@ -88,6 +94,9 @@ export const GET: APIRoute = async ({ params, request }) => {
       resolvedPaymentMethods = resolved.methods;
       paymentSource = resolved.source;
     }
+    viewerIsPayer = Boolean(
+      userId && payerName && game?.payerEventPlayer?.userId === userId && !game?.payerStoodDownAt,
+    );
   }
 
   return Response.json({
@@ -98,6 +107,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     resolvedPaymentMethods,
     payerName,
     paymentSource,
+    viewerIsPayer,
     effectivePaymentDetails: eventCost.tempPaymentDetails ?? eventCost.paymentDetails ?? null,
     createdAt: eventCost.createdAt.toISOString(),
     updatedAt: eventCost.updatedAt.toISOString(),
