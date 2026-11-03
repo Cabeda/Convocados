@@ -998,7 +998,7 @@ describe("game_payer_set webhook (#1359)", () => {
     );
   });
 
-  it("keeps the event's details when the payer has not consented", async () => {
+  it("does not inherit the organizer account when the payer has not consented", async () => {
     const { event, game } = await seedEndedGameWithMethods();
     await linkUser("Ana", "user-ana-private");
     await prisma.user.update({
@@ -1017,7 +1017,7 @@ describe("game_payer_set webhook (#1359)", () => {
     expect(fireWebhooks).toHaveBeenCalledWith(
       event.id,
       "game_payer_set",
-      expect.objectContaining({ paymentMethods: [{ type: "mbway", value: "912345678" }] }),
+      expect.objectContaining({ paymentMethods: [] }),
     );
   });
 
