@@ -41,12 +41,11 @@ export const GET: APIRoute = async ({ params, request }) => {
   const linkHolderRead = authz.role === "ownerless-open";
 
   // Password-locked Events require an explicit access grant (owner/invitee/admin
-  // or a valid ev_access cookie) even for the basic settlement view.
-  if (event.accessPassword) {
-    const isInvited = userId
-      ? (await prisma.eventInvite.count({ where: { eventId, userId } })) > 0
-        || (await checkEventAdmin(eventId, userId))
-      : false;
+  // or a valid ev_access cookie) even for the basic settlement view. Anonymous
+  // callers fall through to the normal 401 below.
+  if (event.accessPassword && userId) {
+    const isInvited = (await prisma.eventInvite.count({ where: { eventId, userId } })) > 0
+      || (await checkEventAdmin(eventId, userId));
     const access = checkAccess({
       eventOwnerId: event.ownerId,
       accessPassword: event.accessPassword,
