@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
+import { getSession, checkOwnership, checkEventAdmin } from "../../../../lib/auth.helpers.server";
 import { getOutstandingBalance, getGateBalance, getEventBalanceSummary } from "../../../../lib/balance.server";
+import { checkAccess } from "../../../../lib/eventAccess";
 
 /**
  * GET /api/events/[id]/balance
@@ -16,6 +17,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     select: {
       id: true,
       ownerId: true,
+      isPublic: true,
+      accessPassword: true,
       showDebtorNames: true,
       paymentEnforcementLevel: true,
       paymentGateThreshold: true,
@@ -24,6 +27,24 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const session = await getSession(request);
+
+  if (event.accessPassword) {
+    const isInvited = session?.user
+      ? (await prisma.eventInvite.count({ where: { eventId, userId: session.user.id } })) > 0
+        || (await checkEventAdmin(eventId, session.user.id))
+      : false;
+    const access = checkAccess({
+      eventOwnerId: event.ownerId,
+      accessPassword: event.accessPassword,
+      requestUserId: session?.user?.id ?? null,
+      cookieHeader: request.headers.get("cookie"),
+      eventId,
+      isInvited,
+    });
+    if (!access.granted) {
+      return Response.json({ error: "Access denied." }, { status: 403 });
+    }
+  }
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
   const isPrivileged = isOwner || isAdmin;
 
