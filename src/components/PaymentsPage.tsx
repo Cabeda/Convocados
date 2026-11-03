@@ -212,21 +212,32 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
                         variant="contained"
                         disabled={busy}
                         onClick={async () => {
-                          const ids = g.rows
-                            .filter((r) => r.status === "pending" || r.status === "sent")
-                            .map((r) => r.eventPlayerId);
-                          const ok = await runAction(() =>
-                            isManager
-                              ? apiRequest("PUT /api/events/{id}/payments/settlement/bulk", {
-                                  params: { id: eventId },
-                                  body: { gameId: g.gameId },
-                                })
-                              : apiRequest("POST /api/events/{id}/payments/payer-check-in/mark-all-paid", {
-                                  params: { id: eventId },
-                                  body: { gameId: g.gameId },
-                                }),
-                          );
-                          if (ok && ids.length > 0) setUndoBulk({ gameId: g.gameId, eventPlayerIds: ids });
+                          setBusy(true);
+                          try {
+                            if (isManager) {
+                              const ids = g.rows
+                                .filter((r) => r.status === "pending" || r.status === "sent")
+                                .map((r) => r.eventPlayerId);
+                              await apiRequest("PUT /api/events/{id}/payments/settlement/bulk", {
+                                params: { id: eventId },
+                                body: { gameId: g.gameId },
+                              });
+                              await load();
+                              if (ids.length > 0) setUndoBulk({ gameId: g.gameId, eventPlayerIds: ids });
+                            } else {
+                              const res = (await apiRequest("POST /api/events/{id}/payments/payer-check-in/mark-all-paid", {
+                                params: { id: eventId },
+                                body: { gameId: g.gameId },
+                              })) as { settledEventPlayerIds?: string[] };
+                              await load();
+                              const ids = Array.isArray(res?.settledEventPlayerIds) ? res.settledEventPlayerIds : [];
+                              if (ids.length > 0) setUndoBulk({ gameId: g.gameId, eventPlayerIds: ids });
+                            }
+                          } catch {
+                            setError("failed");
+                          } finally {
+                            setBusy(false);
+                          }
                         }}
                       >
                         {t("paymentsSettleAll")}
