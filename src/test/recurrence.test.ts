@@ -479,3 +479,16 @@ describe("describeRecurrenceRule — all locales produce non-empty strings", () 
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// nextOccurrence — spring-forward gap (issue #1668)
+// ---------------------------------------------------------------------------
+describe("nextOccurrence — spring-forward gap", () => {
+  it("returns a valid post-transition instant when the wall time falls in the gap", () => {
+    const base = new Date("2026-03-22T01:30:00Z");
+    const rule: RecurrenceRule = { freq: "weekly", interval: 1 };
+    const after = new Date("2026-03-22T02:00:00Z");
+    const next = nextOccurrence(base, rule, after, "Europe/Lisbon");
+    expect(next.toISOString()).toBe("2026-03-29T01:30:00.000Z");
+  });
+});
