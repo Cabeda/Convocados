@@ -1,5 +1,5 @@
 import { createT, type Locale } from "./i18n";
-import { fromDateTimeLocalValue } from "./timezones";
+import { fromDateTimeLocalValue, toDateTimeLocalValue } from "./timezones";
 
 export interface RecurrenceRule {
   freq: "daily" | "weekly" | "monthly" | "yearly";
@@ -53,7 +53,24 @@ function civilPseudoToInstant(pseudo: Date, tz: string): Date {
   const h = String(pseudo.getUTCHours()).padStart(2, "0");
   const min = String(pseudo.getUTCMinutes()).padStart(2, "0");
   const localValue = `${y}-${m}-${d}T${h}:${min}`;
-  return new Date(fromDateTimeLocalValue(localValue, tz || "UTC"));
+  const zone = tz || "UTC";
+  const result = new Date(fromDateTimeLocalValue(localValue, zone));
+  // If the wall time does not exist (spring-forward gap) or is ambiguous,
+  // fromDateTimeLocalValue cannot round-trip it. Fall forward to the nearest
+  // valid post-transition time instead of returning an off-by-an-hour instant.
+  if (toDateTimeLocalValue(result, zone) !== localValue) {
+    const shifted = `${y}-${m}-${d}T${String((pseudo.getUTCHours() + 1) % 24).padStart(2, "0")}:${min}`;
+    // Carry the day over when the hour wraps past midnight.
+    const carryDay = pseudo.getUTCHours() === 23;
+    const shiftedDate = carryDay
+      ? new Date(Date.UTC(y, pseudo.getUTCMonth(), pseudo.getUTCDate() + 1))
+      : null;
+    const shiftedLocal = shiftedDate
+      ? `${shiftedDate.getUTCFullYear()}-${String(shiftedDate.getUTCMonth() + 1).padStart(2, "0")}-${String(shiftedDate.getUTCDate()).padStart(2, "0")}T${String((pseudo.getUTCHours() + 1) % 24).padStart(2, "0")}:${min}`
+      : shifted;
+    return new Date(fromDateTimeLocalValue(shiftedLocal, zone));
+  }
+  return result;
 }
 
 export function nextOccurrence(base: Date, rule: RecurrenceRule, after: Date, timezone?: string): Date {
