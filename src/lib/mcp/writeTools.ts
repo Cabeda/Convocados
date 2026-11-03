@@ -860,6 +860,7 @@ export const WRITE_TOOLS: ToolDef[] = [
       },
       required: ["eventId", "playerName", "status"],
     },
+    destructive: true,
     scope: "manage:payments",
     handler: updatePayment,
   },
