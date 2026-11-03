@@ -28,6 +28,8 @@ export interface ToolDef {
   readOnly?: boolean;
   /** Write tools only: true when the call overwrites or removes existing data. */
   destructive?: boolean;
+  /** True when the tool touches an independently controlled external system (public listing, scheduler, etc.). */
+  openWorld?: boolean;
   /**
    * When true (default), `tools/call` requires a valid OAuth token. Set false
    * for tools that anonymous callers may use (read-only public data).

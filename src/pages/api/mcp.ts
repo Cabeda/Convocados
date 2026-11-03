@@ -229,11 +229,11 @@ export const POST: APIRoute = async ({ request }) => {
       // write tools are never read-only. openWorldHint is false because these
       // tools only touch the Convocados data store, not external systems.
       annotations: t.readOnly
-        ? { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+        ? { readOnlyHint: true, destructiveHint: false, openWorldHint: t.openWorld === true }
         : {
             readOnlyHint: false,
             destructiveHint: t.destructive === true,
-            openWorldHint: false,
+            openWorldHint: t.openWorld === true,
           },
       // ChatGPT derives its linking UI from per-tool `securitySchemes`: without
       // it, a protected tool is treated as anonymous and never prompts the

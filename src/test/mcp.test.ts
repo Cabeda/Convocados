@@ -109,7 +109,7 @@ describe("POST /api/mcp — stateless transport", () => {
     expect((byName.get("convocados_create_event") as any).annotations).toEqual({
       readOnlyHint: false,
       destructiveHint: false,
-      openWorldHint: false,
+      openWorldHint: true,
     });
     // The model needs the format spelled out, or it passes a UTC time for a
     // local kickoff and the game lands an hour or two off.
