@@ -2,9 +2,9 @@ import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { authenticateRequest } from "~/lib/authenticate.server";
 import { getSession } from "~/lib/auth.helpers.server";
-import { checkAccess } from "~/lib/eventAccess";
+
 import { canReadEventFinances } from "~/lib/eventReadAccess.server";
-import { checkEventAdmin } from "~/lib/auth.helpers.server";
+
 import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
 
 /**
@@ -26,25 +26,11 @@ export const GET: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Mirror the page gate: an Event admin or invitee is admitted without the
-  // password cookie (GET /events/[id] never asks them for it).
-  const [isAdmin, isInvited] = await Promise.all([
-    checkEventAdmin(eventId, userId),
-    prisma.eventInvite.count({ where: { eventId, userId } }).then((count) => count > 0),
-  ]);
-  const access = checkAccess({
-    eventOwnerId: event.ownerId,
-    accessPassword: event.accessPassword,
-    requestUserId: userId,
-    cookieHeader: request.headers.get("cookie"),
-    eventId: event.id,
-    isInvited: isInvited || isAdmin,
-  });
-  if (!access.granted) {
-    return Response.json({ locked: true, error: "This event is locked." }, { status: 403 });
-  }
+  // The seam resolves the password gate (owner/invitee/admin/cookie) and the
+  // unlocked read gate (owner/admin/participant or ownerless-unlisted link) for
+  // every auth method, so this route no longer re-implements either.
   if (!(await canReadEventFinances(request, event))) {
-    return Response.json({ error: "You cannot read this event's payments." }, { status: 403 });
+    return Response.json({ locked: true, error: "This event is locked." }, { status: 403 });
   }
   if (!event.currentGameId) {
     return Response.json({ gameId: null, mode: "tracked", hasCost: false, payerName: null, isPayer: false, isRosterPlayer: false, vacant: false });

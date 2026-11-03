@@ -359,11 +359,13 @@ describe("GET payer/index", () => {
     const accessPassword = hashPassword("secret");
     await testPrisma.event.update({ where: { id: event.id }, data: { accessPassword } });
 
+    mockCanReadFinances.mockResolvedValueOnce(false);
     mockGetSession.mockResolvedValue({ user: { id: outsider.id } });
     const denied = await getPayer(GET_CTX(event.id));
     expect(denied.status).toBe(403);
     expect((await denied.json()).locked).toBe(true);
 
+    mockCanReadFinances.mockResolvedValueOnce(true);
     const cookie = buildAccessCookie(null, event.id, accessPassword);
     mockGetSession.mockResolvedValue({ user: { id: ana.id } });
     const allowed = await getPayer(GET_CTX(event.id, cookie));
