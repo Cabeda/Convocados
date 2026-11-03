@@ -2,6 +2,9 @@ import { prisma } from "../db.server";
 import type { AuthContext } from "../authenticate.server";
 import { fetchMyGames } from "../myGames.server";
 import { getEventBalanceSummary } from "../balance.server";
+import { canReadEventFinances } from "../eventReadAccess.server";
+import { checkEventAdmin } from "../auth.helpers.server";
+import { checkAccess } from "../eventAccess";
 import { McpError } from "./errors";
 import { WRITE_TOOLS } from "./writeTools";
 
@@ -56,10 +59,25 @@ async function getGame(args: Record<string, unknown>, ctx: AuthContext) {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw new McpError("Game not found", -32001, 404);
 
-  // Anonymous callers get link-accessible events, but a password-locked event
-  // reveals only its title (ADR 0034).
-  if (event.accessPassword && !ctx.userId) {
-    return { id: event.id, title: event.title, locked: true, hasPassword: true };
+  // Password-locked events reveal only their title unless the caller is the
+  // owner, an invitee/admin, or holds a valid ev_access cookie (MCP has no
+  // cookie, so only owner/invitee/admin qualify).
+  if (event.accessPassword) {
+    const isInvited = ctx.userId
+      ? (await prisma.eventInvite.count({ where: { eventId: event.id, userId: ctx.userId } })) > 0
+        || (await checkEventAdmin(event.id, ctx.userId))
+      : false;
+    const granted = checkAccess({
+      eventOwnerId: event.ownerId,
+      accessPassword: event.accessPassword,
+      requestUserId: ctx.userId ?? null,
+      cookieHeader: null,
+      eventId: event.id,
+      isInvited,
+    }).granted;
+    if (!granted) {
+      return { id: event.id, title: event.title, locked: true, hasPassword: true };
+    }
   }
 
   const playerCount = event.currentGameId
@@ -99,9 +117,33 @@ async function listPublicEvents(args: Record<string, unknown>) {
 }
 
 type PlayerLike = { id: string; name: string; userId: string | null; rating?: number };
-async function listPlayers(args: Record<string, unknown>, _ctx: AuthContext) {
-  const eventId = args.eventId as string;
+async function assertEventReadable(eventId: string, ctx: AuthContext): Promise<void> {
   if (!eventId) throw new McpError("eventId required", -32602, 400);
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, ownerId: true, isPublic: true, accessPassword: true },
+  });
+  if (!event) throw new McpError("Game not found", -32001, 404);
+  if (event.accessPassword) {
+    const isInvited = ctx.userId
+      ? (await prisma.eventInvite.count({ where: { eventId: event.id, userId: ctx.userId } })) > 0
+        || (await checkEventAdmin(event.id, ctx.userId))
+      : false;
+    const granted = checkAccess({
+      eventOwnerId: event.ownerId,
+      accessPassword: event.accessPassword,
+      requestUserId: ctx.userId ?? null,
+      cookieHeader: null,
+      eventId: event.id,
+      isInvited,
+    }).granted;
+    if (!granted) throw new McpError("Access denied", -32003, 403);
+  }
+}
+
+async function listPlayers(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string;
+  await assertEventReadable(eventId, ctx);
   const eventPlayers = await prisma.eventPlayer.findMany({ where: { eventId }, select: { id: true, name: true, userId: true, rating: true } });
   // fallback to legacy Player for older events
   const legacy = await prisma.player.findMany({ where: { eventId }, select: { id: true, name: true, userId: true } });
@@ -111,11 +153,16 @@ async function listPlayers(args: Record<string, unknown>, _ctx: AuthContext) {
   return { players: Array.from(map.values()) };
 }
 
-async function getBalance(args: Record<string, unknown>, _ctx: AuthContext) {
+async function getBalance(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string;
   if (!eventId) throw new McpError("eventId required", -32602, 400);
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, ownerId: true, isPublic: true, accessPassword: true },
+  });
   if (!event) throw new McpError("Game not found", -32001, 404);
+  const allowed = await canReadEventFinances(new Request("http://localhost"), event, ctx.userId ?? null);
+  if (!allowed) throw new McpError("Access denied", -32003, 403);
   const summary = await getEventBalanceSummary(eventId);
   return {
     eventId,
@@ -126,16 +173,16 @@ async function getBalance(args: Record<string, unknown>, _ctx: AuthContext) {
   };
 }
 
-async function getHistory(args: Record<string, unknown>, _ctx: AuthContext) {
+async function getHistory(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string;
-  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await assertEventReadable(eventId, ctx);
   const rows = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "desc" }, take: 20 });
   return { history: rows.map((r) => ({ ...r, dateTime: r.dateTime.toISOString(), createdAt: r.createdAt.toISOString() })) };
 }
 
-async function getRatings(args: Record<string, unknown>, _ctx: AuthContext) {
+async function getRatings(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string;
-  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await assertEventReadable(eventId, ctx);
   const ratings = await prisma.playerRating.findMany({ where: { eventId } });
   const fallback = ratings.length ? ratings : await prisma.eventPlayer.findMany({ where: { eventId }, select: { name: true, rating: true, gamesPlayed: true, wins: true, losses: true } });
   return { ratings: fallback };
