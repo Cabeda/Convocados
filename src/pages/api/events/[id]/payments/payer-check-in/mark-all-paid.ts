@@ -15,13 +15,17 @@ export const POST: APIRoute = async ({ params, request }) => {
   const { event, game, userId } = resolved;
 
   try {
+    const unpaid = await prisma.gamePayment.findMany({
+      where: { gameId: game.id, archivedAt: null, status: { not: "paid" } },
+      select: { eventPlayerId: true },
+    });
     const updated = await bulkSettleGame(event.id, game.id, userId);
     // The payer answered the check-in — stop asking about this game.
     await prisma.game.update({
       where: { id: game.id },
       data: { payerCheckInSentAt: new Date(), payerCheckInSnoozedUntil: null },
     });
-    return Response.json({ ok: true, updated });
+    return Response.json({ ok: true, updated, settledEventPlayerIds: unpaid.map((p) => p.eventPlayerId) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to settle game.";
     return Response.json({ error: message }, { status: 400 });
