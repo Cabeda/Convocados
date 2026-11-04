@@ -92,6 +92,21 @@ export default function NotificationsPage() {
   const when = (iso: string) =>
     formatDateInTz(new Date(iso), locale, "UTC", { dateStyle: "medium", timeStyle: "short" });
 
+  // In-app rows are stored as "translationKey:{json params}" so they can be
+  // rendered in the viewer's own locale instead of a server-picked one.
+  const readableBody = (raw: string): string => {
+    const idx = raw.indexOf(":");
+    if (idx <= 0) return raw;
+    const key = raw.slice(0, idx);
+    const rest = raw.slice(idx + 1);
+    try {
+      const params = JSON.parse(rest) as Record<string, string>;
+      return t(key as Parameters<typeof t>[0], params);
+    } catch {
+      return raw;
+    }
+  };
+
   return (
     <ThemeModeProvider>
       <ResponsiveLayout>
@@ -138,7 +153,7 @@ export default function NotificationsPage() {
                           <Typography fontWeight={unread ? 700 : 500}>{row.title}</Typography>
                           {unread && <Chip size="small" color="primary" label={t("unread")} />}
                         </Stack>
-                        <Typography variant="body2" color="text.secondary">{row.body}</Typography>
+                        <Typography variant="body2" color="text.secondary">{readableBody(row.body)}</Typography>
                         <Typography variant="caption" color="text.disabled">{when(row.createdAt)}</Typography>
                       </Box>
                       {row.url && (
