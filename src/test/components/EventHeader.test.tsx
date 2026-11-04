@@ -11,7 +11,6 @@ vi.mock("~/components/event/NotifyButton", () => ({ NotifyButton: () => null }))
 vi.mock("~/components/PaymentSurface", () => ({ PaymentSurface: () => null }));
 vi.mock("~/components/event/MyNotificationsDialog", () => ({ MyNotificationsDialog: () => null }));
 vi.mock("~/components/LocationAutocomplete", () => ({ default: () => null, reverseGeocode: vi.fn() }));
-vi.mock("~/components/CourtAlternatives", () => ({ default: () => null }));
 
 const baseEvent: EventData = {
   id: "evt-1",

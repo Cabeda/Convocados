@@ -5,6 +5,9 @@ import { resolveLocation, type GeoResult } from "../../../../lib/geocode";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { inferCity, normalizeCity } from "../../../../lib/city";
+import { enqueueNotification } from "~/lib/notificationQueue.server";
+import { fireWebhooks } from "~/lib/webhook.server";
+import { getRosterCapacity } from "~/lib/roster.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -46,6 +49,17 @@ export const PUT: APIRoute = async ({ params, request }) => {
     },
   });
 
+  if (event.location !== storedLocation || event.latitude !== (geo?.latitude ?? null) || event.longitude !== (geo?.longitude ?? null)) {
+    fireWebhooks(event.id, "game_rescheduled", {}).catch(() => {});
+    const { spotsLeft } = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
+    await enqueueNotification(event.id, "event_details", {
+      title: event.title,
+      key: "notifyEventDetailsChanged",
+      params: { title: event.title },
+      url: `/events/${event.id}`,
+      spotsLeft,
+    }, authz.session?.user?.id);
+  }
 
   return Response.json({
     location: storedLocation,

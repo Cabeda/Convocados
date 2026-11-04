@@ -409,7 +409,7 @@ describe("game_rescheduled webhook", () => {
     expect(fireWebhooks).not.toHaveBeenCalledWith(event.id, "game_rescheduled", {});
   });
 
-  it("fires when the court/location changes", async () => {
+  it("fires when the manual game location changes", async () => {
     const event = await prisma.event.create({
       data: {
         id: "evt-dr-12",
@@ -420,8 +420,8 @@ describe("game_rescheduled webhook", () => {
       },
     });
 
-    const { POST } = await import("~/pages/api/events/[id]/switch-court");
-    const res = await POST(
+    const { PUT } = await import("~/pages/api/events/[id]/location");
+    const res = await PUT(
       putCtx(event.id, { location: "Pitch B" }) as any,
     );
     expect(res.status).toBe(200);

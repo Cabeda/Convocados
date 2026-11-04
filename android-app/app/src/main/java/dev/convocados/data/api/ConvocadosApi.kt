@@ -356,10 +356,6 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun claimOwnership(eventId: String): OkResponse =
         client.post("/api/events/$eventId/claim")
 
-    /** Adopt an Open Pickup (ADR-0021): user becomes the owner, event stays public. */
-    suspend fun adoptPickup(eventId: String): OkResponse =
-        client.post("/api/events/$eventId/adopt")
-
     suspend fun relinquishOwnership(eventId: String): OkResponse =
         client.delete("/api/events/$eventId/claim")
 
@@ -453,31 +449,6 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     /** ADR 0025: reversible per-event invite opt-out for the caller's EventPlayer. */
     suspend fun setInvitationOptOut(eventId: String, optOut: Boolean): InvitationOptOutResponse =
         client.post("/api/events/$eventId/invitation-opt-out", InvitationOptOutRequest(optOut))
-
-    // ── Court Finder ──────────────────────────────────────────────────────
-    suspend fun fetchCourtAlternatives(
-        eventId: String,
-        radius: Int = 10000,
-        startTime: String? = null,
-        endTime: String? = null,
-        includeBooked: Boolean = true,
-    ): CourtAlternativesResponse {
-        val params = buildString {
-            append("?radius=$radius&includeBooked=$includeBooked")
-            if (startTime != null) append("&startTime=$startTime")
-            if (endTime != null) append("&endTime=$endTime")
-        }
-        return client.get("/api/events/$eventId/court-alternatives$params")
-    }
-
-    suspend fun fetchCourtWatches(): CourtWatchesResponse =
-        client.get("/api/court-watches")
-
-    suspend fun createCourtWatch(request: CreateCourtWatchRequest): OkResponse =
-        client.post("/api/court-watches", request)
-
-    suspend fun deleteCourtWatch(id: String): OkResponse =
-        client.delete("/api/court-watches/$id")
 
     // ── Invites (ADR 0025) ───────────────────────────────────────────────
     suspend fun fetchInvite(token: String): InviteLookupResponse =

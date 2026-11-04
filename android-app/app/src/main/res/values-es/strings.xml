@@ -108,18 +108,10 @@
     <string name="no_attendance_data">Aún no hay datos de asistencia</string>
     <string name="games_streak_format">%1$d/%2$d partidos · racha: %3$d</string>
     <string name="last_played">Última vez %1$s</string>
-
-    <string name="watch_created">¡Alerta creada! Te avisaremos cuando esté libre.</string>
-    <string name="court_alternatives">Pistas alternativas</string>
     <string name="from">Desde</string>
     <string name="to">Hasta</string>
     <string name="search">Buscar</string>
-    <string name="no_courts_found">No hay pistas para este intervalo de tiempo.</string>
-    <string name="notify_when_free">Avisar cuando esté libre</string>
-    <string name="book_on_playtomic">Reservar en Playtomic</string>
-    <string name="court_watches">Alertas de pistas</string>
     <string name="delete">Eliminar</string>
-    <string name="no_court_watches">Aún no hay alertas de pistas.\nCrea una desde las pistas alternativas de un evento.</string>
 
     <!-- Invites (ADR 0025) -->
     <string name="invite_page_title">Invitación a partido</string>
@@ -185,7 +177,6 @@
     <string name="share">Compartir</string>
     <string name="randomize">Sortear</string>
     <string name="settings">Ajustes</string>
-    <string name="courts">Pistas</string>
     <string name="alerts">Alertas</string>
     <string name="game_ended">Partido terminado</string>
     <string name="record_final_score">Registrar el resultado final</string>
@@ -308,8 +299,6 @@
     <string name="set_custom_cost">Definir coste personalizado</string>
     <string name="custom_cost_for">Coste personalizado para %1$s</string>
     <string name="amount">Importe</string>
-
-    <string name="court_watches_subtitle">Avisar cuando pistas reservadas queden libres</string>
     <string name="theme">Tema</string>
     <string name="theme_system">Sistema</string>
     <string name="theme_light">Claro</string>
@@ -400,8 +389,6 @@
     <string name="games_you_played">Partidos en los que jugaste</string>
     <string name="no_archived_games">No hay partidos archivados</string>
     <string name="will_invite">Invitará a %1$s</string>
-    <string name="open_pickup">Pickup abierto</string>
-    <string name="claim_pickup">Reclamar este pickup</string>
     <string name="team_total_elo">ELO total: %1$d</string>
     <string name="team_view_toggle_label">Vista de equipos</string>
     <string name="team_view_list">Lista</string>

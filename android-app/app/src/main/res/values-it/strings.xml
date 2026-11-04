@@ -108,18 +108,10 @@
     <string name="no_attendance_data">Ancora nessun dato sulle presenze</string>
     <string name="games_streak_format">%1$d/%2$d partite · serie: %3$d</string>
     <string name="last_played">Ultima volta %1$s</string>
-
-    <string name="watch_created">Avviso creato! Riceverai una notifica quando si libera.</string>
-    <string name="court_alternatives">Campi alternativi</string>
     <string name="from">Da</string>
     <string name="to">A</string>
     <string name="search">Cerca</string>
-    <string name="no_courts_found">Nessun campo per questa fascia oraria.</string>
-    <string name="notify_when_free">Avvisa quando libero</string>
-    <string name="book_on_playtomic">Prenota su Playtomic</string>
-    <string name="court_watches">Avvisi campi</string>
     <string name="delete">Elimina</string>
-    <string name="no_court_watches">Ancora nessun avviso campi.\nCreane uno dai campi alternativi di un evento.</string>
 
     <!-- Invites (ADR 0025) -->
     <string name="invite_page_title">Invito a partita</string>
@@ -185,7 +177,6 @@
     <string name="share">Condividi</string>
     <string name="randomize">Sorteggia</string>
     <string name="settings">Impostazioni</string>
-    <string name="courts">Campi</string>
     <string name="alerts">Avvisi</string>
     <string name="game_ended">Partita terminata</string>
     <string name="record_final_score">Registra il punteggio finale</string>
@@ -308,8 +299,6 @@
     <string name="set_custom_cost">Imposta costo personalizzato</string>
     <string name="custom_cost_for">Costo personalizzato per %1$s</string>
     <string name="amount">Importo</string>
-
-    <string name="court_watches_subtitle">Avvisa quando i campi prenotati si liberano</string>
     <string name="theme">Tema</string>
     <string name="theme_system">Sistema</string>
     <string name="theme_light">Chiaro</string>
@@ -400,8 +389,6 @@
     <string name="games_you_played">Partite a cui hai giocato</string>
     <string name="no_archived_games">Nessuna partita archiviata</string>
     <string name="will_invite">Inviterà %1$s</string>
-    <string name="open_pickup">Pickup aperto</string>
-    <string name="claim_pickup">Adotta questo pickup</string>
     <string name="team_total_elo">ELO totale: %1$d</string>
     <string name="team_view_toggle_label">Vista squadre</string>
     <string name="team_view_list">Elenco</string>

@@ -88,9 +88,6 @@ class PublicGamesViewModel @Inject constructor(private val api: ConvocadosApi) :
         applyFilter()
     }
 
-    suspend fun adopt(eventId: String): Boolean =
-        runCatching { api.adoptPickup(eventId) }.isSuccess
-
     private fun applyFilter() {
         _events.value = if (_sportFilter.value == "all") allEvents
         else allEvents.filter { it.sport.contains(_sportFilter.value, ignoreCase = true) }
@@ -111,7 +108,6 @@ fun PublicGamesScreen(
     val hasMore by viewModel.hasMore.collectAsState()
     val sportFilter by viewModel.sportFilter.collectAsState()
     var showMap by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
@@ -166,7 +162,6 @@ fun PublicGamesScreen(
                         }
                     }
                     items(events, key = { it.id }) { event ->
-                        val isPickup = event.source == "playtomic" && event.ownerId == null
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             modifier = Modifier
@@ -188,9 +183,6 @@ fun PublicGamesScreen(
                                         Text(event.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
                                     }
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (isPickup) {
-                                            Text(stringResource(R.string.open_pickup), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = 8.dp))
-                                        }
                                         Card(colors = CardDefaults.cardColors(containerColor = if (event.spotsLeft == 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer)) {
                                             Text(if (event.spotsLeft == 0) stringResource(R.string.full) else stringResource(R.string.spots_left, event.spotsLeft), color = if (event.spotsLeft == 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                                         }
@@ -198,18 +190,6 @@ fun PublicGamesScreen(
                                 }
                                 Text(stringResource(R.string.event_meta, formatRelativeDate(event.dateTime), event.playerCount, event.maxPlayers), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 if (event.location.isNotBlank()) Text(event.location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
-                                if (isPickup) {
-                                    Button(
-                                        onClick = {
-                                            scope.launch {
-                                                if (viewModel.adopt(event.id)) onEventClick(event.id)
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                                    ) {
-                                        Text(stringResource(R.string.claim_pickup))
-                                    }
-                                }
                             }
                         }
                     }

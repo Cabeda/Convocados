@@ -39,7 +39,6 @@ export const docsNav: DocsNavSection[] = [
       { href: "/docs/features/recurrence", label: "Recurring Games" },
       { href: "/docs/features/notifications", label: "Notifications" },
       { href: "/docs/features/history", label: "History & Scores" },
-      { href: "/docs/features/court-finder", label: "Court Finder" },
     ],
   },
   {

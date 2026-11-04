@@ -14,13 +14,11 @@ import { POST as calendarToken } from "~/pages/api/me/calendar-token";
 import { GET as settlementSummary, PUT as settleShare } from "~/pages/api/events/[id]/payments/settlement";
 import { PUT as updateTitle } from "~/pages/api/events/[id]/title";
 import { PUT as archivePlayer } from "~/pages/api/events/[id]/archive-player";
-import { GET as searchCourtAlternatives, PUT as saveCourtWatch } from "~/pages/api/events/[id]/court-alternatives";
 import { POST as mergePlayer } from "~/pages/api/events/[id]/merge-player";
 import { POST as markNoShow } from "~/pages/api/events/[id]/no-show";
 import { DELETE as purgePlayer } from "~/pages/api/events/[id]/purge-player";
 import { PUT as reorderPlayers } from "~/pages/api/events/[id]/reorder-players";
 import { POST as resetPlayerOrder } from "~/pages/api/events/[id]/reset-player-order";
-import { POST as switchCourt } from "~/pages/api/events/[id]/switch-court";
 import { PUT as setReminderTimings } from "~/pages/api/events/[id]/reminder-timings";
 import { PUT as setNotificationDefaults } from "~/pages/api/events/[id]/notification-defaults";
 
@@ -254,18 +252,6 @@ const ROOT_EVENT_MUTATIONS = [
     call: (id: string, token?: string) => archivePlayer(ctx({ id }, {}, token, "PUT")),
   },
   {
-    route: "GET court-alternatives",
-    denied: "Only event owner or admins can search alternatives.",
-    afterGate: 400,
-    call: (id: string, token?: string) => searchCourtAlternatives(ctx({ id }, undefined, token, "GET")),
-  },
-  {
-    route: "PUT court-alternatives",
-    denied: "Only event owner or admins can manage court watch.",
-    afterGate: 400,
-    call: (id: string, token?: string) => saveCourtWatch(ctx({ id }, {}, token, "PUT")),
-  },
-  {
     route: "POST merge-player",
     denied: "Only the event owner or admin can merge players.",
     afterGate: 400,
@@ -294,12 +280,6 @@ const ROOT_EVENT_MUTATIONS = [
     denied: "Only the event owner can reset player order.",
     afterGate: 200,
     call: (id: string, token?: string) => resetPlayerOrder(ctx({ id }, {}, token, "POST")),
-  },
-  {
-    route: "POST switch-court",
-    denied: "Only event owner or admins can switch courts.",
-    afterGate: 400,
-    call: (id: string, token?: string) => switchCourt(ctx({ id }, {}, token, "POST")),
   },
   {
     route: "PUT reminder-timings",

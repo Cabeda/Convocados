@@ -160,7 +160,7 @@ class DeepLinkTest {
     fun `deepLinkToRoute resolves court watches url`() {
         // Server sends absolute APP_URL/court-watches from the court-watch cron
         assertEquals(
-            "court-watches",
+            "public-games",
             DeepLink.deepLinkToRoute("https://convocados.cabeda.dev/court-watches"),
         )
     }
@@ -168,7 +168,7 @@ class DeepLinkTest {
     @Test
     fun `deepLinkToRoute resolves convocados court watches url`() {
         val route = DeepLink.deepLinkToRoute("convocados://court-watches")
-        assertEquals("court-watches", route)
+        assertEquals("public-games", route)
     }
 
     @Test

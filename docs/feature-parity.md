@@ -25,7 +25,6 @@
 | **Sharing** | ✅ | ✅ | ❌ |
 | **User Profile** | ✅ | ✅ | ❌ |
 | **Webhooks** | ✅ | ❌ | ❌ |
-| **Court Finder** | ✅ | ❌ | ❌ |
 | **Admin Panel** | ✅ | ❌ | ❌ |
 
 ## Detailed Capabilities
@@ -158,7 +157,6 @@
 | List View | ✅ | ✅ | ❌ |
 | Map View | ✅ | ❌ | ❌ |
 | Sport Filter | ✅ | ✅ | ❌ |
-| Adopt Open Pickup | ✅ | ✅ | ❌ |
 
 ### Notifications
 
@@ -184,17 +182,3 @@
 | View Other Profiles | ✅ | ✅ | ❌ |
 | Edit Name | ✅ | ❌ | ❌ |
 | Edit Photo | ✅ | ✅ | ❌ |
-
-### Court Finder
-
-| Capability | Web | Android | Wear OS |
-|------------|:---:|:-------:|:-------:|
-| Search Nearby Clubs | ✅ | ❌ | ❌ |
-| Availability Check | ✅ | ❌ | ❌ |
-| Compare Prices | ✅ | ❌ | ❌ |
-| Map View | ✅ | ❌ | ❌ |
-| Switch Court | ✅ | ❌ | ❌ |
-| Playtomic Deep Links | ✅ | ❌ | ❌ |
-| Include Booked Courts | ✅ | ❌ | ❌ |
-| Court Watch Alerts | ✅ | ❌ | ❌ |
-| Recurring Watches | ✅ | ❌ | ❌ |

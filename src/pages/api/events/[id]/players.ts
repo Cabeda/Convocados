@@ -44,18 +44,6 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // ADR-0021: joining an un-adopted Open Pickup is blocked until someone adopts.
-  const pickupGate = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { source: true, ownerId: true },
-  });
-  if (pickupGate?.source === "playtomic" && pickupGate.ownerId === null) {
-    return Response.json(
-      { error: "This is an open pickup — claim it first." },
-      { status: 409 },
-    );
-  }
-
   // Cancelling the current Game freezes the roster for that occurrence. A
   // recurring Event has already advanced to its next Game, so this only trips
   // while the cancelled occurrence is still current.

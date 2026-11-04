@@ -132,3 +132,12 @@ only documentation and the issue ledger. It does not implement or deploy fixes.
 The production-inspection runbook has been corrected: Fly does retain historical
 logs. See [Fly log search](https://docs.fly.io/monitoring/search-logs) and the
 [logs API guide](https://docs.fly.io/monitoring/logs-api-options).
+
+## Subsequent retirement decision
+
+Cabeda confirmed that Playtomic has blocked access and no longer supports public
+API access. Issue #1693 therefore tracks removal rather than repair. The Change
+removes active integration code, UI, schedules, contracts and obsolete storage.
+A second read-only inspection found zero watches, hits, alerts or Event provider
+metadata; 45 rows remained in the disposable availability cache. No game, player,
+user or notification rows are deleted by the prepared migration.

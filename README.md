@@ -1,6 +1,6 @@
 # 🏆 Convocados
 
-**Organize pickup sports games in seconds** — create events, find courts, randomize fair teams, track scores, and notify players.
+**Organize pickup sports games in seconds** — create events, randomize fair teams, track scores, and notify players.
 
 [![CI](https://github.com/Cabeda/Convocados/actions/workflows/ci.yml/badge.svg)](https://github.com/Cabeda/Convocados/actions/workflows/ci.yml)
 [![License: FSL-1.1-ALv2](https://img.shields.io/badge/License-FSL--1.1--ALv2-blue.svg)](LICENSE)
@@ -18,7 +18,6 @@
 
 Most sports organizers use a WhatsApp group and a spreadsheet. Convocados replaces both with a single shareable link — and adds features you can't get elsewhere:
 
-- **🔍 Court Finder** — Search nearby courts via Playtomic, compare prices across venues, and get notified when a booked court frees up. No more manually refreshing booking apps.
 - **🎲 Fair Teams** — ELO-balanced team randomization so games aren't one-sided
 - **🔄 Recurring Games** — Auto-resets weekly/monthly. Players just tap "I'm in" each week
 - **💰 Split Costs** — Track who owes what, with payment nudges and enforcement gates
@@ -29,18 +28,6 @@ Most sports organizers use a WhatsApp group and a spreadsheet. Convocados replac
 ---
 
 ## Features
-
-### 🏟️ Court Finder & Availability Alerts
-
-| Search nearby | Map view | Notify when free |
-|---|---|---|
-| Search 15+ Playtomic clubs by distance, price, time | Toggle between list and map | Watch a booked court and get push-notified when it opens |
-
-- Searches multiple sport variants (FUTSAL + FOOTBALL_OTHERS for 5-a-side)
-- Groups results by club with clickable time-slot chips showing prices
-- Deep links open Playtomic with the correct sport, date, and court pre-selected
-- Recurring watches (e.g. "every Monday 18–20h") with smart deduplication
-- Availability cached and batch-fetched (scales to hundreds of watches)
 
 ### Core Features
 
@@ -92,7 +79,6 @@ Most sports organizers use a WhatsApp group and a spreadsheet. Convocados replac
 | Testing | Vitest (96%+ coverage) + E2E |
 | Mobile | Native Android — Kotlin + Jetpack Compose |
 | Deployment | Docker on [Fly.io](https://fly.io) |
-| Court data | [Playtomic](https://playtomic.io) public API |
 
 ---
 
@@ -145,7 +131,7 @@ Convocados is free and open source. If it saves you time, consider donating — 
 Full docs at [`/docs`](https://convocados.cabeda.dev/docs):
 
 - [Getting started](https://convocados.cabeda.dev/docs/quickstart)
-- [Feature guides](https://convocados.cabeda.dev/docs/features/events) (events, teams, court finder, payments, etc.)
+- [Feature guides](https://convocados.cabeda.dev/docs/features/events) (events, teams, payments, etc.)
 - [API reference](https://convocados.cabeda.dev/docs/api)
 - [Self-hosting](https://convocados.cabeda.dev/docs/guides/self-hosting)
 - [Delivery factory runbook](./docs/factory/README.md)

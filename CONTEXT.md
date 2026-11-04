@@ -109,9 +109,6 @@ _Avoid_: rank change, Elo swing, MMR delta
 The projected Season outcome of the current, unplayed **Game**, shown to **Season** participants on the team view during team formation: each lineup player's **Crew** association, their **Season Contribution** under each side result, each **Crew**'s resulting **Crew Round Score**, and the per-scenario **Season Rank** movement and Crew standings position. Shown only while the Season still has an available **Season Round**; tournament points display as whole numbers.
 _Avoid_: prediction, forecast (implies certainty), odds
 
-## Open Pickup
-An un-adopted one-off Event+Game sourced from a Playtomic booking (`source=playtomic`), created automatically by the sweep when a court slot is detected as booked. Public (`isPublic=true`), no Owner (`ownerId=null`), no players yet. A notice that people play here at this court and time — a lead for organizing, not a real game. Rendered distinctly in the public listing (badge + no roster/join UI). Joining is blocked until someone Adopts.
-_Avoid_: synthetic game, beacon, phantom game
 
 ## Player
 A participation record in a specific **Game** (via `GameParticipant`). The per-game row that tracks order/position. Linked to an **EventPlayer** (the persistent series identity). A pending invitation is not yet a Player; "joined" means having an active GameParticipant record in the current Game.
@@ -163,9 +160,6 @@ The User who created the Game or to whom ownership was transferred. Has full man
 ## Admin
 A User granted management privileges for a Game by the Owner (via `EventAdmin`). Can edit teams, archive players, approve Skill Rating, etc. Has no ownership rights.
 
-## Adopt
-The action of taking over an Open Pickup: an authenticated User claims the event, becoming its Owner. The event then behaves as an ordinary Event+Game and stays public unless the new Owner opts into privacy (sets a password via settings). Followers and joiners are notified on adoption. Distinct from Claim (anonymous EventPlayer identity claim).
-_Avoid_: take over, takeover
 
 ## Follow
 An explicit relationship between a User and a Game (stored in `EventFollow`). Following a Game means:
@@ -377,11 +371,7 @@ Consequences: notification to the player with streak count, priority enrollment 
 No automatic detection — manual marking only to avoid false positives.
 _Avoid_: absence, missed game (overloaded with Wallet credit context)
 
-## Court Alternative
-A Playtomic court slot that matches an existing Game's dateTime (±30 min), sport, and minimum duration, offered as a replacement option. Surfaced to Owner/Admins only — either via manual search or an automated hourly background sweep ("Court Watch"). Filtered by distance from the Game's coordinates, and optionally by indoor/outdoor and surface type (best-effort, dependent on Playtomic data availability). When accepted ("Switch"), the Game's location and coordinates are updated and all Followers are notified via the standard event-details-changed flow.
 
-## Court Watch
-An opt-in background process that checks Playtomic hourly for Court Alternatives matching a Game's criteria. Enabled per-game by an Admin via a JSON config (`courtWatchConfig`) on the Event. Requires the Event to have latitude/longitude. Alerts are deduplicated — the same slot is never re-notified. Watching stops only when the Admin disables it.
 
 ## Outstanding Balance ("tab")
 The total amount an **EventPlayer** still owes within an Event series, computed by summing unpaid `GamePayment` rows across all Games for that EventPlayer. Scoped **per-Event, per-EventPlayer** — it does not span Events.

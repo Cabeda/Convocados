@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck -- component test type suppression for @testing-library/react screen exports
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, waitFor, cleanup } from "@testing-library/react";
+import { screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
@@ -58,6 +58,24 @@ describe("CreateEventForm", () => {
     expect(screen.getByLabelText(/Game title/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Date & time/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Create game/i })).toBeInTheDocument();
+  });
+
+  it("creates a padel game with a manual location without offering retired court discovery", () => {
+    vi.useFakeTimers();
+    try {
+      setupSubmission("manual-padel");
+      renderWithTheme(<CreateEventForm />);
+      fireEvent.mouseDown(screen.getAllByRole("combobox")[0]);
+      fireEvent.click(screen.getByRole("option", { name: "Padel (4)" }));
+      fireEvent.click(screen.getByRole("button", { name: /Advanced options/i }));
+      expect(screen.queryByRole("button", { name: /Find a court/i })).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText(/Location/i), { target: { value: "Local sports centre" } });
+      fireEvent.click(screen.getByRole("button", { name: /Create game/i }));
+      expect(getSubmittedBody()).toMatchObject({ sport: "padel", location: "Local sports centre", maxPlayers: 4 });
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
   it("renders sport selector", () => {

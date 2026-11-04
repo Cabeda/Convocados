@@ -1,5 +1,8 @@
 # ADR 0005: Court Watch uses single hourly sweep, not per-game scheduled jobs
 
+> Retired on 2026-11-04: Playtomic no longer supports public API access.
+> This ADR remains historical context; the integration is removed.
+
 ## Status
 Accepted
 

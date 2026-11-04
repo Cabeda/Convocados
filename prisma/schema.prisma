@@ -50,7 +50,6 @@ model User {
   oauthTokens             OauthAccessToken[] @relation("OAuthTokens")
   oauthRefreshTokens      OauthRefreshToken[] @relation("OAuthRefreshTokens")
   oauthConsents           OauthConsent[]      @relation("OAuthConsents")
-  courtWatches            CourtWatch[]        @relation("UserCourtWatches")
   monthlySubscriptions    MonthlySubscription[]
   appOpens                UserAppOpen[]
   walletTransactions      WalletTransaction[]
@@ -235,17 +234,7 @@ model Event {
   autoConfirmEnabled   Boolean @default(false)
   autoConfirmThreshold Int     @default(3) // consecutive games attended to earn auto-confirm
 
-  // Court Watch (JSON: {radius: number, indoor: boolean|null, surface: string|null}; null = disabled)
-  courtWatchConfig String?
-  courtWatchAlerts CourtWatchAlert[]
   rankSnapshots SeasonRankSnapshot[]
-
-  // Open Pickups (ADR-0021): events sourced from Playtomic bookings
-  source String @default("manual") // "manual" | "playtomic"
-  sourceKey String? // natural key for pickups: "{tenantId}|{resourceId}|{slotDate}|{slotStart}" (unique)
-  playtomicTenantId String? // Playtomic club id (pickup source)
-  playtomicTenantName String? // Playtomic club name (pickup title)
-  adoptedAt DateTime? // when an Open Pickup was adopted (ADR-0021); null = unowned
 
   // Archive
   archivedAt     DateTime?
@@ -254,8 +243,6 @@ model Event {
   updatedAt      DateTime              @updatedAt
 
   @@index([ownerId])
-  @@unique([sourceKey])
-  @@index([source, archivedAt])
 }
 
 model GameHistory {
@@ -1327,81 +1314,6 @@ model OauthConsent {
   @@index([clientId])
   @@index([userId])
   @@map("oauthConsent")
-}
-
-// ── Court Watch alerts (deduplication) ────────────────────────────────────────
-
-model CourtWatchAlert {
-  id          String   @id @default(cuid())
-  eventId     String
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  tenantId    String   // Playtomic club ID
-  tenantName  String
-  resourceId  String   // Playtomic court ID
-  resourceName String
-  slotTime    String   // "HH:mm" of the available slot
-  slotDate    String   // "YYYY-MM-DD"
-  duration    Int      // minutes
-  price       Float?
-  currency    String?  @default("EUR")
-  coordinate  String?  // JSON: {lat, lon}
-  address     String?  // club address string
-  notifiedAt  DateTime @default(now())
-
-  @@unique([eventId, tenantId, resourceId, slotDate, slotTime])
-  @@index([eventId])
-}
-
-// Standalone recurring court watch: notify a user when a specific Playtomic
-// court becomes available in a recurring weekday/time window. Independent of events.
-model CourtWatch {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation("UserCourtWatches", fields: [userId], references: [id], onDelete: Cascade)
-  sport        String   // Convocados sport id (e.g. "padel")
-  tenantId     String   // Playtomic club id
-  tenantName   String
-  resourceId   String?  // specific court; null = any court at the club
-  resourceName String?
-  dayOfWeek    Int      // 0=Sunday .. 6=Saturday (matched in club-local time)
-  startTime    String   // "HH:mm" window start (club-local)
-  endTime      String   // "HH:mm" window end (club-local)
-  durationMinutes Int   @default(90)
-  timezone     String   @default("UTC") // label for display; matching is club-local
-  maxPrice     Float?   // optional: only notify when price <= this
-  active       Boolean  @default(true)
-  lastCheckedAt DateTime? // for chunked cron processing (oldest-first)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  hits         CourtWatchHit[]
-
-  @@index([userId])
-  @@index([active])
-}
-
-// Dedup record: a specific available slot already notified for a watch.
-model CourtWatchHit {
-  id           String     @id @default(cuid())
-  watchId      String
-  watch        CourtWatch @relation(fields: [watchId], references: [id], onDelete: Cascade)
-  resourceId   String
-  slotDate     String     // "YYYY-MM-DD"
-  slotTime     String     // "HH:mm"
-  notifiedAt   DateTime   @default(now())
-
-  @@unique([watchId, resourceId, slotDate, slotTime])
-  @@index([watchId])
-}
-
-// Short-TTL cache of Playtomic availability, keyed by club+sport+date.
-// Lets many watches (and the live search) share a single upstream fetch and
-// avoids hammering Playtomic / getting the IP blocked.
-model PlaytomicAvailabilityCache {
-  cacheKey   String   @id // "{tenantId}|{sport}|{date}"
-  courtsJson String   // JSON array of PlaytomicCourtAvailability (all durations)
-  fetchedAt  DateTime @default(now())
-
-  @@index([fetchedAt])
 }
 
 // #457 RSVP per (subject, Event). status null == pending.

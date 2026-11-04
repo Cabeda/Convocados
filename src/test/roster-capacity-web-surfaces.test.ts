@@ -208,11 +208,11 @@ describe("reschedule routes — the spotsLeft the notification carries", () => {
       .map((call) => (call[2] as { spotsLeft: number }).spotsLeft);
   }
 
-  it("notifies with the current Game's remaining capacity on a court switch", async () => {
+  it("notifies with the current Game's remaining capacity on a manual location change", async () => {
     const event = await seedEventWithChurn();
-    const { POST } = await import("~/pages/api/events/[id]/switch-court");
+    const { PUT } = await import("~/pages/api/events/[id]/location");
 
-    await POST(routeContext(event.id, "POST", { location: "Court 2" }));
+    await PUT(routeContext(event.id, "PUT", { location: "Court 2" }));
 
     expect(queuedSpotsLeft()).toEqual([MAX_PLAYERS - ROSTER.length]);
   });

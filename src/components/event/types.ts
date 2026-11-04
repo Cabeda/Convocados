@@ -59,7 +59,6 @@ export interface EventData {
   isAdmin?: boolean;
   latitude?: number | null;
   longitude?: number | null;
-  courtWatchConfig?: string | null;
   gameStatus?: string | null;
   gameId?: string | null;
   /** Post-game wrap-up status delivered with the initial payload so the

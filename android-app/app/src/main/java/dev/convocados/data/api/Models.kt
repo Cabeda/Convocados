@@ -249,7 +249,6 @@ data class PublicEvent(
     val maxPlayers: Int,
     val playerCount: Int,
     val spotsLeft: Int,
-    val source: String = "manual",
     val ownerId: String? = null,
 )
 
@@ -845,59 +844,6 @@ data class FollowStateResponse(
     val muteEventDetails: Boolean? = null,
     /** ADR 0025: per-event invite opt-out (EventPlayer.invitationOptOutAt). */
     val inviteOptedOut: Boolean? = null,
-)
-
-// ── Court Finder ────────────────────────────────────────────────────────────
-
-@Serializable
-data class CourtAlternative(
-    val tenantId: String,
-    val tenantName: String,
-    val resourceName: String,
-    val slotTime: String,
-    val price: Double,
-    val currency: String = "EUR",
-    val status: String = "available",
-    val playtomicUrl: String = "",
-    val distanceKm: Double = 0.0,
-    val coordinate: CourtCoordinate? = null,
-)
-
-@Serializable
-data class CourtCoordinate(val lat: Double, val lng: Double)
-
-@Serializable
-data class CourtAlternativesResponse(val alternatives: List<CourtAlternative> = emptyList())
-
-@Serializable
-data class CourtWatch(
-    val id: String,
-    val sport: String = "",
-    val tenantId: String = "",
-    val tenantName: String = "",
-    val resourceId: String = "",
-    val resourceName: String = "",
-    val dayOfWeek: Int = 1,
-    val startTime: String = "",
-    val endTime: String = "",
-    val timezone: String = "",
-    val createdAt: String = "",
-)
-
-@Serializable
-data class CourtWatchesResponse(val watches: List<CourtWatch> = emptyList())
-
-@Serializable
-data class CreateCourtWatchRequest(
-    val sport: String,
-    val tenantId: String,
-    val tenantName: String,
-    val resourceId: String,
-    val resourceName: String,
-    val dayOfWeek: Int,
-    val startTime: String,
-    val endTime: String,
-    val timezone: String,
 )
 
 // ── Payment Nudge / Balance ─────────────────────────────────────────────────
