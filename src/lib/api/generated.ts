@@ -649,6 +649,15 @@ export interface ApiOperations {
       gameId: string;
     };
   };
+  "POST /api/events/{id}/payments/settlement/bulk-undo": {
+    params: {
+      id: string;
+    };
+    body: {
+      gameId: string;
+      eventPlayerIds: string[];
+    };
+  };
   "POST /api/events/{id}/payments/settlement/self-report": {
     params: {
       id: string;
