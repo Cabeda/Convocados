@@ -87,6 +87,8 @@
     <string name="back">Atrás</string>
     <string name="remove">Quitar</string>
     <string name="add_to_calendar">Add to calendar</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
     <string name="linked_account">Cuenta vinculada</string>
     <string name="you_suffix"> (tú)</string>
     <plurals name="games_played_suffix">
