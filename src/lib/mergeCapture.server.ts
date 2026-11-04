@@ -12,6 +12,7 @@
  * survivor confirms (POST /api/me/credentials/merge) or it expires.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createTtlStore } from "./ttlStore";
 
 export interface AccountKeyInput {
   providerId: string;
@@ -40,7 +41,6 @@ export interface PendingMerge {
 const PENDING_TTL_MS = 15 * 60_000;
 
 const storage = new AsyncLocalStorage<{ survivorUserId: string }>();
-import { createTtlStore } from "./ttlStore";
 const pendingBySurvivor = createTtlStore<PendingMerge>(1000);
 
 /** Run fn with merge-capture active for the given survivor (link OAuth callback). */
