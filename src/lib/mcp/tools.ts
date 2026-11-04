@@ -176,13 +176,33 @@ async function getBalance(args: Record<string, unknown>, ctx: AuthContext) {
 async function getHistory(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string;
   await assertEventReadable(eventId, ctx);
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true, showCompetitiveData: true } });
+  if (!event) throw new McpError("Game not found", -32001, 404);
+  const isOwner = !!ctx.userId && ctx.userId === event.ownerId;
+  const isAdmin = ctx.userId ? await checkEventAdmin(eventId, ctx.userId) : false;
+  const hideCompetitive = !event.showCompetitiveData && !isOwner && !isAdmin;
+
   const rows = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "desc" }, take: 20 });
-  return { history: rows.map((r) => ({ ...r, dateTime: r.dateTime.toISOString(), createdAt: r.createdAt.toISOString() })) };
+  return {
+    history: rows.map((r) => ({
+      ...r,
+      scoreOne: hideCompetitive ? null : r.scoreOne,
+      scoreTwo: hideCompetitive ? null : r.scoreTwo,
+      scoreSets: hideCompetitive ? null : r.scoreSets,
+      dateTime: r.dateTime.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+    })),
+  };
 }
 
 async function getRatings(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string;
   await assertEventReadable(eventId, ctx);
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
+  if (!event) throw new McpError("Game not found", -32001, 404);
+  const isOwner = !!ctx.userId && ctx.userId === event.ownerId;
+  const isAdmin = ctx.userId ? await checkEventAdmin(eventId, ctx.userId) : false;
+  if (!isOwner && !isAdmin) throw new McpError("Ratings are hidden for this event.", -32003, 403);
   const ratings = await prisma.playerRating.findMany({ where: { eventId } });
   const fallback = ratings.length ? ratings : await prisma.eventPlayer.findMany({ where: { eventId }, select: { name: true, rating: true, gamesPlayed: true, wins: true, losses: true } });
   return { ratings: fallback };
