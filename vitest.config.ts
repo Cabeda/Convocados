@@ -127,12 +127,11 @@ export default defineConfig({
         "src/pages/api/users/[id]/calendar.ics.ts",
         "src/test/**",
       ],
-      // Thresholds ratchet up to the measured values after each coverage pass
-      // (see docs/coverage.md). Latest history-settlement pass (2026-09-11):
-      // lines 95.27, functions 91.92, branches 83.81, statements 92.45.
+      // Thresholds ratchet up to the measured values (see docs/coverage.md).
+      // Retirement regressions preserve venue edits, notifications and limits.
       // Excluding __generated__/prisma (auto-generated Prisma 7 types).
       // Upgrade path: mutation testing (Stryker) validates assertion quality where coverage can't.
-      thresholds: { lines: 95, functions: 91, branches: 83, statements: 92 },
+      thresholds: { lines: 95.09, functions: 92.2, branches: 83.02, statements: 92 },
     },
   },
 });

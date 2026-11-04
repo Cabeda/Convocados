@@ -201,4 +201,20 @@ describe("PUT /api/events/[id]/location", () => {
     expect(enqueueNotification).toHaveBeenCalledTimes(1);
   });
 
+  it("rate-limits repeated manual venue edits before changing the game or notifying players", async () => {
+    const owner = await seedUser("owner-rate-limit");
+    const event = await seedEvent(owner.id);
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+    vi.mocked(resolveLocation).mockResolvedValue(null);
+    for (let i = 0; i < 30; i++) {
+      expect((await PUT(ctx(event.id, { location: event.location }))).status).toBe(200);
+    }
+    const rejected = await PUT(ctx(event.id, { location: "Rejected venue" }));
+    expect(rejected.status).toBe(429);
+    expect(rejected.headers.get("retry-after")).toBeTruthy();
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: event.id } })).location).toBe(event.location);
+    expect(enqueueNotification).not.toHaveBeenCalled();
+    expect(fireWebhooks).not.toHaveBeenCalled();
+  });
+
 });
