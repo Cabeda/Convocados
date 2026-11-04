@@ -53,7 +53,7 @@ event-detail:
     remove-player: { web: true, android: true, wearos: false }
     claim-player: { web: true, android: true, wearos: false }
     undo-remove: { web: true, android: true, wearos: false }
-    reorder-players: { web: true, android: false, wearos: false }
+    reorder-players: { web: true, android: true, wearos: false }
     known-players-autocomplete: { web: true, android: true, wearos: false }
     contact-picker-invite: { web: true, android: false, wearos: false }
 

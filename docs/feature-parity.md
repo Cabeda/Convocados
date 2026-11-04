@@ -76,7 +76,7 @@
 | Remove Player | ✅ | ✅ | ❌ |
 | Claim Player | ✅ | ✅ | ❌ |
 | Undo Remove | ✅ | ✅ | ❌ |
-| Reorder Players | ✅ | ❌ | ❌ |
+| Reorder Players | ✅ | ✅ | ❌ |
 | Known Players Autocomplete | ✅ | ✅ | ❌ |
 | Contact Picker Invite | ✅ | ❌ | ❌ |
 
