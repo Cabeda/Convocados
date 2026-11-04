@@ -2,8 +2,8 @@
 
 How to answer "what is production actually doing?" without guessing. Covers the
 database, the job queue, the scheduler, and logs. Two traps cost a debugging
-session: the production image has **no
-`sqlite3` CLI**, and **`fly logs` only returns a recent buffer**. Historical log
+session: the production image has **no `sqlite3` CLI**, and **`fly logs` only
+returns a recent buffer**. Historical log
 search is a separate interface with seven-day retention.
 
 ## Where things run
