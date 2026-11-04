@@ -801,6 +801,24 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    fun movePlayerUp(eventId: String, playerId: String) {
+        val ids = _state.value.event?.players?.map { it.id }?.toMutableList() ?: return
+        val idx = ids.indexOf(playerId)
+        if (idx <= 0) return
+        ids.removeAt(idx)
+        ids.add(idx - 1, playerId)
+        reorderPlayers(eventId, ids)
+    }
+
+    fun movePlayerDown(eventId: String, playerId: String) {
+        val ids = _state.value.event?.players?.map { it.id }?.toMutableList() ?: return
+        val idx = ids.indexOf(playerId)
+        if (idx < 0 || idx >= ids.lastIndex) return
+        ids.removeAt(idx)
+        ids.add(idx + 1, playerId)
+        reorderPlayers(eventId, ids)
+    }
+
     fun saveScore(eventId: String, historyId: String, s1: Int? = null, s2: Int? = null, scoreSets: List<SetScore>? = null) {
         viewModelScope.launch {
             runCatching { api.updateScore(eventId, historyId, s1, s2, scoreSets) }
@@ -1808,7 +1826,19 @@ private fun HeroTeamColumn(
 @Composable
 private fun PlayerGroup(players: List<Player>, user: UserProfile?, isOwner: Boolean, isBench: Boolean, viewModel: EventDetailViewModel, eventId: String, onUserClick: (String) -> Unit) {
     players.forEachIndexed { i, p ->
-        PlayerRow(player = p, isMe = p.userId != null && p.userId == user?.id, isBench = isBench, canRemove = isOwner || p.userId == user?.id || p.userId == null, onRemove = { viewModel.removePlayer(eventId, p.id) }, onUserClick = p.userId?.let { { onUserClick(it) } } ?: {}, canEditPosition = isOwner, onPositionChange = { position -> viewModel.setPlayerPosition(eventId, p.name, position) })
+        PlayerRow(
+            player = p,
+            isMe = p.userId != null && p.userId == user?.id,
+            isBench = isBench,
+            canRemove = isOwner || p.userId == user?.id || p.userId == null,
+            onRemove = { viewModel.removePlayer(eventId, p.id) },
+            onUserClick = p.userId?.let { { onUserClick(it) } } ?: {},
+            canEditPosition = isOwner,
+            onPositionChange = { position -> viewModel.setPlayerPosition(eventId, p.name, position) },
+            canReorder = isOwner,
+            onMoveUp = { viewModel.movePlayerUp(eventId, p.id) },
+            onMoveDown = { viewModel.movePlayerDown(eventId, p.id) },
+        )
         if (i < players.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
@@ -2626,7 +2656,7 @@ private fun OfflineStaleBanner() {
 }
 
 @Composable fun PlayerAvatar(name:String,image:String?,isMe:Boolean,onClick:()->Unit,modifier:Modifier=Modifier){ val bg=if(isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant; val fg=if(isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant; Box(modifier.size(24.dp).clip(CircleShape).background(bg).clickable(onClick=onClick), Alignment.Center){ if(image!=null) SubcomposeAsyncImage(model=image, contentDescription=name, modifier=Modifier.fillMaxSize(), loading={ InitialAvatar(name, fg) }, error={ InitialAvatar(name, fg) }) else InitialAvatar(name, fg) } }
-@Composable fun PlayerRow(player: Player, isMe:Boolean=false, isBench:Boolean=false, canRemove:Boolean=false, onRemove:()->Unit={}, onUserClick:()->Unit={}, canEditPosition:Boolean=false, onPositionChange:(String?)->Unit={}){ ListItem(headlineContent={ Text("${player.name}${if(isMe) stringResource(R.string.you_suffix) else ""}", color=if(isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface, fontWeight=if(isMe) FontWeight.SemiBold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)}, leadingContent={ if(player.userId!=null) PlayerAvatar(player.name, player.image, isMe, onUserClick) else Icon(Icons.Outlined.Person, stringResource(R.string.anonymous_player), tint=MaterialTheme.colorScheme.outline, modifier=Modifier.size(20.dp))}, trailingContent={
+@Composable fun PlayerRow(player: Player, isMe:Boolean=false, isBench:Boolean=false, canRemove:Boolean=false, onRemove:()->Unit={}, onUserClick:()->Unit={}, canEditPosition:Boolean=false, onPositionChange:(String?)->Unit={}, canReorder:Boolean=false, onMoveUp:()->Unit={}, onMoveDown:()->Unit={}){ ListItem(headlineContent={ Text("${player.name}${if(isMe) stringResource(R.string.you_suffix) else ""}", color=if(isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface, fontWeight=if(isMe) FontWeight.SemiBold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)}, leadingContent={ if(player.userId!=null) PlayerAvatar(player.name, player.image, isMe, onUserClick) else Icon(Icons.Outlined.Person, stringResource(R.string.anonymous_player), tint=MaterialTheme.colorScheme.outline, modifier=Modifier.size(20.dp))}, trailingContent={
     Row(verticalAlignment = Alignment.CenterVertically) {
         // A row with no position renders exactly as before: no chip, no gap.
         player.position?.let { set ->
@@ -2646,6 +2676,10 @@ private fun OfflineStaleBanner() {
                     }
                 }
             }
+        }
+        if (canReorder) {
+            IconButton(onClick = onMoveUp, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.KeyboardArrowUp, stringResource(R.string.move_up), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp)) }
+            IconButton(onClick = onMoveDown, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.move_down), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp)) }
         }
         if (canRemove) IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, stringResource(R.string.remove), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp)) }
     }
