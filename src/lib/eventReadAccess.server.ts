@@ -31,7 +31,7 @@ export async function canReadEventFinances(
   const hasOverride = arguments.length >= 3;
   const authCtx = hasOverride ? null : await authenticateRequest(request);
   const userId = hasOverride ? (userIdOverride ?? null) : (authCtx?.userId ?? null);
-  const cookieHeader = hasOverride ? null : request.headers.get("cookie");
+  const cookieHeader = request.headers.get("cookie");
 
   // An ownerless UNLISTED Event without a password is the no-account management
   // flow (ADR 0035): the link is the capability, signed in or not.

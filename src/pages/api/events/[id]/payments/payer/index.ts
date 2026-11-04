@@ -29,7 +29,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   // The seam resolves the password gate (owner/invitee/admin/cookie) and the
   // unlocked read gate (owner/admin/participant or ownerless-unlisted link) for
   // every auth method, so this route no longer re-implements either.
-  if (!(await canReadEventFinances(request, event))) {
+  if (!(await canReadEventFinances(request, event, userId))) {
     return Response.json({ locked: true, error: "This event is locked." }, { status: 403 });
   }
   if (!event.currentGameId) {

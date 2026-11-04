@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
+import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
@@ -16,7 +17,10 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  if (!(await canReadEventFinances(request, event))) {
+  const authCtx = await authenticateRequest(request);
+  const userId = authCtx?.userId ?? null;
+
+  if (!(await canReadEventFinances(request, event, userId))) {
     return Response.json({ error: "Only event participants can view payments." }, { status: 403 });
   }
 

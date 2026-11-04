@@ -54,7 +54,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const authCtx = await authenticateRequest(request);
   const userId = authCtx?.userId ?? (await getSession(request))?.user?.id ?? null;
 
-  if (!(await canReadEventFinances(request, event))) {
+  if (!(await canReadEventFinances(request, event, userId))) {
     return Response.json({ error: "Only event participants can view costs." }, { status: 403 });
   }
 
