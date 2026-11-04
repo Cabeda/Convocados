@@ -4,6 +4,8 @@ import { prisma } from "~/lib/db.server";
 import { PUT } from "~/pages/api/events/[id]/location";
 import { checkOwnership } from "~/lib/auth.helpers.server";
 import { resolveLocation } from "~/lib/geocode";
+import { enqueueNotification } from "~/lib/notificationQueue.server";
+import { fireWebhooks } from "~/lib/webhook.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
@@ -18,6 +20,9 @@ vi.mock("~/lib/auth.helpers.server", async () => {
 vi.mock("~/lib/geocode", () => ({
   resolveLocation: vi.fn(),
 }));
+
+vi.mock("~/lib/notificationQueue.server", () => ({ enqueueNotification: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("~/lib/webhook.server", () => ({ fireWebhooks: vi.fn().mockResolvedValue(undefined) }));
 
 beforeEach(async () => {
   await prisma.event.deleteMany();
@@ -152,4 +157,48 @@ describe("PUT /api/events/[id]/location", () => {
     const body = await res.json();
     expect(body.location).toBe("New York");
   });
+  it("uses a manually pinned venue and explicit city without contacting geocoding", async () => {
+    const owner = await seedUser("owner-pin");
+    const event = await seedEvent(owner.id);
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: owner.id } } } as any);
+    const response = await PUT(ctx(event.id, { location: "Padel club", latitude: 41.15, longitude: -8.6, city: " PORTO " }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ location: "Padel club", latitude: 41.15, longitude: -8.6, city: "Porto", geocoded: true });
+    expect(resolveLocation).not.toHaveBeenCalled();
+    expect(enqueueNotification).toHaveBeenCalledWith(event.id, "event_details", expect.objectContaining({ spotsLeft: 10 }), owner.id);
+  });
+
+  it.each([
+    [41.16, -8.6],
+    [41.15, -8.7],
+  ])("notifies when only the venue pin changes to %s,%s", async (latitude, longitude) => {
+    const owner = await seedUser("owner-pin-change");
+    const event = await seedEvent(owner.id);
+    await prisma.event.update({ where: { id: event.id }, data: { latitude: 41.15, longitude: -8.6 } });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+    expect((await PUT(ctx(event.id, { location: event.location, latitude, longitude }))).status).toBe(200);
+    expect(fireWebhooks).toHaveBeenCalledWith(event.id, "game_rescheduled", {});
+    expect(enqueueNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not notify players again when the venue and pin are unchanged", async () => {
+    const owner = await seedUser("owner-unchanged");
+    const event = await seedEvent(owner.id);
+    await prisma.event.update({ where: { id: event.id }, data: { latitude: 41.15, longitude: -8.6 } });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+    expect((await PUT(ctx(event.id, { location: event.location, latitude: 41.15, longitude: -8.6 }))).status).toBe(200);
+    expect(fireWebhooks).not.toHaveBeenCalled();
+    expect(enqueueNotification).not.toHaveBeenCalled();
+  });
+
+  it("keeps a location edit successful when webhook delivery fails", async () => {
+    const owner = await seedUser("owner-webhook-failure");
+    const event = await seedEvent(owner.id);
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+    vi.mocked(resolveLocation).mockResolvedValue(null);
+    vi.mocked(fireWebhooks).mockRejectedValueOnce(new Error("delivery unavailable"));
+    expect((await PUT(ctx(event.id, { location: "New venue", city: "" }))).status).toBe(200);
+    expect(enqueueNotification).toHaveBeenCalledTimes(1);
+  });
+
 });
