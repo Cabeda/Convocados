@@ -345,14 +345,10 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
               if (!undoBulk) return;
               setBusy(true);
               try {
-                await Promise.all(
-                  undoBulk.eventPlayerIds.map((eventPlayerId) =>
-                    apiRequest("DELETE /api/events/{id}/payments/settlement", {
-                      params: { id: eventId },
-                      body: { gameId: undoBulk.gameId, eventPlayerId },
-                    }),
-                  ),
-                );
+                await apiRequest("POST /api/events/{id}/payments/settlement/bulk-undo", {
+                  params: { id: eventId },
+                  body: { gameId: undoBulk.gameId, eventPlayerIds: undoBulk.eventPlayerIds },
+                });
                 setUndoBulk(null);
                 await load();
               } catch {

@@ -30,6 +30,7 @@ import {
   settleShare,
   unsettleShare,
   bulkSettleGame,
+  bulkUnsettleGame,
   selfReportSent,
   getSettlementSummary,
   getGameSettlement,
@@ -450,6 +451,21 @@ describe("bulkSettleGame", () => {
     expect(updated).toBe(2);
     const pending = await prisma.gamePayment.count({ where: { gameId: game.id, status: { not: "paid" } } });
     expect(pending).toBe(0);
+  });
+});
+
+describe("bulkUnsettleGame", () => {
+  it("reverts settled shares", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    await bulkSettleGame(event.id, game.id, "owner-settlement");
+
+    const payments = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    const ids = payments.map((p) => p.eventPlayerId);
+    const reverted = await bulkUnsettleGame(event.id, game.id, ids);
+    expect(reverted).toBeGreaterThan(0);
   });
 });
 

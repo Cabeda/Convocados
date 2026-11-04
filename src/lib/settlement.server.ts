@@ -777,6 +777,38 @@ export async function unsettleShare(
   });
 }
 
+/** Revert a set of debtor shares for a game in one transaction (Undo for mark-all-paid). */
+export async function bulkUnsettleGame(
+  eventId: string,
+  gameId: string,
+  eventPlayerIds: string[],
+): Promise<number> {
+  const payments = await prisma.gamePayment.findMany({
+    where: { gameId, eventPlayerId: { in: eventPlayerIds }, archivedAt: null },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    for (const payment of payments) {
+      if (payment.method === "payer") continue;
+      const ep = await tx.eventPlayer.findUnique({ where: { id: payment.eventPlayerId } });
+      const ledgerUserId =
+        ep?.userId ?? (payment.playerName ? systemUserId(eventId, payment.playerName) : null);
+
+      await tx.gamePayment.update({
+        where: { id: payment.id },
+        data: { status: "pending", paidAt: null, method: null, markedBy: null },
+      });
+      if (ledgerUserId) {
+        await tx.walletTransaction.deleteMany({
+          where: { eventId, eventInstanceId: gameId, reason: "payment_received", userId: ledgerUserId },
+        });
+      }
+    }
+  });
+
+  return payments.length;
+}
+
 /** Mark all debtor shares of a game paid (owner/admin). Dual-writes each ledger credit. */
 export async function bulkSettleGame(eventId: string, gameId: string, markedBy: string): Promise<number> {
   const payments = await prisma.gamePayment.findMany({

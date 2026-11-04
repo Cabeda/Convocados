@@ -962,6 +962,18 @@ export const openApiSpec = {
         responses: { "200": { description: "Shares settled" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/payments/settlement/bulk-undo": {
+      post: {
+        summary: "Revert shares settled by mark-all-paid (Undo)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, eventPlayerIds: { type: "array", items: { type: "string" } } }, required: ["gameId", "eventPlayerIds"] } } },
+        },
+        responses: { "200": { description: "Shares reverted" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/payments/settlement/self-report": {
       post: {
         summary: "Self-report that a player sent their share",

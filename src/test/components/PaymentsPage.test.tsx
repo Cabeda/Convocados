@@ -113,9 +113,9 @@ describe("PaymentsPage settle-all affordance (#1236)", () => {
     fireEvent.click(screen.getByRole("button", { name: /undo/i }));
 
     await waitFor(() => {
-      const deletes = requests.filter((r) => r.method === "DELETE");
-      expect(deletes).toHaveLength(2);
-      expect(deletes.map((r) => JSON.parse(r.body!).eventPlayerId).sort()).toEqual(["ep-b", "ep-c"]);
+      const undos = requests.filter((r) => r.method === "POST" && r.url.includes("bulk-undo"));
+      expect(undos).toHaveLength(1);
+      expect(JSON.parse(undos[0].body!).eventPlayerIds.sort()).toEqual(["ep-b", "ep-c"]);
     });
   });
 
