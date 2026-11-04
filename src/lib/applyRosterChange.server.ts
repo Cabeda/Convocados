@@ -28,6 +28,7 @@ import { normalizeForMatch } from "./stringMatch";
 import { isSystemUserId } from "./payerIdentity.server";
 import { enqueuePushSetupHintSafe } from "./pushSetupHint";
 import { getRosterCapacity } from "./roster.server";
+import { createTtlStore } from "./ttlStore";
 import { acceptPendingAccountInviteForDirectJoin } from "./invite.server";
 import { readPosition } from "./positions";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
@@ -60,8 +61,8 @@ export type ApplyRosterChangeInput = {
 // Per-event: max 10 unique invite emails per event per 24h
 // Per-sender: max 20 invite emails per authenticated user per 24h across all events
 interface InviteRateEntry { emails: Set<string>; expiresAt: number }
-const invitePerEventStore = new Map<string, InviteRateEntry>();
-const invitePerSenderStore = new Map<string, InviteRateEntry>();
+const invitePerEventStore = createTtlStore<InviteRateEntry>(10000);
+const invitePerSenderStore = createTtlStore<InviteRateEntry>(10000);
 const INVITE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_INVITES_PER_EVENT = 10;
 const MAX_INVITES_PER_SENDER = 20;
@@ -214,7 +215,7 @@ async function notifyPlayerJoined(input: {
   await enqueueJoinNotifications({ event, playerName, isOnBench, spotsLeft, rosterCount, url, senderClientId });
 
   if (!process.env.VITEST) {
-    await drainNotificationQueue().catch((err) => {
+    void drainNotificationQueue().catch((err) => {
       log.error({ eventId: event.id, err }, "Failed to drain notification queue");
     });
   }
@@ -600,7 +601,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   await enqueueJoinNotifications({ event, playerName: trimmed, isOnBench, spotsLeft, rosterCount, url, senderClientId });
 
   if (!process.env.VITEST) {
-    await drainNotificationQueue().catch((err) => {
+    void drainNotificationQueue().catch((err) => {
       log.error({ eventId, err }, "Failed to drain notification queue");
     });
   }

@@ -3,6 +3,7 @@
  * No database round-trips — suitable for single-instance Fly deployment.
  */
 import { createLogger } from "./logger.server";
+import { createTtlStore } from "./ttlStore";
 
 const log = createLogger("api-rate-limit");
 
@@ -42,14 +43,11 @@ interface RateLimitEntry {
   expiresAt: number;
 }
 
-const store = new Map<string, RateLimitEntry>();
+const store = createTtlStore<RateLimitEntry>(50000);
 
 // Cleanup expired entries every 60s
 setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (entry.expiresAt < now) store.delete(key);
-  }
+  store.sweep();
 }, 60_000).unref?.();
 
 export async function checkApiRateLimit(
@@ -123,14 +121,7 @@ export async function resetApiRateLimitStore(): Promise<void> {
 
 /** Delete all expired rate limit entries. Called from cron. */
 export async function cleanupExpiredRateLimits(): Promise<number> {
-  const now = Date.now();
-  let deleted = 0;
-  for (const [key, entry] of store) {
-    if (entry.expiresAt < now) {
-      store.delete(key);
-      deleted++;
-    }
-  }
+  const deleted = store.sweep();
   if (deleted > 0) {
     log.info({ deleted }, "Cleaned up expired rate limit entries");
   }

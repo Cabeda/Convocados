@@ -4,7 +4,7 @@ import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
 import { parsePaginationParams } from "../../../lib/pagination";
-import { getRosterCapacity } from "../../../lib/roster.server";
+import { getRosterCapacities } from "../../../lib/roster.server";
 import { createLogger } from "../../../lib/logger.server";
 
 const log = createLogger("me-games");
@@ -46,11 +46,9 @@ export const GET: APIRoute = async ({ request }) => {
 
   // ponytail: when currentGameId is set, player count comes from GameParticipant
   // (game-scoped). Otherwise fall back to event-level Player count.
-  async function resolvePlayerCount(e: GameRow): Promise<number> {
-    return (await getRosterCapacity(e.id, e.maxPlayers, e.currentGameId)).totalCount;
-  }
+  let capacities = new Map<string, { totalCount: number }>();
 
-  const mapGame = async (e: GameRow) => ({
+  const mapGame = (e: GameRow) => ({
     ...e,
     // Surface the organizer's custom team names (same defaults as
     // GET /api/events/[id]/teams) so clients can label teams offline.
@@ -58,7 +56,7 @@ export const GET: APIRoute = async ({ request }) => {
     teamTwoName: e.teamTwoName || "Team 2",
     dateTime: e.dateTime.toISOString(),
     archivedAt: e.archivedAt?.toISOString() ?? null,
-    playerCount: await resolvePlayerCount(e),
+    playerCount: (capacities.get(e.id) ?? { totalCount: e._count.players }).totalCount,
     lastScoreOne: e.history[0]?.scoreOne ?? null,
     lastScoreTwo: e.history[0]?.scoreTwo ?? null,
   });
@@ -115,9 +113,15 @@ export const GET: APIRoute = async ({ request }) => {
   const followedHasMore = followedRecords.length > limit;
   const followedSlice = followedDeduped.slice(0, limit);
 
-  const allOwned = await Promise.all(ownedSlice.map(mapGame));
-  const allAdmin = await Promise.all(adminSlice.map(mapGame));
-  const allFollowed = await Promise.all(followedSlice.map((r) => mapGame(r.event as unknown as GameRow)));
+  capacities = await getRosterCapacities([
+    ...ownedSlice.map((e) => ({ eventId: e.id, maxPlayers: e.maxPlayers, currentGameId: e.currentGameId })),
+    ...adminSlice.map((e) => ({ eventId: e.id, maxPlayers: e.maxPlayers, currentGameId: e.currentGameId })),
+    ...followedSlice.map((r) => ({ eventId: (r.event as unknown as GameRow).id, maxPlayers: (r.event as unknown as GameRow).maxPlayers, currentGameId: (r.event as unknown as GameRow).currentGameId })),
+  ]);
+
+  const allOwned = ownedSlice.map(mapGame);
+  const allAdmin = adminSlice.map(mapGame);
+  const allFollowed = followedSlice.map((r) => mapGame(r.event as unknown as GameRow));
 
   return Response.json({
     owned: allOwned.filter((g) => !g.archivedAt),

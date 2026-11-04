@@ -66,3 +66,59 @@ export async function getRosterCapacity(
 ): Promise<RosterCapacity> {
   return splitRoster(await fetchRosterMembers(eventId, currentGameId), maxPlayers);
 }
+
+export interface RosterCapacityInput {
+  eventId: string;
+  maxPlayers: number;
+  currentGameId?: string | null;
+}
+
+export async function getRosterCapacities(
+  inputs: RosterCapacityInput[],
+): Promise<Map<string, RosterCapacity>> {
+  const result = new Map<string, RosterCapacity>();
+  if (inputs.length === 0) return result;
+
+  const gameInputs = inputs.filter((i) => i.currentGameId);
+  const legacyInputs = inputs.filter((i) => !i.currentGameId);
+
+  if (gameInputs.length > 0) {
+    const gameIds = gameInputs.map((i) => i.currentGameId as string);
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: { in: gameIds }, archivedAt: null, status: { not: "pending" } },
+      include: { eventPlayer: { select: { name: true, userId: true } } },
+      orderBy: { order: "asc" },
+    });
+    const byGame = new Map<string, RosterMember[]>();
+    for (const gp of participants) {
+      const list = byGame.get(gp.gameId) ?? [];
+      list.push({ name: gp.eventPlayer.name, userId: gp.eventPlayer.userId });
+      byGame.set(gp.gameId, list);
+    }
+    for (const inp of gameInputs) {
+      const members = byGame.get(inp.currentGameId as string) ?? [];
+      result.set(inp.eventId, splitRoster(members, inp.maxPlayers));
+    }
+  }
+
+  if (legacyInputs.length > 0) {
+    const eventIds = legacyInputs.map((i) => i.eventId);
+    const players = await prisma.player.findMany({
+      where: { eventId: { in: eventIds }, archivedAt: null },
+      orderBy: { order: "asc" },
+      select: { name: true, userId: true, eventId: true },
+    });
+    const byEvent = new Map<string, RosterMember[]>();
+    for (const p of players) {
+      const list = byEvent.get(p.eventId) ?? [];
+      list.push({ name: p.name, userId: p.userId });
+      byEvent.set(p.eventId, list);
+    }
+    for (const inp of legacyInputs) {
+      const members = byEvent.get(inp.eventId) ?? [];
+      result.set(inp.eventId, splitRoster(members, inp.maxPlayers));
+    }
+  }
+
+  return result;
+}

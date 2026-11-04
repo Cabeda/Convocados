@@ -1,4 +1,5 @@
 import { prisma } from "./db.server";
+import { createTtlStore } from "./ttlStore";
 import { isGameEnded } from "./gameStatus";
 import { getSession, checkOwnership } from "./auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
@@ -60,7 +61,9 @@ export interface PostGameStatusPayload {
   isRecurring: boolean;
 }
 
-export async function computePostGameStatus(
+const postGameStore = createTtlStore<PostGameStatusPayload & { expiresAt: number }>(500);
+
+async function computePostGameStatusImpl(
   eventId: string,
   request: Request,
 ): Promise<PostGameStatusPayload | null> {
@@ -398,4 +401,28 @@ export async function computePostGameStatus(
     viewerPaymentSettled,
     isRecurring: event.isRecurring ?? false,
   };
+}
+
+export async function computePostGameStatus(
+  eventId: string,
+  request: Request,
+): Promise<PostGameStatusPayload | null> {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, currentGameId: true },
+  });
+  if (!event) return null;
+
+  const session = await getSession(request);
+  const userId = session?.user?.id ?? "anon";
+  const cacheKey = `${eventId}::${userId}::${event.currentGameId ?? ""}`;
+
+  const cached = postGameStore.get(cacheKey);
+  if (cached) return cached;
+
+  const result = await computePostGameStatusImpl(eventId, request);
+  if (result) {
+    postGameStore.set(cacheKey, { ...result, expiresAt: Date.now() + 10_000 });
+  }
+  return result;
 }

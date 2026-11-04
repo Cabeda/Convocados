@@ -5,6 +5,7 @@
  * Limit: 10 events per hour per IP.
  */
 import { createLogger } from "./logger.server";
+import { createTtlStore } from "./ttlStore";
 
 const log = createLogger("rate-limit");
 
@@ -17,14 +18,10 @@ interface RateLimitEntry {
   expiresAt: number;
 }
 
-const store = new Map<string, RateLimitEntry>();
+const store = createTtlStore<RateLimitEntry>(10000);
 
-// Cleanup expired entries every 60s
 setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (entry.expiresAt < now) store.delete(key);
-  }
+  store.sweep();
 }, 60_000).unref?.();
 
 export async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remaining: number }> {
@@ -34,7 +31,6 @@ export async function checkRateLimit(ip: string): Promise<{ allowed: boolean; re
   const entry = store.get(key);
 
   if (!entry || entry.expiresAt < now) {
-    // Window expired or first request — create/reset
     store.set(key, { count: 1, expiresAt: now + WINDOW_MS });
     return { allowed: true, remaining: MAX_REQUESTS - 1 };
   }
@@ -44,14 +40,10 @@ export async function checkRateLimit(ip: string): Promise<{ allowed: boolean; re
     return { allowed: false, remaining: 0 };
   }
 
-  // Increment
   entry.count += 1;
   return { allowed: true, remaining: MAX_REQUESTS - entry.count };
 }
 
-/** Clear all event-creation rate limit entries. Used in tests. */
 export async function resetRateLimitStore(): Promise<void> {
-  for (const key of store.keys()) {
-    if (key.startsWith(`${PRESET}:`)) store.delete(key);
-  }
+  store.clear();
 }

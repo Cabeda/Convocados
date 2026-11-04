@@ -40,7 +40,8 @@ export interface PendingMerge {
 const PENDING_TTL_MS = 15 * 60_000;
 
 const storage = new AsyncLocalStorage<{ survivorUserId: string }>();
-const pendingBySurvivor = new Map<string, PendingMerge>();
+import { createTtlStore } from "./ttlStore";
+const pendingBySurvivor = createTtlStore<PendingMerge>(1000);
 
 /** Run fn with merge-capture active for the given survivor (link OAuth callback). */
 export function captureDuring<T>(survivorUserId: string, fn: () => Promise<T>): Promise<T> {

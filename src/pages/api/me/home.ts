@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
-import { getRosterCapacity } from "../../../lib/roster.server";
+import { getRosterCapacities } from "../../../lib/roster.server";
 import { findDiscoverableUpcomingEvents } from "../../../lib/discoverableEvents.server";
 import { computeHomeActions } from "../../../lib/homeActions.server";
 
@@ -97,21 +97,22 @@ export const GET: APIRoute = async ({ request }) => {
       .map((row) => ({ row, status: "upcoming" })),
   ].slice(0, UP_NEXT_LIMIT);
 
-  const upNext: UpNextEvent[] = await Promise.all(
-    merged.map(async ({ row, status }) => ({
-      id: row.id,
-      title: row.title,
-      location: row.location,
-      dateTime: row.dateTime.toISOString(),
-      timezone: row.timezone,
-      sport: row.sport,
-      maxPlayers: row.maxPlayers,
-      playerCount: (await getRosterCapacity(row.id, row.maxPlayers, row.currentGameId)).totalCount,
-      isRecurring: row.isRecurring,
-      recurrenceRule: row.recurrenceRule,
-      status,
-    })),
+  const upNextCapacities = await getRosterCapacities(
+    merged.map(({ row }) => ({ eventId: row.id, maxPlayers: row.maxPlayers, currentGameId: row.currentGameId })),
   );
+  const upNext: UpNextEvent[] = merged.map(({ row, status }) => ({
+    id: row.id,
+    title: row.title,
+    location: row.location,
+    dateTime: row.dateTime.toISOString(),
+    timezone: row.timezone,
+    sport: row.sport,
+    maxPlayers: row.maxPlayers,
+    playerCount: (upNextCapacities.get(row.id) ?? { totalCount: 0 }).totalCount,
+    isRecurring: row.isRecurring,
+    recurrenceRule: row.recurrenceRule,
+    status,
+  }));
 
   // Inferred home region + preferred sports, so Discover feels local and
   // relevant without ever asking the user (ADR 0041). Located games give a
