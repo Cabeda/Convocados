@@ -40,7 +40,21 @@ function resolveBootAt(): number {
  * writers can leave a space-separated UTC string. */
 function parseMigrationTimestamp(value: unknown): Date | null {
   if (value instanceof Date) return value;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    const ms = value < 1e12 ? value * 1000 : value;
+    const parsed = new Date(ms);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
   if (typeof value !== "string" || value.length === 0) return null;
+  // Prisma 7 may store epoch ms as text; parse it as a number first.
+  if (/^\d+$/.test(value.trim())) {
+    const num = Number(value.trim());
+    if (Number.isFinite(num) && num > 0) {
+      const ms = num < 1e12 ? num * 1000 : num;
+      const parsed = new Date(ms);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+  }
   const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
   const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
