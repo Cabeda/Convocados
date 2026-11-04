@@ -79,8 +79,19 @@ if [ -f "$DB" ]; then
       ).all();
       let n = 0;
       for (const r of rows) {
-        const ts = String(r.started_at).replace(" ", "T");
-        const ms = Date.parse(ts.endsWith("Z") ? ts : ts + "Z");
+        let ms;
+        if (typeof r.started_at === "number") {
+          ms = r.started_at < 1e12 ? r.started_at * 1000 : r.started_at;
+        } else {
+          const raw = String(r.started_at).trim();
+          if (/^\d+$/.test(raw)) {
+            const num = Number(raw);
+            ms = num < 1e12 ? num * 1000 : num;
+          } else {
+            const ts = raw.replace(" ", "T");
+            ms = Date.parse(ts.endsWith("Z") ? ts : ts + "Z");
+          }
+        }
         if (Number.isFinite(ms) && ms < cutoffMs) n++;
       }
       console.log(n);
@@ -137,8 +148,19 @@ if [ -f "$DB" ]; then
         "SELECT migration_name, started_at FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL"
       ).all();
       const failed = allUnfinished.filter((r) => {
-        const ts = String(r.started_at).replace(" ", "T");
-        const ms = Date.parse(ts.endsWith("Z") ? ts : ts + "Z");
+        let ms;
+        if (typeof r.started_at === "number") {
+          ms = r.started_at < 1e12 ? r.started_at * 1000 : r.started_at;
+        } else {
+          const raw = String(r.started_at).trim();
+          if (/^\d+$/.test(raw)) {
+            const num = Number(raw);
+            ms = num < 1e12 ? num * 1000 : num;
+          } else {
+            const ts = raw.replace(" ", "T");
+            ms = Date.parse(ts.endsWith("Z") ? ts : ts + "Z");
+          }
+        }
         return Number.isFinite(ms) && ms < cutoffMs;
       });
       if (failed.length > 0) {

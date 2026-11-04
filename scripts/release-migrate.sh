@@ -25,11 +25,27 @@ node -e '
     process.exit(0);
   }
   const db = new Database("/data/db.sqlite", { readonly: false });
-  const cutoff = new Date(Date.now() - 300000).toISOString();
+  const cutoffMs = Date.now() - 300000;
   try {
-    const failed = db.prepare(
-      "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < ?"
-    ).all(cutoff);
+    const allUnfinished = db.prepare(
+      "SELECT migration_name, started_at FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL"
+    ).all();
+    const failed = allUnfinished.filter((r) => {
+      let ms;
+      if (typeof r.started_at === "number") {
+        ms = r.started_at < 1e12 ? r.started_at * 1000 : r.started_at;
+      } else {
+        const raw = String(r.started_at).trim();
+        if (/^\d+$/.test(raw)) {
+          const num = Number(raw);
+          ms = num < 1e12 ? num * 1000 : num;
+        } else {
+          const ts = raw.replace(" ", "T");
+          ms = Date.parse(ts.endsWith("Z") ? ts : ts + "Z");
+        }
+      }
+      return Number.isFinite(ms) && ms < cutoffMs;
+    });
     if (failed.length > 0) {
       console.log(`[release] WARNING: detected ${failed.length} failed migration(s) from a previous deploy`);
       const markApplied = db.prepare(
