@@ -130,6 +130,11 @@ object DeepLink {
         val id = eventId(url)
         if (id != null) {
             val actionPay = uri.getQueryParameter("action") == "pay"
+            // Sub-routes of an event: /events/<id>/payments (and friends) must
+            // not collapse onto the event detail screen.
+            if (path.trimEnd('/').endsWith("/payments")) {
+                return Route.EventPayments.create(id)
+            }
             return Route.EventDetail.create(id) + if (actionPay) "?action=pay" else ""
         }
 
