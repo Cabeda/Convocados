@@ -121,7 +121,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // Geocode location (non-blocking failure — coordinates are optional)
-  // Use explicit coordinates if provided (e.g. from Playtomic court finder), otherwise resolve from location text
+  // Use explicit coordinates if provided (e.g. from a map pin), otherwise resolve from location text
   const explicitLat = typeof body.latitude === "number" ? body.latitude : null;
   const explicitLng = typeof body.longitude === "number" ? body.longitude : null;
   const geo: GeoResult | null = (explicitLat !== null && explicitLng !== null)

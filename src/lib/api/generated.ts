@@ -811,11 +811,6 @@ export interface ApiOperations {
       id: string;
     };
   };
-  "POST /api/events/{id}/adopt": {
-    params: {
-      id: string;
-    };
-  };
   "GET /api/events/{id}/status": {
     params: {
       id: string;
@@ -1245,58 +1240,6 @@ export interface ApiOperations {
   "GET /api/auth/oauth2/userinfo": Record<string, never>;
   "POST /api/auth/oauth2/introspect": Record<string, never>;
   "POST /api/auth/oauth2/revoke": Record<string, never>;
-  "GET /api/court-watches": Record<string, never>;
-  "POST /api/court-watches": {
-    body: {
-      sport: string;
-      tenantId: string;
-      tenantName: string;
-      resourceId?: string;
-      resourceName?: string;
-      dayOfWeek: number;
-      startTime: string;
-      endTime: string;
-      timezone?: string;
-    };
-  };
-  "DELETE /api/court-watches/{id}": {
-    params: {
-      id: string;
-    };
-  };
-  "GET /api/events/{id}/court-alternatives": {
-    params: {
-      id: string;
-    };
-    query: {
-      radius?: number;
-      startTime?: string;
-      endTime?: string;
-      indoor?: boolean;
-      includeBooked?: boolean;
-    };
-  };
-  "PUT /api/events/{id}/court-alternatives": {
-    params: {
-      id: string;
-    };
-    body: {
-      enabled: boolean;
-      radius?: number;
-      indoor?: boolean | null;
-    };
-  };
-  "POST /api/events/{id}/switch-court": {
-    params: {
-      id: string;
-    };
-    body: {
-      location: string;
-      latitude?: number;
-      longitude?: number;
-      dateTime?: string;
-    };
-  };
   "POST /api/events/{id}/stakes-preview": {
     params: {
       id: string;
@@ -1392,23 +1335,6 @@ export interface ApiOperations {
   "DELETE /api/admin/users/{id}": {
     params: {
       id: string;
-    };
-  };
-  "GET /api/playtomic/clubs": {
-    query: {
-      lat?: number;
-      lng?: number;
-      sport?: string;
-      radius?: number;
-      size?: number;
-    };
-  };
-  "GET /api/playtomic/availability": {
-    query: {
-      tenantId?: string;
-      date?: string;
-      sport?: string;
-      duration?: number;
     };
   };
   "GET /.well-known/oauth-protected-resource": Record<string, never>;

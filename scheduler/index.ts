@@ -59,9 +59,6 @@ async function processJob(jobId: string): Promise<void> {
 /** Interval for periodic maintenance (rate limit cleanup, stale tokens, etc.) */
 const MAINTENANCE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-/** Interval for court-watch sweep (hourly) */
-const COURT_WATCH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-
 /** Interval for SQLite maintenance — PRAGMA optimize (daily, per SQLite docs) */
 const DB_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -74,9 +71,6 @@ const RECURRING_ADVANCE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
  * the current game, so stale occurrences need a sweep of their own.
  */
 const INVITE_EXPIRY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-/** UTC hours the Open Pickup sweep runs (ADR-0021: twice daily) */
-const PICKUP_SWEEP_HOURS = [9, 21];
 
 async function triggerMaintenance(): Promise<void> {
   const res = await fetch(`${APP_URL}/api/cron/reminders`, {
@@ -91,21 +85,6 @@ async function triggerMaintenance(): Promise<void> {
 
   const body = await res.json() as Record<string, unknown>;
   console.log("[scheduler] Maintenance completed:", JSON.stringify(body));
-}
-
-async function triggerCourtWatch(): Promise<void> {
-  const res = await fetch(`${APP_URL}/api/cron/court-watch`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${CRON_SECRET}` },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Court-watch cron failed: ${res.status} ${res.statusText}`);
-  }
-
-  const body = await res.json() as Record<string, unknown>;
-  console.log("[scheduler] Court-watch completed:", JSON.stringify(body));
 }
 
 async function triggerDbMaintenance(): Promise<void> {
@@ -152,8 +131,6 @@ async function triggerCron(
   }
 }
 
-const triggerPickupSweep = (): Promise<void> => triggerCron("/api/cron/pickups", "Pickup sweep");
-
 const triggerRecurringAdvance = (): Promise<void> =>
   triggerCron("/api/cron/advance-recurring", "Recurring advance", ["advanced", "failed"]);
 
@@ -161,8 +138,8 @@ const triggerInviteExpiry = (): Promise<void> =>
   triggerCron("/api/cron/invite-expiry", "Invite expiry", ["expired"]);
 
 /**
- * Run one periodic trigger at most once per `intervalMs`, and only while
- * `gate` allows — the pickup sweep is pinned to fixed UTC hours. Failures are
+ * Run one periodic trigger at most once per `intervalMs`, with failures
+ * isolated from the rest of the loop. Errors are
  * logged and swallowed so a broken cron cannot stall the loop, and the stamp
  * advances only on success, so a failing trigger is retried on the next tick
  * rather than being skipped for a whole interval.
@@ -173,10 +150,8 @@ async function runTick(
   intervalMs: number,
   last: number,
   now: number,
-  gate?: () => boolean,
 ): Promise<number> {
   if (now - last < intervalMs) return last;
-  if (gate && !gate()) return last;
 
   try {
     await trigger();
@@ -192,9 +167,7 @@ async function runLoop() {
   // read, so seeding it with POLL_IDLE_MS would be a dead assignment.
   let pollInterval: number;
   let lastMaintenance = 0;
-  let lastCourtWatch = 0;
   let lastDbMaintenance = 0;
-  let lastPickupSweep = 0;
   let lastRecurringAdvance = 0;
   let lastInviteExpiry = 0;
 
@@ -211,16 +184,6 @@ async function runLoop() {
       }
     }
 
-    // Hourly court-watch sweep
-    if (start - lastCourtWatch >= COURT_WATCH_INTERVAL_MS) {
-      try {
-        await triggerCourtWatch();
-        lastCourtWatch = start;
-      } catch (err) {
-        console.error("[scheduler] Court-watch error:", err);
-      }
-    }
-
     // Daily SQLite maintenance (PRAGMA optimize) — runs in the app on request;
     // the worker only holds the timer, so the app needs no long-lived process.
     if (start - lastDbMaintenance >= DB_MAINTENANCE_INTERVAL_MS) {
@@ -231,16 +194,6 @@ async function runLoop() {
         console.error("[scheduler] DB maintenance error:", err);
       }
     }
-
-    // Twice-daily Open Pickup sweep (09:00 / 21:00 UTC, at most once per hour).
-    lastPickupSweep = await runTick(
-      triggerPickupSweep,
-      "Pickup sweep",
-      60 * 60 * 1000,
-      lastPickupSweep,
-      start,
-      () => PICKUP_SWEEP_HOURS.includes(new Date().getUTCHours()),
-    );
 
     // Eager recurring-occurrence advance (issue #1176) — keeps recurring
     // events listed on Discover and next-occurrence reminders armed without

@@ -40,9 +40,7 @@ export interface DiscoverableEventSummary {
   spotsLeft: number;
   isRecurring: boolean;
   recurrenceRule: string | null;
-  source: string;
   ownerId: string | null;
-  playtomicTenantName: string | null;
 }
 
 /**
@@ -95,9 +93,7 @@ export function mapDiscoverableEvent(e: DiscoverableEventRow): DiscoverableEvent
     spotsLeft: Math.max(0, e.maxPlayers - e._count.players),
     isRecurring: e.isRecurring,
     recurrenceRule: e.recurrenceRule,
-    source: e.source,
     ownerId: e.ownerId,
-    playtomicTenantName: e.playtomicTenantName,
   };
 }
 

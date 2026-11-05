@@ -11,15 +11,12 @@ import SportsIcon from "@mui/icons-material/Sports";
 import CasinoIcon from "@mui/icons-material/Casino";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PeopleIcon from "@mui/icons-material/People";
-import PlaceIcon from "@mui/icons-material/Place";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
-import PlaytomicCourtFinder from "./PlaytomicCourtFinder";
 import LocationAutocomplete from "./LocationAutocomplete";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
-import { isPlaytomicSport } from "~/lib/playtomic";
 import { inferCity } from "~/lib/city";
 import { getRandomTitle, type TitleLocale } from "~/lib/randomTitles";
 import { COMMON_TIMEZONES, detectTimezone, fromDateTimeLocalValue, dateFormatTag } from "~/lib/timezones";
@@ -83,8 +80,6 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
   // new field to fill in; typing in the field overrides the guess for good.
   const [city, setCity] = useState("");
   const [cityEdited, setCityEdited] = useState(false);
-  const [locationCoord, setLocationCoord] = useState<{ lat: number; lon: number } | undefined>();
-  const [courtFinderOpen, setCourtFinderOpen] = useState(false);
   const [dateTime, setDateTime] = useState(nextHour);
   const [timezone, setTimezone] = useState(() => detectTimezone());
 
@@ -150,7 +145,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
       recurrenceFreq,
       recurrenceInterval: isRecurring ? recurrenceInterval : null,
       recurrenceByDay: isRecurring ? recurrenceByDay : null,
-      ...(locationCoord ? { latitude: locationCoord.lat, longitude: locationCoord.lon } : {}),
+
     };
 
     let json: { id: string };
@@ -190,8 +185,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
     <>
       <LocationAutocomplete
         value={location}
-        onChange={(v) => { setLocation(v); setLocationCoord(undefined); }}
-        coordinate={locationCoord}
+        onChange={setLocation}
         label={t("locationOptional")}
         placeholder={t("locationPlaceholder")}
       />
@@ -205,16 +199,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
         onChange={(e) => { setCity(e.target.value); setCityEdited(true); }}
       />
 
-      {isPlaytomicSport(sport) && (
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<PlaceIcon />}
-          onClick={() => setCourtFinderOpen(true)}
-        >
-          {t("playtomicFindCourt")}
-        </Button>
-      )}
+
 
       <TextField
         label={t("maxPlayers")}
@@ -527,16 +512,7 @@ export default function CreateEventForm({ bare, quick = false }: { bare?: boolea
             </Button>
           </DialogActions>
         </Dialog>
-        <PlaytomicCourtFinder
-          open={courtFinderOpen}
-          onClose={() => setCourtFinderOpen(false)}
-          sport={sport}
-          date={dateTime.split("T")[0] || new Date().toISOString().split("T")[0]}
-          onSelect={(loc, coord) => {
-            setLocation(loc);
-            setLocationCoord(coord ? { lat: coord.lat, lon: coord.lng } : undefined);
-          }}
-        />
+
     </>
   );
 

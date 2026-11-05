@@ -258,7 +258,6 @@ class ProfileViewModel @Inject constructor(
 fun ProfileScreen(
     onLogout: () -> Unit,
     onNotificationPrefs: () -> Unit,
-    onCourtWatches: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val user by viewModel.user.collectAsState()
@@ -338,9 +337,6 @@ fun ProfileScreen(
 
         // Notifications
         MenuItem(title = stringResource(R.string.notifications_title), subtitle = stringResource(R.string.notifications_subtitle), onClick = onNotificationPrefs)
-
-        // Court Watches
-        MenuItem(title = stringResource(R.string.court_watches), subtitle = stringResource(R.string.court_watches_subtitle), onClick = onCourtWatches)
 
         // Language
         MenuItem(title = stringResource(R.string.language), subtitle = LOCALE_OPTIONS.find { it.code == locale }?.label ?: "English", onClick = { showLanguages = !showLanguages })

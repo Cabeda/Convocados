@@ -75,7 +75,6 @@ import dev.convocados.ui.components.InitialAvatar
 import dev.convocados.ui.components.MatchEventItem
 import dev.convocados.ui.components.MatchEventPlayer
 import dev.convocados.ui.components.MatchEventsSection
-import dev.convocados.ui.screen.courts.PLAYTOMIC_SPORTS
 import dev.convocados.ui.screen.history.TennisSetEditor
 import dev.convocados.ui.screen.payments.PayerCard
 import dev.convocados.ui.screen.games.formatEventDateInTz
@@ -1121,7 +1120,6 @@ fun EventDetailScreen(
     onUserClick: (String) -> Unit,
     onHistoryClick: (String) -> Unit = {},
     onAllHistory: () -> Unit = {},
-    onCourtAlternatives: () -> Unit = {},
     onBackToGames: () -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(key = "event-detail-$eventId"),
     sharedTransitionScope: SharedTransitionScope,
@@ -1310,7 +1308,7 @@ fun EventDetailScreen(
                                     if (ds.isFollowing) {
                                         IconButton(onClick = { viewModel.showNotifications() }) { Icon(Icons.Default.Notifications, stringResource(R.string.notification_settings)) }
                                     }
-                                    HeroMoreMenu(ev, ds, viewModel, eventId, onBack, onSettings, onRankings, onPayments, onLog, onAttendance, onNotificationPrefs, onAllHistory, onCourtAlternatives, onSeasons)
+                                    HeroMoreMenu(ev, ds, viewModel, eventId, onBack, onSettings, onRankings, onPayments, onLog, onAttendance, onNotificationPrefs, onAllHistory, onSeasons)
                                 }
                                 Text(sportEmoji(ev.sport), fontSize = 36.sp, modifier = Modifier.padding(top = 4.dp))
                                 Text(ev.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
@@ -1814,7 +1812,7 @@ private fun PlayerGroup(players: List<Player>, user: UserProfile?, isOwner: Bool
 }
 
 @Composable
-private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: EventDetailViewModel, eventId: String, onBack: () -> Unit, onSettings: () -> Unit, onRankings: () -> Unit, onPayments: () -> Unit, onLog: () -> Unit, onAttendance: () -> Unit, onNotificationPrefs: () -> Unit, onAllHistory: () -> Unit, onCourtAlternatives: () -> Unit, onSeasons: () -> Unit = {}) {
+private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: EventDetailViewModel, eventId: String, onBack: () -> Unit, onSettings: () -> Unit, onRankings: () -> Unit, onPayments: () -> Unit, onLog: () -> Unit, onAttendance: () -> Unit, onNotificationPrefs: () -> Unit, onAllHistory: () -> Unit, onSeasons: () -> Unit = {}) {
     val shareLabel = stringResource(R.string.share)
     var open by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -1834,7 +1832,6 @@ private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: Ev
             DropdownMenuItem(text = { Text(stringResource(R.string.history)) }, onClick = { open = false; onAllHistory() })
             DropdownMenuItem(text = { Text("Attendance") }, onClick = { open = false; onAttendance() })
             DropdownMenuItem(text = { Text("Activity log") }, onClick = { open = false; onLog() })
-            if (ev.sport in PLAYTOMIC_SPORTS) DropdownMenuItem(text = { Text(stringResource(R.string.courts)) }, onClick = { open = false; onCourtAlternatives() })
             DropdownMenuItem(text = { Text(stringResource(R.string.alerts)) }, onClick = { open = false; onNotificationPrefs() })
             if (state.isAdmin || ev.ownerId == null) DropdownMenuItem(text = { Text(stringResource(R.string.settings)) }, onClick = { open = false; onSettings() })
         }

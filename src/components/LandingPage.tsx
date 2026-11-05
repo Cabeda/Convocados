@@ -8,7 +8,6 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import AlarmIcon from "@mui/icons-material/Alarm";
-import PlaceIcon from "@mui/icons-material/Place";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import CreateEventForm from "./CreateEventForm";
@@ -22,7 +21,6 @@ const FEATURES = [
   { icon: CasinoIcon, key: "landingFeatureTeams" },
   { icon: PaymentsIcon, key: "landingFeaturePayments" },
   { icon: EmojiEventsIcon, key: "landingFeatureRankings" },
-  { icon: PlaceIcon, key: "landingFeatureCourtFinder" },
   { icon: NotificationsActiveIcon, key: "landingFeatureNotifications" },
   { icon: AlarmIcon, key: "landingFeatureReminders" },
 ] as const;

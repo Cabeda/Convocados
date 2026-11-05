@@ -481,60 +481,6 @@ struct FollowOverridesRequest: Codable {
     var muteEventDetails: Bool?
 }
 
-// MARK: - Court Finder
-
-struct CourtAlternative: Codable {
-    let tenantId: String
-    let tenantName: String
-    let resourceName: String
-    let slotTime: String
-    let price: Double
-    var currency: String = "EUR"
-    var status: String = "available"
-    var playtomicUrl: String = ""
-    var distanceKm: Double = 0.0
-    var coordinate: CourtCoordinate?
-}
-
-struct CourtCoordinate: Codable {
-    let lat: Double
-    let lng: Double
-}
-
-struct CourtAlternativesResponse: Codable {
-    var alternatives: [CourtAlternative] = []
-}
-
-struct CourtWatch: Codable, Identifiable {
-    let id: String
-    var sport: String = ""
-    var tenantId: String = ""
-    var tenantName: String = ""
-    var resourceId: String = ""
-    var resourceName: String = ""
-    var dayOfWeek: Int = 1
-    var startTime: String = ""
-    var endTime: String = ""
-    var timezone: String = ""
-    var createdAt: String = ""
-}
-
-struct CourtWatchesResponse: Codable {
-    var watches: [CourtWatch] = []
-}
-
-struct CreateCourtWatchRequest: Codable {
-    let sport: String
-    let tenantId: String
-    let tenantName: String
-    let resourceId: String
-    let resourceName: String
-    let dayOfWeek: Int
-    let startTime: String
-    let endTime: String
-    let timezone: String
-}
-
 // MARK: - Balance
 
 struct PlayerBalance: Codable {

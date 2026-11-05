@@ -1179,14 +1179,6 @@ export const openApiSpec = {
         responses: { "200": { description: "Ownership transferred" }, ...errorResponses },
       },
     },
-    "/api/events/{id}/adopt": {
-      post: {
-        summary: "Adopt an Open Pickup (ADR-0021)",
-        tags: ["Events"],
-        parameters: [eventIdParam],
-        responses: { "200": { description: "Pickup adopted" }, ...errorResponses },
-      },
-    },
     "/api/events/{id}/status": {
       get: {
         summary: "Get event status (player count, spots left)",
@@ -2156,110 +2148,6 @@ export const openApiSpec = {
         },
       },
     },
-    "/api/court-watches": {
-      get: {
-        summary: "List court watches",
-        tags: ["Court Finder"],
-        responses: { "200": { description: "User's court watches" }, ...errorResponses },
-      },
-      post: {
-        summary: "Create a court watch",
-        tags: ["Court Finder"],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                required: ["sport", "tenantId", "tenantName", "dayOfWeek", "startTime", "endTime"],
-                properties: {
-                  sport: { type: "string" },
-                  tenantId: { type: "string" },
-                  tenantName: { type: "string" },
-                  resourceId: { type: "string" },
-                  resourceName: { type: "string" },
-                  dayOfWeek: { type: "integer" },
-                  startTime: { type: "string" },
-                  endTime: { type: "string" },
-                  timezone: { type: "string" },
-                },
-              },
-            },
-          },
-        },
-        responses: { "201": { description: "Watch created" }, ...errorResponses },
-      },
-    },
-    "/api/court-watches/{id}": {
-      delete: {
-        summary: "Delete a court watch",
-        tags: ["Court Finder"],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-        responses: { "200": { description: "Watch deleted" }, ...errorResponses },
-      },
-    },
-    "/api/events/{id}/court-alternatives": {
-      get: {
-        summary: "Search court alternatives for an event",
-        tags: ["Court Finder"],
-        parameters: [
-          eventIdParam,
-          { name: "radius", in: "query", schema: { type: "number" }, description: "Search radius in km" },
-          { name: "startTime", in: "query", schema: { type: "string" } },
-          { name: "endTime", in: "query", schema: { type: "string" } },
-          { name: "indoor", in: "query", schema: { type: "boolean" } },
-          { name: "includeBooked", in: "query", schema: { type: "boolean" } },
-        ],
-        responses: { "200": { description: "Court alternatives" }, ...errorResponses },
-      },
-      put: {
-        summary: "Enable or disable the court watch for an event",
-        tags: ["Court Finder"],
-        parameters: [eventIdParam],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                required: ["enabled"],
-                properties: {
-                  enabled: { type: "boolean" },
-                  radius: { type: "number" },
-                  indoor: { type: ["boolean", "null"] },
-                },
-              },
-            },
-          },
-        },
-        responses: { "200": { description: "Court watch setting updated" }, ...errorResponses },
-      },
-    },
-    "/api/events/{id}/switch-court": {
-      post: {
-        summary: "Move an event to a different court",
-        tags: ["Court Finder"],
-        parameters: [eventIdParam],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                required: ["location"],
-                properties: {
-                  location: { type: "string" },
-                  latitude: { type: "number" },
-                  longitude: { type: "number" },
-                  dateTime: { type: "string", format: "date-time" },
-                },
-              },
-            },
-          },
-        },
-        responses: { "200": { description: "Court switched" }, ...errorResponses },
-      },
-    },
     "/api/events/{id}/stakes-preview": {
       post: {
         summary: "Project the season stakes for the drawn lineups",
@@ -2431,35 +2319,6 @@ export const openApiSpec = {
         tags: ["Admin"],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "User deleted" }, ...errorResponses },
-      },
-    },
-
-    // ── Playtomic ───────────────────────────────────────────────────────
-    "/api/playtomic/clubs": {
-      get: {
-        summary: "Find nearby Playtomic clubs",
-        tags: ["Court Finder"],
-        parameters: [
-          { name: "lat", in: "query", schema: { type: "number" } },
-          { name: "lng", in: "query", schema: { type: "number" } },
-          { name: "sport", in: "query", schema: { type: "string" } },
-          { name: "radius", in: "query", schema: { type: "integer" } },
-          { name: "size", in: "query", schema: { type: "integer" } },
-        ],
-        responses: { "200": { description: "Clubs" }, ...errorResponses },
-      },
-    },
-    "/api/playtomic/availability": {
-      get: {
-        summary: "Playtomic court availability for a club on a date",
-        tags: ["Court Finder"],
-        parameters: [
-          { name: "tenantId", in: "query", schema: { type: "string" } },
-          { name: "date", in: "query", schema: { type: "string" } },
-          { name: "sport", in: "query", schema: { type: "string" } },
-          { name: "duration", in: "query", schema: { type: "integer" } },
-        ],
-        responses: { "200": { description: "Courts and slots" }, ...errorResponses },
       },
     },
 

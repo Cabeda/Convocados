@@ -83,7 +83,6 @@ async function resolveRoutes(signedIn: boolean): Promise<Route[]> {
     { path: "/docs/quickstart", name: "docs-quickstart", requiresAuth: false },
     { path: "/dashboard", name: "dashboard", requiresAuth: true },
     { path: "/admin", name: "admin", requiresAuth: true },
-    { path: "/court-watches", name: "court-watches", requiresAuth: true },
     { path: `/users/${DEMO_USER_ID}`, name: "user-profile", requiresAuth: true },
   ];
 

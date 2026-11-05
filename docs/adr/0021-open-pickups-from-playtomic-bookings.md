@@ -1,5 +1,8 @@
 # 0021 — Open pickups from Playtomic bookings
 
+> Retired on 2026-11-04: Playtomic no longer supports public API access.
+> This ADR remains historical context; the integration is removed.
+
 **Status:** Accepted
 **Date:** 2026-08-20
 

@@ -108,18 +108,10 @@
     <string name="no_attendance_data">Ainda sem dados de presença</string>
     <string name="games_streak_format">%1$d/%2$d jogos · sequência: %3$d</string>
     <string name="last_played">Última vez %1$s</string>
-
-    <string name="watch_created">Alerta criado! Serás notificado quando estiver livre.</string>
-    <string name="court_alternatives">Campos alternativos</string>
     <string name="from">De</string>
     <string name="to">Até</string>
     <string name="search">Procurar</string>
-    <string name="no_courts_found">Não há campos para este intervalo de tempo.</string>
-    <string name="notify_when_free">Notificar quando livre</string>
-    <string name="book_on_playtomic">Reservar no Playtomic</string>
-    <string name="court_watches">Alertas de campos</string>
     <string name="delete">Eliminar</string>
-    <string name="no_court_watches">Ainda sem alertas de campos.\nCria um a partir dos campos alternativos de um evento.</string>
 
     <!-- Invites (ADR 0025) -->
     <string name="invite_page_title">Convite para jogo</string>
@@ -185,7 +177,6 @@
     <string name="share">Partilhar</string>
     <string name="randomize">Sortear</string>
     <string name="settings">Definições</string>
-    <string name="courts">Campos</string>
     <string name="alerts">Alertas</string>
     <string name="game_ended">Jogo terminado</string>
     <string name="record_final_score">Registar o resultado final</string>
@@ -308,8 +299,6 @@
     <string name="set_custom_cost">Definir custo personalizado</string>
     <string name="custom_cost_for">Custo personalizado para %1$s</string>
     <string name="amount">Valor</string>
-
-    <string name="court_watches_subtitle">Notificar quando campos reservados ficarem livres</string>
     <string name="theme">Tema</string>
     <string name="theme_system">Sistema</string>
     <string name="theme_light">Claro</string>
@@ -400,8 +389,6 @@
     <string name="games_you_played">Jogos em que participou</string>
     <string name="no_archived_games">Sem jogos arquivados</string>
     <string name="will_invite">Vai convidar %1$s</string>
-    <string name="open_pickup">Pickup aberto</string>
-    <string name="claim_pickup">Assumir este pickup</string>
     <string name="team_total_elo">ELO total: %1$d</string>
     <string name="team_view_toggle_label">Vista de equipas</string>
     <string name="team_view_list">Lista</string>

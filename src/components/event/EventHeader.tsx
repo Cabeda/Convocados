@@ -36,8 +36,6 @@ import { NotifyButton } from "./NotifyButton";
 import { PaymentSurface } from "../PaymentSurface";
 import { MyNotificationsDialog } from "./MyNotificationsDialog";
 import LocationAutocomplete from "../LocationAutocomplete";
-import CourtAlternatives from "../CourtAlternatives";
-import { isPlaytomicSport } from "~/lib/playtomic";
 
 interface Props {
   eventId: string;
@@ -381,16 +379,6 @@ export function EventHeader({
                     size="small"
                   />
                 </Box>
-                {/* Court alternatives — shown in edit mode near location */}
-                {isPlaytomicSport(sport) && (
-                  <CourtAlternatives
-                    eventId={eventId}
-                    sport={sport}
-                    hasCoordinates={!!(event.latitude && event.longitude)}
-                    courtWatchConfig={event.courtWatchConfig ? JSON.parse(event.courtWatchConfig) : null}
-                    gameTime={(() => { const parts = new Intl.DateTimeFormat("en-GB", { timeZone: event.timezone || "UTC", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(gameDate); const h = parts.find(p => p.type === "hour")?.value ?? "00"; const m = parts.find(p => p.type === "minute")?.value ?? "00"; return `${h}:${m}`; })()}
-                  />
-                )}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <SportsSoccerIcon fontSize="small" color="action" sx={{ flexShrink: 0 }} />
                   <FormControl size="small" fullWidth>

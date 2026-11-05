@@ -1,12 +1,3 @@
 ---
-export const prerender = true;
-import BaseLayout from "../layouts/BaseLayout.astro";
-import CourtWatchesPage from "../components/CourtWatchesPage";
+return Astro.redirect("/public", 301);
 ---
-
-<BaseLayout
-  title="Court watches — Convocados"
-  mainTransitionName="page-court-watches" mergePrompt
->
-  <CourtWatchesPage client:only="react" />
-</BaseLayout>

@@ -81,11 +81,11 @@ export default function LocationAutocomplete({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  // Track the known coordinate — set when user picks from autocomplete or Playtomic
+  // Track the known coordinate — set when user picks from autocomplete or an external coordinate
   const [knownCoord, setKnownCoord] = useState<{ lat: number; lon: number } | undefined>(coordinate);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync external coordinate prop (e.g. from Playtomic)
+  // Sync external coordinate prop (e.g. a saved location)
   React.useEffect(() => {
     if (coordinate) setKnownCoord(coordinate);
   }, [coordinate]);

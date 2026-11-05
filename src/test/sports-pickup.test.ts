@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { getSportPreset, SPORT_PRESETS } from "~/lib/sports";
-import { playtomicSportIds, mapSportToPlaytomic } from "~/lib/playtomic";
 
 const LOCALES = ["en", "pt", "es", "fr", "de", "it"] as const;
 
@@ -10,15 +9,6 @@ describe("Open Pickup sports (ADR-0021)", () => {
     expect(getSportPreset("badminton-doubles")).toMatchObject({ id: "badminton-doubles", defaultMaxPlayers: 4, defaultDurationMinutes: 45, labelKey: "sportBadmintonDoubles" });
     expect(getSportPreset("squash")).toMatchObject({ id: "squash", defaultMaxPlayers: 2, defaultDurationMinutes: 40, labelKey: "sportSquash" });
     expect(getSportPreset("pickleball")).toMatchObject({ id: "pickleball", defaultMaxPlayers: 4, defaultDurationMinutes: 60, labelKey: "sportPickleball" });
-  });
-
-  it("maps the new sports to Playtomic sport ids", () => {
-    expect(playtomicSportIds("badminton-singles")).toEqual(["BADMINTON"]);
-    expect(playtomicSportIds("badminton-doubles")).toEqual(["BADMINTON"]);
-    expect(playtomicSportIds("squash")).toEqual(["SQUASH"]);
-    expect(playtomicSportIds("pickleball")).toEqual(["PICKLEBALL"]);
-    expect(mapSportToPlaytomic("badminton-singles")).toBe("BADMINTON");
-    expect(mapSportToPlaytomic("squash")).toBe("SQUASH");
   });
 
   it("declares the new sport labels in all six locales", async () => {

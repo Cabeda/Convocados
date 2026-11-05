@@ -211,7 +211,6 @@ export async function mergeUsers(tx: Tx, survivorId: string, absorbedId: string)
   await tx.oauthAccessToken.updateMany({ where: { userId: absorbedId }, data: { userId: survivorId } });
   await tx.oauthRefreshToken.updateMany({ where: { userId: absorbedId }, data: { userId: survivorId } });
   await tx.oauthConsent.updateMany({ where: { userId: absorbedId }, data: { userId: survivorId } });
-  await tx.courtWatch.updateMany({ where: { userId: absorbedId }, data: { userId: survivorId } });
   await tx.monthlySubscription.updateMany({ where: { userId: absorbedId }, data: { userId: survivorId } });
   await tx.walletTransaction.updateMany({ where: { userId: absorbedId }, data: { userId: survivorId } });
   await tx.playerInvite.updateMany({ where: { invitedByUserId: absorbedId }, data: { invitedByUserId: survivorId } });

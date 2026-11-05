@@ -1,9 +1,10 @@
 # Inspecting Production
 
 How to answer "what is production actually doing?" without guessing. Covers the
-database, the job queue, the scheduler, and logs — plus the two traps that cost
-a debugging session: the production image has **no `sqlite3` CLI**, and logs are
-**not retained**.
+database, the job queue, the scheduler, and logs. Two traps cost a debugging
+session: the production image has **no `sqlite3` CLI**, and **`fly logs` only
+returns a recent buffer**. Historical log
+search is a separate interface with seven-day retention.
 
 ## Where things run
 
@@ -43,7 +44,7 @@ holds user emails and other PII; query it where it lives, read-only.
 - `failedAt` — set on dead-letter. `lastError` carries the (truncated) reason and is
   written on **every** failed attempt (cleared on success), so both a retrying and a
   dead-lettered job are diagnosable from the row. Before `lastError` existed, the reason
-  lived only in stdout — which is retained for minutes, not months.
+  lived only in stdout — whose searchable history expires after seven days.
 
 Note that `countFailedJobs()` / `/api/health`'s `failedJobs` is **cumulative**: a
 dead-letter row is never pruned, so the count includes fixes from long ago. Check
@@ -61,13 +62,28 @@ via `GET /api/admin/stats` (`jobFailures`, each flagged `deadLettered`); the pub
 ## Logs
 
 ```bash
-fly logs -a convocados           # live tail only — no history
+fly logs -a convocados           # live tail / recent buffer
 fly logs -a convocados-scheduler # the poll loop; rarely what you want
 ```
 
-Fly retains logs for a short window and the app has no error sink, so a failure
-older than a few minutes is gone from logs. That is why `ScheduledJob.lastError`
-persists the reason **on the row**.
+Fly retains searchable stdout/stderr for **seven days**, separately from the
+recent 100-event buffer returned by `fly logs --no-tail`. Use **Search logs in
+Grafana** in the app dashboard for historical queries. Do not infer that older
+logs are unavailable from an empty CLI buffer.
+
+For programmatic access, the [Fly logs API guide](https://docs.fly.io/monitoring/logs-api-options)
+documents `GET https://api.fly.io/api/v1/apps/:app/logs`. Pass `next_token` as a
+nanosecond Unix timestamp to start at the desired time, then page forward using
+`meta.next_token` until the audit cutoff. The response contains a `data` array;
+log fields are under each entry’s `attributes`. Recent `fly auth token` output
+uses the `Authorization: FlyV1 <token>` scheme. Keep credentials in memory or
+environment variables and never print them or save them in reports.
+
+[Log search](https://docs.fly.io/monitoring/search-logs) is currently a free beta,
+not a long-term error archive. A query may start later than the requested cutoff
+when older entries have expired. Report the actual earliest/latest timestamps
+and collection gaps. `ScheduledJob.lastError` persists the reason **on the row**
+after the log window expires.
 
 The other queue is different: `NotificationJob` (the notification outbox) stores only
 `failedAt` for a dead-letter, **not** a reason, and prunes dead-letters after 30 days

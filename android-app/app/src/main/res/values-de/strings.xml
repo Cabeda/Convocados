@@ -108,18 +108,10 @@
     <string name="no_attendance_data">Noch keine Teilnahmedaten</string>
     <string name="games_streak_format">%1$d/%2$d Spiele · Serie: %3$d</string>
     <string name="last_played">Zuletzt %1$s</string>
-
-    <string name="watch_created">Alarm erstellt! Du wirst benachrichtigt, sobald er frei ist.</string>
-    <string name="court_alternatives">Alternative Plätze</string>
     <string name="from">Von</string>
     <string name="to">Bis</string>
     <string name="search">Suchen</string>
-    <string name="no_courts_found">Keine Plätze für diesen Zeitraum gefunden.</string>
-    <string name="notify_when_free">Benachrichtigen, wenn frei</string>
-    <string name="book_on_playtomic">Auf Playtomic buchen</string>
-    <string name="court_watches">Platz-Alarme</string>
     <string name="delete">Löschen</string>
-    <string name="no_court_watches">Noch keine Platz-Alarme.\nErstelle einen über die alternativen Plätze eines Ereignisses.</string>
 
     <!-- Invites (ADR 0025) -->
     <string name="invite_page_title">Spieleinladung</string>
@@ -185,7 +177,6 @@
     <string name="share">Teilen</string>
     <string name="randomize">Auslosen</string>
     <string name="settings">Einstellungen</string>
-    <string name="courts">Plätze</string>
     <string name="alerts">Alarme</string>
     <string name="game_ended">Spiel beendet</string>
     <string name="record_final_score">Endergebnis eintragen</string>
@@ -308,8 +299,6 @@
     <string name="set_custom_cost">Eigenen Betrag festlegen</string>
     <string name="custom_cost_for">Eigener Betrag für %1$s</string>
     <string name="amount">Betrag</string>
-
-    <string name="court_watches_subtitle">Benachrichtigen, wenn belegte Plätze frei werden</string>
     <string name="theme">Design</string>
     <string name="theme_system">System</string>
     <string name="theme_light">Hell</string>
@@ -400,8 +389,6 @@
     <string name="games_you_played">Spiele, die du gespielt hast</string>
     <string name="no_archived_games">Keine archivierten Spiele</string>
     <string name="will_invite">Lädt %1$s ein</string>
-    <string name="open_pickup">Offenes Pickup</string>
-    <string name="claim_pickup">Dieses Pickup übernehmen</string>
     <string name="team_total_elo">Gesamt-ELO: %1$d</string>
     <string name="team_view_toggle_label">Team-Ansicht</string>
     <string name="team_view_list">Liste</string>
