@@ -39,7 +39,7 @@ create-event:
     recurring-events: { web: true, android: true, wearos: false }
     sport-presets: { web: true, android: true, wearos: false }
     custom-team-names: { web: true, android: true, wearos: false }
-    location-map-picker: { web: true, android: false, wearos: false }
+    location-map-picker: { web: true, android: true, wearos: false }
     quick-add: { web: true, android: false, wearos: false }
     public-by-default: { web: true, android: true, wearos: false }
 
@@ -102,7 +102,7 @@ rankings:
   wearos: false
   capabilities:
     elo-ratings: { web: true, android: true, wearos: false }
-    recalculate-elo: { web: true, android: false, wearos: false }
+    recalculate-elo: { web: true, android: true, wearos: false }
     manual-rating: { web: true, android: false, wearos: false }
 
 attendance:
@@ -151,7 +151,7 @@ public-games:
   wearos: false
   capabilities:
     list-view: { web: true, android: true, wearos: false }
-    map-view: { web: true, android: false, wearos: false }
+    map-view: { web: true, android: true, wearos: false }
     sport-filter: { web: true, android: true, wearos: false }
 
 notifications:
@@ -179,7 +179,7 @@ user-profile:
   capabilities:
     view-stats: { web: true, android: true, wearos: false }
     view-other-profiles: { web: true, android: true, wearos: false }
-    edit-name: { web: true, android: false, wearos: false }
+    edit-name: { web: true, android: true, wearos: false }
     edit-photo: { web: true, android: true, wearos: false }
 
 webhooks:

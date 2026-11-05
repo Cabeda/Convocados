@@ -62,7 +62,7 @@
 | Recurring Events | ✅ | ✅ | ❌ |
 | Sport Presets | ✅ | ✅ | ❌ |
 | Custom Team Names | ✅ | ✅ | ❌ |
-| Location Map Picker | ✅ | ❌ | ❌ |
+| Location Map Picker | ✅ | ✅ | ❌ |
 | Quick Add | ✅ | ❌ | ❌ |
 | Public By Default | ✅ | ✅ | ❌ |
 
@@ -119,7 +119,7 @@
 | Capability | Web | Android | Wear OS |
 |------------|:---:|:-------:|:-------:|
 | Elo Ratings | ✅ | ✅ | ❌ |
-| Recalculate Elo | ✅ | ❌ | ❌ |
+| Recalculate Elo | ✅ | ✅ | ❌ |
 | Manual Rating | ✅ | ❌ | ❌ |
 
 ### Payments
@@ -155,7 +155,7 @@
 | Capability | Web | Android | Wear OS |
 |------------|:---:|:-------:|:-------:|
 | List View | ✅ | ✅ | ❌ |
-| Map View | ✅ | ❌ | ❌ |
+| Map View | ✅ | ✅ | ❌ |
 | Sport Filter | ✅ | ✅ | ❌ |
 
 ### Notifications
@@ -180,5 +180,5 @@
 |------------|:---:|:-------:|:-------:|
 | View Stats | ✅ | ✅ | ❌ |
 | View Other Profiles | ✅ | ✅ | ❌ |
-| Edit Name | ✅ | ❌ | ❌ |
+| Edit Name | ✅ | ✅ | ❌ |
 | Edit Photo | ✅ | ✅ | ❌ |
