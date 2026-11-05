@@ -55,7 +55,7 @@ event-detail:
     undo-remove: { web: true, android: true, wearos: false }
     reorder-players: { web: true, android: true, wearos: false }
     known-players-autocomplete: { web: true, android: true, wearos: false }
-    contact-picker-invite: { web: true, android: false, wearos: false }
+    contact-picker-invite: { web: true, android: true, wearos: false }
 
 teams:
   web: true
@@ -66,7 +66,7 @@ teams:
     balanced-randomize: { web: true, android: true, wearos: false }
     manual-drag-assign: { web: true, android: true, wearos: false }
     view-teams: { web: true, android: true, wearos: true }
-    field-view: { web: true, android: false, wearos: false }
+    field-view: { web: true, android: true, wearos: false }
     player-positions: { web: true, android: true, wearos: false }
 
 score-tracking:
@@ -170,7 +170,7 @@ sharing:
   wearos: false
   capabilities:
     share-link: { web: true, android: true, wearos: false }
-    calendar-ics: { web: true, android: false, wearos: false }
+    calendar-ics: { web: true, android: true, wearos: false }
 
 user-profile:
   web: true

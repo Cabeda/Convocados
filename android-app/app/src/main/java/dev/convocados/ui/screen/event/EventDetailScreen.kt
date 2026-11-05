@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.event
 
 import android.content.Intent
+import android.provider.CalendarContract
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -1825,6 +1826,19 @@ private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: Ev
                 val spots = ev.maxPlayers - ev.players.size
                 val text = "${sportEmoji(ev.sport)} ${ev.title}\n${formatEventDateInTz(ev.dateTime, ev.timezone)}" + (if (ev.location.isNotBlank()) "\n📍 ${ev.location}" else "") + "\n👥 ${if (spots > 0) "$spots spot(s) left" else "Full"}\n\n$url"
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, shareLabel))
+            })
+            DropdownMenuItem(text = { Text(stringResource(R.string.add_to_calendar)) }, onClick = {
+                open = false
+                val start = java.time.Instant.parse(ev.dateTime)
+                val end = start.plus(java.time.Duration.ofMinutes(ev.durationMinutes.toLong()))
+                val intent = Intent(Intent.ACTION_INSERT).apply {
+                    data = CalendarContract.Events.CONTENT_URI
+                    putExtra(CalendarContract.Events.TITLE, ev.title)
+                    putExtra(CalendarContract.Events.EVENT_LOCATION, ev.location)
+                    putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start.toEpochMilli())
+                    putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end.toEpochMilli())
+                }
+                context.startActivity(intent)
             })
             DropdownMenuItem(text = { Text(stringResource(R.string.rankings)) }, onClick = { open = false; onRankings() })
             DropdownMenuItem(text = { Text(stringResource(R.string.seasons)) }, onClick = { open = false; onSeasons() })

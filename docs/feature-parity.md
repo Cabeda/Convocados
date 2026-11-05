@@ -77,7 +77,7 @@
 | Undo Remove | ✅ | ✅ | ❌ |
 | Reorder Players | ✅ | ✅ | ❌ |
 | Known Players Autocomplete | ✅ | ✅ | ❌ |
-| Contact Picker Invite | ✅ | ❌ | ❌ |
+| Contact Picker Invite | ✅ | ✅ | ❌ |
 
 ### Teams
 
@@ -87,7 +87,7 @@
 | Balanced Randomize | ✅ | ✅ | ❌ |
 | Manual Drag Assign | ✅ | ✅ | ❌ |
 | View Teams | ✅ | ✅ | ✅ |
-| Field View | ✅ | ❌ | ❌ |
+| Field View | ✅ | ✅ | ❌ |
 | Player Positions | ✅ | ✅ | ❌ |
 
 ### Score Tracking
@@ -172,7 +172,7 @@
 | Capability | Web | Android | Wear OS |
 |------------|:---:|:-------:|:-------:|
 | Share Link | ✅ | ✅ | ❌ |
-| Calendar Ics | ✅ | ❌ | ❌ |
+| Calendar Ics | ✅ | ✅ | ❌ |
 
 ### User Profile
 
