@@ -33,7 +33,7 @@
 
 | Capability | Web | Android | Wear OS |
 |------------|:---:|:-------:|:-------:|
-| Email Magic Link | ✅ | ❌ | ❌ |
+| Email Magic Link | ✅ | ✅ | ❌ |
 | Google Sso | ✅ | ✅ | ✅ |
 | Oauth2 Pkce | ✅ | ✅ | ✅ |
 
@@ -75,7 +75,7 @@
 | Remove Player | ✅ | ✅ | ❌ |
 | Claim Player | ✅ | ✅ | ❌ |
 | Undo Remove | ✅ | ✅ | ❌ |
-| Reorder Players | ✅ | ❌ | ❌ |
+| Reorder Players | ✅ | ✅ | ❌ |
 | Known Players Autocomplete | ✅ | ✅ | ❌ |
 | Contact Picker Invite | ✅ | ❌ | ❌ |
 
@@ -120,7 +120,7 @@
 |------------|:---:|:-------:|:-------:|
 | Elo Ratings | ✅ | ✅ | ❌ |
 | Recalculate Elo | ✅ | ✅ | ❌ |
-| Manual Rating | ✅ | ❌ | ❌ |
+| Manual Rating | ✅ | ✅ | ❌ |
 
 ### Payments
 
@@ -147,7 +147,7 @@
 | Split Costs Toggle | ✅ | ✅ | ❌ |
 | Password Protection | ✅ | ✅ | ❌ |
 | Archive Event | ✅ | ✅ | ❌ |
-| Transfer Ownership | ✅ | ❌ | ❌ |
+| Transfer Ownership | ✅ | ✅ | ❌ |
 | Game Settings Wear | ❌ | ❌ | ✅ |
 
 ### Public Games
