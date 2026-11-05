@@ -38,3 +38,19 @@ describe("POST /api/events/[id]/payments/settlement/bulk-undo", () => {
     expect([200, 400]).toContain(res.status);
   });
 });
+
+describe("POST /api/events/[id]/payments/settlement/bulk-undo (locked)", () => {
+  it("returns 403 for a password-locked event without access", async () => {
+    const event = await prisma.event.create({
+      data: { title: "E", location: "P", dateTime: new Date(), maxPlayers: 10, ownerId: null, isPublic: false, accessPassword: "hashed" },
+    });
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: new Date(), status: "upcoming" } });
+    const req = new Request(`http://localhost/api/events/${event.id}/payments/settlement/bulk-undo`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ gameId: game.id, eventPlayerIds: ["ep"] }),
+    });
+    const res = await POST({ params: { id: event.id }, request: req } as any);
+    expect(res.status).toBe(403);
+  });
+});
