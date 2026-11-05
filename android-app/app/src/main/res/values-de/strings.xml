@@ -86,6 +86,7 @@
     <string name="load_more">Mehr laden</string>
     <string name="back">Zurück</string>
     <string name="remove">Entfernen</string>
+    <string name="add_to_calendar">Add to calendar</string>
     <string name="linked_account">Verknüpftes Konto</string>
     <string name="you_suffix"> (du)</string>
     <plurals name="games_played_suffix">
