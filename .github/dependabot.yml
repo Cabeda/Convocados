@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       minor-and-patch:
         update-types:
@@ -16,18 +21,33 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
 
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
     ignore:
       # better-sqlite3 ships no musl prebuilds for Node >=24 (build fails in
       # alpine without python/make/g++); node 25 also drops bundled corepack.
@@ -39,6 +59,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
     ignore:
       # Hilt/Dagger can't read Kotlin 2.4.x metadata yet (shaded kotlin-metadata-jvm).
       # Remove this once Dagger ships 2.4.0 support.
