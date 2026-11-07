@@ -110,6 +110,8 @@
     <string name="back">Back</string>
     <string name="remove">Remove</string>
     <string name="add_to_calendar">Add to calendar</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
     <string name="linked_account">Linked account</string>
     <string name="you_suffix"> (you)</string>
     <plurals name="games_played_suffix">
