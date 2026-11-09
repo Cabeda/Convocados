@@ -367,9 +367,16 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     ? await resolveGameLineups(db, event, [{ id: gameId, dateTime: game.dateTime }])
     : new Map<string, Set<string>>();
   const lineup = lineups.get(gameId);
+  // Without a frozen lineup, fall back to the best in-row signal for "who
+  // played". Team membership wins over queue order: a bench player moved onto a
+  // team keeps their join order (past maxPlayers), so an order-only slice
+  // silently drops them from the roll even though they played.
+  const hasTeamAssignments = participants.some((p) => p.team !== null);
   const charged = lineup
     ? participants.filter((p) => lineup.has(p.eventPlayer.name))
-    : participants.filter((p) => p.order < maxPlayers);
+    : hasTeamAssignments
+      ? participants.filter((p) => p.team !== null)
+      : participants.filter((p) => p.order < maxPlayers);
 
   const activeIds = charged.map((p) => p.eventPlayer.id);
   await db.gamePayment.updateMany({
