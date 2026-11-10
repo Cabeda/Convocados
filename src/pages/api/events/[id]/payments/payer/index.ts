@@ -69,7 +69,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       select: { paymentDetails: true, sharePaymentDetails: true },
     });
     if (!profile?.sharePaymentDetails || !profile.paymentDetails) {
-      payerDetailsUrl = `/users/${userId}`;
+      payerDetailsUrl = `/users/${userId}#payment-details`;
     }
   }
 

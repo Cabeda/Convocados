@@ -562,14 +562,15 @@ async function notifyPayerChange(
   const incoming = nextEventPlayerId ? byId.get(nextEventPlayerId) : null;
   const outgoing = previousEventPlayerId ? byId.get(previousEventPlayerId) : null;
   const incomingName = incoming?.name ?? nextExternalName ?? null;
+  const incomingUrl = incoming?.userId ? `/users/${incoming.userId}#payment-details` : `/events/${eventId}`;
   const url = `/events/${eventId}`;
-
+ 
   if (incoming?.userId && incoming.userId !== outgoing?.userId) {
     await enqueueNotification(eventId, "payer_assigned", {
       title: event.title,
       key: "payerAssignedBody",
       params: { title: event.title },
-      url,
+      url: incomingUrl,
       spotsLeft: 0,
       recipientUserIds: [incoming.userId],
     });

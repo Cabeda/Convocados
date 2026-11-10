@@ -1657,7 +1657,7 @@ statsGoals: "Tore",
   payerCardCancel: "Abbrechen",
   payerVacantBody: "Niemand sammelt für {title} ein. Öffne das Spiel, um die Rolle zu übernehmen.",
   // ADR 0055 — payer notifications
-  payerAssignedBody: "Du sammelst für {title} ein. Die Gruppe sieht deine Zahlungsdaten, wenn du sie teilst.",
+  payerAssignedBody: "Du sammelst für {title} ein. Füge deine Zahlungsdaten hinzu (mindestens eine MB-Way-Nummer) und aktiviere die Freigabe, damit die Gruppe weiß, wohin sie zahlen soll.",
   payerChangedBody: "{name} sammelt für {title} statt dir ein.",
 };
 
