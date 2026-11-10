@@ -73,7 +73,7 @@ export function PaymentDetailsSection() {
   };
 
   return (
-    <Paper elevation={1} sx={{ p: 3 }}>
+    <Paper id="payment-details" elevation={1} sx={{ p: 3 }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
         <PaymentsIcon color="action" fontSize="small" />
         <Typography variant="h6" fontWeight={600}>{t("myPaymentDetails")}</Typography>

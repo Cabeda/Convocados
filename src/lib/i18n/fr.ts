@@ -1657,7 +1657,7 @@ statsGoals: "Buts",
   payerCardCancel: "Annuler",
   payerVacantBody: "Personne ne collecte pour {title} pour l'instant. Ouvre le jeu pour prendre le rôle.",
   // ADR 0055 — payer notifications
-  payerAssignedBody: "Tu encaisses pour {title}. Le groupe verra tes coordonnées de paiement si tu les partages.",
+  payerAssignedBody: "Tu encaisses pour {title}. Ajoute tes coordonnées de paiement (au moins un numéro MB Way) et active le partage pour que le groupe sache où payer.",
   payerChangedBody: "{name} encaisse pour {title} à ta place.",
 };
 
