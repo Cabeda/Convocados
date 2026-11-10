@@ -288,6 +288,29 @@ describe("syncGamePayments", () => {
     expect(rows.every((r) => r.archivedAt !== null)).toBe(true);
   });
 
+  it("charges team-assigned participants even when their queue order is past the bench", async () => {
+    // Moving a bench player onto a team leaves their join order past maxPlayers.
+    // When no frozen lineup is available, team membership is the authoritative
+    // "who played" signal — order alone would silently drop them from the roll.
+    const { event, game } = await seedEvent({ players: ["Alice", "Bob", "Cara", "Dan"], cost: 20 });
+    await prisma.event.update({ where: { id: event.id }, data: { maxPlayers: 2 } });
+    const eps = await prisma.eventPlayer.findMany({
+      where: { eventId: event.id, name: { in: ["Cara", "Dan"] } },
+    });
+    await prisma.gameParticipant.updateMany({
+      where: { gameId: game.id, eventPlayerId: { in: eps.map((e) => e.id) } },
+      data: { team: "Gunas", slot: 0 },
+    });
+
+    await syncGamePayments(game.id, event.id);
+
+    const active = await prisma.gamePayment.findMany({
+      where: { gameId: game.id, archivedAt: null },
+      orderBy: { playerName: "asc" },
+    });
+    expect(active.map((r) => r.playerName)).toEqual(["Cara", "Dan"]);
+  });
+
   it("archives rows for participants who leave", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     await syncGamePayments(game.id, event.id);

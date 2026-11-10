@@ -12,6 +12,7 @@ const mockGetSession = vi.mocked(getSession);
 const mockCheckOwnership = vi.mocked(checkOwnership);
 
 import { PATCH } from "~/pages/api/events/[id]/history/[historyId]";
+import { syncGamePayments } from "~/lib/settlement.server";
 import { POST as POST_HISTORY } from "~/pages/api/events/[id]/history/index";
 import { PUT as PUT_TEAMS } from "~/pages/api/events/[id]/teams";
 import { POST as POST_RANDOMIZE } from "~/pages/api/events/[id]/randomize";
@@ -237,6 +238,42 @@ describe("history PATCH dual-write to Game", () => {
     });
     expect(bobPay).not.toBeNull();
     expect(bobPay!.status).toBe("pending");
+  });
+
+  it("re-syncs GamePayment after a teamsSnapshot edit, reviving players a stale sync archived", async () => {
+    // A team move used to append players after the bench and archive their
+    // GamePayment rows. Editing the teams on the history page must reconcile
+    // the payment roll with the lineup the edit just wrote.
+    const event = await seedEvent({ maxPlayers: 4 });
+    const game = await seedGame(event.id, { status: "played" });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    await seedRoster(event.id, game.id, ["Alice", "Bob", "Cara", "Dan"]);
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 20, currency: "EUR" } });
+    const snapshot = [
+      { team: "Reds", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
+      { team: "Blues", players: [{ name: "Cara", order: 0 }, { name: "Dan", order: 1 }] },
+    ];
+    const history = await seedHistory(event.id, {
+      id: game.id,
+      dateTime: game.dateTime,
+      teamsSnapshot: JSON.stringify(snapshot),
+    });
+    await syncGamePayments(game.id, event.id);
+    // The bug: two lineup players were archived even though they played.
+    await prisma.gamePayment.updateMany({
+      where: { gameId: game.id, playerName: { in: ["Cara", "Dan"] } },
+      data: { archivedAt: new Date() },
+    });
+    expect(await prisma.gamePayment.count({ where: { gameId: game.id, archivedAt: null } })).toBe(2);
+
+    const res = await PATCH(ctx({ id: event.id, historyId: history.id }, { teamsSnapshot: snapshot }));
+    expect(res.status).toBe(200);
+
+    const active = await prisma.gamePayment.findMany({
+      where: { gameId: game.id, archivedAt: null },
+      orderBy: { playerName: "asc" },
+    });
+    expect(active.map((r) => r.playerName)).toEqual(["Alice", "Bob", "Cara", "Dan"]);
   });
 });
 

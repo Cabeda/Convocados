@@ -8,7 +8,7 @@ import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
-import { getGameSettlement, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
+import { getGameSettlement, syncGamePayments, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
 import { perPlayerShare } from "../../../../../lib/gameCost";
 import { postLedgerEntry } from "../../../../../lib/ledger.server";
 import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
@@ -513,6 +513,11 @@ export const PATCH: APIRoute = async ({ params, request }) => {
         { id: mirrorGame.id, eventId: params.id ?? "", dateTime: updated.dateTime },
         updated.teamsSnapshot,
       );
+      // Keep the durable payment roll aligned with the lineup this edit just
+      // wrote. A team move can leave a player's GameParticipant order past the
+      // bench; without a re-sync their GamePayment row stays stale or archived
+      // even though they played.
+      await syncGamePayments(mirrorGame.id, params.id ?? "");
     }
     if (paymentsSnapshot !== undefined) {
       await mirrorPaymentsSnapshotToGame(mirrorGame, updated.paymentsSnapshot, params.id ?? "");
