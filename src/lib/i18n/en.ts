@@ -1717,7 +1717,7 @@ statsGoals: "Goals",
   payerCardCancel: "Cancel",
   payerVacantBody: "Nobody is collecting for {title} yet. Open the game to take the role.",
   // ADR 0055 — payer notifications
-  payerAssignedBody: "You are collecting for {title}. The group will see your payment details if you share them.",
+  payerAssignedBody: "You are collecting for {title}. Add your payment details (at least an MB WAY number) and turn on sharing so the group knows where to pay.",
   payerChangedBody: "{name} is collecting for {title} instead of you.",} as const;
 
 export default en;

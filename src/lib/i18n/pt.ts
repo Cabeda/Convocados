@@ -1705,7 +1705,7 @@ statsGoals: "Golos",
   payerCardCancel: "Cancelar",
   payerVacantBody: "Ainda ninguém está a cobrar por {title}. Abre o jogo para assumir.",
   // ADR 0055 — payer notifications
-  payerAssignedBody: "Estás a receber para {title}. O grupo vê os teus dados de pagamento se os partilhares.",
+  payerAssignedBody: "Estás a receber para {title}. Adiciona os teus dados de pagamento (pelo menos um número MB WAY) e ativa a partilha para o grupo saber onde pagar.",
   payerChangedBody: "{name} está a receber para {title} em vez de ti.",
 };
 

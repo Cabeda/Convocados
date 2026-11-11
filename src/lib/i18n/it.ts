@@ -1657,7 +1657,7 @@ statsGoals: "Goal",
   payerCardCancel: "Annulla",
   payerVacantBody: "Nessuno sta incassando per {title}. Apri la partita per assumere il ruolo.",
   // ADR 0055 — payer notifications
-  payerAssignedBody: "Stai incassando per {title}. Il gruppo vedrà i tuoi dati di pagamento se li condividi.",
+  payerAssignedBody: "Stai incassando per {title}. Aggiungi i tuoi dati di pagamento (almeno un numero MB Way) e attiva la condivisione così il gruppo sa dove pagare.",
   payerChangedBody: "{name} sta incassando per {title} al posto tuo.",
 };
 
