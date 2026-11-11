@@ -523,7 +523,7 @@ describe("sendPushToEvent — capacity suffix (#1725)", () => {
     await sendPushToEvent(
       eventId,
       "Push Test Game",
-      "payerAssignedBody" as any,
+      "payerAssignedBody",
       { title: "Push Test Game" },
       `/events/${eventId}`,
       0,
@@ -534,8 +534,7 @@ describe("sendPushToEvent — capacity suffix (#1725)", () => {
     const call = getFcmCalls().find((c: any[]) => getFcmToken(c) === "fcm-token-cap-1");
     expect(call).toBeDefined();
     const body = JSON.parse(call![1].body).message.data.body;
-    expect(body).not.toContain("·");
-    expect(body).not.toContain("Game is full");
+    expect(body).toBe("You are collecting for Push Test Game. The group will see your payment details if you share them.");
   });
 
   it("still appends the suffix for capacity job types at spotsLeft 0 (FCM)", async () => {
@@ -563,5 +562,31 @@ describe("sendPushToEvent — capacity suffix (#1725)", () => {
     const body = JSON.parse(call![1].body).message.data.body;
     expect(body).toContain("·");
     expect(body).toContain("Game is full");
+  });
+
+  it("does not append a suffix for payment_confirmed at spotsLeft 0", async () => {
+    const ownerId = await seedUser("cap-owner3", "Owner");
+    const userId = await seedUser("cap-user3", "User");
+    const eventId = await seedEvent(ownerId, "evt-cap3");
+    await prisma.player.create({ data: { name: "User", eventId, userId, order: 0 } });
+    await followEvent(userId, eventId);
+    await prisma.appPushToken.create({ data: { userId, token: "fcm-token-cap-3", platform: "android" } });
+
+    const { sendPushToEvent } = await import("~/lib/push.server");
+    await sendPushToEvent(
+      eventId,
+      "Push Test Game",
+      "notifyPaymentConfirmed",
+      { title: "Push Test Game" },
+      `/events/${eventId}`,
+      0,
+      undefined,
+      "payment_confirmed",
+    );
+
+    const call = getFcmCalls().find((c: any[]) => getFcmToken(c) === "fcm-token-cap-3");
+    expect(call).toBeDefined();
+    const body = JSON.parse(call![1].body).message.data.body;
+    expect(body).toBe("✅ Your payment for Push Test Game has been confirmed");
   });
 });

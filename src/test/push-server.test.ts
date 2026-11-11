@@ -415,3 +415,33 @@ describe("sendTestPushToUserWebSubs", () => {
     }
   });
 });
+
+describe("sendPushToEvent — capacity suffix on web push", () => {
+  it("does not append a suffix for non-capacity types (payer_assigned)", async () => {
+    process.env.VAPID_PUBLIC_KEY = "test-public";
+    process.env.VAPID_PRIVATE_KEY = "test-private";
+    const owner = await seedUser("cap-web-owner");
+    const user = await seedUser("cap-web-user");
+    const event = await seedEvent("evt-cap-web", owner.id);
+    await prisma.player.create({ data: { name: "User", eventId: event.id, userId: user.id, order: 0 } });
+    await prisma.eventFollow.create({ data: { eventId: event.id, userId: user.id } });
+    await prisma.pushSubscription.create({ data: { userId: user.id, endpoint: "https://web.endpoint", p256dh: "a", auth: "b", locale: "en" } });
+
+    await sendPushToEvent(
+      event.id,
+      "Push Game",
+      "payerAssignedBody",
+      { title: "Push Game" },
+      `/events/${event.id}`,
+      0,
+      undefined,
+      "payer_assigned",
+    );
+
+    const { sendNotification } = await import("web-push");
+    expect(sendNotification).toHaveBeenCalled();
+    const payload = JSON.parse(vi.mocked(sendNotification).mock.calls[0][1]);
+    expect(payload.body).not.toContain("·");
+    expect(payload.body).not.toContain("Game is full");
+  });
+});
