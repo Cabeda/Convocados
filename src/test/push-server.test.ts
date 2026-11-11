@@ -440,7 +440,7 @@ describe("sendPushToEvent — capacity suffix on web push", () => {
 
     const { sendNotification } = await import("web-push");
     expect(sendNotification).toHaveBeenCalled();
-    const payload = JSON.parse(vi.mocked(sendNotification).mock.calls[0][1]);
+    const payload = JSON.parse(vi.mocked(sendNotification).mock.calls[0][1] as string);
     expect(payload.body).not.toContain("·");
     expect(payload.body).not.toContain("Game is full");
   });
