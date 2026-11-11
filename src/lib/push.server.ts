@@ -1,5 +1,5 @@
 import { prisma } from "./db.server";
-import { createT, type Locale, type TranslationKey } from "./i18n";
+import { createT, type Locale, type TranslationKey, type TFunction } from "./i18n";
 import { createLogger } from "./logger.server";
 import { DEFAULTS, wantsPushReminder, wantsPushWithDecision, type MuteTierDecision, type NotificationPrefs } from "./notificationPrefs.server";
 import { resolveJobAudience, type JobAudience } from "./eventAudience.server";
@@ -28,23 +28,41 @@ const FCM_PLATFORMS = ["android"];
  * (#1725). Undefined jobType (direct callers, legacy) keeps the suffix to
  * preserve prior behaviour.
  */
-const CAPACITY_JOB_TYPES = new Set<NotificationJobType>([
-  "player_joined",
-  "player_left",
-  "player_joined_bench",
-  "player_left_bench",
-  "player_left_promoted",
-  "game_full",
-  "spot_available",
-  "bench_promoted_capacity",
-  "few_spots_left",
-  "recruitment",
-  "reminder",
-]);
+const CAPACITY_JOB_TYPES: Record<NotificationJobType, boolean> = {
+  player_joined: true,
+  player_left: true,
+  player_joined_bench: true,
+  player_left_bench: true,
+  player_left_promoted: true,
+  game_full: true,
+  spot_available: true,
+  few_spots_left: true,
+  recruitment: true,
+  reminder: true,
+  event_details: true,
+  game_invite: true,
+  post_game: true,
+  // Non-capacity: spotsLeft is "not applicable" (passed as 0)
+  rsvp_request: false,
+  game_cancelled: false,
+  bench_promoted_capacity: false,
+  payment_confirmed: false,
+  payment_self_reported: false,
+  payer_assigned: false,
+  payer_changed: false,
+  payer_vacant: false,
+  player_invited: false,
+  crew_captain_nominated: false,
+  crew_captain_accepted: false,
+};
+
+function isCapacityJobType(type?: NotificationJobType): boolean {
+  if (!type) return true;
+  return CAPACITY_JOB_TYPES[type];
+}
 
 export function isCapacityNotificationType(type?: NotificationJobType): boolean {
-  if (!type) return true;
-  return CAPACITY_JOB_TYPES.has(type);
+  return isCapacityJobType(type);
 }
 
 /**
@@ -55,7 +73,7 @@ export function isCapacityNotificationType(type?: NotificationJobType): boolean 
 export function capacitySuffix(
   jobType: NotificationJobType | undefined,
   spotsLeft: number,
-  t: (key: TranslationKey, params?: Record<string, any>) => string,
+  t: TFunction,
 ): string | null {
   if (!isCapacityNotificationType(jobType)) return null;
   return spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
