@@ -21,6 +21,46 @@ const FCM_API_URL = "https://fcm.googleapis.com/v1/projects/{projectId}/messages
  */
 const FCM_PLATFORMS = ["android"];
 
+/**
+ * Job types whose `spotsLeft` payload is a real roster-capacity fact. Only
+ * these get the "· Game is full / N spots left" suffix — every other type
+ * passes `spotsLeft: 0` as "not applicable" and must not lie about the roster
+ * (#1725). Undefined jobType (direct callers, legacy) keeps the suffix to
+ * preserve prior behaviour.
+ */
+const CAPACITY_JOB_TYPES = new Set<NotificationJobType>([
+  "player_joined",
+  "player_left",
+  "player_joined_bench",
+  "player_left_bench",
+  "player_left_promoted",
+  "game_full",
+  "spot_available",
+  "bench_promoted_capacity",
+  "few_spots_left",
+  "recruitment",
+  "reminder",
+]);
+
+export function isCapacityNotificationType(type?: NotificationJobType): boolean {
+  if (!type) return true;
+  return CAPACITY_JOB_TYPES.has(type);
+}
+
+/**
+ * Shared suffix decision for both delivery channels. Returns the capacity
+ * suffix string when applicable, or null when the job type is non-capacity
+ * (or the caller should render the body verbatim).
+ */
+export function capacitySuffix(
+  jobType: NotificationJobType | undefined,
+  spotsLeft: number,
+  t: (key: TranslationKey, params?: Record<string, any>) => string,
+): string | null {
+  if (!isCapacityNotificationType(jobType)) return null;
+  return spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
+}
+
 let initialized = false;
 let _webpush: typeof webpush | null = null;
 
@@ -254,8 +294,9 @@ async function sendAppPushToEventUsers(
     }
     const t = createT((token.locale as Locale) ?? "en");
     const body = t(key, params);
-    const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
-    fcmMessages.push({ token: token.token, title, body: `${body} · ${suffix}`, data: { url, ...(jobType ? { type: jobType } : {}), ...(reminderType ? { reminderType } : {}), ...params } });
+    const suffix = capacitySuffix(jobType, spotsLeft, t);
+    const composedBody = suffix ? `${body} · ${suffix}` : body;
+    fcmMessages.push({ token: token.token, title, body: composedBody, data: { url, ...(jobType ? { type: jobType } : {}), ...(reminderType ? { reminderType } : {}), ...params } });
   }
 
   await sendFcmBatch(fcmMessages);
@@ -324,8 +365,9 @@ export async function sendPushToEvent(
 
             const t = createT((sub.locale as Locale) ?? "en");
             const body = t(key, params);
-            const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
-            const pushPayload = JSON.stringify({ title, body: `${body} · ${suffix}`, url });
+            const suffix = capacitySuffix(jobType, spotsLeft, t);
+            const composedBody = suffix ? `${body} · ${suffix}` : body;
+            const pushPayload = JSON.stringify({ title, body: composedBody, url });
 
             try {
               await webpush.sendNotification(
