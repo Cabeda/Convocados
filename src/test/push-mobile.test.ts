@@ -534,7 +534,7 @@ describe("sendPushToEvent — capacity suffix (#1725)", () => {
     const call = getFcmCalls().find((c: any[]) => getFcmToken(c) === "fcm-token-cap-1");
     expect(call).toBeDefined();
     const body = JSON.parse(call![1].body).message.data.body;
-    expect(body).toBe("You are collecting for Push Test Game. The group will see your payment details if you share them.");
+    expect(body).toBe("You are collecting for Push Test Game. Add your payment details (at least an MB WAY number) and turn on sharing so the group knows where to pay.");
   });
 
   it("still appends the suffix for capacity job types at spotsLeft 0 (FCM)", async () => {
