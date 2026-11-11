@@ -509,3 +509,84 @@ describe("sendPushToEvent — notification preferences", () => {
     expect(tokens).not.toContain("fcm-token-optout-1");
   });
 });
+
+describe("sendPushToEvent — capacity suffix (#1725)", () => {
+  it("does not append a capacity suffix for non-capacity job types at spotsLeft 0 (FCM)", async () => {
+    const ownerId = await seedUser("cap-owner", "Owner");
+    const userId = await seedUser("cap-user", "User");
+    const eventId = await seedEvent(ownerId, "evt-cap");
+    await prisma.player.create({ data: { name: "User", eventId, userId, order: 0 } });
+    await followEvent(userId, eventId);
+    await prisma.appPushToken.create({ data: { userId, token: "fcm-token-cap-1", platform: "android" } });
+
+    const { sendPushToEvent } = await import("~/lib/push.server");
+    await sendPushToEvent(
+      eventId,
+      "Push Test Game",
+      "payerAssignedBody",
+      { title: "Push Test Game" },
+      `/events/${eventId}`,
+      0,
+      undefined,
+      "payer_assigned",
+    );
+
+    const call = getFcmCalls().find((c: any[]) => getFcmToken(c) === "fcm-token-cap-1");
+    expect(call).toBeDefined();
+    const body = JSON.parse(call![1].body).message.data.body;
+    expect(body).toBe("You are collecting for Push Test Game. Add your payment details (at least an MB WAY number) and turn on sharing so the group knows where to pay.");
+  });
+
+  it("still appends the suffix for capacity job types at spotsLeft 0 (FCM)", async () => {
+    const ownerId = await seedUser("cap-owner2", "Owner");
+    const userId = await seedUser("cap-user2", "User");
+    const eventId = await seedEvent(ownerId, "evt-cap2");
+    await prisma.player.create({ data: { name: "User", eventId, userId, order: 0 } });
+    await followEvent(userId, eventId);
+    await prisma.appPushToken.create({ data: { userId, token: "fcm-token-cap-2", platform: "android" } });
+
+    const { sendPushToEvent } = await import("~/lib/push.server");
+    await sendPushToEvent(
+      eventId,
+      "Push Test Game",
+      "notifyPlayerJoined",
+      { name: "Last Player" },
+      `/events/${eventId}`,
+      0,
+      undefined,
+      "player_joined",
+    );
+
+    const call = getFcmCalls().find((c: any[]) => getFcmToken(c) === "fcm-token-cap-2");
+    expect(call).toBeDefined();
+    const body = JSON.parse(call![1].body).message.data.body;
+    expect(body).toContain("·");
+    expect(body).toContain("Game is full");
+  });
+
+  it("does not append a suffix for payment_confirmed at spotsLeft 0", async () => {
+    const ownerId = await seedUser("cap-owner3", "Owner");
+    const userId = await seedUser("cap-user3", "User");
+    const eventId = await seedEvent(ownerId, "evt-cap3");
+    await prisma.player.create({ data: { name: "User", eventId, userId, order: 0 } });
+    await followEvent(userId, eventId);
+    await prisma.appPushToken.create({ data: { userId, token: "fcm-token-cap-3", platform: "android" } });
+
+    const { sendPushToEvent } = await import("~/lib/push.server");
+    await sendPushToEvent(
+      eventId,
+      "Push Test Game",
+      "notifyPaymentConfirmed",
+      { title: "Push Test Game" },
+      `/events/${eventId}`,
+      0,
+      undefined,
+      "payment_confirmed",
+    );
+
+    const call = getFcmCalls().find((c: any[]) => getFcmToken(c) === "fcm-token-cap-3");
+    expect(call).toBeDefined();
+    const body = JSON.parse(call![1].body).message.data.body;
+    expect(body).toBe("✅ Your payment for Push Test Game has been confirmed");
+  });
+});
