@@ -54,7 +54,7 @@
     "@mui/material": "^9.5.0",
     "@prisma/adapter-better-sqlite3": "^7.10.1",
     "@prisma/client": "^7.10.1",
-    "astro": "^7.4.5",
+    "astro": "^7.4.7",
     "better-auth": "^1.7.16",
     "better-sqlite3": "^13.0.3",
     "leaflet": "^1.9.4",
