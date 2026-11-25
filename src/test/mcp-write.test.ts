@@ -278,6 +278,29 @@ describe("MCP write tools — add_player", () => {
     const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id })));
     expect(res.status).toBe(400);
   });
+
+  it("enqueues game_full when add_player fills the last spot", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id, { maxPlayers: 1 });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Solo" })));
+    expect(res.status).toBe(200);
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: event.id, type: "game_full" },
+    });
+    expect(job).toBeTruthy();
+  });
+
+  it("rejects add_player with 409 when the current game is cancelled", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    await prisma.game.update({ where: { id: event.currentGameId! }, data: { status: "cancelled" } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Alice" })));
+    expect(res.status).toBe(409);
+    const player = await prisma.eventPlayer.findFirst({ where: { eventId: event.id, name: "Alice" } });
+    expect(player).toBeNull();
+  });
 });
 
 describe("MCP write tools — remove_player", () => {

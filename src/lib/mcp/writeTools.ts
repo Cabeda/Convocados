@@ -2,12 +2,11 @@ import { prisma } from "../db.server";
 import type { AuthContext } from "../authenticate.server";
 import type { ToolDef } from "./tools";
 import { McpError } from "./errors";
-import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../rosterCore.server";
+import { resolveRosterTarget } from "../rosterCore.server";
 import { getRosterCapacity } from "../roster.server";
 import { syncGamePayments } from "../settlement.server";
 import { syncGameFromTeamResults } from "../gameDualWrite.server";
 import { splitRoster } from "../rosterCapacity";
-import { finishRosterAdd } from "../teamFormation.server";
 import { archiveAndLeave } from "../leave.server";
 import { Randomize } from "../random";
 import type { Imatch } from "../random";
@@ -16,6 +15,7 @@ import { applyFormationLayout } from "../teams";
 import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
 import { anchorDayOf, buildRecurrenceRule, parseRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
+import { applyRosterChange } from "../applyRosterChange.server";
 import { getDefaultDurationMinutes } from "../sports";
 import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
 import { fromDateTimeLocalValue } from "../timezones";
@@ -68,9 +68,6 @@ async function addPlayer(args: Record<string, unknown>, ctx: AuthContext) {
   if (!eventId) throw new McpError("eventId required", -32602, 400);
   const event = await requireEventAccess(ctx, eventId);
   if (!event.currentGameId) throw new McpError("This event has no current game.", -32001, 400);
-  if (isGameEnded(event.dateTime, event.durationMinutes)) {
-    throw new McpError("The game has already ended — players can no longer be added.", -32001, 403);
-  }
 
   let target: Awaited<ReturnType<typeof resolveRosterTarget>>;
   try {
@@ -88,37 +85,33 @@ async function addPlayer(args: Record<string, unknown>, ctx: AuthContext) {
     throw new McpError(`The bench is full (maximum ${event.maxPlayers} bench players).`, -32001, 400);
   }
 
-  const ep = await upsertEventPlayerForRoster(eventId, target);
-  await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: ep.id, status: "active" });
-  await prisma.player.upsert({
-    where: { eventId_name: { eventId, name: target.name } },
-    create: { eventId, name: target.name, userId: target.userId, order: roster.totalCount },
-    update: { userId: target.userId ?? undefined, archivedAt: null },
-  });
-  await syncGamePayments(event.currentGameId, eventId);
-
-  // Team sync seam: place when active, evict stale members, draw when full —
-  // same obligations as POST /players.
-  await finishRosterAdd(eventId, ep.name, event.maxPlayers, event.currentGameId);
-  // Response field: the pre-join active count decides whether this joiner got
-  // an active slot (roster was fetched before the upsert above).
+  // Same post-body core as POST /players and POST /roster: writes, capacity
+  // notifications, invite/owner emails, webhooks and the cancelled/ended Game
+  // guards (#1793). The pre-join active count decides the response field.
   const isActive = roster.activeCount < event.maxPlayers;
-
-  // Auto-follow + ELO seat — same side effects as POST /players.
-  if (target.userId) {
-    await prisma.eventFollow.upsert({
-      where: { eventId_userId: { eventId, userId: target.userId } },
-      create: { eventId, userId: target.userId },
-      update: {},
-    });
-  }
-  await prisma.playerRating.upsert({
-    where: { eventId_name: { eventId, name: target.name } },
-    create: { eventId, name: target.name, rating: 1000 },
-    update: {},
+  const result = await applyRosterChange({
+    eventId,
+    origin: process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev",
+    session: null,
+    body: { name: target.name, userId: target.userId, linkToAccount: false },
+    event,
   });
 
-  return { ok: true, name: target.name, userId: target.userId, isActive };
+  // The tool is idempotent: a repeat add for someone already on the roster is
+  // a success, not an error. The seam did no writes on that path.
+  if (result.status === 409 && result.body.code === "ALREADY_IN_ROSTER") {
+    return { ok: true, name: target.name, userId: target.userId, isActive };
+  }
+  if (result.status !== 200) {
+    throw new McpError(String(result.body.error ?? "Could not add player."), -32001, result.status);
+  }
+
+  return {
+    ok: true,
+    name: (result.body.resolvedName as string | undefined) ?? target.name,
+    userId: target.userId,
+    isActive,
+  };
 }
 
 async function removePlayer(args: Record<string, unknown>, ctx: AuthContext) {

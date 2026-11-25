@@ -2,8 +2,6 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { isGameEnded } from "../../../../lib/gameStatus";
-import { isCurrentGameCancelled } from "../../../../lib/currentGame.server";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { activeRosterEventPlayerById } from "../../../../lib/rosterChange.server";
 import { applyRosterChange, resetInviteRateLimitStores } from "../../../../lib/applyRosterChange.server";
@@ -44,23 +42,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Cancelling the current Game freezes the roster for that occurrence. A
-  // recurring Event has already advanced to its next Game, so this only trips
-  // while the cancelled occurrence is still current.
-  if (await isCurrentGameCancelled(event.currentGameId)) {
-    return Response.json({ error: "This game has been cancelled." }, { status: 409 });
-  }
-
-  // Once the game has ended, the roster is frozen on the event page — players
-  // must not be added after kickoff. Post-game roster fixes go through the
-  // game history (PATCH /history) instead.
-  if (isGameEnded(event.dateTime, event.durationMinutes)) {
-    return Response.json(
-      { error: "The game has already ended — players can no longer be added." },
-      { status: 403 },
-    );
-  }
-
+  // The cancelled/ended Game guards live in applyRosterChange, the post-body
+  // core every add path shares (#1793).
   const { name, linkToAccount, email, position } = await request.json();
 
   // Idempotency replay check: if the same key + same body was already processed,

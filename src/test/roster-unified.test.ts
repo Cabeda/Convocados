@@ -32,8 +32,12 @@ function eid() { return `e-${Math.random().toString(36).slice(2, 8)}`; }
 async function seedUser(name: string, email?: string) {
   return prisma.user.create({ data: { id: `u-${name}-${Math.random().toString(36).slice(2, 4)}`, name, email: email ?? `${name}${Math.random().toString(36).slice(2, 4)}@t.com`, emailVerified: true } });
 }
-async function seedEventWithGame(ownerId: string | null, dateTime = new Date(Date.now() + 48 * 3600_000)) {
-  const event = await prisma.event.create({ data: { id: eid(), title: "Game", location: "Pitch", dateTime, ownerId, maxPlayers: 10 } });
+async function seedEventWithGame(
+  ownerId: string | null,
+  dateTime = new Date(Date.now() + 48 * 3600_000),
+  maxPlayers = 10,
+) {
+  const event = await prisma.event.create({ data: { id: eid(), title: "Game", location: "Pitch", dateTime, ownerId, maxPlayers } });
   const game = await prisma.game.create({ data: { eventId: event.id, dateTime } });
   await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
   return { ...event, currentGameId: game.id };
@@ -107,5 +111,27 @@ describe("POST /api/events/[id]/roster (#814 unified endpoint)", () => {
     mockGetSession.mockResolvedValue(null);
     const res = await postRoster(ctx({ id: ev.id }, { userId: "u-x", asInvite: true }));
     expect(res.status).toBe(401);
+  });
+
+  it("enqueues game_full when the direct add fills the last spot", async () => {
+    const ev = await seedEventWithGame(null, undefined, 1);
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Alice" }));
+    expect(res.status).toBe(200);
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: ev.id, type: "game_full" },
+    });
+    expect(job).toBeTruthy();
+  });
+
+  it("answers 409 when the current game is cancelled", async () => {
+    const ev = await seedEventWithGame(null);
+    await prisma.game.update({
+      where: { id: ev.currentGameId },
+      data: { status: "cancelled" },
+    });
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Alice" }));
+    expect(res.status).toBe(409);
+    const player = await prisma.eventPlayer.findFirst({ where: { eventId: ev.id, name: "Alice" } });
+    expect(player).toBeNull();
   });
 });

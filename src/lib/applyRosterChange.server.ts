@@ -33,6 +33,8 @@ import { readPosition } from "./positions";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
 import { movePlayerToEndOfList, rejoinPlayerToCurrentGame } from "./rosterChange.server";
 import { finishRosterAdd } from "./teamFormation.server";
+import { isCurrentGameCancelled } from "./currentGame.server";
+import { isGameEnded } from "./gameStatus";
 
 const log = createLogger("players-api");
 
@@ -51,7 +53,14 @@ export type ApplyRosterChangeInput = {
   session: ApplyRosterChangeSession;
   /** Webhook/notification actor: session user id, x-client-id, or undefined. */
   senderClientId?: string;
-  body: { name?: unknown; linkToAccount?: unknown; email?: unknown; position?: unknown };
+  body: {
+    name?: unknown;
+    linkToAccount?: unknown;
+    email?: unknown;
+    position?: unknown;
+    /** Explicit account id (organizer/MCP paths); mirrors resolveRosterTarget. */
+    userId?: unknown;
+  };
   /** Event pre-fetched by the route (post 404/pickup/ended guards). */
   event: PrismaEvent;
 };
@@ -228,7 +237,20 @@ async function notifyPlayerJoined(input: {
  */
 export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<ApplyRosterChangeResult> {
   const { eventId, origin, session, senderClientId, event } = input;
-  const { name, linkToAccount, email } = input.body;
+  const { name, linkToAccount, email, userId } = input.body;
+
+  // The occurrence guards belong to the seam, not to each caller: a cancelled
+  // current Game freezes the roster and a played Game accepts no adds. POST
+  // /players, POST /roster and MCP add_player all land here (#1793).
+  if (await isCurrentGameCancelled(event.currentGameId)) {
+    return { status: 409, body: { error: "This game has been cancelled." } };
+  }
+  if (isGameEnded(event.dateTime, event.durationMinutes)) {
+    return {
+      status: 403,
+      body: { error: "The game has already ended — players can no longer be added." },
+    };
+  }
   // #1448: a position is optional and free-form input is refused — free text
   // here would make the rotation suggestion's input meaningless.
   const parsedPosition = readPosition(input.body.position);
@@ -256,14 +278,21 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
 
   // ── Resolve user by email (needed before name validation) ──────────────────
   let resolvedUser: { id: string; name: string } | null = null;
-  if (normalizedEmail) {
+  const explicitUserId = typeof userId === "string" ? userId.trim() : "";
+  if (explicitUserId) {
     const found = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { id: explicitUserId },
       select: { id: true, name: true },
     });
     // A synthetic ledger placeholder is named (and emailed) after the player it
     // charges, never a person — resolving to one links the roster row to an id
     // the human can never match and strands them on the list.
+    if (found && !isSystemUserId(found.id)) resolvedUser = found;
+  } else if (normalizedEmail) {
+    const found = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, name: true },
+    });
     if (found && !isSystemUserId(found.id)) resolvedUser = found;
   }
 
@@ -352,7 +381,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   // Email-based invite resolution
   let notifyRegisteredUserId: string | null = null;
   let inviteUnregisteredEmail: string | null = null;
-  if (normalizedEmail) {
+  if (normalizedEmail && !explicitUserId) {
     if (resolvedUser) {
       notifyRegisteredUserId = resolvedUser.id;
     } else {
@@ -530,13 +559,13 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
             });
             return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
           } else if (existing.userId === resolvedUser.id) {
-            return { status: 409, body: { error: `"${trimmed}" is already in the list.` } };
+            return { status: 409, body: { error: `"${trimmed}" is already in the list.`, code: "ALREADY_IN_ROSTER" } };
           } else {
             return { status: 409, body: { error: `"${trimmed}" is already linked to a different account.` } };
           }
         }
       }
-      return { status: 409, body: { error: `"${trimmed}" is already in the list.` } };
+      return { status: 409, body: { error: `"${trimmed}" is already in the list.`, code: "ALREADY_IN_ROSTER" } };
     }
     throw e;
   }
