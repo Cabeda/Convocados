@@ -58,7 +58,14 @@ overrides:
   browserslist@<=4.28.6: '>=4.28.7'
   deepmerge-ts@<8.0.0: '>=8.0.0'
   devalue@>=5.6.3 <=5.8.0: '>=5.8.1'
-  effect@<3.20.0: '>=3.20.0'
+  # ReDoS in Schema.TemplateLiteral's compiled regex (GHSA-7589-6fvf-x4pw,
+  # published 2026-11-19). Reached through prisma -> @prisma/config's config
+  # loader, so it is build-time only and no src file imports effect. Patched
+  # in 3.22.1; the previous >=3.20.0 floor no longer clears the advisory.
+  # The upper bound is part of the fix: an open-ended >=3.22.1 made pnpm
+  # satisfy prisma's exact 3.20.0 request with effect 4.x, a breaking major
+  # inside the config loader.
+  effect@<3.22.1: '>=3.22.1 <4.0.0'
   # max-stale can disclose cross-user cached responses (GHSA-ch52-4w7c-c8xp).
   # Reached through astro -> @astrojs/node, so it is in the server render path.
   # The advisory names >=4.2.1 as patched, but no 4.2.1 was ever published; 4.3.0
