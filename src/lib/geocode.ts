@@ -2,6 +2,15 @@
 // Parses coordinates from Google Maps URLs, raw "lat,lng" strings,
 // or falls back to Nominatim for free-text addresses.
 
+import { createLogger } from "./logger.server";
+
+const log = createLogger("geocode");
+
+/** OSMF allows at most one request per second and blocks repeat clients, and
+ *  this runs inside the Event create journey — bound every call so a stalled
+ *  upstream cannot hold a server connection. */
+const GEOCODE_TIMEOUT_MS = 3000;
+
 export interface GeoResult {
   latitude: number;
   longitude: number;
@@ -71,24 +80,18 @@ export function parseRawCoords(text: string): GeoResult | null {
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 
-/** Geocode a free-text address via Nominatim. Tries the full query first, then progressively simpler versions. */
+/**
+ * Geocode a free-text address via Nominatim.
+ *
+ * One request, not a suffix cascade: dropping leading words to probe shorter
+ * variants fired up to four calls per create, four times the OSMF limit of one
+ * request per second, which is the pattern that gets a client blocked. The
+ * location text is still stored when this returns null.
+ */
 export async function geocodeAddress(address: string): Promise<GeoResult | null> {
-  if (!address.trim()) return null;
-
-  // Try the full address first, then progressively drop leading words
-  // e.g. "Matosinhos Sports and Events Center" → "Sports and Events Center" → "Events Center"
-  const words = address.trim().split(/\s+/);
-  const attempts = [address.trim()];
-  // Add progressively shorter versions (drop from the start, keep at least 2 words)
-  for (let i = 1; i < words.length - 1; i++) {
-    attempts.push(words.slice(i).join(" "));
-  }
-
-  for (const query of attempts) {
-    const result = await nominatimSearch(query);
-    if (result) return result;
-  }
-  return null;
+  const query = address.trim();
+  if (!query) return null;
+  return nominatimSearch(query);
 }
 
 async function nominatimSearch(query: string): Promise<GeoResult | null> {
@@ -100,13 +103,21 @@ async function nominatimSearch(query: string): Promise<GeoResult | null> {
           "User-Agent": "Convocados/1.0",
           "Accept-Language": "en",
         },
+        signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
       },
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      log.warn({ query, status: res.status }, "nominatim search failed");
+      return null;
+    }
     const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return null;
+    if (!Array.isArray(data) || data.length === 0) {
+      log.info({ query }, "nominatim search returned no match");
+      return null;
+    }
     return parseCoords(data[0].lat, data[0].lon);
-  } catch {
+  } catch (err) {
+    log.warn({ query, err }, "nominatim search errored");
     return null;
   }
 }
@@ -121,8 +132,12 @@ async function reverseGeocodeName(latitude: number, longitude: number): Promise<
         "User-Agent": "Convocados/1.0",
         "Accept-Language": "en",
       },
+      signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      log.warn({ latitude, longitude, status: res.status }, "nominatim reverse geocode failed");
+      return null;
+    }
     const data = await res.json();
     if (!data || typeof data !== "object") return null;
     if (typeof data.name === "string" && data.name.trim()) return data.name.trim();
@@ -146,10 +161,16 @@ async function withMapsLinkName(url: string, coords: GeoResult): Promise<GeoResu
 /** Follow a short URL redirect (e.g. goo.gl/maps, maps.app.goo.gl) to get the full URL. */
 async function resolveShortUrl(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { method: "HEAD", redirect: "manual" });
+    const res = await fetch(url, {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
+    });
     const location = res.headers.get("location");
+    if (!location) log.info({ url }, "short maps link had no redirect");
     return location || null;
-  } catch {
+  } catch (err) {
+    log.warn({ url, err }, "short maps link resolution errored");
     return null;
   }
 }
