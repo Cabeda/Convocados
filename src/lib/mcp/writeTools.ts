@@ -15,7 +15,7 @@ import { balanceTeams, processGame } from "../elo.server";
 import { applyFormationLayout } from "../teams";
 import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
-import { buildRecurrenceRule, parseRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
+import { anchorDayOf, buildRecurrenceRule, parseRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
 import { getDefaultDurationMinutes } from "../sports";
 import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
 import { fromDateTimeLocalValue } from "../timezones";
@@ -450,21 +450,27 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
     data.dateTime = dateTime;
   }
 
-  // A reschedule moves the occurrence: re-anchor a monthly/yearly series to the
-  // edited day, or the next advance would snap back to the old anchor (#1788).
+  // A reschedule that changes the day moves the series occurrence. A time- or
+  // timezone-only edit keeps the anchor: re-anchoring a 31st series from its
+  // clamped Feb 28 occurrence would silently move it to the 28th (#1788).
   const existingRule = parseRecurrenceRule(event.recurrenceRule);
   if (
     (data.dateTime || data.timezone) &&
     existingRule &&
     (existingRule.freq === "monthly" || existingRule.freq === "yearly")
   ) {
-    data.recurrenceRule = serializeRecurrenceRule(
-      buildRecurrenceRule(
-        existingRule,
-        data.dateTime ?? event.dateTime,
-        data.timezone ?? event.timezone ?? "UTC",
-      ),
+    const currentDay = anchorDayOf(event.dateTime, event.timezone ?? "UTC");
+    const editedDay = anchorDayOf(
+      data.dateTime ?? event.dateTime,
+      data.timezone ?? event.timezone ?? "UTC",
     );
+    const nextAnchor = editedDay === currentDay ? (existingRule.anchorDay ?? currentDay) : editedDay;
+    if (nextAnchor !== existingRule.anchorDay) {
+      data.recurrenceRule = serializeRecurrenceRule({
+        ...existingRule,
+        anchorDay: nextAnchor,
+      });
+    }
   }
 
   if (Object.keys(data).length === 0) {

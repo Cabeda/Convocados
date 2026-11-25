@@ -8,7 +8,7 @@ import { fireWebhooks } from "../../../../lib/webhook.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { getRosterCapacity } from "../../../../lib/roster.server";
 import {
-  buildRecurrenceRule,
+  anchorDayOf,
   parseRecurrenceRule,
   serializeRecurrenceRule,
 } from "../../../../lib/recurrence";
@@ -51,22 +51,28 @@ export const PUT: APIRoute = async ({ params, request }) => {
     updates.timezone = timezoneRaw;
   }
 
-  // A reschedule moves the series occurrence (same as before #1788, when the
-  // edited date became the base). Re-anchor a monthly/yearly rule to the new
-  // day, otherwise the next advance would snap the series back to the old one.
+  // A reschedule that changes the day moves the series occurrence (same as
+  // before #1788). A time- or timezone-only edit must NOT re-anchor from a
+  // clamped occurrence: a 31st series sitting on Feb 28 would otherwise
+  // silently become a 28th series.
   const existingRule = parseRecurrenceRule(event.recurrenceRule);
   if (
     (updates.dateTime || updates.timezone) &&
     existingRule &&
     (existingRule.freq === "monthly" || existingRule.freq === "yearly")
   ) {
-    updates.recurrenceRule = serializeRecurrenceRule(
-      buildRecurrenceRule(
-        existingRule,
-        updates.dateTime ?? event.dateTime,
-        updates.timezone ?? event.timezone ?? "UTC",
-      ),
+    const currentDay = anchorDayOf(event.dateTime, event.timezone ?? "UTC");
+    const editedDay = anchorDayOf(
+      updates.dateTime ?? event.dateTime,
+      updates.timezone ?? event.timezone ?? "UTC",
     );
+    const nextAnchor = editedDay === currentDay ? (existingRule.anchorDay ?? currentDay) : editedDay;
+    if (nextAnchor !== existingRule.anchorDay) {
+      updates.recurrenceRule = serializeRecurrenceRule({
+        ...existingRule,
+        anchorDay: nextAnchor,
+      });
+    }
   }
 
   if (Object.keys(updates).length === 0) {

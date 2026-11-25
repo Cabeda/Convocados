@@ -172,6 +172,28 @@ describe("PUT /api/events/[id]/datetime", () => {
     });
   });
 
+  it("keeps the anchor on a time-only edit of a clamped occurrence", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Monthly",
+        location: "Pitch A",
+        dateTime: new Date("2027-02-28T19:00:00Z"),
+        timezone: "UTC",
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "monthly", interval: 1, anchorDay: 31 }),
+      },
+    });
+
+    const res = await updateDateTime(
+      putCtx({ id: event.id }, { dateTime: "2027-02-28T20:30:00Z" }),
+    );
+    expect(res.status).toBe(200);
+
+    const after = await prisma.event.findUnique({ where: { id: event.id } });
+    // The occurrence is clamped to Feb 28, but the series is still a 31st.
+    expect(JSON.parse(after!.recurrenceRule!).anchorDay).toBe(31);
+  });
+
   it("returns 403 when non-owner tries to update an owned event", async () => {
     const owner = await prisma.user.create({
       data: { id: "owner-1", name: "Owner", email: "owner@test.com", emailVerified: false },
