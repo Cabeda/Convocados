@@ -7,6 +7,11 @@ import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/schedul
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { getRosterCapacity } from "../../../../lib/roster.server";
+import {
+  buildRecurrenceRule,
+  parseRecurrenceRule,
+  serializeRecurrenceRule,
+} from "../../../../lib/recurrence";
 
 const log = createLogger("datetime-api");
 
@@ -27,7 +32,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const dateTimeRaw = body.dateTime !== undefined ? String(body.dateTime) : null;
   const timezoneRaw = body.timezone !== undefined ? String(body.timezone).trim().slice(0, 100) : null;
 
-  const updates: { dateTime?: Date; timezone?: string } = {};
+  const updates: { dateTime?: Date; timezone?: string; recurrenceRule?: string } = {};
 
   if (dateTimeRaw !== null) {
     const dateTime = new Date(dateTimeRaw);
@@ -44,6 +49,24 @@ export const PUT: APIRoute = async ({ params, request }) => {
       return Response.json({ error: "Invalid timezone." }, { status: 400 });
     }
     updates.timezone = timezoneRaw;
+  }
+
+  // A reschedule moves the series occurrence (same as before #1788, when the
+  // edited date became the base). Re-anchor a monthly/yearly rule to the new
+  // day, otherwise the next advance would snap the series back to the old one.
+  const existingRule = parseRecurrenceRule(event.recurrenceRule);
+  if (
+    (updates.dateTime || updates.timezone) &&
+    existingRule &&
+    (existingRule.freq === "monthly" || existingRule.freq === "yearly")
+  ) {
+    updates.recurrenceRule = serializeRecurrenceRule(
+      buildRecurrenceRule(
+        existingRule,
+        updates.dateTime ?? event.dateTime,
+        updates.timezone ?? event.timezone ?? "UTC",
+      ),
+    );
   }
 
   if (Object.keys(updates).length === 0) {

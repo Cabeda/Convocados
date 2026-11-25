@@ -148,6 +148,30 @@ describe("PUT /api/events/[id]/datetime", () => {
     expect(res.status).toBe(404);
   });
 
+  it("re-anchors a monthly series when its occurrence is rescheduled", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Monthly",
+        location: "Pitch A",
+        dateTime: new Date("2027-01-15T19:00:00Z"),
+        timezone: "UTC",
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "monthly", interval: 1, anchorDay: 15 }),
+      },
+    });
+
+    const res = await updateDateTime(
+      putCtx({ id: event.id }, { dateTime: "2027-01-20T19:00:00Z" }),
+    );
+    expect(res.status).toBe(200);
+
+    const after = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(JSON.parse(after!.recurrenceRule!)).toMatchObject({
+      freq: "monthly",
+      anchorDay: 20,
+    });
+  });
+
   it("returns 403 when non-owner tries to update an owned event", async () => {
     const owner = await prisma.user.create({
       data: { id: "owner-1", name: "Owner", email: "owner@test.com", emailVerified: false },

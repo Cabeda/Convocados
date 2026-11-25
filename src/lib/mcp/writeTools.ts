@@ -15,7 +15,7 @@ import { balanceTeams, processGame } from "../elo.server";
 import { applyFormationLayout } from "../teams";
 import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
-import { buildRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
+import { buildRecurrenceRule, parseRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
 import { getDefaultDurationMinutes } from "../sports";
 import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
 import { fromDateTimeLocalValue } from "../timezones";
@@ -398,7 +398,7 @@ async function createEvent(args: Record<string, unknown>, ctx: AuthContext) {
 async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string | undefined;
   if (!eventId) throw new McpError("eventId required", -32602, 400);
-  await requireEventAccess(ctx, eventId);
+  const event = await requireEventAccess(ctx, eventId);
 
   const data: {
     title?: string;
@@ -408,6 +408,7 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
     isPublic?: boolean;
     timezone?: string;
     dateTime?: Date;
+    recurrenceRule?: string;
   } = {};
 
   if (args.title !== undefined) {
@@ -447,6 +448,23 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
     if (isNaN(dateTime.getTime())) throw new McpError("Invalid dateTime", -32602, 400);
     if (dateTime.getTime() <= Date.now()) throw new McpError("dateTime must be in the future", -32602, 400);
     data.dateTime = dateTime;
+  }
+
+  // A reschedule moves the occurrence: re-anchor a monthly/yearly series to the
+  // edited day, or the next advance would snap back to the old anchor (#1788).
+  const existingRule = parseRecurrenceRule(event.recurrenceRule);
+  if (
+    (data.dateTime || data.timezone) &&
+    existingRule &&
+    (existingRule.freq === "monthly" || existingRule.freq === "yearly")
+  ) {
+    data.recurrenceRule = serializeRecurrenceRule(
+      buildRecurrenceRule(
+        existingRule,
+        data.dateTime ?? event.dateTime,
+        data.timezone ?? event.timezone ?? "UTC",
+      ),
+    );
   }
 
   if (Object.keys(data).length === 0) {

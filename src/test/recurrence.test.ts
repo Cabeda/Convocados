@@ -330,6 +330,17 @@ describe("nextOccurrence — monthly", () => {
     expect(next.toISOString().slice(0, 10)).toBe("2026-02-28");
   });
 
+  it("clamps a malformed stored anchor instead of rolling into another month", () => {
+    const jan15 = new Date("2026-01-15T18:00:00Z");
+    const after = new Date("2026-01-15T19:00:00Z");
+    // 0 would setUTCDate(0) = 31 Dec, 32 would roll into March, NaN would
+    // produce an Invalid Date. All three must stay inside February.
+    for (const anchorDay of [0, 32, Number.NaN]) {
+      const next = nextOccurrence(jan15, { freq: "monthly", interval: 1, anchorDay }, after);
+      expect(next.toISOString().slice(0, 7)).toBe("2026-02");
+    }
+  });
+
   it("skips multiple months to get past after", () => {
     const rule: RecurrenceRule = { freq: "monthly", interval: 1 };
     const after = new Date("2026-06-01T00:00:00Z");
