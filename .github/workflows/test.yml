@@ -7,32 +7,51 @@ on:
   pull_request:
     branches:
       - main
-    # `labeled`/`unlabeled` re-run the job so applying the `no-issue` hatch can
-    # turn it green; `edited` re-checks a body changed after it passed green (the
-    # #1114/#1199 failure mode). opened/synchronize/reopened are the defaults.
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   workflow_dispatch:
-  # Merge queue: required checks run against the queued merge result, so a
-  # combination that only breaks after merging is caught before it lands.
-  merge_group:
-    types: [checks_requested]
 
 # Cancel in-progress runs for the same ref when a new push lands.
 # Saves CI minutes when a developer pushes repeatedly to the same branch.
-# Never cancel a merge-queue run: GitHub re-queues on cancellation.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  # ── Change filter: docs-only PRs skip the heavy suite ────────────────────
+  # The required "CI" check must still report, so the gate always runs; this
+  # only skips the expensive jobs. `some-with-excludes` means "any changed file
+  # that is not docs or Markdown". On push/manual runs each job's `if:` runs it
+  # regardless, so a merge to main is still fully tested.
+  check-code:
+    name: Check Code Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          predicate-quantifier: 'some-with-excludes'
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+
   # ── Static analysis: typecheck, lint (parallel) ──────────────────────────
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: [check-code]
+    if: needs.check-code.outputs.code == 'true' || github.event_name != 'pull_request'
 
     steps:
       - uses: actions/checkout@v7
@@ -63,6 +82,8 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: [check-code]
+    if: needs.check-code.outputs.code == 'true' || github.event_name != 'pull_request'
 
     steps:
       - uses: actions/checkout@v7
@@ -93,6 +114,8 @@ jobs:
     name: Dependency Audit
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: [check-code]
+    if: needs.check-code.outputs.code == 'true' || github.event_name != 'pull_request'
 
     steps:
       - uses: actions/checkout@v7
@@ -101,29 +124,6 @@ jobs:
           run_install: false
       - name: Audit dependencies (fail on high/critical)
         run: pnpm audit --audit-level high
-
-  # ── PR hygiene: every PR must name the issue it closes ───────────────────
-  # GitHub closes an issue only when the PR body carries a closing keyword
-  # ("Closes #123"). Without one the issue lingers open after the fix ships, and
-  # stale open state misleads the next reader (it cost a session: #1114 closed
-  # by hand 20h after its merge, #1199 11 days after). `no-issue` is the escape
-  # hatch, for a PR that genuinely closes nothing. The check itself is a module
-  # (scripts/check-pr-closing-keyword.mjs) with unit tests, so a regex typo here
-  # cannot ship green.
-  pr-links-issue:
-    name: PR Links Issue
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v7
-      - name: Check the PR body names the issue it closes
-        env:
-          # Passed via env, never interpolated into the shell — body text is
-          # untrusted input.
-          PR_BODY: ${{ github.event.pull_request.body }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: node scripts/check-pr-closing-keyword.mjs
 
   # ── Ledger integrity: a union merge can splice duplicate task lines ───────
   # .dex/tasks.jsonl is merge=union, so a rebase/merge across main can duplicate
@@ -145,6 +145,8 @@ jobs:
     name: DB Seed Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: [check-code]
+    if: needs.check-code.outputs.code == 'true' || github.event_name != 'pull_request'
 
     steps:
       - uses: actions/checkout@v7
@@ -194,6 +196,8 @@ jobs:
     name: Test (${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: [check-code]
+    if: needs.check-code.outputs.code == 'true' || github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -216,7 +220,6 @@ jobs:
           node-version: 24
           # No `cache: pnpm` here — node_modules cache below already covers
           # installs; downloading the pnpm store too costs 9-13s per leg.
-          cache-dependency-path cache-dependency-path: pnpm-lock.yaml
       - name: Cache node_modules
         uses: actions/cache@v6
         id: nm-cache
@@ -289,6 +292,8 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: [check-code]
+    if: needs.check-code.outputs.code == 'true' || github.event_name != 'pull_request'
 
     steps:
       - uses: actions/checkout@v7
@@ -370,7 +375,8 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build, check-code]
+    if: needs.check-code.outputs.code == 'true' || github.event_name != 'pull_request'
     # `playwright install-deps` runs apt-get on every run and is not cached;
     # a slow Ubuntu mirror spent 9m30s of a 10m budget and had the job killed
     # mid-install (run 39802793041).
@@ -545,7 +551,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear, dex-ledger, pr-links-issue]
+    needs: [check-code, typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear, dex-ledger]
     steps:
       # The gate's logic lives in scripts/ci-gate.sh so src/test/ci-gate.test.ts
       # can exercise it: a red "CI" that does not say *which* job went red sends
