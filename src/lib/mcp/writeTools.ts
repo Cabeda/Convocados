@@ -15,7 +15,7 @@ import { balanceTeams, processGame } from "../elo.server";
 import { applyFormationLayout } from "../teams";
 import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
-import { serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
+import { buildRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
 import { getDefaultDurationMinutes } from "../sports";
 import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
 import { fromDateTimeLocalValue } from "../timezones";
@@ -351,11 +351,11 @@ async function createEvent(args: Record<string, unknown>, ctx: AuthContext) {
     const rawFreq = args.recurrenceFreq;
     const freq = rawFreq && (VALID_RECURRENCE_FREQS as readonly string[]).includes(rawFreq as string) ? (rawFreq as string) : null;
     if (freq) {
-      const rule: RecurrenceRule = {
+      const rule = buildRecurrenceRule({
         freq: freq as RecurrenceRule["freq"],
         interval: isNaN(parseInt(String(args.recurrenceInterval ?? "1"), 10)) ? 1 : Math.max(1, parseInt(String(args.recurrenceInterval ?? "1"), 10)),
         ...(typeof args.recurrenceByDay === "string" ? { byDay: args.recurrenceByDay } : {}),
-      };
+      }, dateTime, timezone);
       recurrenceRule = serializeRecurrenceRule(rule);
       nextResetAt = new Date(dateTime.getTime() + durationMinutes * 60 * 1000);
     }

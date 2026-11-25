@@ -3,7 +3,7 @@
  * event GET handler into a shared module, plus a cron sweep so recurring
  * events advance (and re-arm reminders/webhooks) without waiting for a visit.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { advanceDueRecurringEvent } from "~/lib/advanceOccurrence.server";
 import { POST as cronAdvance } from "~/pages/api/cron/advance-recurring";
@@ -278,5 +278,65 @@ describe("POST /api/cron/advance-recurring", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe("advanceDueRecurringEvent — month-end anchor (#1788)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("clamps February but keeps the 31st for March", async () => {
+    vi.setSystemTime(new Date("2026-02-01T00:00:00Z"));
+    const user = await prisma.user.create({
+      data: {
+        id: uid("user"),
+        name: "Month End",
+        email: `${uid("mail")}@test.com`,
+        emailVerified: true,
+      },
+    });
+    // Legacy rule without anchorDay, as every row created before #1788.
+    const seeded = await prisma.event.create({
+      data: {
+        id: uid("evt"),
+        title: "Monthly Game",
+        location: "Field",
+        dateTime: new Date("2026-01-31T19:00:00Z"),
+        timezone: "UTC",
+        maxPlayers: 10,
+        ownerId: user.id,
+        durationMinutes: 60,
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "monthly", interval: 1 }),
+        nextResetAt: new Date("2026-01-31T20:00:00Z"),
+      },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: seeded.id, dateTime: seeded.dateTime, status: "upcoming" },
+    });
+    await prisma.event.update({
+      where: { id: seeded.id },
+      data: { currentGameId: game.id },
+    });
+
+    const first = (await load(seeded.id))!;
+    expect(await advanceDueRecurringEvent(first)).toBe("advanced");
+    const february = (await load(seeded.id))!;
+    expect(february.dateTime.toISOString().slice(0, 10)).toBe("2026-02-28");
+    expect(JSON.parse(february.recurrenceRule!).anchorDay).toBe(31);
+
+    vi.setSystemTime(new Date("2026-02-28T21:00:00Z"));
+    await prisma.event.update({
+      where: { id: seeded.id },
+      data: { nextResetAt: new Date("2026-02-28T20:00:00Z") },
+    });
+    const second = (await load(seeded.id))!;
+    expect(await advanceDueRecurringEvent(second)).toBe("advanced");
+    const march = (await load(seeded.id))!;
+    expect(march.dateTime.toISOString().slice(0, 10)).toBe("2026-03-31");
   });
 });

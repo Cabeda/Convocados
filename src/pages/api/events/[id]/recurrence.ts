@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { serializeRecurrenceRule, type RecurrenceRule } from "../../../../lib/recurrence";
+import { buildRecurrenceRule, serializeRecurrenceRule } from "../../../../lib/recurrence";
 import { getDefaultDurationMinutes } from "../../../../lib/sports";
 
 const VALID_FREQS = ["daily", "weekly", "monthly", "yearly"] as const;
@@ -50,11 +50,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
     ? body.recurrenceByDay.trim()
     : undefined;
 
-  const rule: RecurrenceRule = {
+  const rule = buildRecurrenceRule({
     freq: rawFreq,
     interval: Number.isNaN(interval) || interval < 1 ? 1 : interval,
     ...(byDay ? { byDay } : {}),
-  };
+  }, event.dateTime, event.timezone);
 
   const durationMinutes = event.durationMinutes || getDefaultDurationMinutes(event.sport);
   const nextResetAt = new Date(event.dateTime.getTime() + durationMinutes * 60_000);
