@@ -1,0 +1,247 @@
+# The Fixer: one Explorer-filed Issue at a time, worked into a Change.
+#
+# The queue is the Explorer's label, not a human's. An Issue filed by the daily
+# review or an Explorer is a standing offer (AGENTS.md → The Delivery Factory),
+# so this workflow drains that queue oldest-first, one Change at a time. It never
+# merges, and it never promotes an Issue to `ready-for-agent` — that stays
+# Cabeda's decision, and it hands the Issue to the Factory instead.
+name: "factory: fix"
+
+on:
+  # A cron rather than `issues: labeled`, because the queue it drains is mostly a
+  # backlog: a new Issue must not jump thirty older ones, and a run that finishes
+  # early is picked up by the next tick instead of waiting for an event.
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to work. Empty drains the queue, oldest first."
+        required: false
+        type: string
+
+# One run at a time. A second run waits, and because it re-reads the queue when
+# it starts, a skipped tick loses nothing.
+concurrency:
+  group: factory-fix-queue
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  # Reads the queue and takes the Claim. Separate from the agent so the Claim is
+  # written before any work starts: a run that dies still owns its Issue until
+  # the Claim goes stale, and the next tick does not pick the same one.
+  queue:
+    runs-on: ubuntu-latest
+    if: >-
+      vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_APP_ID != '' &&
+      vars.FACTORY_MODEL != ''
+    permissions:
+      issues: write
+      pull-requests: read
+    outputs:
+      issue: ${{ steps.pick.outputs.issue }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Pick the next Issue
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_ISSUE: ${{ inputs.issue }}
+        run: |
+          if [ -n "${DISPATCH_ISSUE:-}" ]; then
+            echo "issue=${DISPATCH_ISSUE}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node scripts/factory/next-issue.ts
+
+      - name: Claim it
+        if: steps.pick.outputs.issue != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ steps.pick.outputs.issue }}
+        run: |
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "factory: claiming"
+
+  # Work. Nothing here writes to the remote: the App token is minted in `deliver`
+  # below, *after* this job. An App token lives 60 minutes and this step may run
+  # 110 — minting it here is how #937 finished a green change and lost it to
+  # `Bad credentials` while the job still reported success.
+  fix:
+    needs: queue
+    if: >-
+      needs.queue.outputs.issue != '' &&
+      vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_APP_ID != '' &&
+      vars.FACTORY_MODEL != ''
+    runs-on: ubuntu-latest
+    # The read-and-claim token: no push, no PR scope, so the split is enforced
+    # rather than merely instructed (ADR 0046).
+    permissions:
+      contents: read
+      issues: write
+    timeout-minutes: 130
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+
+      - name: Run the Fixer
+        # The real budget. A step that times out exits non-zero, and this absorbs
+        # it, so the job — and therefore the Change's check list — stays green.
+        timeout-minutes: 110
+        # Advisory, not a gate: an agent that wanders until the timeout must not
+        # redden the very Checks it exists to serve.
+        continue-on-error: true
+        uses: anomalyco/opencode/github@latest
+        env:
+          # The job's own token: read the repo and report. It cannot push or open
+          # a Change even if it outlives the run.
+          GITHUB_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: ${{ vars.FACTORY_MODEL }}
+          agent: fixer
+          # A shared session publishes the transcript, and a transcript of a
+          # failing run can quote a DATABASE_URL or a token. Permanently off.
+          share: "false"
+          use_github_token: true
+          prompt: |
+            Work Issue #${{ needs.queue.outputs.issue }} as the Fixer, in Issue mode.
+
+            Follow `.opencode/agents/fixer.md`, and read `.opencode/skills/high-quality-pr/SKILL.md`
+            before you design anything. The Issue is already claimed.
+
+            Branch `factory/${{ needs.queue.outputs.issue }}-<slug>` from `origin/main`. Reproduce
+            the defect with a test that fails for the reason the Issue describes, and keep the
+            failure output. Then the smallest fix, then `bash scripts/factory/gate.sh` (add
+            `--skip-android` only if the diff cannot touch Kotlin). Commit.
+
+            Then write `.factory-handoff/`: `status` (`review` or `blocked`), `branch`, `title`,
+            `pr-body.md` (the skill's template, with the red-before/green-after reproduction), and
+            `comment.md` (what changed, the linked Issue, the Gates passed, the coverage delta).
+
+            Do not push, open the Change, comment, or label: the `deliver` job does that with a
+            token minted after you finish. If the Issue has no verifiable acceptance criterion, or
+            the work does not fit 400 lines / 20 files, that is Blocked — say so in the handoff and
+            stop.
+
+      # Lose nothing if the run stopped mid-edit: uncommitted work becomes a
+      # commit on the agent's branch and rides the same bundle.
+      - name: Package the work for delivery
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .factory-handoff
+          branch="$(cat .factory-handoff/branch 2>/dev/null || git branch --show-current)"
+          case "$branch" in
+            factory/*) ;;
+            *) echo "No factory branch; nothing to deliver."; exit 0 ;;
+          esac
+          if ! git rev-parse --verify --quiet "refs/heads/$branch" >/dev/null; then
+            echo "Branch $branch does not exist; nothing to deliver."
+            exit 0
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git -c user.name="convocados-factory[bot]" \
+                -c user.email="convocados-factory[bot]@users.noreply.github.com" \
+                commit -m "factory: work in progress for #${{ needs.queue.outputs.issue }}"
+          fi
+          if [ "$(git rev-list --count "origin/main..$branch")" = "0" ]; then
+            echo "$branch has no commits beyond origin/main; nothing to deliver."
+            exit 0
+          fi
+          git bundle create .factory-handoff/change.bundle "origin/main..$branch"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: factory-handoff
+          path: .factory-handoff/
+          # The directory is hidden, and v4+ skips hidden paths by default:
+          # without this the upload reports "no files were found" and the run is
+          # delivered as an empty Blocked (observed on run 39447497995).
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  # The only job that writes to GitHub. Its token is minted here, after the agent
+  # has finished, so it is valid for the few seconds this takes no matter how
+  # long the work took.
+  deliver:
+    needs: [queue, fix]
+    if: >-
+      always() &&
+      needs.queue.outputs.issue != '' &&
+      vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_APP_ID != '' &&
+      vars.FACTORY_MODEL != ''
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # The bundle's prerequisite is the origin/main the agent branched
+          # from, which may no longer be the tip. A shallow clone cannot
+          # satisfy that prerequisite, so delivery needs real history.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        # A run that produced nothing still needs a voice: the script reports
+        # Blocked instead of leaving the Issue looking unclaimed.
+        continue-on-error: true
+        with:
+          name: factory-handoff
+          path: .factory-handoff
+
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Least privilege, stated per run: contents to push factory/*,
+          # pull-requests to open Changes and comment, issues to label and file
+          # the evidence. No workflows permission, so the fixer cannot edit the
+          # workflows that run it.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Push the branch, open the Change, and report
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE: ${{ needs.queue.outputs.issue }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HANDOFF_DIR: .factory-handoff
+        run: node scripts/factory/deliver.ts
