@@ -2,9 +2,16 @@
 // Parses coordinates from Google Maps URLs, raw "lat,lng" strings,
 // or falls back to Nominatim for free-text addresses.
 
+import { createHash } from "node:crypto";
 import { createLogger } from "./logger.server";
 
 const log = createLogger("geocode");
+
+/** Correlate retries without writing a user-typed address (possibly a private
+ *  residence) to the log. Eight hex chars are enough to match lines by hand. */
+function queryRef(query: string): string {
+  return createHash("sha256").update(query).digest("hex").slice(0, 8);
+}
 
 /** OSMF allows at most one request per second and blocks repeat clients, and
  *  this runs inside the Event create journey — bound every call so a stalled
@@ -107,17 +114,17 @@ async function nominatimSearch(query: string): Promise<GeoResult | null> {
       },
     );
     if (!res.ok) {
-      log.warn({ query, status: res.status }, "nominatim search failed");
+      log.warn({ queryRef: queryRef(query), status: res.status }, "nominatim search failed");
       return null;
     }
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) {
-      log.info({ query }, "nominatim search returned no match");
+      log.info({ queryRef: queryRef(query) }, "nominatim search returned no match");
       return null;
     }
     return parseCoords(data[0].lat, data[0].lon);
   } catch (err) {
-    log.warn({ query, err }, "nominatim search errored");
+    log.warn({ queryRef: queryRef(query), err }, "nominatim search errored");
     return null;
   }
 }
@@ -135,17 +142,22 @@ async function reverseGeocodeName(latitude: number, longitude: number): Promise<
       signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
     });
     if (!res.ok) {
-      log.warn({ latitude, longitude, status: res.status }, "nominatim reverse geocode failed");
+      log.warn({ status: res.status }, "nominatim reverse geocode failed");
       return null;
     }
     const data = await res.json();
-    if (!data || typeof data !== "object") return null;
+    if (!data || typeof data !== "object") {
+      log.info("nominatim reverse geocode returned no object");
+      return null;
+    }
     if (typeof data.name === "string" && data.name.trim()) return data.name.trim();
     if (typeof data.display_name === "string") {
       return data.display_name.split(",")[0]?.trim() || null;
     }
+    log.info("nominatim reverse geocode returned no name");
     return null;
-  } catch {
+  } catch (err) {
+    log.warn({ err }, "nominatim reverse geocode errored");
     return null;
   }
 }
@@ -167,10 +179,10 @@ async function resolveShortUrl(url: string): Promise<string | null> {
       signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
     });
     const location = res.headers.get("location");
-    if (!location) log.info({ url }, "short maps link had no redirect");
+    if (!location) log.info("short maps link had no redirect");
     return location || null;
   } catch (err) {
-    log.warn({ url, err }, "short maps link resolution errored");
+    log.warn({ err }, "short maps link resolution errored");
     return null;
   }
 }
