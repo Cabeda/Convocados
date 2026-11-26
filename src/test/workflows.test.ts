@@ -402,3 +402,25 @@ describe("a dead run still hands over its branch", () => {
     expect(records, "it must be written before the bundle").toBeLessThan(bundles);
   });
 });
+
+describe("the merge gate and the Reviewer's verdict", () => {
+  it("merges only through the tested decision, on the commit it decided about", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-merge.yml"), "utf8");
+    expect(raw).toContain("factory-merge-run.ts");
+    const run = readFileSync(join(process.cwd(), "scripts/factory/factory-merge-run.ts"), "utf8");
+    expect(run).toContain("--match-head-commit");
+  });
+
+  it("fails the review when no verdict was written", () => {
+    // Silence used to read as approval: the reviewer's step had
+    // continue-on-error, so a 25-minute timeout posted nothing and passed.
+    const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+    expect(raw).toContain("Record the verdict");
+    expect(raw).toContain("no verdict was written");
+  });
+
+  it("lets the Reviewer write the verdict file and nothing else", () => {
+    const raw = readFileSync(join(process.cwd(), ".opencode/agents/reviewer.md"), "utf8");
+    expect(raw).toContain('".factory-review/**": allow');
+  });
+});

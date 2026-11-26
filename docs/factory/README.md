@@ -17,7 +17,8 @@ factory:explored Issue (an Explorer or the daily review filed it)
                      open the Change with `Closes #<issue>`
   → Reviewer: independent review against Mission + Core Principles
   → findings → Fixer again on the same branch (≤3 rounds), then Cabeda decides
-  → CABEDA. Always Cabeda.
+  → Merge gate: green · Reviewer approved · **two-way door** → merged
+  → CABEDA for a one-way door. Always Cabeda.
 
 ready-for-agent Issue (Cabeda's label)
   → Factory: the same Gate 1 and the same delivery, without the reproduction contract
@@ -65,6 +66,7 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 | Agent | Trigger | May | May not |
 |---|---|---|---|
 | `fixer` | `schedule` (30 min): the oldest `factory:explored` Issue with no open Change, no `factory:blocked` and no live Claim — or a review that carries findings | reproduce, edit, commit, gate, write the handoff; in repair mode push to that `factory/*` branch | push in Issue mode, open a Change, merge, label, touch a human branch or a second Issue |
+| `merge` | `schedule` (30 min) | merge a factory Change that is green, approved and a two-way door | merge a one-way door, a draft, a stale branch, or anything the Reviewer refused |
 | `factory` | Issue labelled `ready-for-agent` | edit, commit, write the handoff artifact | push, open a Change, merge, release, label, touch a human branch (the `deliver` job pushes and opens the Change with a token minted after the run) |
 | `repairer` | Gate red | same as factory, budget 3 | exceed its Attempt budget |
 | `reviewer` | `pull_request` opened/synchronize | comment, mark findings for the Fixer | approve; push; edit; review a Change it cannot reach |
@@ -103,6 +105,26 @@ docs/explorations/<focus>/     # Explorer memory
 The gate lives in a script, not in a prompt. A prompt can be ignored; a script that exits
 non-zero cannot. Every rule about measurements lives in `AGENTS.md` and is enforced by that
 script, and the two must be changed in the same PR.
+
+## Merging: the two-way door
+
+A machine merges only what a human could undo by reverting one commit. That is the whole rule, and
+it is a list of paths, not a judgement: `scripts/factory/automerge-eligibility.ts` names every
+**one-way door** — migrations, schema, auth and token handling, workflows, `AGENTS.md`,
+dependencies, the Android build, deploy config, the scheduler, the measurement — and
+`factory-merge.yml` merges nothing that contains one.
+
+Three conditions, all required:
+
+- **the required Checks are green on the head** (`CI` and its members, `Analyze
+  (javascript-typescript)` — a missing check is not a pass);
+- **the Reviewer's verdict is `approve` and names that exact head** — the merge reads the marker,
+  not the job status, because a scheduled review's check attaches to the default branch, not the PR;
+- **the Change is not behind its base and not a draft** — a green run on a stale base proves
+  nothing about the base it lands on (#1256).
+
+The merge uses `--match-head-commit`, so a push between the decision and the merge cannot land
+untested code.
 
 ## Enforcement
 

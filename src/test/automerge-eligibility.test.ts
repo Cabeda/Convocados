@@ -7,7 +7,11 @@
 import { describe, expect, it } from "vitest";
 import {
   decideAutomerge,
+  decideFactoryMerge,
   explain,
+  type FactoryFacts,
+  isTwoWayDoor,
+  latestReview,
   REQUIRED_CHECKS,
   type Check,
   type PullRequestFacts,
@@ -167,5 +171,109 @@ describe("explain() is usable as an audit line", () => {
   it("carries the reasons when not eligible", () => {
     const p = pr({ number: 7, commitsBehindBase: 1 });
     expect(explain(p, decideAutomerge(p))).toMatch(/not eligible: .*behind base/);
+  });
+});
+// ── Factory Changes and the two-way door ────────────────────────────────────
+
+const HEAD = "aaaa1111";
+
+function factoryPr(overrides: Partial<FactoryFacts> = {}): FactoryFacts {
+  return {
+    number: 1800,
+    author: "app/convocarados-factory",
+    baseRefName: "main",
+    headRefName: "factory/1708-work",
+    headRefOid: HEAD,
+    isDraft: false,
+    mergeable: "MERGEABLE",
+    commitsBehindBase: 0,
+    labels: [],
+    checks: GREEN,
+    files: ["src/lib/roster.ts", "src/test/roster.test.ts"],
+    reviewBodies: [`No findings.\n<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`],
+    ...overrides,
+  };
+}
+
+describe("a two-way door", () => {
+  it("is a change to ordinary application code", () => {
+    expect(isTwoWayDoor(["src/lib/roster.ts", "src/test/roster.test.ts"]).eligible).toBe(true);
+  });
+
+  it.each([
+    ["prisma/migrations/20261126000000_add/migration.sql", "a migration"],
+    ["prisma/schema.prisma", "a schema change"],
+    ["src/pages/api/auth/register.ts", "an auth route"],
+    ["src/lib/auth.server.ts", "auth"],
+    [".github/workflows/ci.yml", "workflows"],
+    ["AGENTS.md", "the constitution"],
+    ["package.json", "dependencies"],
+    ["fly.toml", "deploy"],
+    ["vitest.config.ts", "the measurement"],
+  ])("is not %s (%s)", (file) => {
+    const door = isTwoWayDoor([file]);
+    expect(door.eligible).toBe(false);
+    expect(door.reasons[0]).toContain("one-way door");
+  });
+});
+
+describe("the review a merge reads", () => {
+  it("takes the newest review and its verdict", () => {
+    expect(
+      latestReview([
+        `<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->`,
+        `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`,
+      ]),
+    ).toEqual({ head: HEAD, verdict: "approve" });
+  });
+
+  it("returns null when nothing reviewed this Change", () => {
+    expect(latestReview(["just a comment"])).toBeNull();
+  });
+});
+
+describe("decideFactoryMerge", () => {
+  it("merges a green, approved, two-way factory Change", () => {
+    expect(decideFactoryMerge(factoryPr())).toEqual({ eligible: true, reasons: [] });
+  });
+
+  it("refuses a Change the Reviewer refused", () => {
+    const verdict = decideFactoryMerge(
+      factoryPr({
+        reviewBodies: [`<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->`],
+      }),
+    );
+    expect(verdict.eligible).toBe(false);
+    expect(verdict.reasons.join(" ")).toContain("refuse");
+  });
+
+  it("refuses a Change whose only approval named an older head", () => {
+    const verdict = decideFactoryMerge(
+      factoryPr({
+        reviewBodies: [`<!-- factory:verdict:approve -->\n<!-- factory:reviewed:9999ffff -->`],
+      }),
+    );
+    expect(verdict.reasons.join(" ")).toContain("not the current head");
+  });
+
+  it("refuses a Change nobody reviewed", () => {
+    const verdict = decideFactoryMerge(factoryPr({ reviewBodies: [] }));
+    expect(verdict.reasons.join(" ")).toContain("no review has named its head");
+  });
+
+  it("refuses a one-way door even when green and approved", () => {
+    const verdict = decideFactoryMerge(factoryPr({ files: ["prisma/schema.prisma"] }));
+    expect(verdict.eligible).toBe(false);
+    expect(verdict.reasons.join(" ")).toContain("one-way door");
+  });
+
+  it("refuses anything the human has parked", () => {
+    const verdict = decideFactoryMerge(factoryPr({ labels: ["factory:blocked"] }));
+    expect(verdict.reasons.join(" ")).toContain("factory:blocked");
+  });
+
+  it("refuses a human's Change", () => {
+    const verdict = decideFactoryMerge(factoryPr({ author: "Cabeda" }));
+    expect(verdict.reasons.join(" ")).toContain("not the factory App");
   });
 });

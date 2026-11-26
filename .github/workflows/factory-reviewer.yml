@@ -174,6 +174,31 @@ jobs:
 
             You may not approve, merge, push, or touch a human branch: the Fixer writes, you judge.
             Put `<!-- factory:findings -->` on its own line in the review body when it carries at
-            least one finding — that marker starts the Fixer's next round, and a review without it
-            ends the loop. Always end the body with `<!-- factory:reviewed:<head sha> -->` for the
-            head you read: that marker is how a scheduled run knows this commit has been seen.
+            least one finding — that marker starts the Fixer's next round. End the body with
+            `<!-- factory:verdict:approve -->` or `<!-- factory:verdict:refuse -->`, then
+            `<!-- factory:reviewed:<head sha> -->` for the head you read: the first gates the merge,
+            the second tells a scheduled run this commit has been seen.
+
+            Write `.factory-review/verdict` with the same word as your last act. No file means the
+            review did not finish, and the check fails — which is the honest reading of a timeout.
+
+      - name: Record the verdict
+        # The Reviewer writes this file as its last act. A missing file means the
+        # review did not finish — and an unfinished review must fail, because a
+        # silent timeout used to read exactly like an approval.
+        if: always()
+        id: verdict
+        run: |
+          set -euo pipefail
+          verdict="$(cat .factory-review/verdict 2>/dev/null || echo "")"
+          case "$verdict" in
+            approve) echo "Reviewer approved." ;;
+            refuse)
+              echo "Reviewer refused — the findings are in the review comment." >&2
+              exit 1
+              ;;
+            *)
+              echo "The review did not finish: no verdict was written." >&2
+              exit 1
+              ;;
+          esac
