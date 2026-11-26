@@ -94,6 +94,22 @@ export function eventMutationDenied(authz: EventMutationAuthz, error: string): R
 }
 
 /**
+ * Whether the caller holds the password capability for this Event: no password,
+ * a valid `ev_access` cookie, an invitation, or an Event-admin role. Routes that
+ * keep a participant allowance alongside the seam use this to keep the password
+ * gate on owned Events, where `authorizeEventMutation` only consults it for the
+ * ownerless-open branch.
+ */
+export async function hasEventPasswordAccess(
+  request: Request,
+  event: AuthorizableEvent,
+  session: SessionResult | null,
+): Promise<boolean> {
+  if (!event.accessPassword) return true;
+  return (await checkLinkAccess(request, event, session)).granted;
+}
+
+/**
  * Whether the share link alone authorizes this caller. Granted unless the Event
  * set a password, in which case the password (or an invitation) must also be held.
  */

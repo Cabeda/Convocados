@@ -4,6 +4,7 @@ import { processGame, recalculateAllRatings } from "../../../../../lib/elo.serve
 import { computeSkillUpdates } from "../../../../../lib/skill";
 import { MVP_ELO_BONUS } from "../../../../../lib/mvp.constants";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
+import { authorizeEventMutation, eventMutationDenied, hasEventPasswordAccess } from "../../../../../lib/eventAuthz.server";
 import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
@@ -199,26 +200,49 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
-
+  // Resolve the entry read-only first: a denied caller must not materialise a
+  // snapshot, because that create is the write the password gate protects.
   let entry = await prisma.gameHistory.findUnique({
     where: { id: params.historyId, eventId: params.id },
   });
+  const sourceGame = entry
+    ? null
+    : await prisma.game.findUnique({
+        where: { id: params.historyId, eventId: params.id },
+      });
+  if (!entry && (!sourceGame || sourceGame.status !== "played")) {
+    return Response.json({ error: "Not found." }, { status: 404 });
+  }
+
+  // Owner/admin/invite/password-cookie are settled by the seam. The #658
+  // participant allowance survives only while the Event is unlocked: on a
+  // password-locked Event a participant holds no capability the Event accepted.
+  const authz = await authorizeEventMutation(request, event, session);
+  const { isOwner, isAdmin } = authz;
+  const passwordHeld = event.accessPassword
+    ? await hasEventPasswordAccess(request, event, session)
+    : false;
+  const latestHistory = entry ?? (sourceGame ? { dateTime: sourceGame.dateTime, teamsSnapshot: null } : null);
+  const isParticipant = !isOwner && !isAdmin && !passwordHeld && session.user.name
+    ? await isSettledGameParticipant({ sessionUser: session.user, event, latestHistory })
+    : false;
+
+  if (!authz.allowed && !passwordHeld && !(isParticipant && !event.accessPassword)) {
+    return eventMutationDenied(
+      event.accessPassword ? { ...authz, reason: "password_required" } : authz,
+      "Only the event owner or a participant can edit this.",
+    );
+  }
 
   // ADR 0016: a "played" live Game may not yet have a GameHistory snapshot
   // (e.g. the game just ended but the recurrence reset hasn't run, or the
   // history entry was loaded directly). Materialise one so the score/teams
   // can be edited through the same path.
   let historyId = params.historyId;
-  if (!entry) {
-    const game = await prisma.game.findUnique({
-      where: { id: params.historyId, eventId: params.id },
-    });
-    if (game && game.status === "played") {
-      const snap = await buildSnapshotForGame(params.id ?? "", game);
-      entry = await prisma.gameHistory.create({ data: snap });
-      historyId = entry.id;
-    }
+  if (!entry && sourceGame) {
+    const snap = await buildSnapshotForGame(params.id ?? "", sourceGame);
+    entry = await prisma.gameHistory.create({ data: snap });
+    historyId = entry.id;
   }
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -267,35 +291,15 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     });
   }
 
-  // Allow owner, admin, or any player who participated in the settled game.
-  // Participants are matched against this game's teams AND payment roll (the
-  // same rule the post-game banner uses), with a fallback to the played Game's
-  // participants when no snapshot has materialised yet. Claiming a spot in a
-  // later game does NOT grant edit rights (issue #658).
-  const isParticipant = session.user.name
-    ? await isSettledGameParticipant({
-        sessionUser: session.user,
-        event,
-        latestHistory: entry,
-      })
-    : false;
-
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic) && !isParticipant) {
-    return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
+  // Settling the game (score, who paid) is shared between admins, the players
+  // who played in it, and a caller holding the password. On an unlocked Event
+  // the #658 participant allowance is preserved; unrelated users are blocked.
+  const canSettle = isOwner || isAdmin || passwordHeld || isParticipant;
+  if (body.paymentsSnapshot !== undefined && !canSettle) {
+    return Response.json({ error: "Only the event owner, admin, or a participant can edit payments." }, { status: 403 });
   }
-
-  // Settling the game (score, who paid) is shared between admins and the
-  // players who played in it — participants may record payments like they may
-  // set the score. Unrelated users are still blocked.
-  if (body.paymentsSnapshot !== undefined) {
-    if (!isOwner && !isAdmin && !isParticipant) {
-      return Response.json({ error: "Only the event owner, admin, or a participant can edit payments." }, { status: 403 });
-    }
-  }
-  if (body.teamsSnapshot !== undefined) {
-    if (!isOwner && !isAdmin && !isParticipant) {
-      return Response.json({ error: "Only the event owner, admin, or a participant can edit teams." }, { status: 403 });
-    }
+  if (body.teamsSnapshot !== undefined && !canSettle) {
+    return Response.json({ error: "Only the event owner, admin, or a participant can edit teams." }, { status: 403 });
   }
 
   // ADR 0019: Handle per-game cost edit on a past game
