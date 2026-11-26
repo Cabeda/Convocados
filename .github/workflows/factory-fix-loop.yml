@@ -7,6 +7,14 @@
 # that dies does not get a free round. That ledger also bounds a nastier loop: a
 # failing run of *this* workflow completes a check suite on the branch, which
 # would re-trigger the `check_suite` path — at most three times, then it stops.
+#
+# Three jobs, and the split is the security model, not tidiness:
+#   ledger — decides whether a round is allowed, and records it. Writes a comment.
+#   round  — the agent. Its token is READ-ONLY, so nothing it can reach can push.
+#   push   — a fresh write token, in a job that never runs agent-controlled code.
+# Handing the agent a write token and forbidding `git push` in prose was not
+# enough: the push step shares the workspace, so a `.git/hooks/pre-push` written
+# by the agent executes with the token already in its environment.
 name: "factory: fix loop"
 
 on:
@@ -39,7 +47,7 @@ jobs:
   # Resolve the event to a PR number and a branch, and stop early for anything
   # that is not a Fixer branch. The event's `if:` cannot make an API call, and
   # `issue_comment` has no branch in its payload.
-  resolve:
+  ledger:
     runs-on: ubuntu-latest
     if: >-
       vars.FACTORY_PAUSED != 'true' &&
@@ -59,14 +67,20 @@ jobs:
       )
     permissions:
       contents: read
+      issues: write
       pull-requests: read
     outputs:
       pr: ${{ steps.resolve.outputs.pr }}
+      branch: ${{ steps.resolve.outputs.branch }}
+      run: ${{ steps.budget.outputs.run }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
 
       - name: Resolve the Change
         id: resolve
@@ -98,21 +112,40 @@ jobs:
               exit 0
               ;;
           esac
-          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+          {
+            echo "pr=$pr"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
 
-  fix:
-    needs: resolve
-    # The output is empty for every event this role does not own, which is the
-    # whole filter — a human branch never reaches the token.
-    if: >-
-      needs.resolve.outputs.pr != '' &&
-      vars.FACTORY_PAUSED != 'true' &&
-      vars.FACTORY_APP_ID != '' &&
-      vars.FACTORY_MODEL != ''
+      - name: Check the round budget
+        id: budget
+        if: steps.resolve.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.resolve.outputs.pr }}
+        run: |
+          set -euo pipefail
+          if ! node scripts/factory/attempt.ts "$PR" review; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body \
+              "factory: three fix rounds are spent. The findings that remain are a disagreement for Cabeda, not another round."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The third round's own record exits 1 (budget reached); that is the
+          # ledger being honest, not a failure to repair.
+          node scripts/factory/attempt.ts "$PR" review --set || true
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+  # The round itself. Read-only on purpose: this is the only job that runs code
+  # shaped by the Change, so it holds no scope to write anything anywhere.
+  round:
+    needs: ledger
+    if: needs.ledger.outputs.run == 'true'
     runs-on: ubuntu-latest
-    # Everything privileged happens under the minted App token below; the job's
-    # own token is not used at all.
-    permissions: {}
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
     timeout-minutes: 70
     steps:
       - uses: actions/checkout@v7
@@ -139,48 +172,26 @@ jobs:
         with:
           app-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
-          # The round reads the findings and answers in a comment; the push is
-          # the next step's token. Handing the agent a write token is how a
-          # prompt injection becomes a force-push to a human's branch — the
-          # permission has to be absent, not merely forbidden in prose.
+          # Read the findings and the branch, nothing else. The push token is
+          # minted in a different job, after this one is gone.
           permission-contents: read
-          permission-pull-requests: write
-          permission-issues: write
-
-      - name: Check the round budget
-        id: budget
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR: ${{ needs.resolve.outputs.pr }}
-        run: |
-          set -euo pipefail
-          if ! node scripts/factory/attempt.ts "$PR" review; then
-            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body \
-              "factory: three fix rounds are spent. The findings that remain are a disagreement for Cabeda, not another round."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # The third round's own record exits 1 (budget reached); that is the
-          # ledger being honest, not a failure to repair.
-          node scripts/factory/attempt.ts "$PR" review --set || true
-          echo "run=true" >> "$GITHUB_OUTPUT"
+          permission-pull-requests: read
+          permission-issues: read
 
       - name: Check out the Change
-        if: steps.budget.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR: ${{ needs.resolve.outputs.pr }}
+          PR: ${{ needs.ledger.outputs.pr }}
         run: |
           gh auth setup-git
           gh pr checkout "$PR" --repo "$GITHUB_REPOSITORY"
 
       - name: Answer the findings
-        if: steps.budget.outputs.run == 'true'
-        # The token was minted above and lives 60 minutes; this step must finish
+        # The token lives 60 minutes and was minted above; this step must finish
         # inside that window, not the job's.
         timeout-minutes: 45
-        # Advisory: a round that cannot converge must not redden the very checks
-        # it exists to make green.
+        # The round's own failure is reported by the reply file it does or does
+        # not write. A red step here must not redden the checks it repairs.
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
         env:
@@ -194,51 +205,120 @@ jobs:
           share: "false"
           use_github_token: true
           prompt: |
-            Repair pull request #${{ needs.resolve.outputs.pr }} as the Fixer, in repair mode.
+            Repair pull request #${{ needs.ledger.outputs.pr }} as the Fixer, in repair mode.
 
             Follow `.opencode/agents/fixer.md`. This is one of three rounds; the round is already
-            recorded on the Change. The workspace is already checked out on the Change's branch.
+            recorded on the Change. The workspace is already checked out on the Change's branch,
+            and your token is read-only: commit, do not push, and do not comment.
 
             Read the evidence itself, never a summary:
-            - a review: `gh pr view ${{ needs.resolve.outputs.pr }} --json reviews --jq '.reviews[-1].body'`
-            - a red suite: `gh pr checks ${{ needs.resolve.outputs.pr }}`, then the failing job's log
+            - a review: `gh pr view ${{ needs.ledger.outputs.pr }} --json reviews --jq '.reviews[-1].body'`
+            - a red suite: `gh pr checks ${{ needs.ledger.outputs.pr }}`, then the failing job's log
 
             Make the smallest change that answers the findings. Re-run `bash scripts/factory/gate.sh`
-            for the part you moved, then commit to this branch — the workflow pushes it, you cannot.
-            Do not merge, approve, close, or label.
+            for the part you moved, then commit.
 
-            If a finding is wrong, say why in one comment on the Change and leave that code alone.
-            If the Change is already correct, commit nothing and say so in one comment. A round that
-            changes nothing is a valid answer.
+            Write `.factory-handoff/reply.md` as your last act, even when you changed nothing: that
+            file is how the workflow knows the round finished, and its contents are posted to the
+            Change. A round without it is treated as killed, and its work is not pushed.
+
+      # Commit whatever the round left in the tree and bundle it, so a killed
+      # round still leaves its reproduction test in the artifact — it is simply
+      # not pushed, because a red partial commit would re-enter this loop and
+      # spend another of the three rounds.
+      - name: Package the round
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .factory-handoff
+          branch="${{ needs.ledger.outputs.branch }}"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git -c user.name="convocados-factory[bot]" \
+                -c user.email="convocados-factory[bot]@users.noreply.github.com" \
+                commit -m "factory: work in progress on PR #${{ needs.ledger.outputs.pr }}"
+          fi
+          if [ "$(git rev-list --count "origin/$branch..HEAD")" = "0" ]; then
+            echo "Round made no commits."
+            exit 0
+          fi
+          git bundle create .factory-handoff/round.bundle "origin/$branch..HEAD"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: factory-round
+          path: .factory-handoff/
+          # The directory is hidden and v4+ skips hidden paths by default.
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  # The only job that writes to GitHub. It never runs agent-controlled code: it
+  # fetches the bundle as a ref and pushes that ref, so no hook written in the
+  # round's workspace is in the path of the token.
+  push:
+    needs: [ledger, round]
+    if: >-
+      always() &&
+      needs.ledger.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # The bundle's prerequisite is the branch tip the round checked out,
+          # which a shallow clone cannot satisfy.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: factory-round
+          path: .factory-handoff
 
       - name: Mint a write token for the push
-        # The round's own token is read-only; this one exists for a single `git
-        # push` and never reaches the agent.
-        if: steps.budget.outputs.run == 'true'
         id: push-token
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # contents to push the factory/* branch, issues to post the round's
+          # reply. No pull-requests write: a round reads findings, it does not
+          # adjudicate them.
           permission-contents: write
+          permission-issues: write
 
-      - name: Push the round
-        # An empty round is a valid answer, so a zero-commit diff is not an
-        # error. A branch that is not `factory/*` is: it means the round left
-        # the Change, and that branch is not its to move.
-        if: steps.budget.outputs.run == 'true'
+      - name: Push the round and post its reply
         env:
           GH_TOKEN: ${{ steps.push-token.outputs.token }}
+          PR: ${{ needs.ledger.outputs.pr }}
+          BRANCH: ${{ needs.ledger.outputs.branch }}
+          HANDOFF_DIR: .factory-handoff
         run: |
           set -euo pipefail
-          branch="$(git rev-parse --abbrev-ref HEAD)"
-          case "$branch" in
-            factory/*) ;;
-            *) echo "Round left $branch; refusing to push." >&2; exit 0 ;;
-          esac
-          if [ "$(git rev-list --count "origin/$branch..HEAD")" = "0" ]; then
-            echo "No commits this round."
+          if [ ! -f "$HANDOFF_DIR/reply.md" ]; then
+            echo "The round did not finish; its bundle stays an artifact." >&2
             exit 0
           fi
-          gh auth setup-git
-          git push origin "HEAD:refs/heads/$branch"
+          case "$BRANCH" in
+            factory/*) ;;
+            *) echo "Refusing a branch that is not factory/*: $BRANCH" >&2; exit 1 ;;
+          esac
+
+          pushed=0
+          if [ -f "$HANDOFF_DIR/round.bundle" ]; then
+            git fetch "$HANDOFF_DIR/round.bundle" \
+              "+refs/heads/$BRANCH:refs/heads/$BRANCH"
+            if [ "$(git rev-list --count "origin/$BRANCH..$BRANCH")" != "0" ]; then
+              gh auth setup-git
+              git push origin "$BRANCH"
+              pushed=1
+            fi
+          fi
+
+          if [ "$pushed" = "1" ]; then
+            echo "Pushed $BRANCH." >> "$HANDOFF_DIR/reply.md"
+          fi
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$HANDOFF_DIR/reply.md"

@@ -30,13 +30,11 @@ permission:
     "gh pr close*": deny
     # The Gates are defined by the pre-push hook; bypassing them is cheating.
     "git push --no-verify*": deny
-    # Issue mode has no push scope at all, so this deny is the instruction and
-    # the token is the mechanism. Repair mode mints a write token and may push
-    # to the Change's own branch — nothing else. Last match wins.
-    "git push origin main*": deny
-    "git push origin refs/heads/main*": deny
-    "git push origin *": deny
-    "git push origin factory/*": allow
+    # A push is never the agent's: Issue mode has no write scope at all, and in
+    # repair mode the token is read-only too — a later job pushes the bundle.
+    # The denies stay so a run that ignores its prompt fails locally, not
+    # halfway through a branch.
+    "git push*": deny
     # Delivery opens the Change under a token minted after the run, because an
     # App token lives 60 minutes and a run may take 110 (#937).
     "gh pr create*": deny
@@ -77,8 +75,9 @@ The prompt that started you says which mode you are in.
    value. If the Issue has no such criterion, that is Blocked — say why, do not improvise. If the
    Issue is *about an existing Change* (a Sweeper report), the Change's own branch owns that
    repair: report Blocked and point at it, do not open a second Change for the same work.
-3. **Branch from `origin/main` only**: `factory/<issue-number>-<slug>`. Never inherit a local
-   checkout or another branch.
+3. **Use the branch the workflow gave you**: `factory/<issue>-work`, already checked out. Do not
+   create another and do not switch back to `main` — a run that leaves the branch loses the
+   Change, and the packaging step refuses to deliver it.
 4. **Reproduce before you fix.** Write the test that fails for the reason the Issue describes.
    Run it and keep the output. A test you never watched fail is not a reproduction: it may pass
    for the wrong reason, and the Change would claim evidence it does not have.
@@ -100,11 +99,16 @@ The prompt that started you says which mode you are in.
    it. A theory formed before reading the log is a guess.
 2. **Check the budget**: `node scripts/factory/attempt.ts <pr> review`. If the rounds are spent,
    stop and say so; the workflow has already told the human.
-3. **Fix the cause on the Change's own branch.** Push only to the `factory/*` branch you were
-   given. One round is one coherent response to the findings, not a scramble to touch every line.
-4. **Answer findings you disagree with** with a one-line argument in the PR thread, and leave the
-   code alone. A silent non-fix reads as an oversight; a reasoned refusal is reviewable.
-5. **Re-run the Gate you moved**, then hand back. Do not merge, do not approve, do not close.
+3. **Fix the cause on the Change's own branch**, which is already checked out. Commit; do not
+   push — the round's token is read-only, and a later job pushes the bundle. One round is one
+   coherent response to the findings, not a scramble to touch every line.
+4. **Answer findings you disagree with** with a one-line argument, and leave the code alone. A
+   silent non-fix reads as an oversight; a reasoned refusal is reviewable. You cannot comment:
+   write the answer into `.factory-handoff/reply.md` and the workflow posts it.
+5. **Re-run the Gate you moved**, commit, then write `.factory-handoff/reply.md` as your last act —
+   even when you changed nothing. That file is how the workflow knows the round finished, and a
+   round without it is treated as killed: its work is bundled, not pushed. Do not merge, approve,
+   or close.
 
 ## Reproduction is the deliverable
 

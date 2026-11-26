@@ -38,6 +38,26 @@ export function titleFor(raw: string | null | undefined, issue: number): string 
   return title ? title : `factory: work Issue #${issue}`;
 }
 
+/**
+ * What a handoff may do. A Blocked run still pushes its branch: the commit that
+ * reproduces the defect is the expensive part, and a run killed before its
+ * Handoff has no `status` at all — discarding it made the "a killed run keeps
+ * its work" claim false. Only `review` opens a Change.
+ */
+export interface DeliveryPlan {
+  push: boolean;
+  openChange: boolean;
+}
+
+export function deliveryPlan(
+  status: Status,
+  branch: string | null,
+  hasBundle: boolean,
+): DeliveryPlan {
+  if (!isDeliverableBranch(branch) || !hasBundle) return { push: false, openChange: false };
+  return { push: true, openChange: status === "review" };
+}
+
 function read(dir: string, file: string): string | null {
   const full = path.join(dir, file);
   return existsSync(full) ? readFileSync(full, "utf8") : null;
@@ -91,11 +111,9 @@ function main(): number {
     return 0;
   };
 
-  if (handoff.status !== "review") {
+  const plan = deliveryPlan(handoff.status, handoff.branch, existsSync(bundle));
+  if (!plan.push || !isDeliverableBranch(handoff.branch)) {
     return blocked("**Blocked.** The run ended without a deliverable Change.");
-  }
-  if (!isDeliverableBranch(handoff.branch) || !existsSync(bundle) || !existsSync(bodyFile)) {
-    return blocked("**Blocked.** The handoff was incomplete, so there is no Change to open.");
   }
 
   try {
@@ -105,6 +123,23 @@ function main(): number {
     // The bundle records the local branch name, not HEAD.
     run("git", ["fetch", bundle, `+refs/heads/${handoff.branch}:refs/heads/${handoff.branch}`]);
     run("git", ["push", "origin", handoff.branch]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return blocked(`**Delivery failed.** ${message}`);
+  }
+
+  if (!plan.openChange) {
+    return blocked(
+      `**Blocked.** No Change was opened, but the work is preserved on \`${handoff.branch}\`.`,
+    );
+  }
+  if (!existsSync(bodyFile)) {
+    return blocked(
+      `**Blocked.** The handoff had no Change body, so there is no Change to open. Work is on \`${handoff.branch}\`.`,
+    );
+  }
+
+  try {
 
     const existing = gh([
       "pr", "list", "--repo", repo, "--head", handoff.branch, "--state", "open",

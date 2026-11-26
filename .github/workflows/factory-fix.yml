@@ -117,7 +117,16 @@ jobs:
         env:
           ISSUE: ${{ needs.queue.outputs.issue }}
         run: |
-          git switch -c "factory/${ISSUE}-work" || git switch "factory/${ISSUE}-work"
+          branch="factory/${ISSUE}-work"
+          # A Blocked run pushes its branch before reporting. Resuming it means a
+          # cleared Block continues the work instead of paying for the same
+          # reproduction twice.
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch --quiet origin "$branch"
+            git switch -C "$branch" "origin/$branch"
+          else
+            git switch -c "$branch"
+          fi
 
       - name: Run the Fixer
         # The real budget. A step that times out exits non-zero, and this absorbs
