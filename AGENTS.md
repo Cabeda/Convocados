@@ -266,7 +266,8 @@ track, and deploys the scheduler. One click is production.
 
 The factory turns Issues into ready-to-prod Changes without being asked, by two paths: the
 **Fixer** works the Issues the Explorers filed, and the **Factory** works the Issues Cabeda
-labelled `ready-for-agent`. It proposes improvements nobody asked for. It never merges.
+labelled `ready-for-agent`. It proposes improvements nobody asked for. It merges nothing a human
+would have to read twice: only a two-way door that is green and Reviewer-approved.
 
 **Gates (how GATE 1 actually runs), roles, reach, budgets, handoff and the automerge
 exception** are documented in [`docs/factory/README.md`](docs/factory/README.md); the
