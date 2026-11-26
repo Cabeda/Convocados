@@ -257,20 +257,22 @@ describe("agent environment guardrails", () => {
     const template = await read(".github/PULL_REQUEST_TEMPLATE.md");
     expect(template).toMatch(/Closes #/);
 
-    const ci = await read(".github/workflows/test.yml");
-    // The check must be a job the aggregate gate depends on, or it never runs
-    // as a required check.
-    expect(ci).toMatch(/^\s{2}pr-links-issue:\s*$/m);
-    expect(ci).toMatch(/^\s{2}dex-ledger:\s*$/m);
-    expect(ci).toMatch(/node scripts\/dex-dedupe\.mjs --check/);
+    // The closing-keyword check lives in its own workflow so body/label events
+    // do not re-run the whole suite. Its job name ("PR Links Issue") is a
+    // required status check on `main`, so it still blocks merge.
+    const hygiene = await read(".github/workflows/pr-hygiene.yml");
+    expect(hygiene).toMatch(/^\s{2}pr-links-issue:\s*$/m);
     // The closing-keyword logic is a tested module, not an inline snippet.
-    expect(ci).toMatch(/node scripts\/check-pr-closing-keyword\.mjs/);
+    expect(hygiene).toMatch(/node scripts\/check-pr-closing-keyword\.mjs/);
     // `labeled`/`unlabeled` re-run the job so the `no-issue` hatch can turn it
     // green; `edited` re-checks a body changed after green.
-    expect(ci).toMatch(/types: \[[^\]]*\blabeled\b[^\]]*\]/);
-    expect(ci).toMatch(/types: \[[^\]]*\bedited\b[^\]]*\]/);
+    expect(hygiene).toMatch(/types: \[[^\]]*\blabeled\b[^\]]*\]/);
+    expect(hygiene).toMatch(/types: \[[^\]]*\bedited\b[^\]]*\]/);
+
+    const ci = await read(".github/workflows/test.yml");
+    expect(ci).toMatch(/^\s{2}dex-ledger:\s*$/m);
+    expect(ci).toMatch(/node scripts\/dex-dedupe\.mjs --check/);
     expect(ci).toMatch(/needs: \[[^\]]*\bdex-ledger\b[^\]]*\]/);
-    expect(ci).toMatch(/needs: \[[^\]]*\bpr-links-issue\b[^\]]*\]/);
 
     // The ledger check also runs locally (warn-only; CI blocks): the hazard (a
     // union-merge splice of duplicate lines) happens during a rebase.
