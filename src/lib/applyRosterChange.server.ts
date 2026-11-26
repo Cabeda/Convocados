@@ -378,6 +378,39 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
     }
   }
 
+  // Duplicate-add guard: an active GameParticipant can exist without a legacy
+  // Player row (invite acceptance creates exactly that), and the Player-table
+  // P2002 below cannot see it. Without this check a repeat add creates a
+  // duplicate row, moves the queue order and re-announces the join (#1793).
+  if (event.currentGameId && !pendingSelfInviteEventPlayerId) {
+    const existingIdentity = await prisma.eventPlayer.findFirst({
+      where: {
+        eventId,
+        ...(linkedUserId
+          ? { OR: [{ userId: linkedUserId }, { name: trimmed }] }
+          : { name: trimmed }),
+      },
+      select: { id: true },
+    });
+    if (existingIdentity) {
+      const participant = await prisma.gameParticipant.findUnique({
+        where: {
+          gameId_eventPlayerId: {
+            gameId: event.currentGameId,
+            eventPlayerId: existingIdentity.id,
+          },
+        },
+        select: { archivedAt: true, status: true },
+      });
+      if (participant && !participant.archivedAt && participant.status !== "pending") {
+        return {
+          status: 409,
+          body: { error: `"${trimmed}" is already in the list.`, code: "ALREADY_IN_ROSTER" },
+        };
+      }
+    }
+  }
+
   // Email-based invite resolution
   let notifyRegisteredUserId: string | null = null;
   let inviteUnregisteredEmail: string | null = null;

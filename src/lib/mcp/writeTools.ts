@@ -13,7 +13,6 @@ import type { Imatch } from "../random";
 import { balanceTeams, processGame } from "../elo.server";
 import { applyFormationLayout } from "../teams";
 import { recordReceived } from "../payments.server";
-import { isGameEnded } from "../gameStatus";
 import { anchorDayOf, buildRecurrenceRule, parseRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
 import { applyRosterChange } from "../applyRosterChange.server";
 import { getDefaultDurationMinutes } from "../sports";
@@ -89,10 +88,17 @@ async function addPlayer(args: Record<string, unknown>, ctx: AuthContext) {
   // notifications, invite/owner emails, webhooks and the cancelled/ended Game
   // guards (#1793). The pre-join active count decides the response field.
   const isActive = roster.activeCount < event.maxPlayers;
+  // The caller is a real actor: resolve the name so the webhook/log record who
+  // performed the add, and so a self-add does not notify the actor about their
+  // own join (#1793 review).
+  const actor = await prisma.user.findUnique({
+    where: { id: ctx.userId },
+    select: { id: true, name: true },
+  });
   const result = await applyRosterChange({
     eventId,
     origin: process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev",
-    session: null,
+    session: actor ? { user: actor } : null,
     body: { name: target.name, userId: target.userId, linkToAccount: false },
     event,
   });

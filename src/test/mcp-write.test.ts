@@ -301,6 +301,34 @@ describe("MCP write tools — add_player", () => {
     const player = await prisma.eventPlayer.findFirst({ where: { eventId: event.id, name: "Alice" } });
     expect(player).toBeNull();
   });
+
+  it("is idempotent for an invited participant with no Player row", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Invited" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Invited" })));
+    expect(res.status).toBe(200);
+    // Idempotent means no second write, not a duplicate row.
+    expect(await prisma.player.count({ where: { eventId: event.id, name: "Invited" } })).toBe(0);
+  });
+
+  it("does not notify the actor about their own add", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, userId: owner.id })));
+    expect(res.status).toBe(200);
+    const invites = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "game_invite" },
+    });
+    expect(invites).toHaveLength(0);
+  });
 });
 
 describe("MCP write tools — remove_player", () => {

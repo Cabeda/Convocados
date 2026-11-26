@@ -134,4 +134,18 @@ describe("POST /api/events/[id]/roster (#814 unified endpoint)", () => {
     const player = await prisma.eventPlayer.findFirst({ where: { eventId: ev.id, name: "Alice" } });
     expect(player).toBeNull();
   });
+
+  it("rejects a duplicate add for an invited participant with no Player row", async () => {
+    const ev = await seedEventWithGame(null);
+    // acceptPlayerInvite creates this shape: an active GameParticipant with no
+    // legacy Player row, so the seam's Player-table P2002 check cannot see it.
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Invited" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Invited" }));
+    expect(res.status).toBe(409);
+    expect(await prisma.player.count({ where: { eventId: ev.id, name: "Invited" } })).toBe(0);
+  });
 });
