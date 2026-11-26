@@ -223,6 +223,13 @@ it runs on a schedule, where secrets are available, and reports what it finds as
 than reviews — but it flags a Change only once it is stuck (red, or untouched for a day), so an
 **active, green fork PR gets no factory attention at all**.
 
+A **factory Change is read from the schedule**, not from its `pull_request` event. The agent action
+asserts the repo permission of the event's *actor*, and a branch the App pushed has the App as
+actor, whose collaborator permission is `none` — the minted token's scopes do not change that. A
+scheduled run's actor is the human who last touched the workflow, so both machine roles pick their
+next Change from `scripts/factory/next-review.ts` and `next-fix.ts`. The cost is latency: a Change
+waits one tick, not one event.
+
 **Budgets.** 3 Attempts per gate, 6 per Issue, 500k tokens per Issue, 5M per day. Exceeding
 any budget ends the run as **Blocked**, with the evidence attached.
 

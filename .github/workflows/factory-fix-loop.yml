@@ -18,8 +18,13 @@
 name: "factory: fix loop"
 
 on:
-  # The Reviewer writes the findings marker into its review body. A review
-  # without it is either clean or not about findings, and costs no run.
+  # A scheduled run is the only one that can work a factory Change: the agent
+  # action asserts the *actor's* repo permission, and every machine push makes
+  # the App the actor, whose permission is `none`. These event triggers stay for
+  # completeness — they are how a human-authored Change's review is answered —
+  # but the schedule is what drives the loop.
+  schedule:
+    - cron: "*/30 * * * *"
   pull_request_review:
     types: [submitted]
   issue_comment:
@@ -54,6 +59,7 @@ jobs:
       vars.FACTORY_APP_ID != '' &&
       vars.FACTORY_MODEL != '' &&
       (
+        github.event_name == 'schedule' ||
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'pull_request_review' &&
          contains(github.event.review.body, '<!-- factory:findings -->')) ||
@@ -95,13 +101,15 @@ jobs:
           set -euo pipefail
           pr=""
           case "$EVENT_NAME" in
+            # The picker prints one number when GITHUB_OUTPUT is unset.
+            schedule) pr="$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)" ;;
             pull_request_review) pr="$REVIEW_PR" ;;
             issue_comment) pr="$COMMENT_PR" ;;
             check_suite) pr="$SUITE_PR" ;;
             workflow_dispatch) pr="$DISPATCH_PR" ;;
           esac
           if [ -z "$pr" ]; then
-            echo "No pull request in this event; nothing to repair."
+            echo "No Change is waiting for a round; nothing to repair."
             exit 0
           fi
           branch="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName)"

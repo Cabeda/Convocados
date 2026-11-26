@@ -7,6 +7,18 @@ name: "factory: review"
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  # A `pull_request` run cannot read a factory Change: the agent action asserts
+  # the *actor's* repo permission, and a branch the App pushed has the App as
+  # actor, whose permission is `none`. A scheduled run's actor is the human who
+  # last touched this file, so the schedule is how machine Changes get read.
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request to review. Empty picks the oldest unread factory Change."
+        required: false
+        type: string
 
 # Everything flows through the App token minted in the job below. The
 # default GITHUB_TOKEN needs no scope and must not carry one: it sits in
@@ -15,7 +27,44 @@ on:
 permissions: {}
 
 jobs:
+  # Who to read. For a `pull_request` event it is the event's own number; on a
+  # schedule it is the oldest factory Change with no review naming its head.
+  pick:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      pr: ${{ steps.pick.outputs.pr }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Pick the Change
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          DISPATCH_PR: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "pr=$EVENT_PR" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "${DISPATCH_PR:-}" ]; then
+            echo "pr=$DISPATCH_PR" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node scripts/factory/next-review.ts
+
   reviewer:
+    needs: pick
     # The factory is inert until its identity exists: no App id and no model
     # means step 2 is not finished, and an unconfigured run is a red run that
     # teaches nobody anything. The wizard sets both, and that is the activation.
@@ -35,12 +84,14 @@ jobs:
     # Name Dependabot exactly, not "any bot": `factory/*` Changes are authored by
     # the factory App and must still be reviewed — they are this role's customer.
     if: >-
+      needs.pick.outputs.pr != '' &&
       vars.FACTORY_PAUSED != 'true' &&
       vars.FACTORY_APP_ID != '' &&
       vars.FACTORY_MODEL != '' &&
-      github.event.pull_request.user.login != 'dependabot[bot]' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      !github.event.pull_request.draft
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.user.login != 'dependabot[bot]' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        !github.event.pull_request.draft))
     runs-on: ubuntu-latest
     # Backstop only. The wall clock that matters is on the agent step below: a
     # *job* timeout kills the job and no continue-on-error can absorb that,
@@ -112,7 +163,7 @@ jobs:
           share: "false"
           use_github_token: true
           prompt: |
-            Review pull request #${{ github.event.pull_request.number }} as the Delivery Factory's
+            Review pull request #${{ needs.pick.outputs.pr }} as the Delivery Factory's
             Reviewer, following `.opencode/agents/reviewer.md`.
 
             Start with the mission question in your comment: does this let people play more, with
@@ -124,4 +175,5 @@ jobs:
             You may not approve, merge, push, or touch a human branch: the Fixer writes, you judge.
             Put `<!-- factory:findings -->` on its own line in the review body when it carries at
             least one finding — that marker starts the Fixer's next round, and a review without it
-            ends the loop.
+            ends the loop. Always end the body with `<!-- factory:reviewed:<head sha> -->` for the
+            head you read: that marker is how a scheduled run knows this commit has been seen.

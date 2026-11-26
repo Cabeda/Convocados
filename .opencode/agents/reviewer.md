@@ -96,6 +96,10 @@ nothing; if it refused with an argument, that is the disagreement Cabeda is ther
 - Put `<!-- factory:findings -->` on its own line in the review body when it carries at least one
   finding. That line is the whole trigger: no marker, no next round. It must be exact, and it must
   mean "there is work to do", never "I looked".
+- End the body with `<!-- factory:reviewed:<head sha> -->`, naming the head you actually read
+  (`git rev-parse HEAD` or `gh pr view <n> --json headRefOid`). A scheduled run picks its next
+  Change by that marker: without it the same commit is read every half hour, and with a stale one
+  a Change is skipped after it moves.
 - If the Change is genuinely ready, say so, with no marker — and leave `factory:review` in place.
   The human gate is Cabeda's, and no agent merges, ever.
 - Push nothing. A reviewer that repairs its own finding is marking its own homework, and the
