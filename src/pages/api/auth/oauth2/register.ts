@@ -1,40 +1,34 @@
 import type { APIRoute } from "astro";
 import { auth } from "~/lib/auth.server";
+import { oauthRateLimitResponse } from "~/lib/oauthRateLimit.server";
 
 /**
- * RFC 7591 DCR endpoint with CIMD preference (MCP 2026-07-28).
- * DCR is deprecated in favor of Client ID Metadata Documents (CIMD).
- * This wrapper adds deprecation headers and supports `client_metadata_uri`
- * per SEP-2352: client credentials bound to issuer, no reuse across AS.
+ * RFC 7591 DCR endpoint.
+ * DCR is deprecated in favor of Client ID Metadata Documents (CIMD), but
+ * `client_metadata_uri` is refused rather than fetched: better-auth's
+ * registration schema strips the fetched document, so dialing a caller's URL
+ * would only turn this endpoint into an SSRF primitive.
  */
 const handler: APIRoute = async ({ request }) => {
-  // CIMD: if client sends client_metadata_uri, fetch and inline as client_metadata
-  // per https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+  // This concrete route shadows the [...all] catch-all, so it must apply the
+  // OAuth limits itself or the 5/hour DCR limit never runs.
+  const limited = await oauthRateLimitResponse(request);
+  if (limited) return limited;
+
   if (request.method === "POST") {
-    const clone = request.clone();
     try {
-      const body: any = await clone.json();
-      if (body?.client_metadata_uri && !body?.client_metadata) {
-        try {
-          const resp = await fetch(body.client_metadata_uri, { headers: { accept: "application/json" } });
-          if (resp.ok) {
-            const cimd = await resp.json();
-            // Merge CIMD into registration — server treats it as client_metadata
-            body.client_metadata = cimd;
-            delete body.client_metadata_uri;
-            // Rebuild request with inlined metadata for auth.handler
-            request = new Request(request.url, {
-              method: request.method,
-              headers: request.headers,
-              body: JSON.stringify(body),
-            });
-          }
-        } catch {
-          // CIMD fetch failed — let auth.handler return 400
-        }
+      const body: any = await request.clone().json();
+      if (body?.client_metadata_uri) {
+        return Response.json(
+          {
+            error: "invalid_client_metadata",
+            error_description: "client_metadata_uri is not supported",
+          },
+          { status: 400 },
+        );
       }
     } catch {
-      // not JSON — let handler deal
+      // not JSON — let the auth handler deal with it
     }
   }
 
