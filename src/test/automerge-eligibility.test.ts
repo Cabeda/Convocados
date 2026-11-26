@@ -400,6 +400,8 @@ describe("the findings a re-run leaves", () => {
       "src/pages/api/me/credentials.ts",
       "src/pages/api/me/api-keys.ts",
       "src/lib/invite.server.ts",
+      "src/lib/merge.server.ts",
+      "src/lib/mergeCapture.server.ts",
       "src/pages/api/events/[id]/invites.ts",
       "src/lib/apiKey.server.ts",
       "src/pages/api/admin/audit.ts",

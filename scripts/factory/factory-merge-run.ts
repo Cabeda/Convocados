@@ -121,8 +121,9 @@ function main(): number {
     const { facts, verdict } = factsFor(pr);
     console.log(explain(facts, verdict));
     if (!verdict.eligible) {
-      // A stale base is the one block the machine can clear itself. Updating the
-      // branch re-runs CI; the next tick merges on evidence about the new base.
+      // A stale base is the one block the machine can clear itself, but not in
+      // this run: `update-branch` rewrites the head, the Reviewer has not seen
+      // the new one, and the next tick merges on a fresh review and fresh CI.
       if (verdict.reasons.every((r) => r.includes(BEHIND_BASE))) {
         try {
           gh(["pr", "update-branch", String(pr.number), "--repo", REPO]);

@@ -29,7 +29,8 @@ ready-for-agent Issue (Cabeda's label)
   → CABEDA. Always Cabeda.
 ```
 
-Nothing above is "done". Every path ends at a human or at **Blocked**.
+Nothing above is "done". Every path ends at a human, at **Blocked**, or — for a two-way door that
+is green and approved — at the Merge gate, which is still a human's policy expressed as code.
 
 ## Gates
 

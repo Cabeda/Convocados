@@ -176,6 +176,7 @@ export const ONE_WAY_PATHS: Array<{ match: RegExp; why: string }> = [
   { match: /^src\/pages\/api\/push\//, why: "push credentials" },
   { match: /^src\/pages\/api\/.*push[^/]*\.ts$/, why: "push credentials" },
   { match: /^src\/pages\/api\/me\/(credentials|api-keys)/, why: "account credentials" },
+  { match: /^src\/lib\/merge[^/]*\.server\.ts$/, why: "account merging — it hard-deletes users" },
   { match: /^src\/lib\/invite[^/]*\.server\.ts$/, why: "invite tokens" },
   { match: /^src\/pages\/api\/events\/\[id\]\/invites\.ts$/, why: "invite tokens" },
   { match: /^src\/pages\/api\/(me\/calendar-token|oauth-callback|invite\/)/, why: "a token route" },
