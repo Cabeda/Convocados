@@ -62,6 +62,10 @@ export const REQUIRED_CHECKS = [
   "Lint",
   "Dependency Audit",
   "Build",
+  // Both `main` rulesets require it (13717171 and 20842995, verified against
+  // repos/…/rules/branches/main). Without it the decision can say "eligible"
+  // and `gh pr merge` is then rejected by branch protection.
+  "PR Links Issue",
 ] as const;
 
 export interface Verdict {
@@ -145,17 +149,28 @@ export const VERDICT_MARKER = /<!-- factory:verdict:(approve|refuse) -->/;
 export const ONE_WAY_PATHS: Array<{ match: RegExp; why: string }> = [
   { match: /^prisma\/migrations\//, why: "a database migration" },
   { match: /^prisma\/schema\.prisma$/, why: "a schema change" },
-  { match: /^src\/lib\/auth[^/]*\.server\.ts$/, why: "auth and token handling" },
+  // Any server module whose name says auth, token, session, cron, scheduler or
+  // push. The first list named only `auth*.server.ts` and missed
+  // `googleToken.server.ts`, `calendarToken.server.ts`, `cronAuth.server.ts`
+  // and `scheduler.server.ts` — all verified two-way by the Reviewer.
+  { match: /^src\/lib\/[^/]*(auth|token|oauth|session|cron|schedul|push|vapid)[^/]*\.server\.ts$/i, why: "auth, token or scheduler handling" },
   { match: /^src\/pages\/api\/auth\//, why: "an auth route" },
-  { match: /^src\/lib\/(oauth|tokens?)/, why: "OAuth and token handling" },
+  { match: /^src\/lib\/oauth/, why: "OAuth and token handling" },
   { match: /^\.github\//, why: "the workflows that run the factory" },
+  // The decision and the instructions are the most one-way files here: a Change
+  // that weakens them is green, approved, and then executes on the next tick.
+  { match: /^scripts\/factory\//, why: "the factory's own decision code" },
+  { match: /^\.opencode\/(agents|skills)\//, why: "the roles' instructions" },
   { match: /^AGENTS\.md$/, why: "the constitution" },
   { match: /^(package\.json|pnpm-lock\.yaml)$/, why: "dependencies" },
   { match: /^android-app\/(gradle|libs\.versions\.toml|.*\.gradle\.kts?$)/, why: "the Android build" },
-  { match: /^(fly\.toml|Dockerfile|deploy\/)/, why: "deploy configuration" },
-  { match: /^scripts\/(scheduler|server)/, why: "the scheduler" },
+  { match: /^(fly\.toml|Dockerfile|deploy\/|litestream\.ya?ml$)/, why: "deploy configuration" },
+  { match: /^scripts\/[^/]*(schedul|backfill|cron)/i, why: "the scheduler" },
   { match: /^(vitest|stryker|playwright)\.config\./, why: "the measurement itself" },
 ];
+
+/** The factory App, under every spelling GitHub has returned for it. */
+export const FACTORY_IDENTITY = /^(app\/)?convocarados-factory(\[bot\])?$/;
 
 export function isTwoWayDoor(files: string[]): Verdict {
   const reasons: string[] = [];
@@ -171,15 +186,35 @@ export interface ReviewRecord {
   verdict: "approve" | "refuse" | null;
 }
 
+export interface ReviewEntry {
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+/** The last of a marker that may be quoted earlier in the same body. */
+function lastMatch(re: RegExp, body: string): string | null {
+  const all = [...body.matchAll(new RegExp(re.source, "g"))];
+  return all.at(-1)?.[1] ?? null;
+}
+
 /**
- * The newest review that names a head. Bodies from both issue comments and
- * formal reviews, oldest first, because a review may be posted either way.
+ * The newest review by the factory App that names a head.
+ *
+ * Author-scoped because the marker was unauthenticated: any GitHub user could
+ * comment `verdict:approve` and the gate would merge. Sorted by time because
+ * comments and formal reviews arrive in two lists and concatenating them puts a
+ * newer comment *before* an older review. Last marker wins because the prompt
+ * hands the agent both literals and a review may quote the one it rejected.
  */
-export function latestReview(bodies: string[]): ReviewRecord | null {
-  for (let i = bodies.length - 1; i >= 0; i -= 1) {
-    const head = REVIEWED_MARKER.exec(bodies[i] ?? "")?.[1];
+export function latestReview(entries: ReviewEntry[]): ReviewRecord | null {
+  const ordered = [...entries].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  for (let i = ordered.length - 1; i >= 0; i -= 1) {
+    const entry = ordered[i];
+    if (!FACTORY_IDENTITY.test(entry.author ?? "")) continue;
+    const head = lastMatch(REVIEWED_MARKER, entry.body ?? "");
     if (!head) continue;
-    const verdict = VERDICT_MARKER.exec(bodies[i] ?? "")?.[1] as ReviewRecord["verdict"];
+    const verdict = lastMatch(VERDICT_MARKER, entry.body ?? "") as ReviewRecord["verdict"];
     return { head, verdict: verdict ?? null };
   }
   return null;
@@ -187,10 +222,12 @@ export function latestReview(bodies: string[]): ReviewRecord | null {
 
 export interface FactoryFacts extends PullRequestFacts {
   files: string[];
-  /** Comment and review bodies, oldest first. */
-  reviewBodies: string[];
+  reviews: ReviewEntry[];
   headRefOid: string;
 }
+
+/** The substring the merge runner looks for when a stale base is the only block. */
+export const BEHIND_BASE = "behind base";
 
 export function decideFactoryMerge(pr: FactoryFacts): Verdict {
   const reasons: string[] = [];
@@ -209,7 +246,7 @@ export function decideFactoryMerge(pr: FactoryFacts): Verdict {
   }
   if (pr.labels.includes(BLOCKED_LABEL)) reasons.push(`is labelled ${BLOCKED_LABEL}`);
   if (pr.commitsBehindBase > 0) {
-    reasons.push(`is ${pr.commitsBehindBase} commit(s) behind base — its CI proved nothing about the base it lands on`);
+    reasons.push(`is ${pr.commitsBehindBase} commit(s) ${BEHIND_BASE} — its CI proved nothing about the base it lands on`);
   }
 
   for (const required of REQUIRED_CHECKS) {
@@ -222,14 +259,40 @@ export function decideFactoryMerge(pr: FactoryFacts): Verdict {
   const door = isTwoWayDoor(pr.files);
   reasons.push(...door.reasons);
 
-  const review = latestReview(pr.reviewBodies);
+  const review = latestReview(pr.reviews);
   if (!review) {
     reasons.push("no review has named its head");
-  } else if (review.head !== pr.headRefOid) {
+  } else if (!pr.headRefOid.startsWith(review.head)) {
     reasons.push(`the newest review named ${review.head}, not the current head`);
   } else if (review.verdict !== "approve") {
     reasons.push(`the Reviewer's verdict on this head is ${review.verdict ?? "missing"}`);
   }
 
   return { eligible: reasons.length === 0, reasons };
+}
+
+/** Normalise `gh pr view --json comments,reviews` into one time-ordered list. */
+export function reviewEntries(raw: {
+  comments?: Array<{ body?: string; createdAt?: string; author?: { login?: string } | null }>;
+  reviews?: Array<{ body?: string; submittedAt?: string; createdAt?: string; author?: { login?: string } | null }>;
+}): ReviewEntry[] {
+  const entries: ReviewEntry[] = [
+    ...(raw.comments ?? []).map((c) => ({
+      author: c.author?.login ?? "",
+      body: c.body ?? "",
+      createdAt: c.createdAt ?? "",
+    })),
+    ...(raw.reviews ?? []).map((r) => ({
+      author: r.author?.login ?? "",
+      body: r.body ?? "",
+      createdAt: r.submittedAt ?? r.createdAt ?? "",
+    })),
+  ];
+  return entries.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+}
+
+/** True when the factory App reviewed this exact head — approved or refused. */
+export function reviewedAt(entries: ReviewEntry[], headOid: string): boolean {
+  const review = latestReview(entries);
+  return review !== null && headOid.startsWith(review.head);
 }

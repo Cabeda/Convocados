@@ -115,9 +115,11 @@ nothing; if it refused with an argument, that is the disagreement Cabeda is ther
   you actually read (`gh pr view <n> --json headRefOid`). A scheduled run picks its next Change by
   the reviewed marker; the Merge gate merges on the verdict, and only when both name the current
   head. A stale marker is a stale decision.
-- Write `.factory-review/verdict` as your last act — the same word, `approve` or `refuse`. That
-  file is your check: **absent means the review did not finish, and an unfinished review fails**.
-  Silence is not approval, and a run that times out must not read as one.
+- Write `.factory-review/verdict` **before** you post the review — the same word, `approve` or
+  `refuse`. That file is your check: **absent means the review did not finish, and an unfinished
+  review fails**. The order matters: die before the file and the check is red with no marker
+  anywhere; die after it, before the review, and there is still no marker, so the merge sees
+  nothing. Silence is never approval.
 - If the Change is genuinely ready, say so, with no marker — and leave `factory:review` in place.
   The human gate is Cabeda's, and no agent merges, ever.
 - Push nothing. A reviewer that repairs its own finding is marking its own homework, and the

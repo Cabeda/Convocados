@@ -187,8 +187,10 @@ jobs:
             `<!-- factory:reviewed:<head sha> -->` for the head you read: the first gates the merge,
             the second tells a scheduled run this commit has been seen.
 
-            Write `.factory-review/verdict` with the same word as your last act. No file means the
-            review did not finish, and the check fails — which is the honest reading of a timeout.
+            Write `.factory-review/verdict` with the same word **before** you post the review. No
+            file means the review did not finish, and the check fails — which is the honest reading
+            of a timeout. Writing it first means a run that dies mid-review never leaves an approval
+            marker behind.
 
       - name: Record the verdict
         # The Reviewer writes this file as its last act. A missing file means the

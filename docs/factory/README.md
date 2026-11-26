@@ -1,7 +1,8 @@
 # The Delivery Factory
 
 Automation that turns Issues into ready-to-prod Changes, and watches for work nobody has
-asked for. It never merges.
+asked for. It merges only a **two-way door** — a Change whose undo is one revert, Reviewed and
+green — and nothing else. See *Merging* below.
 
 The contract lives in [`AGENTS.md`](../../AGENTS.md) (Mission, Core Principles, Merge
 Authority, The Delivery Factory). The vocabulary lives in
@@ -66,10 +67,9 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 | Agent | Trigger | May | May not |
 |---|---|---|---|
 | `fixer` | `schedule` (30 min): the oldest `factory:explored` Issue with no open Change, no `factory:blocked` and no live Claim — or a review that carries findings | reproduce, edit, commit, gate, write the handoff; in repair mode push to that `factory/*` branch | push in Issue mode, open a Change, merge, label, touch a human branch or a second Issue |
-| `merge` | `schedule` (30 min) | merge a factory Change that is green, approved and a two-way door | merge a one-way door, a draft, a stale branch, or anything the Reviewer refused |
 | `factory` | Issue labelled `ready-for-agent` | edit, commit, write the handoff artifact | push, open a Change, merge, release, label, touch a human branch (the `deliver` job pushes and opens the Change with a token minted after the run) |
 | `repairer` | Gate red | same as factory, budget 3 | exceed its Attempt budget |
-| `reviewer` | `pull_request` opened/synchronize | comment, mark findings for the Fixer | approve; push; edit; review a Change it cannot reach |
+| `reviewer` | `pull_request`, `schedule` | comment, mark findings for the Fixer, write its verdict | approve; push; edit anything but the verdict; review a Change it cannot reach |
 | `explorer-performance` | schedule (nightly) | read, run committed benchmarks, file Issues | edit code, label Issues |
 | `explorer-bugs` | schedule (weekly) | read, file Issues | edit code, label Issues |
 | `explorer-security` | dependency event + schedule | read, file Issues | edit code, label Issues |
@@ -80,6 +80,10 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 `repairer` is the same agent as `factory` with a lower `steps` budget. Separate file,
 identical permissions, so a repair cannot quietly inherit more authority than an
 implementation.
+
+The **Merge gate** is not an agent and has no row above: it is `factory-merge.yml` plus
+`scripts/factory/factory-merge-run.ts`, because a merge decision must be reproducible. It merges
+what `decideFactoryMerge` allows and nothing else.
 
 `sweeper` is the inverse of `repairer`: it finds broken Changes instead of fixing them, and its
 authority stops at an Issue. It runs on a schedule rather than a `pull_request` trigger on purpose —

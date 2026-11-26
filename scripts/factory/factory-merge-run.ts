@@ -11,10 +11,12 @@
  */
 import { execFileSync } from "node:child_process";
 import {
+  BEHIND_BASE,
   type Check,
   decideFactoryMerge,
   type FactoryFacts,
   explain,
+  type ReviewEntry,
   type Verdict,
 } from "./automerge-eligibility.ts";
 
@@ -34,8 +36,8 @@ interface RawPr {
 
 interface RawDetail {
   files: Array<{ path: string }>;
-  comments: Array<{ body: string }>;
-  reviews: Array<{ body: string }>;
+  comments: Array<{ body: string; createdAt: string; author: { login: string } | null }>;
+  reviews: Array<{ body: string; createdAt: string; author: { login: string } | null }>;
 }
 
 function gh(args: string[]): string {
@@ -84,11 +86,15 @@ function factsFor(pr: RawPr): { facts: FactoryFacts; verdict: Verdict } {
     labels: pr.labels.map((l) => l.name),
     checks: checksFor(pr),
     files: detail.files.map((f) => f.path),
-    // Oldest first, so `latestReview` can take the last word.
-    reviewBodies: [
-      ...detail.comments.map((c) => c.body ?? ""),
-      ...detail.reviews.map((r) => r.body ?? ""),
-    ],
+    // Both surfaces, each carrying its author and its time: `latestReview`
+    // orders them itself, because two concatenated lists are not chronological.
+    reviews: [...detail.comments, ...detail.reviews].map(
+      (r): ReviewEntry => ({
+        author: r.author?.login ?? "",
+        body: r.body ?? "",
+        createdAt: r.createdAt,
+      }),
+    ),
   };
 
   return { facts, verdict: decideFactoryMerge(facts) };
@@ -110,7 +116,19 @@ function main(): number {
   for (const pr of factory) {
     const { facts, verdict } = factsFor(pr);
     console.log(explain(facts, verdict));
-    if (!verdict.eligible) continue;
+    if (!verdict.eligible) {
+      // A stale base is the one block the machine can clear itself. Updating the
+      // branch re-runs CI; the next tick merges on evidence about the new base.
+      if (verdict.reasons.every((r) => r.includes(BEHIND_BASE))) {
+        try {
+          gh(["pr", "update-branch", String(pr.number), "--repo", REPO]);
+          console.log(`updated #${pr.number} onto ${pr.baseRefName}`);
+        } catch (error) {
+          console.log(`could not update #${pr.number}: ${error}`);
+        }
+      }
+      continue;
+    }
 
     if (DRY_RUN) {
       console.log(`would merge #${pr.number}`);
@@ -119,13 +137,19 @@ function main(): number {
 
     // `--match-head-commit` is the race guard: the decision was made about this
     // commit, and a push between the read and the merge would land untested code.
-    gh([
-      "pr", "merge", String(pr.number), "--repo", REPO, "--merge",
-      "--match-head-commit", pr.headRefOid,
-      "--subject", `${pr.headRefName}: merge (two-way door, green, approved)`,
-    ]);
-    console.log(`merged #${pr.number}`);
-    merged += 1;
+    // One rejected merge must not abort the batch — a head-of-line stall is how
+    // a later eligible Change never gets merged.
+    try {
+      gh([
+        "pr", "merge", String(pr.number), "--repo", REPO, "--merge",
+        "--match-head-commit", pr.headRefOid,
+        "--subject", `${pr.headRefName}: merge (two-way door, green, approved)`,
+      ]);
+      console.log(`merged #${pr.number}`);
+      merged += 1;
+    } catch (error) {
+      console.log(`merge of #${pr.number} was rejected: ${error}`);
+    }
   }
 
   console.log(merged === 0 ? "Nothing to merge." : `Merged ${merged}.`);

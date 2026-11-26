@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  BEHIND_BASE,
   decideAutomerge,
   decideFactoryMerge,
   explain,
@@ -15,6 +16,7 @@ import {
   REQUIRED_CHECKS,
   type Check,
   type PullRequestFacts,
+  type ReviewEntry,
 } from "../../scripts/factory/automerge-eligibility";
 
 const GREEN: Check[] = [
@@ -24,6 +26,7 @@ const GREEN: Check[] = [
   { name: "Lint", conclusion: "success" },
   { name: "Dependency Audit", conclusion: "success" },
   { name: "Build", conclusion: "success" },
+  { name: "PR Links Issue", conclusion: "success" },
 ];
 
 function pr(overrides: Partial<PullRequestFacts> = {}): PullRequestFacts {
@@ -175,7 +178,16 @@ describe("explain() is usable as an audit line", () => {
 });
 // ── Factory Changes and the two-way door ────────────────────────────────────
 
-const HEAD = "aaaa1111";
+const HEAD = "70d5e19ac8099eb60ba23386c24ca6aeb43a0617";
+
+function review(overrides: Partial<ReviewEntry> = {}): ReviewEntry {
+  return {
+    author: "convocarados-factory[bot]",
+    body: `No findings.\n<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`,
+    createdAt: "2026-11-26T09:00:00Z",
+    ...overrides,
+  };
+}
 
 function factoryPr(overrides: Partial<FactoryFacts> = {}): FactoryFacts {
   return {
@@ -190,7 +202,7 @@ function factoryPr(overrides: Partial<FactoryFacts> = {}): FactoryFacts {
     labels: [],
     checks: GREEN,
     files: ["src/lib/roster.ts", "src/test/roster.test.ts"],
-    reviewBodies: [`No findings.\n<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`],
+    reviews: [review()],
     ...overrides,
   };
 }
@@ -201,18 +213,29 @@ describe("a two-way door", () => {
   });
 
   it.each([
-    ["prisma/migrations/20261126000000_add/migration.sql", "a migration"],
-    ["prisma/schema.prisma", "a schema change"],
-    ["src/pages/api/auth/register.ts", "an auth route"],
-    ["src/lib/auth.server.ts", "auth"],
-    [".github/workflows/ci.yml", "workflows"],
-    ["AGENTS.md", "the constitution"],
-    ["package.json", "dependencies"],
-    ["fly.toml", "deploy"],
-    ["vitest.config.ts", "the measurement"],
-  ])("is not %s (%s)", (file) => {
+    "prisma/migrations/20261126000000_add/migration.sql",
+    "prisma/schema.prisma",
+    "src/pages/api/auth/register.ts",
+    "src/lib/auth.server.ts",
+    // The first list called these two-way; the Reviewer named them by file.
+    "src/lib/googleToken.server.ts",
+    "src/lib/calendarToken.server.ts",
+    "src/lib/cronAuth.server.ts",
+    "src/lib/scheduler.server.ts",
+    "scripts/backfill-scheduled-jobs.ts",
+    "litestream.yml",
+    // A Change that weakens the gate, or the rules that judge it.
+    "scripts/factory/automerge-eligibility.ts",
+    "scripts/factory/factory-merge-run.ts",
+    ".opencode/agents/reviewer.md",
+    ".github/workflows/factory-merge.yml",
+    "AGENTS.md",
+    "package.json",
+    "fly.toml",
+    "vitest.config.ts",
+  ])("is not %s", (file) => {
     const door = isTwoWayDoor([file]);
-    expect(door.eligible).toBe(false);
+    expect(door.eligible, file).toBe(false);
     expect(door.reasons[0]).toContain("one-way door");
   });
 });
@@ -221,14 +244,43 @@ describe("the review a merge reads", () => {
   it("takes the newest review and its verdict", () => {
     expect(
       latestReview([
-        `<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->`,
-        `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`,
+        review({ body: `<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->` }),
+        review({ body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`, createdAt: "2026-11-26T10:00:00Z" }),
       ]),
     ).toEqual({ head: HEAD, verdict: "approve" });
   });
 
+  it("orders a comment after an older review by time, not by list", () => {
+    // The bug: comments and reviews arrive in two lists, and concatenating them
+    // read an older approval as the current word.
+    expect(
+      latestReview([
+        review({ body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`, createdAt: "2026-11-26T09:00:00Z" }),
+        review({ body: `<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->`, createdAt: "2026-11-26T09:05:00Z" }),
+      ])?.verdict,
+    ).toBe("refuse");
+  });
+
+  it("takes the last marker in a body, so quoting refuse does not approve", () => {
+    expect(
+      latestReview([
+        review({
+          body: `I considered <!-- factory:verdict:approve --> and rejected it.\n<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->`,
+        }),
+      ])?.verdict,
+    ).toBe("refuse");
+  });
+
+  it("ignores a marker from anyone but the factory App", () => {
+    // Any GitHub user could comment the markers; the gate merged on the text.
+    expect(
+      latestReview([review({ author: "random-user" })]),
+    ).toBeNull();
+    expect(latestReview([review({ author: "Cabeda" })])).toBeNull();
+  });
+
   it("returns null when nothing reviewed this Change", () => {
-    expect(latestReview(["just a comment"])).toBeNull();
+    expect(latestReview([review({ body: "just a comment" })])).toBeNull();
   });
 });
 
@@ -237,11 +289,14 @@ describe("decideFactoryMerge", () => {
     expect(decideFactoryMerge(factoryPr())).toEqual({ eligible: true, reasons: [] });
   });
 
+  it("accepts an approval that abbreviated the head", () => {
+    const short = review({ body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD.slice(0, 7)} -->` });
+    expect(decideFactoryMerge(factoryPr({ reviews: [short] })).eligible).toBe(true);
+  });
+
   it("refuses a Change the Reviewer refused", () => {
     const verdict = decideFactoryMerge(
-      factoryPr({
-        reviewBodies: [`<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->`],
-      }),
+      factoryPr({ reviews: [review({ body: `<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->` })] }),
     );
     expect(verdict.eligible).toBe(false);
     expect(verdict.reasons.join(" ")).toContain("refuse");
@@ -249,16 +304,15 @@ describe("decideFactoryMerge", () => {
 
   it("refuses a Change whose only approval named an older head", () => {
     const verdict = decideFactoryMerge(
-      factoryPr({
-        reviewBodies: [`<!-- factory:verdict:approve -->\n<!-- factory:reviewed:9999ffff -->`],
-      }),
+      factoryPr({ reviews: [review({ body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:9999ffff -->` })] }),
     );
     expect(verdict.reasons.join(" ")).toContain("not the current head");
   });
 
   it("refuses a Change nobody reviewed", () => {
-    const verdict = decideFactoryMerge(factoryPr({ reviewBodies: [] }));
-    expect(verdict.reasons.join(" ")).toContain("no review has named its head");
+    expect(decideFactoryMerge(factoryPr({ reviews: [] })).reasons.join(" ")).toContain(
+      "no review has named its head",
+    );
   });
 
   it("refuses a one-way door even when green and approved", () => {
@@ -268,12 +322,25 @@ describe("decideFactoryMerge", () => {
   });
 
   it("refuses anything the human has parked", () => {
-    const verdict = decideFactoryMerge(factoryPr({ labels: ["factory:blocked"] }));
-    expect(verdict.reasons.join(" ")).toContain("factory:blocked");
+    expect(
+      decideFactoryMerge(factoryPr({ labels: ["factory:blocked"] })).reasons.join(" "),
+    ).toContain("factory:blocked");
   });
 
   it("refuses a human's Change", () => {
-    const verdict = decideFactoryMerge(factoryPr({ author: "Cabeda" }));
-    expect(verdict.reasons.join(" ")).toContain("not the factory App");
+    expect(decideFactoryMerge(factoryPr({ author: "Cabeda" })).reasons.join(" ")).toContain(
+      "not the factory App",
+    );
+  });
+
+  it("requires PR Links Issue, which both rulesets do", () => {
+    const checks = GREEN.filter((c) => c.name !== "PR Links Issue");
+    const verdict = decideFactoryMerge(factoryPr({ checks }));
+    expect(verdict.reasons.join(" ")).toContain("PR Links Issue");
+  });
+
+  it("names a stale base so the runner can update the branch", () => {
+    const verdict = decideFactoryMerge(factoryPr({ commitsBehindBase: 2 }));
+    expect(verdict.reasons.join(" ")).toContain(BEHIND_BASE);
   });
 });
