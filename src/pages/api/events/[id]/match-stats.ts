@@ -1,6 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getScoringType } from "../../../../lib/scoring";
+import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
+import { checkAccess } from "../../../../lib/eventAccess";
 
 interface Tally {
   name: string;
@@ -15,11 +17,48 @@ interface Tally {
  * GET — the per-player scorer table for an Event, replayed from its Match
  * Events (ADR 0039). No denormalized counters: the timeline is the source.
  */
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  if (getScoringType(event.sport) === "tennis") {
+  const scoringType = getScoringType(event.sport) === "tennis" ? "tennis" : "standard";
+
+  let isPrivileged = false;
+  if (event.accessPassword || !event.showCompetitiveData) {
+    const session = await getSession(request);
+    const { isOwner, isAdmin } = await checkOwnership(
+      request,
+      event.ownerId,
+      session ?? undefined,
+      event.id,
+    );
+    isPrivileged = isOwner || isAdmin;
+
+    if (event.accessPassword && !isPrivileged) {
+      const isInvited = session?.user
+        ? (await prisma.eventInvite.count({
+            where: { eventId: event.id, userId: session.user.id },
+          })) > 0
+        : false;
+      const access = checkAccess({
+        eventOwnerId: event.ownerId,
+        accessPassword: event.accessPassword,
+        requestUserId: session?.user?.id ?? null,
+        cookieHeader: request.headers.get("cookie"),
+        eventId: event.id,
+        isInvited,
+      });
+      if (!access.granted) {
+        return Response.json({ error: "Event access required." }, { status: 403 });
+      }
+    }
+  }
+
+  if (!event.showCompetitiveData && !isPrivileged) {
+    return Response.json({ scorers: [], scoringType });
+  }
+
+  if (scoringType === "tennis") {
     return Response.json({ scorers: [], scoringType: "tennis" });
   }
 
@@ -62,5 +101,5 @@ export const GET: APIRoute = async ({ params }) => {
   const scorers = Array.from(byKey.values())
     .sort((a, b) => b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name));
 
-  return Response.json({ scorers, scoringType: "standard" });
+  return Response.json({ scorers, scoringType });
 };
