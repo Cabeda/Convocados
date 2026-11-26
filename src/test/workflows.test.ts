@@ -388,3 +388,17 @@ describe("a Fixer cycle stays inside its budget", () => {
     expect(raw).toContain("permission-actions: write");
   });
 });
+
+describe("a dead run still hands over its branch", () => {
+  // `deliver.ts` reads the branch from `.factory-handoff/branch` only. A run
+  // killed before writing that file committed to `factory/<issue>-work` and had
+  // it silently dropped (#1710: 77 minutes, blocked with no branch). The
+  // packaging step knows the branch, so it must write it down.
+  it("records the branch before bundling it", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix.yml"), "utf8");
+    const records = raw.indexOf("> .factory-handoff/branch");
+    const bundles = raw.indexOf("git bundle create");
+    expect(records, "the packaging step must write the branch file").toBeGreaterThan(0);
+    expect(records, "it must be written before the bundle").toBeLessThan(bundles);
+  });
+});
