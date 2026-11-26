@@ -304,14 +304,13 @@ describe("a factory commit carries an identity the CLA accepts", () => {
   // #1807 shipped `convocados-factory[bot]` — one letter short of the App's
   // login — and went red on the CLA with a green suite.
   //
-  // Listed by hand rather than inferred: these are the four workflows whose
-  // agent implements, so these are the four that can author a commit.
-  const COMMITTING = [
-    "factory-issue.yml",
-    "factory-fix.yml",
-    "factory-fix-loop.yml",
-    "factory-repairer.yml",
-  ];
+  // Every workflow that runs the agent commits: the action commits whatever the
+  // agent leaves in the tree, and the Reviewer's own verdict file is enough to
+  // make the tree dirty. A workflow missing the identity dies before its first
+  // thought ("empty ident name … not allowed").
+  const COMMITTING = workflowFiles.filter((file) =>
+    readFileSync(join(workflowsDir, file), "utf8").includes("anomalyco/opencode/github"),
+  );
 
   const allowlist = () => {
     const raw = readFileSync(join(workflowsDir, "cla.yml"), "utf8");

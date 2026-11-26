@@ -109,6 +109,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set the committer identity
+        # The action commits whatever the agent leaves in the tree — now
+        # including the Reviewer's verdict file — so every agent workflow needs
+        # an identity, and the CLA must exempt it (#1807).
+        run: |
+          git config user.name "convocarados-factory[bot]"
+          git config user.email "convocarados-factory[bot]@users.noreply.github.com"
+
       - uses: pnpm/action-setup@v6
         with:
           run_install: false
