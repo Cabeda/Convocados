@@ -397,8 +397,10 @@ describe("the findings a re-run leaves", () => {
   it("treats a push-credential and account-merge path as one-way", () => {
     for (const file of [
       "src/pages/api/events/[id]/push.ts",
-      "src/pages/api/me/credentials/merge.ts",
-      "src/lib/mergeAccounts.server.ts",
+      "src/pages/api/me/credentials.ts",
+      "src/pages/api/me/api-keys.ts",
+      "src/lib/invite.server.ts",
+      "src/pages/api/events/[id]/invites.ts",
       "src/lib/apiKey.server.ts",
       "src/pages/api/admin/audit.ts",
     ]) {

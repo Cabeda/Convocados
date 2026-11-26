@@ -121,7 +121,7 @@ dependencies, the Android build, deploy config, the scheduler, the measurement �
 Three conditions, all required:
 
 - **the required Checks are green on the head** (`CI` and its members, `Analyze
-  (javascript-typescript)` — a missing check is not a pass);
+  (javascript-typescript)`, `PR Links Issue` — a missing check is not a pass);
 - **the Reviewer's verdict is `approve` and names that exact head** — the merge reads the marker,
   not the job status, because a scheduled review's check attaches to the default branch, not the PR;
 - **the Change is not behind its base and not a draft** — a green run on a stale base proves
