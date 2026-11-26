@@ -124,7 +124,10 @@ function main(): number {
       // A stale base is the one block the machine can clear itself, but not in
       // this run: `update-branch` rewrites the head, the Reviewer has not seen
       // the new one, and the next tick merges on a fresh review and fresh CI.
-      if (verdict.reasons.every((r) => r.includes(BEHIND_BASE))) {
+      // `mergeability is UNKNOWN` is GitHub still computing, not a reason to
+      // leave the branch stale forever — it clears once the update lands.
+      const actionable = verdict.reasons.filter((r) => !r.includes("UNKNOWN"));
+      if (actionable.length > 0 && actionable.every((r) => r.includes(BEHIND_BASE))) {
         try {
           gh(["pr", "update-branch", String(pr.number), "--repo", REPO]);
           console.log(`updated #${pr.number} onto ${pr.baseRefName}`);
