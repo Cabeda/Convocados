@@ -382,6 +382,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   // Player row (invite acceptance creates exactly that), and the Player-table
   // P2002 below cannot see it. Without this check a repeat add creates a
   // duplicate row, moves the queue order and re-announces the join (#1793).
+  //
   if (event.currentGameId && !pendingSelfInviteEventPlayerId) {
     const existingIdentity = await prisma.eventPlayer.findFirst({
       where: {
@@ -403,11 +404,15 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
         select: { archivedAt: true, status: true },
       });
       // A guest row with no account and an account resolved for this add is a
-      // *link*, not a duplicate: the organizer is attaching the guest to their
-      // account, and the merge branch below sets Player.userId. Rejecting it
-      // left the guest unlinked for good and silently missing notifications.
+      // *link*, not a duplicate: the P2002 merge below sets Player.userId.
+      // Rejecting it left the guest unlinked for good (reviewer finding).
       const linksThisIdentity = linkedUserId !== null && !existingIdentity.userId;
-      if (participant && !participant.archivedAt && participant.status !== "pending" && !linksThisIdentity) {
+      if (
+        participant &&
+        !participant.archivedAt &&
+        participant.status !== "pending" &&
+        !linksThisIdentity
+      ) {
         return {
           status: 409,
           body: { error: `"${trimmed}" is already in the list.`, code: "ALREADY_IN_ROSTER" },
@@ -483,6 +488,49 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
         where: { eventId_name: { eventId, name: trimmed } },
         select: { id: true, userId: true, order: true, archivedAt: true },
       });
+
+      // A pending invite that is now added directly must be activated, not
+      // rejected as a duplicate: the GameParticipant exists but has not
+      // accepted yet (#1793 review).
+      if (existing && !existing.archivedAt && event.currentGameId) {
+        const pendingIdentity = await prisma.eventPlayer.findFirst({
+          where: {
+            eventId,
+            ...(linkedUserId
+              ? { OR: [{ userId: linkedUserId }, { name: trimmed }] }
+              : { name: trimmed }),
+          },
+          select: { id: true, name: true },
+        });
+        if (pendingIdentity) {
+          const participant = await prisma.gameParticipant.findUnique({
+            where: {
+              gameId_eventPlayerId: {
+                gameId: event.currentGameId,
+                eventPlayerId: pendingIdentity.id,
+              },
+            },
+            select: { archivedAt: true, status: true },
+          });
+          if (participant && !participant.archivedAt && participant.status === "pending") {
+            await upsertGameParticipantForRoster({
+              gameId: event.currentGameId,
+              eventPlayerId: pendingIdentity.id,
+              status: "active",
+            });
+            if (resolvedUser && !existing.userId) {
+              await prisma.player.update({
+                where: { id: existing.id },
+                data: { userId: resolvedUser.id },
+              });
+            }
+            await finishRosterAdd(eventId, pendingIdentity.name, event.maxPlayers, event.currentGameId);
+            await notifyPlayerJoined({ event, playerName: trimmed, spotsLeftBefore, rosterCount, actor: joinActor, origin, senderClientId });
+            return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
+          }
+        }
+      }
+
       if (existing?.archivedAt) {
         // ── Re-add: un-archive + place at end of list + reset Rsvp=yes ─
         // New joiners go to the end of the list (the "Queue" mental model).
