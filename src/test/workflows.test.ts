@@ -384,7 +384,10 @@ describe("a Fixer cycle stays inside its budget", () => {
   it("lets the janitor start the drain, because the cron does not", () => {
     const raw = readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
     expect(raw).toContain("Wake the machine");
-    expect(raw).toContain("permission-actions: write");
+    // The hand-off must not ask for Actions write: the installation lacks it
+    // and the mint fails 422 before any dispatch happens.
+    expect(raw).not.toContain("permission-actions: write");
+    expect(raw).toContain("repos/$GITHUB_REPOSITORY/dispatches");
   });
 });
 
@@ -435,12 +438,13 @@ describe("three lanes work the backlog without racing", () => {
 
   it("tells the picker which slice of the queue to take", () => {
     expect(fix()).toContain('FACTORY_LANES: "3"');
-    expect(fix()).toContain("FACTORY_LANE: ${{ inputs.lane || 0 }}");
+    // A repository dispatch carries the lane in client_payload, not inputs.
+    expect(fix()).toContain("FACTORY_LANE: ${{ inputs.lane || github.event.client_payload.lane || 0 }}");
   });
 
   it("feeds every lane from the one cron that fires", () => {
     expect(janitor()).toContain("for lane in 0 1 2");
-    expect(janitor()).toContain("gh workflow run factory-reviewer.yml");
-    expect(janitor()).toContain("gh workflow run factory-merge.yml");
+    expect(janitor()).toContain("tick factory-review");
+    expect(janitor()).toContain("tick factory-merge");
   });
 });

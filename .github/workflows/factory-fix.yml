@@ -16,6 +16,11 @@ on:
     - cron: "*/30 * * * *"
   issues:
     types: [labeled]
+  # The janitor's hand-off. `gh workflow run` needs `actions: write`, which this
+  # App's installation does not grant; a repository dispatch needs only
+  # `contents: write`, which it has.
+  repository_dispatch:
+    types: [factory-tick]
   workflow_dispatch:
     inputs:
       issue:
@@ -68,7 +73,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DISPATCH_ISSUE: ${{ inputs.issue }}
-          FACTORY_LANE: ${{ inputs.lane || 0 }}
+          FACTORY_LANE: ${{ inputs.lane || github.event.client_payload.lane || 0 }}
           FACTORY_LANES: "3"
         run: |
           if [ -n "${DISPATCH_ISSUE:-}" ]; then
