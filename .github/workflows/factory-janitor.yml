@@ -69,6 +69,29 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: write
+          # Dispatch the Fixer. A newly added scheduled workflow has proven
+          # unreliable here — `factory: fix` has never fired on its own cron —
+          # while this one runs. One dispatch per tick keeps the drain moving.
+          permission-actions: write
+      - name: Wake the Fixer when the queue has work
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ vars.FACTORY_PAUSED }}" = "true" ]; then exit 0; fi
+          active=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-fix.yml \
+            --limit 20 --json status \
+            --jq '[.[] | select(.status == "in_progress" or .status == "queued")] | length')
+          if [ "$active" != "0" ]; then
+            echo "A Fixer run is already going."; exit 0
+          fi
+          queued=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --label factory:explored --limit 1 --json number --jq length)
+          if [ "$queued" = "0" ]; then
+            echo "The queue is empty."; exit 0
+          fi
+          gh workflow run factory-fix.yml --repo "$GITHUB_REPOSITORY"
+
       - name: Housekeeping
         # The real budget. A step that times out exits non-zero, and this absorbs
         # it, so the job — and therefore the Change's check list — stays green.

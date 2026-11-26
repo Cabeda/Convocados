@@ -8,11 +8,14 @@
 name: "factory: fix"
 
 on:
-  # A cron rather than `issues: labeled`, because the queue it drains is mostly a
-  # backlog: a new Issue must not jump thirty older ones, and a run that finishes
-  # early is picked up by the next tick instead of waiting for an event.
+  # A cron drains the backlog; the label trigger makes a newly filed Issue start
+  # a run immediately (which still works the oldest Issue first — freshness is
+  # not priority). The cron has been unreliable on a new workflow, so the
+  # janitor also dispatches this file when the queue is non-empty.
   schedule:
     - cron: "*/30 * * * *"
+  issues:
+    types: [labeled]
   workflow_dispatch:
     inputs:
       issue:
@@ -37,7 +40,8 @@ jobs:
     if: >-
       vars.FACTORY_PAUSED != 'true' &&
       vars.FACTORY_APP_ID != '' &&
-      vars.FACTORY_MODEL != ''
+      vars.FACTORY_MODEL != '' &&
+      (github.event_name != 'issues' || github.event.label.name == 'factory:explored')
     permissions:
       issues: write
       pull-requests: read
@@ -89,7 +93,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-    timeout-minutes: 95
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
@@ -140,9 +144,10 @@ jobs:
       - name: Run the Fixer
         # The real budget. A step that times out exits non-zero, and this absorbs
         # it, so the job — and therefore the Change's check list — stays green.
-        # 80 minutes, not 110: the first run hung on a provider call with no
-        # output for 100 minutes, and a hung hour is a hung hour at any ceiling.
-        timeout-minutes: 80
+        # 25 minutes. Two of the first four runs hung with no output for 77 and
+        # 100 minutes and delivered nothing; the work itself takes under ten.
+        # A shorter ceiling turns a stall into one lost tick, not one lost hour.
+        timeout-minutes: 25
         # Advisory, not a gate: an agent that wanders until the timeout must not
         # redden the very Checks it exists to serve.
         continue-on-error: true
@@ -174,8 +179,15 @@ jobs:
             branch `factory/${{ needs.queue.outputs.issue }}-work`: keep it, do not create another.
 
             Reproduce the defect with a test that fails for the reason the Issue describes, and keep
-            the failure output. Then the smallest fix, then `bash scripts/factory/gate.sh` (add
-            `--skip-android` only if the diff cannot touch Kotlin).
+            the failure output. Then the smallest fix, then
+            `timeout 3600 bash scripts/factory/gate.sh --skip-e2e` (add `--skip-android` only if the
+            diff cannot touch Kotlin). Wrap every other test command in `timeout 300 ...`: a vitest
+            process that ignores its own timeout has eaten a whole run twice.
+
+            This runner is already installed. Do not run `scripts/worktree-bootstrap.sh` (it is for a
+            local worktree and it breaks a clean runner), do not run `pnpm build`, and do not rebase
+            or update the branch. The only commands in your budget are the reproduction, the fix,
+            and the Gate.
 
             Commit twice, not once: as soon as the reproduction is red, and again when the Gate is
             green. A run that dies between the two keeps the test that proves the defect.

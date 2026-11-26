@@ -356,3 +356,35 @@ describe("the agent action can start on a bot-authored Change", () => {
     expect(raw, `${file} must pass TOKEN to the action`).toMatch(/^ +TOKEN: /m);
   });
 });
+
+describe("a Fixer cycle stays inside its budget", () => {
+  // Two of the first four runs hung with no output for 77 and 100 minutes and
+  // delivered nothing. The work itself takes under ten. The ceiling is what
+  // turns a stall into one lost tick instead of one lost hour.
+  const fix = () =>
+    (parse(readFileSync(join(workflowsDir, "factory-fix.yml"), "utf8")) as {
+      jobs: Record<string, { timeout_minutes?: number; steps: Array<{ name?: string; "timeout-minutes"?: number; with?: Record<string, unknown> }> }>;
+    }).jobs;
+
+  it("caps the agent step at 25 minutes", () => {
+    const steps = Object.values(fix()).flatMap((j) => j.steps);
+    const agent = steps.find((s) => s.name === "Run the Fixer");
+    expect(agent?.["timeout-minutes"]).toBe(25);
+  });
+
+  it("runs the Gate without e2e, which CI covers", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix.yml"), "utf8");
+    expect(raw).toContain("gate.sh --skip-e2e");
+  });
+
+  it("forbids the worktree bootstrap on a clean runner", () => {
+    const raw = readFileSync(join(process.cwd(), ".opencode/agents/fixer.md"), "utf8");
+    expect(raw).toMatch(/Never run `scripts\/worktree-bootstrap\.sh`/);
+  });
+
+  it("lets the janitor start the drain, because the cron does not", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
+    expect(raw).toContain("Wake the Fixer when the queue has work");
+    expect(raw).toContain("permission-actions: write");
+  });
+});
