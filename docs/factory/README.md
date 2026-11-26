@@ -26,7 +26,7 @@ ready-for-agent Issue (Cabeda's label)
   → Gate 2 (GitHub CI)         → red: Repairer, fresh session, same branch
   → Reviewer: independent review against Mission + Core Principles
   → Handoff: label factory:review, comment the summary and transcript
-  → CABEDA. Always Cabeda.
+  → the Merge gate for a two-way door; CABEDA for a one-way door.
 ```
 
 Nothing above is "done". Every path ends at a human, at **Blocked**, or — for a two-way door that

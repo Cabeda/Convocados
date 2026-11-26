@@ -177,6 +177,11 @@ export const ONE_WAY_PATHS: Array<{ match: RegExp; why: string }> = [
   { match: /^src\/pages\/api\/.*push[^/]*\.ts$/, why: "push credentials" },
   { match: /^src\/pages\/api\/me\/(credentials|api-keys)/, why: "account credentials" },
   { match: /^src\/lib\/merge[^/]*\.server\.ts$/, why: "account merging — it hard-deletes users" },
+  // Naming files one at a time missed `backfillMergedIdentity.server.ts`,
+  // `merge-player.ts`, `purge-player.ts` and `me/account.ts` in the same round.
+  // The rule is the word: any segment of the path that says the change can
+  // destroy data, mint a credential, or run on a schedule is one-way.
+  { match: /(^|\/)[^/]*(merge|purge|delete|backfill|invite|account|payment|billing)[^/]*(\/|$|\.)/i, why: "irreversible data or money" },
   { match: /^src\/lib\/invite[^/]*\.server\.ts$/, why: "invite tokens" },
   { match: /^src\/pages\/api\/events\/\[id\]\/invites\.ts$/, why: "invite tokens" },
   { match: /^src\/pages\/api\/(me\/calendar-token|oauth-callback|invite\/)/, why: "a token route" },
