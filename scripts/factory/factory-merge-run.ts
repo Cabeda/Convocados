@@ -67,13 +67,23 @@ function commitsBehind(base: string, head: string): number {
 }
 
 function checksFor(pr: RawPr): Check[] {
-  const { check_runs } = ghJson<{
-    check_runs: Array<{ name: string; conclusion: string | null; completed_at: string | null }>;
-  }>(["api", `repos/${REPO}/commits/${pr.headRefOid}/check-runs?per_page=100`]);
-  return check_runs.map((c) => ({
-    name: c.name,
-    conclusion: c.conclusion,
-    completedAt: c.completed_at,
+  // Through the pull request, not the checks API: the App's installation does
+  // not grant `checks: read`, and asking for it makes the whole token mint fail
+  // with 422 — which is how the first live merge run died. `pull-requests: write`
+  // already reads this field.
+  const { statusCheckRollup } = ghJson<{
+    statusCheckRollup: Array<{
+      name?: string;
+      context?: string;
+      conclusion?: string | null;
+      state?: string | null;
+      completedAt?: string | null;
+    }> | null;
+  }>(["pr", "view", String(pr.number), "--repo", REPO, "--json", "statusCheckRollup"]);
+  return (statusCheckRollup ?? []).map((c) => ({
+    name: c.name ?? c.context ?? "check",
+    conclusion: c.conclusion ?? c.state ?? null,
+    completedAt: c.completedAt ?? null,
   }));
 }
 
