@@ -1,5 +1,5 @@
 import { Prisma, prisma } from "./db.server";
-import { parseRecurrenceRule, nextOccurrence } from "./recurrence";
+import { anchorDayOf, parseRecurrenceRule, serializeRecurrenceRule, nextOccurrence } from "./recurrence";
 import { fireWebhooks } from "./webhook.server";
 import { autoPriorityEnroll } from "./priority.server";
 import { cancelEventJobs, scheduleEventReminders } from "./scheduler.server";
@@ -44,13 +44,24 @@ export async function advanceDueRecurringEvent(
   if (!rule) return "not-due";
 
   const currentNextResetAt = event.nextResetAt;
-  const newDateTime = nextOccurrence(event.dateTime, rule, now, event.timezone);
+  // Rules created before #1788 carry no anchorDay. Backfill it from the current
+  // occurrence before the write-back below replaces that date, so a month-end
+  // series keeps its day instead of drifting onto the clamped one forever.
+  const needsAnchor =
+    (rule.freq === "monthly" || rule.freq === "yearly") && rule.anchorDay === undefined;
+  const effectiveRule = needsAnchor
+    ? { ...rule, anchorDay: anchorDayOf(event.dateTime, event.timezone) }
+    : rule;
+  const newDateTime = nextOccurrence(event.dateTime, effectiveRule, now, event.timezone);
   const newNextResetAt = new Date(newDateTime.getTime() + event.durationMinutes * 60 * 1000);
 
   // Atomically claim the reset — only one concurrent caller gets count=1.
   const claimed = await prisma.event.updateMany({
     where: { id: event.id, nextResetAt: currentNextResetAt },
-    data: { nextResetAt: newNextResetAt },
+    data: {
+      nextResetAt: newNextResetAt,
+      ...(needsAnchor ? { recurrenceRule: serializeRecurrenceRule(effectiveRule) } : {}),
+    },
   });
   if (claimed.count === 0) return "concurrent";
 

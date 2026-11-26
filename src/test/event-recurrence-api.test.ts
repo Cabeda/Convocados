@@ -90,6 +90,29 @@ describe("PUT /api/events/[id]/recurrence", () => {
     ).toBe(90);
   });
 
+  it("preserves an existing anchor day when only the interval changes", async () => {
+    await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        dateTime: new Date("2027-02-28T19:00:00Z"),
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "monthly", interval: 1, anchorDay: 31 }),
+      },
+    });
+
+    const res = await PUT(
+      ctx(eventId, { isRecurring: true, recurrenceFreq: "monthly", recurrenceInterval: 2 }, ownerToken),
+    );
+    expect(res.status).toBe(200);
+
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    expect(JSON.parse(event!.recurrenceRule!)).toMatchObject({
+      freq: "monthly",
+      interval: 2,
+      anchorDay: 31,
+    });
+  });
+
   it("accepts an explicit interval and byDay", async () => {
     const res = await PUT(
       ctx(eventId, { isRecurring: true, recurrenceFreq: "weekly", recurrenceInterval: 2, recurrenceByDay: "TU,TH" }, ownerToken),
