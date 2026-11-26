@@ -1,0 +1,43 @@
+name: PR Hygiene
+
+# Body edits and label changes only need this ~5s check, not the ~20-minute CI
+# workflow. Keeping them here stops Dependabot / factory label calls from
+# re-running the whole suite and cancelling each other.
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+concurrency:
+  group: pr-hygiene-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── PR hygiene: every PR must name the issue it closes ───────────────────
+  # GitHub closes an issue only when the PR body carries a closing keyword
+  # ("Closes #123"). Without one the issue lingers open after the fix ships, and
+  # stale open state misleads the next reader (it cost a session: #1114 closed
+  # by hand 20h after its merge, #1199 11 days after). `no-issue` is the escape
+  # hatch, for a PR that genuinely closes nothing. The check itself is a module
+  # (scripts/check-pr-closing-keyword.mjs) with unit tests, so a regex typo here
+  # cannot ship green.
+  #
+  # This job's name is a required status check on `main`; renaming it would
+  # block every merge until the ruleset is updated.
+  pr-links-issue:
+    name: PR Links Issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the PR body names the issue it closes
+        env:
+          # Passed via env, never interpolated into the shell — body text is
+          # untrusted input.
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: node scripts/check-pr-closing-keyword.mjs
