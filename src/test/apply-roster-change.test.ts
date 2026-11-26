@@ -71,6 +71,31 @@ describe("applyRosterChange seam (c5)", () => {
     expect(result.body.error).toContain("Player name is required");
   });
 
+  it("links a guest already on the roster to their account instead of rejecting the add", async () => {
+    // Reviewer finding on #1805: the duplicate guard fired on any active
+    // GameParticipant, so an organizer could no longer attach an account to a
+    // guest already on the roster — the guest silently stayed unlinked and
+    // missed their notifications.
+    const seeded = await seedEvent(6);
+    const game = await prisma.game.create({ data: { eventId: seeded.id, dateTime: seeded.dateTime } });
+    await prisma.event.update({ where: { id: seeded.id }, data: { currentGameId: game.id } });
+    await prisma.user.create({
+      data: { id: "u-alex", name: "Alex", email: "alex@t.com", emailVerified: true },
+    });
+    const guest = await prisma.eventPlayer.create({ data: { eventId: seeded.id, name: "Alex" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: guest.id, status: "active", order: 0 },
+    });
+
+    const result = await applyRosterChange(
+      input(await loadEvent(seeded.id), { name: "Alex", email: "alex@t.com" }),
+    );
+
+    expect(result.status).toBe(200);
+    const player = await prisma.player.findFirst({ where: { eventId: seeded.id, name: "Alex" } });
+    expect(player?.userId).toBe("u-alex");
+  });
+
   it("applies a fresh join and returns the ok payload", async () => {
     const seeded = await seedEvent(5);
     const result = await applyRosterChange(input(await loadEvent(seeded.id), { name: "New Player" }));

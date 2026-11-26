@@ -390,7 +390,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           ? { OR: [{ userId: linkedUserId }, { name: trimmed }] }
           : { name: trimmed }),
       },
-      select: { id: true },
+      select: { id: true, userId: true },
     });
     if (existingIdentity) {
       const participant = await prisma.gameParticipant.findUnique({
@@ -402,7 +402,12 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
         },
         select: { archivedAt: true, status: true },
       });
-      if (participant && !participant.archivedAt && participant.status !== "pending") {
+      // A guest row with no account and an account resolved for this add is a
+      // *link*, not a duplicate: the organizer is attaching the guest to their
+      // account, and the merge branch below sets Player.userId. Rejecting it
+      // left the guest unlinked for good and silently missing notifications.
+      const linksThisIdentity = linkedUserId !== null && !existingIdentity.userId;
+      if (participant && !participant.archivedAt && participant.status !== "pending" && !linksThisIdentity) {
         return {
           status: 409,
           body: { error: `"${trimmed}" is already in the list.`, code: "ALREADY_IN_ROSTER" },
