@@ -8,7 +8,7 @@
  * before the user ever sees a login page — which is what Claude.ai reports as
  * "Authentication failed".
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
@@ -61,5 +61,35 @@ describe("OAuth DCR — MCP clients register themselves", () => {
     } as any);
 
     expect(res.status).toBe(400);
+  });
+
+  it("rejects a caller-supplied client_metadata_uri without fetching it", async () => {
+    // The fetched CIMD bytes are stripped by better-auth's registration
+    // schema anyway, so any outbound request is an SSRF primitive that buys
+    // nothing. A loopback URL must never be dialed and the field is refused.
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const res = await registerHandler({
+      request: registrationRequest({ client_metadata_uri: "http://127.0.0.1:1/" }),
+    } as any);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(res.status).toBe(400);
+    fetchSpy.mockRestore();
+  });
+
+  it("applies the 5/hour oauth_register limit on this concrete route", async () => {
+    // This file shadows the [...all] catch-all that used to carry the limit,
+    // so an unmetered DCR route let one caller hold workers at will.
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      const res = await registerHandler({
+        request: registrationRequest({ client_name: `Claude ${i}` }),
+      } as any);
+      statuses.push(res.status);
+    }
+
+    expect(statuses.slice(0, 5)).toEqual([201, 201, 201, 201, 201]);
+    expect(statuses[10]).toBe(429);
   });
 });
