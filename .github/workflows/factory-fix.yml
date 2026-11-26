@@ -89,7 +89,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-    timeout-minutes: 130
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@v7
         with:
@@ -109,10 +109,22 @@ jobs:
         env:
           DATABASE_URL: file:./prisma/dev.db
 
+      - name: Start the Change branch
+        # The branch exists before the agent does. A run that stalls, or is
+        # killed at the step timeout, then still leaves its work on `factory/*`
+        # instead of on `main` where the packaging step refuses to deliver it —
+        # observed on run 45729301815: 110 minutes, no branch, nothing salvaged.
+        env:
+          ISSUE: ${{ needs.queue.outputs.issue }}
+        run: |
+          git switch -c "factory/${ISSUE}-work" || git switch "factory/${ISSUE}-work"
+
       - name: Run the Fixer
         # The real budget. A step that times out exits non-zero, and this absorbs
         # it, so the job — and therefore the Change's check list — stays green.
-        timeout-minutes: 110
+        # 80 minutes, not 110: the first run hung on a provider call with no
+        # output for 100 minutes, and a hung hour is a hung hour at any ceiling.
+        timeout-minutes: 80
         # Advisory, not a gate: an agent that wanders until the timeout must not
         # redden the very Checks it exists to serve.
         continue-on-error: true
@@ -135,12 +147,15 @@ jobs:
             Work Issue #${{ needs.queue.outputs.issue }} as the Fixer, in Issue mode.
 
             Follow `.opencode/agents/fixer.md`, and read `.opencode/skills/high-quality-pr/SKILL.md`
-            before you design anything. The Issue is already claimed.
+            before you design anything. The Issue is already claimed, and you are already on
+            branch `factory/${{ needs.queue.outputs.issue }}-work`: keep it, do not create another.
 
-            Branch `factory/${{ needs.queue.outputs.issue }}-<slug>` from `origin/main`. Reproduce
-            the defect with a test that fails for the reason the Issue describes, and keep the
-            failure output. Then the smallest fix, then `bash scripts/factory/gate.sh` (add
-            `--skip-android` only if the diff cannot touch Kotlin). Commit.
+            Reproduce the defect with a test that fails for the reason the Issue describes, and keep
+            the failure output. Then the smallest fix, then `bash scripts/factory/gate.sh` (add
+            `--skip-android` only if the diff cannot touch Kotlin).
+
+            Commit twice, not once: as soon as the reproduction is red, and again when the Gate is
+            green. A run that dies between the two keeps the test that proves the defect.
 
             Then write `.factory-handoff/`: `status` (`review` or `blocked`), `branch`, `title`,
             `pr-body.md` (the skill's template, with the red-before/green-after reproduction), and

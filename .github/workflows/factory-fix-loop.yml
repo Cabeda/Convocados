@@ -133,17 +133,17 @@ jobs:
         env:
           DATABASE_URL: file:./prisma/dev.db
 
-      - name: Mint an installation token for our App
+      - name: Mint a read token for the round
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
-          # Least privilege, stated per run: contents to push the factory/*
-          # branch, pull-requests and issues to read the findings and answer
-          # them. No workflows permission, so a round cannot edit the workflow
-          # that runs it.
-          permission-contents: write
+          # The round reads the findings and answers in a comment; the push is
+          # the next step's token. Handing the agent a write token is how a
+          # prompt injection becomes a force-push to a human's branch — the
+          # permission has to be absent, not merely forbidden in prose.
+          permission-contents: read
           permission-pull-requests: write
           permission-issues: write
 
@@ -204,9 +204,41 @@ jobs:
             - a red suite: `gh pr checks ${{ needs.resolve.outputs.pr }}`, then the failing job's log
 
             Make the smallest change that answers the findings. Re-run `bash scripts/factory/gate.sh`
-            for the part you moved, then push to this same `factory/*` branch. Do not merge,
-            approve, close, or label.
+            for the part you moved, then commit to this branch — the workflow pushes it, you cannot.
+            Do not merge, approve, close, or label.
 
             If a finding is wrong, say why in one comment on the Change and leave that code alone.
-            If the Change is already correct, push nothing and say so in one comment. A round that
+            If the Change is already correct, commit nothing and say so in one comment. A round that
             changes nothing is a valid answer.
+
+      - name: Mint a write token for the push
+        # The round's own token is read-only; this one exists for a single `git
+        # push` and never reaches the agent.
+        if: steps.budget.outputs.run == 'true'
+        id: push-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          permission-contents: write
+
+      - name: Push the round
+        # An empty round is a valid answer, so a zero-commit diff is not an
+        # error. A branch that is not `factory/*` is: it means the round left
+        # the Change, and that branch is not its to move.
+        if: steps.budget.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ steps.push-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          branch="$(git rev-parse --abbrev-ref HEAD)"
+          case "$branch" in
+            factory/*) ;;
+            *) echo "Round left $branch; refusing to push." >&2; exit 0 ;;
+          esac
+          if [ "$(git rev-list --count "origin/$branch..HEAD")" = "0" ]; then
+            echo "No commits this round."
+            exit 0
+          fi
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/$branch"
