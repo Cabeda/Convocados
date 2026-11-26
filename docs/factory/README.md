@@ -10,11 +10,17 @@ Authority, The Delivery Factory). The vocabulary lives in
 ## The loop
 
 ```
-ready-for-agent Issue
-  → Factory: branch from origin/main, work in an isolated workspace
-  → Gate 1 (local): lint · typecheck · vitest --coverage · route-coverage
-                     feature-parity · Gradle assembleDebug :app + :wear · audit
-  → commit + handoff artifact → deliver job (fresh token): push factory/<issue>, open Change
+factory:explored Issue (an Explorer or the daily review filed it)
+  → Fixer: queue, oldest first, one at a time; branch from origin/main
+  → reproduce: a test that fails for the reason the Issue describes
+  → Gate 1 (local) → commit + handoff → deliver job (fresh token): push factory/<issue>,
+                     open the Change with `Closes #<issue>`
+  → Reviewer: independent review against Mission + Core Principles
+  → findings → Fixer again on the same branch (≤3 rounds), then Cabeda decides
+  → CABEDA. Always Cabeda.
+
+ready-for-agent Issue (Cabeda's label)
+  → Factory: the same Gate 1 and the same delivery, without the reproduction contract
   → Gate 2 (GitHub CI)         → red: Repairer, fresh session, same branch
   → Reviewer: independent review against Mission + Core Principles
   → Handoff: label factory:review, comment the summary and transcript
@@ -58,6 +64,7 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 
 | Agent | Trigger | May | May not |
 |---|---|---|---|
+| `fixer` | `schedule` (30 min): the oldest `factory:explored` Issue with no open Change, no `factory:blocked` and no live Claim — or a review that carries findings | reproduce, edit, commit, gate, write the handoff; in repair mode push to that `factory/*` branch | push in Issue mode, open a Change, merge, label, touch a human branch or a second Issue |
 | `factory` | Issue labelled `ready-for-agent` | edit, commit, write the handoff artifact | push, open a Change, merge, release, label, touch a human branch (the `deliver` job pushes and opens the Change with a token minted after the run) |
 | `repairer` | Gate red | same as factory, budget 3 | exceed its Attempt budget |
 | `reviewer` | `pull_request` opened/synchronize | comment, push fixes to `factory/*` | approve; edit a human branch; review a Change it cannot reach |
@@ -76,8 +83,10 @@ implementation.
 authority stops at an Issue. It runs on a schedule rather than a `pull_request` trigger on purpose —
 a run started by a Dependabot PR receives no repository secrets, so the App token could not be
 minted and the role would fail on precisely the machine-authored Changes it exists to notice. It
-also does not queue what it finds: it labels `factory:explored`, and promoting that to
-`ready-for-agent` stays Cabeda's decision.
+labels what it finds `factory:explored` like any Explorer, so the Fixer reads those Issues too — but
+a stuck Change's remedy lives on the Change, so the Fixer reports Blocked and points there instead
+of opening a second Change for the same work. Promotion to `ready-for-agent` stays Cabeda's
+decision.
 
 ## Files
 
@@ -132,7 +141,7 @@ reads the truth from GitHub.
 | `ready-for-agent` | Queued. **Only Cabeda applies it.** |
 | `factory:review` | Awaiting Cabeda. The Factory's only success state. |
 | `factory:blocked` | Budget spent or target unreachable. Waits for a human. |
-| `factory:explored` | Filed by an Explorer. **Not** queued. |
+| `factory:explored` | Filed by an Explorer, and **queued for the Fixer**. `factory:blocked` takes it out again. |
 | `wayfinder:grilling` | Spec not yet implementable — needs a grilling session first. **Not** queued. |
 
 Queue order: `dex:priority-1` → `-2` → `-3`, oldest first within each. A Claim is a comment
@@ -188,6 +197,7 @@ Steps 2 and 3 are where the risk is, and they are deliberately cheap.
 
 | Role | Trigger | Does | Never |
 |---|---|---|---|
+| **Fixer** | Schedule (30 min), or a review that carries findings | Works the oldest Explorer-filed Issue into a Change; answers the Reviewer on the same `factory/*` branch, three rounds at most | Merge, label, promote an Issue, pull work no Explorer offered |
 | **Factory** | Issue labelled `ready-for-agent` | Implements, gates, opens the Change, iterates on red | Merge, release, self-label |
 | **Reviewer** | Any non-draft PR whose run can mint its App token (not Dependabot, not a fork) | Independent review; pushes fixes to `factory/*` | Approve, touch a human branch |
 | **Sweeper** | Schedule (30 min) | Files one evidenced Issue per stuck open Change; comments once | Edit code, push, adopt work, queue anything |

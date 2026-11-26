@@ -37,7 +37,7 @@ engaging, management-free — or an explicit "none", in which case do not file i
 turns out to be a Hard Block category.
 
 You label the Issue `factory:explored` — that label is yours. You **never** apply
-`ready-for-agent`: only Cabeda does that, and an Issue nobody reviewed is not queued work.
+`ready-for-agent`: only Cabeda does that — applying it hands the Issue to the Factory instead.
 
 ## Exploration is memory
 

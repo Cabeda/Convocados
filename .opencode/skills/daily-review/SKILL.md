@@ -24,8 +24,8 @@ engaging**, **management-free**.
   - `node scripts/daily-review/file-issue.mjs` (creates/comments on an issue after validation),
   - `node scripts/daily-review/digest.mjs` (posts the digest),
   - `gh pr comment` / `gh issue comment` when the orchestrator decides a human needs the evidence.
-- **Never apply `ready-for-agent`.** Only Cabeda promotes an issue. The daily review proposes;
-  Cabeda decides.
+- **Never apply `ready-for-agent`.** Only Cabeda promotes an issue to the Factory. A filed Issue
+  goes into the Fixer's queue as it is; Cabeda still merges.
 - **Never merge or approve.** A comment is an argument, never a gate.
 - **No duplicates.** A finding is new only if no open issue, open Change, ADR, or closed issue in
   the last 30 days already covers it. `file-issue.mjs` enforces the fingerprint check; you still

@@ -116,8 +116,10 @@ thirty minutes is worse than no Sweeper: it trains the human to ignore the label
 - whether the head branch is out of date, and by how much, if you can tell cheaply;
 - an acceptance criterion someone could verify — usually "the checks are green and the Change is no
   longer behind its base";
-- what you did **not** do, and why: you did not touch the branch, and you did not queue this for
-  anyone. Promotion to `ready-for-agent` is Cabeda's decision, never yours.
+- what you did **not** do, and why: you did not touch the branch, and you did not promote the
+  Issue. `factory:explored` is yours to apply; promoting to `ready-for-agent` is Cabeda's
+  decision, never yours. The Fixer will read this Issue, and its only honest answer is Blocked —
+  the repair belongs on the Change's own branch.
 
 Then label the Issue `factory:explored` — that label is yours — and comment once on the Change
 itself, pointing at the Issue with one sentence of what you observed. That comment is how a human
