@@ -185,6 +185,25 @@ class DeepLinkTest {
         )
     }
 
+    // ── payer nudge lands on the payment-details card (GH #1722) ─────────────
+
+    @Test
+    fun `deepLinkToRoute resolves a user profile url over https and the scheme`() {
+        assertEquals(
+            "user/user-abc",
+            DeepLink.deepLinkToRoute("https://convocados.cabeda.dev/users/user-abc"),
+        )
+        assertEquals("user/user-abc", DeepLink.deepLinkToRoute("convocados://users/user-abc"))
+    }
+
+    @Test
+    fun `deepLinkToRoute ignores the payment-details fragment when reading the user id`() {
+        assertEquals(
+            "user/user-abc",
+            DeepLink.deepLinkToRoute("https://convocados.cabeda.dev/users/user-abc#payment-details"),
+        )
+    }
+
     // ── invite link survives sign-in ─────────────────────────────────────────
 
     @Test
