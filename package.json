@@ -1,6 +1,6 @@
 {
   "name": "convocados",
-  "version": "3.275.2",
+  "version": "3.276.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -68,7 +68,7 @@
     "react-leaflet": "^5.0.0",
     "recharts": "^3.11.0",
     "resend": "^6.39.0",
-    "web-push": "^3.6.7"
+    "web-push": "^4.0.0"
   },
   "devDependencies": {
     "@eslint-react/eslint-plugin": "^5.30.6",

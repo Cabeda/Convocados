@@ -206,6 +206,30 @@ describe("PUT /api/events/[id]/cancel", () => {
     expect(cancelledHistory).not.toBeNull();
   });
 
+  it("keeps a legacy month-end series anchored across the cancellation advance", async () => {
+    await seedUser();
+    const jan31 = new Date("2027-01-31T19:00:00Z");
+    const event = await seedEvent({
+      ownerId: "user1",
+      isRecurring: true,
+      // Pre-#1788 rule: no anchorDay.
+      recurrenceRule: JSON.stringify({ freq: "monthly", interval: 1 }),
+      dateTime: jan31,
+    });
+    await seedGame(event.id);
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    const res = await cancelGame(putCtx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    const after = await prisma.event.findUnique({ where: { id: event.id } });
+    // February clamps, but the series must still remember the 31st.
+    expect(after!.dateTime.toISOString().slice(0, 10)).toBe("2027-02-28");
+    expect(JSON.parse(after!.recurrenceRule!).anchorDay).toBe(31);
+  });
+
   it("seeds the replacement game with the Event default payer", async () => {
     await seedUser();
     const future = new Date(Date.now() + 86400_000);

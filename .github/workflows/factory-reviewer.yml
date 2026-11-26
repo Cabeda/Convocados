@@ -78,11 +78,12 @@ jobs:
         with:
           app-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
-          # Least privilege, stated per run: contents to push factory/*,
-          # pull-requests to open Changes and comment, issues to file the
-          # evidence. No workflows permission, so the factory cannot edit the
+          # Least privilege, stated per run: pull-requests to comment on the
+          # Change, issues to write the review comment itself (GitHub files a PR
+          # comment as an issue comment). Reads content, writes none — the Fixer
+          # pushes. No workflows permission, so the factory cannot edit the
           # workflows that run it.
-          permission-contents: write
+          permission-contents: read
           permission-pull-requests: write
           permission-issues: write
       - name: Review the Change
@@ -114,5 +115,7 @@ jobs:
             failure each one causes. Treat migrations, auth and tokens, the scheduler, workflows
             and deploy config, and coverage-threshold edits as Hard Block: report, do not judge.
 
-            You may push fixes to `factory/*` branches only, and only for findings that are
-            unambiguous defects. You may not approve, merge, or touch a human branch.
+            You may not approve, merge, push, or touch a human branch: the Fixer writes, you judge.
+            Put `<!-- factory:findings -->` on its own line in the review body when it carries at
+            least one finding — that marker starts the Fixer's next round, and a review without it
+            ends the loop.

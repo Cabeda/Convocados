@@ -203,4 +203,48 @@ describe("resolveLocation", () => {
     const result = await resolveLocation("Some Address");
     expect(result).toBeNull();
   });
+
+  it("issues exactly one Nominatim search for a multi-word address", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200 }),
+    );
+
+    await resolveLocation("Matosinhos Sports and Events Center");
+
+    // OSMF policy: one request per second. Four suffix retries in one create
+    // is the burst that gets the app permanently blocked.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/search?q=");
+  });
+
+  it("bounds every geocode request with an abort signal", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200 }),
+    );
+
+    await resolveLocation("Porto, Portugal");
+
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("still bounds maps-link and reverse-geocode requests", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const urlStr = typeof url === "string" ? url : url.toString();
+      if (urlStr.includes("goo.gl")) {
+        return new Response(null, {
+          status: 301,
+          headers: { location: "https://www.google.com/maps/search/?api=1&query=38.7223,-9.1393" },
+        });
+      }
+      return new Response(JSON.stringify({ name: "Praça do Município" }), { status: 200 });
+    });
+
+    await resolveLocation("https://maps.app.goo.gl/xyz789");
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    for (const call of fetchSpy.mock.calls) {
+      expect((call[1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+    }
+  });
 });

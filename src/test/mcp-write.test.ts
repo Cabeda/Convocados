@@ -146,6 +146,22 @@ describe("MCP write tools — create_event", () => {
     expect(event?.nextResetAt).toBeTruthy();
   });
 
+  it("anchors a monthly create_event to its day-of-month", async () => {
+    const owner = await createOwner();
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["create:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_create_event", {
+      title: "Monthly Agent",
+      dateTime: "2027-01-31T19:00:00Z",
+      timezone: "UTC",
+      isRecurring: true,
+      recurrenceFreq: "monthly",
+    })));
+    expect(res.status).toBe(200);
+    const data = JSON.parse((await res.json()).result.content[0].text);
+    const event = await prisma.event.findUnique({ where: { id: data.id } });
+    expect(JSON.parse(event!.recurrenceRule!).anchorDay).toBe(31);
+  });
+
   it("rejects an invalid dateTime", async () => {
     const owner = await createOwner();
     mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["create:events"], authMethod: "oauth", clientId: "c1" });
@@ -939,6 +955,33 @@ describe("MCP write tools — update_event", () => {
       eventId: event.id, dateTime: new Date(Date.now() - 3600_000).toISOString(),
     })));
     expect(res.status).toBe(400);
+  });
+
+  it("re-anchors a monthly event only when the day changes", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id, {
+      dateTime: new Date("2027-02-28T19:00:00Z"),
+      timezone: "UTC",
+      isRecurring: true,
+      recurrenceRule: JSON.stringify({ freq: "monthly", interval: 1, anchorDay: 31 }),
+    });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+
+    // Time-only edit while the occurrence sits on its clamped Feb 28: keep 31.
+    const timeOnly = await POST(ctx(callTool("convocados_update_event", {
+      eventId: event.id, dateTime: "2027-02-28T20:30:00Z",
+    })));
+    expect(timeOnly.status).toBe(200);
+    let updated = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(JSON.parse(updated!.recurrenceRule!).anchorDay).toBe(31);
+
+    // Moving the occurrence to another day moves the series.
+    const moved = await POST(ctx(callTool("convocados_update_event", {
+      eventId: event.id, dateTime: "2027-03-05T19:00:00Z",
+    })));
+    expect(moved.status).toBe(200);
+    updated = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(JSON.parse(updated!.recurrenceRule!).anchorDay).toBe(5);
   });
 });
 

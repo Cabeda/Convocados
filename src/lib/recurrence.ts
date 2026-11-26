@@ -5,6 +5,10 @@ export interface RecurrenceRule {
   freq: "daily" | "weekly" | "monthly" | "yearly";
   interval: number;
   byDay?: string; // single or comma-separated: "MO" | "MO,WE" | "MO,WE,FR" etc.
+  /** Day-of-month a monthly/yearly series is anchored to (1-31). Kept apart
+   *  from the current occurrence so a short month clamps to Feb 28 without
+   *  moving the series permanently onto the 28th. */
+  anchorDay?: number;
 }
 
 const DAY_MAP: Record<string, number> = {
@@ -22,6 +26,23 @@ export function parseRecurrenceRule(json: string | null): RecurrenceRule | null 
 
 export function serializeRecurrenceRule(rule: RecurrenceRule): string {
   return JSON.stringify(rule);
+}
+
+/** The wall-clock day-of-month of [date] in [timezone]. */
+export function anchorDayOf(date: Date, timezone?: string): number {
+  return toCivilPseudo(date, timezone || "UTC").getUTCDate();
+}
+
+/** Build a rule anchored to the day-of-month [dateTime] falls on in [timezone].
+ *  Monthly and yearly series then clamp a short month (Feb 28) yet return to
+ *  their original day (Mar 31) on the next occurrence. Daily/weekly ignore it. */
+export function buildRecurrenceRule(
+  rule: Omit<RecurrenceRule, "anchorDay">,
+  dateTime: Date,
+  timezone?: string,
+): RecurrenceRule {
+  if (rule.freq !== "monthly" && rule.freq !== "yearly") return rule;
+  return { ...rule, anchorDay: anchorDayOf(dateTime, timezone) };
 }
 
 /** Convert an instant to a "civil pseudo-Date" whose UTC fields are the
@@ -120,15 +141,55 @@ export function nextOccurrence(base: Date, rule: RecurrenceRule, after: Date, ti
     return best ?? toInstant(new Date(baseCivil));
   }
 
+  // Monthly and yearly arithmetic is anchored to the series' original
+  // day-of-month. `setUTCMonth`/`setUTCFullYear` roll a short month over
+  // (Jan 31 + 1 month = Mar 3), which skipped February and then made the
+  // rolled date the new base for every later occurrence. Clamp to the last
+  // day of the target month instead, and count from the anchor rather than
+  // from the clamped result so the series returns to its day afterwards.
+  const step = Number.isFinite(rule.interval) && rule.interval > 0
+    ? Math.floor(rule.interval)
+    : 1;
+  // Clamp the anchor itself: a rule read back from storage is untrusted JSON,
+  // and setUTCDate(0) would land on the previous month's last day.
+  const anchorDay = Math.min(31, Math.max(1,
+    typeof rule.anchorDay === "number" && Number.isFinite(rule.anchorDay)
+      ? rule.anchorDay
+      : baseCivil.getUTCDate(),
+  ));
+  const hours = baseCivil.getUTCHours();
+  const minutes = baseCivil.getUTCMinutes();
+  const seconds = baseCivil.getUTCSeconds();
+
   if (rule.freq === "yearly") {
-    const result = new Date(baseCivil);
-    while (toInstant(result).getTime() <= afterMs) result.setUTCFullYear(result.getUTCFullYear() + rule.interval);
+    let result = new Date(baseCivil);
+    let years = 0;
+    while (toInstant(result).getTime() <= afterMs) {
+      years += step;
+      const year = baseCivil.getUTCFullYear() + years;
+      const month = baseCivil.getUTCMonth();
+      const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      result = new Date(Date.UTC(year, month, Math.min(anchorDay, daysInMonth), hours, minutes, seconds));
+    }
     return toInstant(result);
   }
 
   // monthly
-  const result = new Date(baseCivil);
-  while (toInstant(result).getTime() <= afterMs) result.setUTCMonth(result.getUTCMonth() + rule.interval);
+  let result = new Date(baseCivil);
+  let months = 0;
+  while (toInstant(result).getTime() <= afterMs) {
+    months += step;
+    const monthStart = new Date(Date.UTC(
+      baseCivil.getUTCFullYear(),
+      baseCivil.getUTCMonth() + months,
+      1, hours, minutes, seconds,
+    ));
+    const daysInMonth = new Date(Date.UTC(
+      monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0,
+    )).getUTCDate();
+    monthStart.setUTCDate(Math.min(anchorDay, daysInMonth));
+    result = monthStart;
+  }
   return toInstant(result);
 }
 

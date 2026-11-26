@@ -45,6 +45,25 @@ describe("generateEventJsonLd", () => {
     const parsed = JSON.parse(generateEventJsonLd({ ...event, playerCount: 15 }));
     expect(parsed.remainingAttendeeCapacity).toBe(0);
   });
+
+  it("escapes script-breaking characters so a title cannot leave the script tag", () => {
+    const title = '</script><img src=x onerror=alert(1)> & "x"';
+    const jsonLd = generateEventJsonLd({ ...event, title });
+
+    expect(jsonLd).not.toContain("</script");
+    expect(jsonLd).not.toContain("<img");
+    expect(jsonLd).toContain("\\u003c/script\\u003e");
+    expect(jsonLd).toContain("\\u0026");
+    // JSON-level escaping must still round-trip for structured-data consumers.
+    expect(JSON.parse(jsonLd).name).toBe(title);
+  });
+
+  it("escapes the location field too", () => {
+    const location = "</script><script>alert(1)</script>";
+    const jsonLd = generateEventJsonLd({ ...event, location });
+    expect(jsonLd).not.toContain("</script");
+    expect(JSON.parse(jsonLd).location.name).toBe(location);
+  });
 });
 
 const baseEvent = {
