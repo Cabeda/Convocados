@@ -383,7 +383,7 @@ describe("a Fixer cycle stays inside its budget", () => {
 
   it("lets the janitor start the drain, because the cron does not", () => {
     const raw = readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
-    expect(raw).toContain("Wake the Fixer when the queue has work");
+    expect(raw).toContain("Wake the machine");
     expect(raw).toContain("permission-actions: write");
   });
 });
@@ -421,5 +421,26 @@ describe("the merge gate and the Reviewer's verdict", () => {
   it("lets the Reviewer write the verdict file and nothing else", () => {
     const raw = readFileSync(join(process.cwd(), ".opencode/agents/reviewer.md"), "utf8");
     expect(raw).toContain('".factory-review/**": allow');
+  });
+});
+
+describe("three lanes work the backlog without racing", () => {
+  const fix = () => readFileSync(join(workflowsDir, "factory-fix.yml"), "utf8");
+  const janitor = () => readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
+
+  it("keys the concurrency group by lane", () => {
+    // One group for every lane would serialise the whole backlog again.
+    expect(fix()).toContain("group: factory-fix-queue-${{ inputs.lane || 0 }}");
+  });
+
+  it("tells the picker which slice of the queue to take", () => {
+    expect(fix()).toContain('FACTORY_LANES: "3"');
+    expect(fix()).toContain("FACTORY_LANE: ${{ inputs.lane || 0 }}");
+  });
+
+  it("feeds every lane from the one cron that fires", () => {
+    expect(janitor()).toContain("for lane in 0 1 2");
+    expect(janitor()).toContain("gh workflow run factory-reviewer.yml");
+    expect(janitor()).toContain("gh workflow run factory-merge.yml");
   });
 });

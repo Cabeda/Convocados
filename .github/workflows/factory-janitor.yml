@@ -81,24 +81,31 @@ jobs:
           # unreliable here — `factory: fix` has never fired on its own cron —
           # while this one runs. One dispatch per tick keeps the drain moving.
           permission-actions: write
-      - name: Wake the Fixer when the queue has work
+      - name: Wake the machine
+        # A newly added scheduled workflow has never fired on its own here, and
+        # this one does. Each tick: feed all three Fixer lanes and the two
+        # downstream roles, which pick their own next Change. A lane that is
+        # busy keeps one pending run and starts when it frees.
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           if [ "${{ vars.FACTORY_PAUSED }}" = "true" ]; then exit 0; fi
-          active=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-fix.yml \
-            --limit 20 --json status \
-            --jq '[.[] | select(.status == "in_progress" or .status == "queued")] | length')
-          if [ "$active" != "0" ]; then
-            echo "A Fixer run is already going."; exit 0
-          fi
           queued=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
             --label factory:explored --limit 1 --json number --jq length)
-          if [ "$queued" = "0" ]; then
-            echo "The queue is empty."; exit 0
+          if [ "$queued" != "0" ]; then
+            for lane in 0 1 2; do
+              gh workflow run factory-fix.yml --repo "$GITHUB_REPOSITORY" -f lane="$lane"
+            done
+            echo "Fed three Fixer lanes."
+          else
+            echo "The queue is empty."
           fi
-          gh workflow run factory-fix.yml --repo "$GITHUB_REPOSITORY"
+          # Two reviews and one merge per tick: with three lanes producing, one
+          # review per 15 minutes is the bottleneck, not the Fixer.
+          gh workflow run factory-reviewer.yml --repo "$GITHUB_REPOSITORY" || true
+          gh workflow run factory-reviewer.yml --repo "$GITHUB_REPOSITORY" || true
+          gh workflow run factory-merge.yml --repo "$GITHUB_REPOSITORY" || true
 
       - name: Housekeeping
         # The real budget. A step that times out exits non-zero, and this absorbs
