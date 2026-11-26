@@ -14,10 +14,18 @@ vi.mock("~/lib/auth.helpers.server", () => ({
 }));
 
 import { GET as getHistoryEntry } from "~/pages/api/events/[id]/history/[historyId]";
+import { GET as getHistoryList } from "~/pages/api/events/[id]/history/index";
 import { syncGamePayments, setPaymentConfig } from "~/lib/settlement.server";
+import { hashPassword, buildAccessCookie } from "~/lib/eventAccess";
 
 function ctx(params: Record<string, string>) {
   return { request: new Request("http://localhost/api/test"), params } as any;
+}
+
+function ctxWithCookie(params: Record<string, string>, cookie?: string) {
+  const headers: Record<string, string> = {};
+  if (cookie) headers.cookie = cookie;
+  return { request: new Request("http://localhost/api/test", { headers }), params } as any;
 }
 
 async function seedEventWithGame(opts: {
@@ -163,5 +171,65 @@ describe("GET /api/events/[id]/history/[historyId] — game settlement", () => {
     const body = await res.json();
     expect(body.paymentConfig?.mode).toBe("untracked");
     expect(body.paymentsSnapshot).toBeNull();
+  });
+});
+
+describe("password-locked Event — history settlement ledger (#1715)", () => {
+  async function seedLockedGame() {
+    const { event, game } = await seedEventWithGame({ withPayer: true });
+    const locked = await prisma.event.update({
+      where: { id: event.id },
+      data: { accessPassword: hashPassword("secret"), isPublic: false },
+    });
+    const gh = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: game.dateTime,
+        status: "played",
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        source: "live",
+      },
+    });
+    return { event: locked, game, gh };
+  }
+
+  it("hides the ledger from an anonymous list read and serves it with the ev_access cookie", async () => {
+    const { event } = await seedLockedGame();
+
+    const anon = await getHistoryList(ctxWithCookie({ id: event.id }));
+    expect(anon.status).toBe(200);
+    const anonBody = await anon.json();
+    expect(anonBody.data.length).toBeGreaterThan(0);
+    for (const entry of anonBody.data) {
+      expect(entry.paymentConfig).toBeNull();
+      expect(entry.paymentsSnapshot).toBeNull();
+    }
+
+    const cookie = buildAccessCookie(null, event.id, event.accessPassword!);
+    const granted = await getHistoryList(ctxWithCookie({ id: event.id }, cookie));
+    const grantedBody = await granted.json();
+    const withLedger = grantedBody.data.filter((entry: { paymentConfig: unknown }) => entry.paymentConfig);
+    expect(withLedger.length).toBeGreaterThan(0);
+    expect(withLedger[0].paymentConfig.gameId).toBeTruthy();
+    expect(withLedger[0].paymentConfig.rows.length).toBeGreaterThan(0);
+  });
+
+  it("hides the ledger on the single history entry anonymously and serves it with the ev_access cookie", async () => {
+    const { event, game, gh } = await seedLockedGame();
+    const cookie = buildAccessCookie(null, event.id, event.accessPassword!);
+
+    for (const historyId of [game.id, gh.id]) {
+      const anon = await getHistoryEntry(ctxWithCookie({ id: event.id, historyId }));
+      expect(anon.status).toBe(200);
+      const anonBody = await anon.json();
+      expect(anonBody.paymentConfig).toBeNull();
+      expect(anonBody.paymentsSnapshot).toBeNull();
+
+      const granted = await getHistoryEntry(ctxWithCookie({ id: event.id, historyId }, cookie));
+      const grantedBody = await granted.json();
+      expect(grantedBody.paymentConfig?.gameId).toBe(game.id);
+      expect(grantedBody.paymentsSnapshot).not.toBeNull();
+    }
   });
 });
