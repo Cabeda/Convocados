@@ -254,7 +254,7 @@ describe("the review a merge reads", () => {
         review({ body: `<!-- factory:verdict:refuse -->\n${signed()}` }),
         review({ body: `<!-- factory:verdict:approve -->\n${signed()}`, createdAt: "2026-11-26T10:00:00Z" }),
       ]),
-    ).toEqual({ head: HEAD, signature: SIG, verdict: "approve" });
+    ).toMatchObject({ head: HEAD, signature: SIG, verdict: "approve" });
   });
 
   it("orders a comment after an older review by time, not by list", () => {
@@ -378,5 +378,31 @@ describe("decideFactoryMerge", () => {
   it("names a stale base so the runner can update the branch", () => {
     const verdict = decideFactoryMerge(factoryPr({ commitsBehindBase: 2 }));
     expect(verdict.reasons.join(" ")).toContain(BEHIND_BASE);
+  });
+});
+
+describe("the findings a re-run leaves", () => {
+  it("reads the latest run of a check name, not the first in the list", () => {
+    // A re-run puts two entries under one name; taking the first made the
+    // decision depend on API order.
+    const checks = [
+      { name: "CI", conclusion: "success", completedAt: "2026-11-26T09:00:00Z" },
+      { name: "CI", conclusion: "failure", completedAt: "2026-11-26T09:10:00Z" },
+      ...GREEN.filter((c) => c.name !== "CI"),
+    ];
+    const verdict = decideFactoryMerge(factoryPr({ checks }));
+    expect(verdict.reasons.join(" ")).toContain('required check "CI" concluded failure');
+  });
+
+  it("treats a push-credential and account-merge path as one-way", () => {
+    for (const file of [
+      "src/pages/api/events/[id]/push.ts",
+      "src/pages/api/me/credentials/merge.ts",
+      "src/lib/mergeAccounts.server.ts",
+      "src/lib/apiKey.server.ts",
+      "src/pages/api/admin/audit.ts",
+    ]) {
+      expect(isTwoWayDoor([file]).eligible, file).toBe(false);
+    }
   });
 });

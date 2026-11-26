@@ -27,6 +27,19 @@ export interface Check {
   name: string;
   /** null while pending or queued. */
   conclusion: string | null;
+  /** ISO timestamp; several runs can share a name after a re-run. */
+  completedAt?: string | null;
+}
+
+/** The run that decides a name: latest `completedAt`, then last in the list. */
+export function latestCheck(checks: Check[], name: string): Check | undefined {
+  const matching = checks.filter((c) => c.name === name);
+  if (matching.length === 0) return undefined;
+  return matching.reduce((newest, c) => {
+    const a = Date.parse(newest.completedAt ?? "");
+    const b = Date.parse(c.completedAt ?? "");
+    return Number.isNaN(b) || (!Number.isNaN(a) && b < a) ? newest : c;
+  });
 }
 
 export interface PullRequestFacts {
@@ -161,6 +174,9 @@ export const ONE_WAY_PATHS: Array<{ match: RegExp; why: string }> = [
   { match: /^src\/pages\/api\/auth\//, why: "an auth route" },
   { match: /^src\/pages\/api\/(cron|internal|admin)\//, why: "a privileged route" },
   { match: /^src\/pages\/api\/push\//, why: "push credentials" },
+  { match: /^src\/pages\/api\/.*push[^/]*\.ts$/, why: "push credentials" },
+  { match: /^src\/pages\/api\/me\/credentials\//, why: "account credentials" },
+  { match: /^src\/lib\/merge[^/]*\.server\.ts$/, why: "account merging" },
   { match: /^src\/pages\/api\/(me\/calendar-token|oauth-callback|invite\/)/, why: "a token route" },
   // The scheduler is its own service, with its own lockfile and image; the
   // root `scripts/*schedul*` anchor did not cover it.
@@ -197,6 +213,8 @@ export interface ReviewRecord {
   head: string;
   signature: string | null;
   verdict: "approve" | "refuse" | null;
+  /** The entry's body, so a caller can read the findings marker. */
+  body: string;
 }
 
 /**
@@ -260,7 +278,7 @@ export function latestReview(
     // When a verifier is supplied, an unsigned marker — or one whose signature
     // does not cover this head **and** this verdict — is not a review at all.
     if (verify && (!signature || !verdict || !verify(head, verdict, signature))) continue;
-    return { head, signature, verdict: verdict ?? null };
+    return { head, signature, verdict: verdict ?? null, body: entry.body ?? "" };
   }
   return null;
 }
@@ -297,7 +315,7 @@ export function decideFactoryMerge(pr: FactoryFacts): Verdict {
   }
 
   for (const required of REQUIRED_CHECKS) {
-    const check = pr.checks.find((c) => c.name === required);
+    const check = latestCheck(pr.checks, required);
     if (!check) reasons.push(`required check "${required}" never ran`);
     else if (check.conclusion === null) reasons.push(`required check "${required}" has not completed`);
     else if (check.conclusion !== "success") reasons.push(`required check "${required}" concluded ${check.conclusion}`);

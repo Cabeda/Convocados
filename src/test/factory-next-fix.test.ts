@@ -74,6 +74,11 @@ describe("needsFix", () => {
     expect(needsFix(pr({ headRefName: "fix/1788-monthly-clamp" }))).toBe(false);
   });
 
+  it("does not round on a refusal that carries no findings", () => {
+    // A Hard Block refusal (auth, workflows) has nothing for the Fixer to change.
+    expect(needsFix(pr({ entries: [entry(reviewed(HEAD))] }))).toBe(false);
+  });
+
   it("rounds on a red check even with no review", () => {
     expect(needsFix(pr({ entries: [], failingChecks: ["CI"] }))).toBe(true);
   });

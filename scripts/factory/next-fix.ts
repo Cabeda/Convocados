@@ -53,7 +53,9 @@ export function needsFix(pr: FixCandidate): boolean {
   // marker cannot start a round against the wrong head.
   const latest = latestReview(entries, verify);
   if (!latest || !pr.headRefOid.startsWith(latest.head)) return false;
-  return latest.verdict !== "approve";
+  // A refusal with no findings is a Hard Block a human must take: a round would
+  // change code the Reviewer did not ask to change.
+  return latest.verdict === "refuse" && latest.body.includes("<!-- factory:findings -->");
 }
 
 export function pickFix(candidates: FixCandidate[]): FixCandidate | null {

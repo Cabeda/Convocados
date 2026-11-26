@@ -208,8 +208,9 @@ jobs:
           body=.factory-review/review.md
           verdict="$(cat .factory-review/verdict 2>/dev/null || echo "")"
           if [ ! -f "$body" ]; then
-            echo "The Reviewer wrote no body; nothing to post." >&2
-            exit 0
+            # A verdict with no review is a green check nobody can read. Fail.
+            echo "The Reviewer wrote no body; the review did not finish." >&2
+            exit 1
           fi
           case "$verdict" in
             approve|refuse) ;;

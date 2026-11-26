@@ -67,11 +67,14 @@ function commitsBehind(base: string, head: string): number {
 }
 
 function checksFor(pr: RawPr): Check[] {
-  const { check_runs } = ghJson<{ check_runs: Array<{ name: string; conclusion: string | null }> }>([
-    "api",
-    `repos/${REPO}/commits/${pr.headRefOid}/check-runs?per_page=100`,
-  ]);
-  return check_runs.map((c) => ({ name: c.name, conclusion: c.conclusion }));
+  const { check_runs } = ghJson<{
+    check_runs: Array<{ name: string; conclusion: string | null; completed_at: string | null }>;
+  }>(["api", `repos/${REPO}/commits/${pr.headRefOid}/check-runs?per_page=100`]);
+  return check_runs.map((c) => ({
+    name: c.name,
+    conclusion: c.conclusion,
+    completedAt: c.completed_at,
+  }));
 }
 
 function factsFor(pr: RawPr): { facts: FactoryFacts; verdict: Verdict } {
