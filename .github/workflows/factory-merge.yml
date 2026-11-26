@@ -55,10 +55,9 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: read
-          # The decision reads the head's check-runs, which needs Checks: read.
-          # Listing permissions narrows the token, so omitting this made every
-          # run 403 and no Change could ever merge.
-          permission-checks: read
+          # No `checks: read`: the installation does not grant it, and asking for
+          # a permission the App lacks makes the mint fail 422. The rollup is read
+          # through the pull request instead.
 
       - name: Merge the eligible Changes
         env:
