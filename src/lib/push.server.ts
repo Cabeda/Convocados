@@ -48,6 +48,7 @@ const CAPACITY_JOB_TYPES: Record<NotificationJobType, boolean> = {
   bench_promoted_capacity: false,
   payment_confirmed: false,
   payment_self_reported: false,
+  payment_payer_check_in: false,
   payer_assigned: false,
   payer_changed: false,
   payer_vacant: false,

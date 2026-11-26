@@ -165,12 +165,15 @@ class ConvocadosFcmService : FirebaseMessagingService() {
             "payment_confirmed" -> CHANNEL_PAYMENT_REMINDERS
             "payment_self_reported" -> CHANNEL_PAYMENT_REMINDERS
             "payment_payer_check_in" -> CHANNEL_PAYMENT_REMINDERS
+            "payer_assigned", "payer_changed" -> CHANNEL_PAYMENT_REMINDERS
             // Tier 1 — Event-level
             "game_cancelled" -> CHANNEL_EVENT_UPDATES
             "game_invite" -> CHANNEL_EVENT_UPDATES
             "player_invited" -> CHANNEL_EVENT_UPDATES
             "event_details" -> CHANNEL_EVENT_UPDATES
             "recruitment", "few_spots_left" -> CHANNEL_EVENT_UPDATES
+            "payer_vacant" -> CHANNEL_EVENT_UPDATES
+            "crew_captain_nominated", "crew_captain_accepted" -> CHANNEL_EVENT_UPDATES
             // Legacy / fallback
             "game_reminder" -> CHANNEL_GAME_REMINDERS
             "player_activity" -> CHANNEL_PLAYER_ACTIVITY

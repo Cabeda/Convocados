@@ -45,9 +45,12 @@ class NotificationChannelsTest {
 
     @Test
     fun `payment types route to payment channel`() {
-        assertEquals(ConvocadosFcmService.CHANNEL_PAYMENT_REMINDERS, ConvocadosFcmService.channelIdFor("payment_confirmed"))
-        assertEquals(ConvocadosFcmService.CHANNEL_PAYMENT_REMINDERS, ConvocadosFcmService.channelIdFor("payment_self_reported"))
-        assertEquals(ConvocadosFcmService.CHANNEL_PAYMENT_REMINDERS, ConvocadosFcmService.channelIdFor("payment_payer_check_in"))
+        for (type in listOf(
+            "payment_confirmed", "payment_self_reported", "payment_payer_check_in",
+            "payer_assigned", "payer_changed",
+        )) {
+            assertEquals(type, ConvocadosFcmService.CHANNEL_PAYMENT_REMINDERS, ConvocadosFcmService.channelIdFor(type))
+        }
     }
 
     @Test
@@ -55,6 +58,7 @@ class NotificationChannelsTest {
         for (type in listOf(
             "game_cancelled", "game_invite", "event_details",
             "recruitment", "few_spots_left",
+            "payer_vacant", "crew_captain_nominated", "crew_captain_accepted",
         )) {
             assertEquals(type, ConvocadosFcmService.CHANNEL_EVENT_UPDATES, ConvocadosFcmService.channelIdFor(type))
         }
