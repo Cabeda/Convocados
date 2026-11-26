@@ -1,7 +1,17 @@
 import { checkOwnership, checkEventAdmin } from "./auth.helpers.server";
 import type { SessionResult } from "./auth.helpers.server";
+import { authenticateRequest, requireScope } from "./authenticate.server";
 import { prisma } from "./db.server";
 import { checkAccess, type AccessResult } from "./eventAccess";
+import { insufficientScopeChallenge } from "./mcp/protocol";
+
+/**
+ * The scopes that authorize an event write. Declared once here so a route
+ * cannot forget the check: ownership alone is not enough for an OAuth token
+ * scoped `read:events`. `manage:payments` is included because payment routes
+ * (payer claim, settlement) legitimately act on their own narrower grant.
+ */
+const EVENT_WRITE_SCOPES = ["write:events", "manage:payments"] as const;
 
 /**
  * The role an event-mutation caller holds, resolved at the authorization seam.
@@ -18,12 +28,15 @@ export interface EventMutationAuthz {
   isAdmin: boolean;
   session: SessionResult | null;
   /**
-   * Why a denial happened, when the client can act on it. Only
-   * `password_required` today: the Event is open by link but password-locked,
-   * so a client should route the user to the password prompt instead of
-   * reporting an ownership problem.
+   * Why a denial happened, when the client can act on it. `password_required`:
+   * the Event is open by link but password-locked, so a client should route the
+   * user to the password prompt instead of reporting an ownership problem.
+   * `insufficient_scope`: the OAuth token is valid but lacks every write scope;
+   * the client should re-consent with `requiredScopes`.
    */
-  reason?: "password_required";
+  reason?: "password_required" | "insufficient_scope";
+  /** The scopes that would have authorized this write (only for `insufficient_scope`). */
+  requiredScopes?: string[];
 }
 
 /** The minimal event facts the authorization seam needs. */
@@ -69,13 +82,36 @@ export async function authorizeEventMutation(
   );
 
   let role: EventMutationRole = "forbidden";
-  let reason: "password_required" | undefined;
+  let reason: "password_required" | "insufficient_scope" | undefined;
   if (isOwner) role = "owner";
   else if (isAdmin) role = "admin";
   else if (event.ownerId === null && !event.isPublic) {
     const access = await checkLinkAccess(request, event, session);
     if (access.granted) role = "ownerless-open";
     else reason = access.reason;
+  }
+
+  // Ownership is settled first, so a read-scoped token still cannot mutate an
+  // event it does not own. A session cookie carries ["*"]; anonymous link
+  // holders send no bearer at all. Only token callers are scope-checked.
+  const isWrite = !["GET", "HEAD", "OPTIONS"].includes(request.method);
+  if (
+    role !== "forbidden" &&
+    isWrite &&
+    request.headers.get("authorization")
+  ) {
+    const auth = await authenticateRequest(request);
+    if (auth && !EVENT_WRITE_SCOPES.some((scope) => requireScope(auth, scope))) {
+      return {
+        allowed: false,
+        role: "forbidden",
+        isOwner,
+        isAdmin,
+        session,
+        reason: "insufficient_scope",
+        requiredScopes: [...EVENT_WRITE_SCOPES],
+      };
+    }
   }
 
   return { allowed: role !== "forbidden", role, isOwner, isAdmin, session, reason };
@@ -87,6 +123,13 @@ export async function authorizeEventMutation(
  * to the password prompt rather than report an ownership problem.
  */
 export function eventMutationDenied(authz: EventMutationAuthz, error: string): Response {
+  if (authz.reason === "insufficient_scope") {
+    const scopes = authz.requiredScopes ?? [];
+    return Response.json(
+      { error: "insufficient_scope", scope: scopes.join(" ") },
+      { status: 403, headers: { "WWW-Authenticate": insufficientScopeChallenge(scopes) } },
+    );
+  }
   return Response.json(
     authz.reason === "password_required" ? { error, locked: true } : { error },
     { status: 403 },

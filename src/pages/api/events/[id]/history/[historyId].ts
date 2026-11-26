@@ -4,6 +4,7 @@ import { processGame, recalculateAllRatings } from "../../../../../lib/elo.serve
 import { computeSkillUpdates } from "../../../../../lib/skill";
 import { MVP_ELO_BONUS } from "../../../../../lib/mvp.constants";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
+import { authorizeEventMutation, eventMutationDenied } from "../../../../../lib/eventAuthz.server";
 import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
@@ -699,9 +700,9 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
-  if (!isOwner && !isAdmin) {
-    return Response.json({ error: "Only the event owner or admin can delete history entries." }, { status: 403 });
+  const authz = await authorizeEventMutation(request, event, session);
+  if (!authz.allowed) {
+    return eventMutationDenied(authz, "Only the event owner or admin can delete history entries.");
   }
 
   let entry = await prisma.gameHistory.findUnique({

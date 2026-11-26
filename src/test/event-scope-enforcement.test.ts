@@ -132,12 +132,10 @@ beforeEach(async () => {
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
 
-  let ownerClientId = "";
-  ({ userId: ownerId, clientId: ownerClientId, token: readToken } = await seedUserWithToken(
-    "owner",
-    "openid read:events",
-  ));
-  fullToken = await addToken(ownerId, ownerClientId, "openid read:events write:events", "builder");
+  const owner = await seedUserWithToken("owner", "openid read:events");
+  ownerId = owner.userId;
+  readToken = owner.token;
+  fullToken = await addToken(owner.userId, owner.clientId, "openid read:events write:events", "builder");
 });
 
 describe("event mutation scope enforcement", () => {

@@ -96,6 +96,15 @@ async function seedGame(eventId: string, status = "upcoming") {
 beforeEach(async () => {
   mockGetSession.mockResolvedValue(null);
   mockCheckOwnership.mockReset();
+  mockCheckOwnership.mockImplementation(
+    async (_request: any, eventOwnerId: string | null, existingSession: any, eventId: string | undefined) => {
+      const session = existingSession ?? (await mockGetSession());
+      const userId = session?.user?.id;
+      const isOwner = !!(userId && eventOwnerId && userId === eventOwnerId);
+      const isAdmin = !isOwner && userId ? await mockCheckEventAdmin(eventId ?? "", userId) : false;
+      return { isOwner, isAdmin, session };
+    },
+  );
   mockCheckEventAdmin.mockReset();
   mockEnqueueNotification.mockReset();
   mockFireWebhooks.mockReset();
