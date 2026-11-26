@@ -3,7 +3,7 @@ import { IconButton, Snackbar } from "@mui/material";
 import ShareIcon from "@mui/icons-material/Share";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
-import { formatDateInTz } from "~/lib/timezones";
+import { buildEventShareText, shareEvent } from "./shareEvent";
 
 interface Props {
   title: string;
@@ -19,44 +19,20 @@ export function ShareBar({ title, dateTime, timezone, location, maxPlayers, play
   const locale = detectLocale();
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
-  const spotsLeft = maxPlayers - playerCount;
   const url = typeof window !== "undefined" ? window.location.href : "";
 
-  const formattedDate = formatDateInTz(dateTime, locale, timezone, {
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
+  const details = { title, dateTime, timezone, location, maxPlayers, playerCount, url };
+  const shareText = buildEventShareText(details, locale, {
+    spotsLeft: (n) => t("spotsLeft", { n }),
+    full: t("full"),
   });
 
-  const shareText = [
-    `⚽ ${title}`,
-    `📅 ${formattedDate}`,
-    location && `📍 ${location}`,
-    spotsLeft > 0 ? `👥 ${t("spotsLeft", { n: spotsLeft })}` : `👥 ${t("full")}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
   const handleShare = async () => {
-    const canShare = typeof navigator !== "undefined" && !!navigator.share;
-
-    if (canShare) {
-      try {
-        await navigator.share({
-          title,
-          text: shareText,
-          url,
-        });
-        return;
-      } catch {
-        // User cancelled
-      }
+    const copied = await shareEvent({ title, text: shareText, url });
+    if (copied) {
+      setSnackbar(t("linkCopiedFull"));
+      setTimeout(() => setSnackbar(null), 2500);
     }
-
-    // Fallback: copy link to clipboard
-    await navigator.clipboard.writeText(url);
-    setSnackbar(t("linkCopiedFull"));
-    setTimeout(() => setSnackbar(null), 2500);
   };
 
   return (
