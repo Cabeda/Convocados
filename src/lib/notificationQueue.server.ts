@@ -12,6 +12,14 @@ const MAX_RETRIES = 3;
 const JOB_CONCURRENCY = 10;
 /** Dead-letter jobs older than this are pruned on each drain run */
 const DEAD_LETTER_TTL_DAYS = 30;
+/**
+ * A claim older than this belongs to a dead worker and is reclaimable. Kept far
+ * wider than any send so a live worker is never raced into a duplicate push;
+ * the cost of a wide window is only that a crashed batch is redelivered later.
+ */
+export const CLAIM_LEASE_MS = 5 * 60 * 1000;
+/** /api/admin/stats counts reclaimed-then-delivered jobs in this window. */
+export const RECLAIM_WINDOW_HOURS = 24;
 
 export type NotificationJobType =
   | "player_joined"
@@ -90,7 +98,7 @@ const PLAYER_ACTIVITY_TYPES = new Set<string>([
  * Group player-activity jobs for the same event within the grouping window.
  * Returns grouped jobs (collapsed) + non-activity jobs (passthrough).
  */
-function groupPlayerActivityJobs(jobs: Array<{ id: string; eventId: string; type: string; payload: string; senderClientId: string | null; createdAt: Date; retryCount: number }>) {
+function groupPlayerActivityJobs(jobs: Array<{ id: string; eventId: string; type: string; payload: string; senderClientId: string | null; createdAt: Date; retryCount: number; claimedBy: string | null }>) {
   const activityByEvent = new Map<string, typeof jobs>();
   const other: typeof jobs = [];
 
@@ -209,26 +217,45 @@ function isBusyError(err: unknown): boolean {
 /**
  * Claim up to BATCH_SIZE pending jobs in one transaction.
  *
+ * A claim is a lease, not a delivery: `processedAt` is only stamped after the
+ * send succeeds, so a row whose worker died mid-send is reclaimed once
+ * `claimedAt` is older than {@link CLAIM_LEASE_MS} (#1735). Reclaimed rows are
+ * stamped with `reclaimedAt` so /api/admin/stats can make a crash loop loud.
+ *
  * Returns null instead of throwing when the lock was busy (#1346): the rows are
  * still pending, so the next drain — every enqueue schedules one, and the cron
  * runs on a timer — picks them up. A throw here propagated into whichever job
  * triggered the drain and dead-lettered it.
  */
 async function claimBatchOrNull() {
+  const now = new Date();
+  const leaseCutoff = new Date(now.getTime() - CLAIM_LEASE_MS);
+  const token = `${process.pid}:${now.getTime()}:${Math.random().toString(36).slice(2, 10)}`;
   try {
     return await prisma.$transaction(async (tx) => {
       const pending = await tx.notificationJob.findMany({
-        where: { processedAt: null, failedAt: null },
+        where: {
+          processedAt: null,
+          failedAt: null,
+          OR: [{ claimedAt: null }, { claimedAt: { lt: leaseCutoff } }],
+        },
         orderBy: { createdAt: "asc" },
         take: BATCH_SIZE,
-        select: { id: true },
+        select: { id: true, claimedAt: true },
       });
       if (pending.length === 0) return [];
       const ids = pending.map((j) => j.id);
+      const reclaimedIds = pending.filter((j) => j.claimedAt !== null).map((j) => j.id);
       await tx.notificationJob.updateMany({
         where: { id: { in: ids } },
-        data: { processedAt: new Date() },
+        data: { claimedAt: now, claimedBy: token },
       });
+      if (reclaimedIds.length > 0) {
+        await tx.notificationJob.updateMany({
+          where: { id: { in: reclaimedIds } },
+          data: { reclaimedAt: now },
+        });
+      }
       return tx.notificationJob.findMany({ where: { id: { in: ids } } });
     });
   } catch (err) {
@@ -236,6 +263,20 @@ async function claimBatchOrNull() {
     log.info({ err }, "Notification claim hit SQLITE_BUSY; leaving the batch to the next drain");
     return null;
   }
+}
+
+/**
+ * Mark a job delivered once its send finished. Guarded on the claim token: a
+ * worker whose lease expired must not overwrite the verdict of the worker that
+ * reclaimed the row.
+ */
+async function markDelivered(job: { id: string; claimedBy: string | null }) {
+  await prisma.notificationJob
+    .updateMany({
+      where: job.claimedBy ? { id: job.id, claimedBy: job.claimedBy } : { id: job.id },
+      data: { processedAt: new Date(), claimedAt: null, claimedBy: null },
+    })
+    .catch((err: unknown) => log.error({ jobId: job.id, err }, "Failed to mark notification delivered"));
 }
 
 async function _doDrain(): Promise<number> {
@@ -287,6 +328,9 @@ async function _doDrain(): Promise<number> {
               audience,
             );
             await createInAppNotifications(audience, group.type, group.payload);
+            for (const job of group.jobs) {
+              await markDelivered(job);
+            }
           } catch (err: unknown) {
             log.error({ eventId: group.eventId, err }, "Failed to process grouped notification");
             // Spend the same retry budget as the individual branch: a failed
@@ -296,11 +340,11 @@ async function _doDrain(): Promise<number> {
               const nextRetry = job.retryCount + 1;
               if (nextRetry >= MAX_RETRIES) {
                 await prisma.notificationJob
-                  .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null } })
+                  .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null, claimedAt: null, claimedBy: null } })
                   .catch(() => {});
               } else {
                 await prisma.notificationJob
-                  .update({ where: { id: job.id }, data: { processedAt: null, retryCount: nextRetry } })
+                  .update({ where: { id: job.id }, data: { processedAt: null, claimedAt: null, claimedBy: null, retryCount: nextRetry } })
                   .catch(() => {});
               }
             }
@@ -335,17 +379,18 @@ async function _doDrain(): Promise<number> {
               audience,
             );
             await createInAppNotifications(audience, type, payload);
+            await markDelivered(job);
           } catch (err: unknown) {
             log.error({ jobId: job.id, eventId: job.eventId, type: job.type, err }, "Failed to process notification job");
             const nextRetry = job.retryCount + 1;
             if (nextRetry >= MAX_RETRIES) {
               await prisma.notificationJob
-                .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null } })
+                .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null, claimedAt: null, claimedBy: null } })
                 .catch(() => {});
               log.error({ jobId: job.id }, "Notification job moved to dead-letter after max retries");
             } else {
               await prisma.notificationJob
-                .update({ where: { id: job.id }, data: { processedAt: null, retryCount: nextRetry } })
+                .update({ where: { id: job.id }, data: { processedAt: null, claimedAt: null, claimedBy: null, retryCount: nextRetry } })
                 .catch(() => {});
             }
           }
@@ -358,6 +403,19 @@ async function _doDrain(): Promise<number> {
   }
 
   return totalProcessed;
+}
+
+/**
+ * Reclaimed-then-delivered jobs inside the window — surfaced via
+ * /api/admin/stats. A stale claim is normally a restart; a number that keeps
+ * climbing means a worker is crashing mid-drain, and the notifications are
+ * being delayed rather than lost, which is the whole point of the lease.
+ */
+export async function countReclaimedDeliveredNotifications(now: Date = new Date()): Promise<number> {
+  const since = new Date(now.getTime() - RECLAIM_WINDOW_HOURS * 3_600_000);
+  return prisma.notificationJob.count({
+    where: { reclaimedAt: { gte: since }, processedAt: { not: null } },
+  });
 }
 
 /**

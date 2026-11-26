@@ -1090,7 +1090,14 @@ model NotificationJob {
   retryCount     Int       @default(0)
   failedAt       DateTime? // set when all retries exhausted (dead-letter)
   createdAt      DateTime  @default(now())
-  processedAt    DateTime?
+  processedAt    DateTime? // set only after the send succeeds
+  /// Lease for the worker that claimed this row. A claim older than the lease
+  /// belongs to a dead worker and is reclaimable by the next drain (#1735).
+  claimedAt      DateTime?
+  claimedBy      String?
+  /// Last time a stale claim was reclaimed; surfaced on /api/admin/stats so a
+  /// crash loop is visible instead of silently delaying notifications.
+  reclaimedAt    DateTime?
 
   // NOTE(postgres): Replace the $transaction claim approach with
   // SELECT ... FOR UPDATE SKIP LOCKED when on Postgres (#236) to get

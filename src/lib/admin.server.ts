@@ -1,5 +1,6 @@
 import { prisma } from "./db.server";
 import { getRecentJobFailures } from "./scheduler.server";
+import { countReclaimedDeliveredNotifications } from "./notificationQueue.server";
 
 /**
  * Returns the configured admin emails from env as a Set.
@@ -84,6 +85,7 @@ export async function getAdminStats() {
   // dead-lettered. Admin-only (the public /api/health shows the count only, and
   // never echoes internal error text).
   const jobFailures = await getRecentJobFailures();
+  const reclaimedNotifications = await countReclaimedDeliveredNotifications();
 
   return {
     totalUsers,
@@ -99,6 +101,7 @@ export async function getAdminStats() {
     oneOffEvents: totalEvents - recurringCount,
     sportDistribution,
     jobFailures,
+    reclaimedNotifications,
   };
 }
 

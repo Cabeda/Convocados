@@ -103,6 +103,25 @@ describe("notification claim lease (#1735)", () => {
 
     const delivered = await prisma.notificationJob.findUniqueOrThrow({ where: { id: JOB_ID } });
     expect(delivered.processedAt).not.toBeNull();
+    expect(delivered.reclaimedAt).not.toBeNull();
     expect(delivered.failedAt).toBeNull();
+  });
+
+  it("reports reclaimed-then-delivered jobs on admin stats", async () => {
+    await seedClaimedJob();
+    const now = new Date();
+    await prisma.notificationJob.update({
+      where: { id: JOB_ID },
+      data: {
+        claimedAt: new Date(now.getTime() - 1000),
+        claimedBy: "dead-worker",
+        reclaimedAt: now,
+        processedAt: now,
+      },
+    });
+
+    const { getAdminStats } = await import("~/lib/admin.server");
+    const stats = await getAdminStats();
+    expect(stats.reclaimedNotifications).toBe(1);
   });
 });
