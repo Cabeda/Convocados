@@ -11,13 +11,23 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { isDeliverableBranch, parseStatus, readHandoff, titleFor } from "../../scripts/factory/deliver";
-
+import {
+  deliveryPlan,
+  isDeliverableBranch,
+  parseStatus,
+  readHandoff,
+  titleFor,
+} from "../../scripts/factory/deliver";
 interface Job {
   needs?: string | string[];
   if?: string;
   permissions?: Record<string, unknown> | string;
-  steps?: Array<{ uses?: string; with?: Record<string, unknown>; env?: Record<string, unknown> }>;
+  steps?: Array<{
+    name?: string;
+    uses?: string;
+    with?: Record<string, unknown>;
+    env?: Record<string, unknown>;
+  }>;
 }
 
 function jobs(): Record<string, Job> {
@@ -92,5 +102,65 @@ describe("delivery runs after the work, with a fresh token", () => {
     expect(deliver.needs).toBe("factory");
     expect(deliver.if).toContain("always()");
     expect(usesOf(deliver)).toContain("actions/create-github-app-token@v3");
+  });
+});
+
+describe("a handoff pushes without opening a Change", () => {
+  // A Blocked run used to leave its commits in an artifact nothing reads: the
+  // "a killed run keeps its work" claim was false, and the next run started
+  // from an empty branch and paid for the same reproduction again.
+  it("pushes and opens a Change only for an explicit review", () => {
+    expect(deliveryPlan("review", "factory/1-thing", true)).toEqual({ push: true, openChange: true });
+  });
+
+  it("pushes a Blocked run's branch, and opens nothing", () => {
+    expect(deliveryPlan("blocked", "factory/1-thing", true)).toEqual({
+      push: true,
+      openChange: false,
+    });
+  });
+
+  it("pushes nothing without a deliverable branch or a bundle", () => {
+    expect(deliveryPlan("review", "main", true)).toEqual({ push: false, openChange: false });
+    expect(deliveryPlan("review", "factory/1-thing", false)).toEqual({
+      push: false,
+      openChange: false,
+    });
+  });
+});
+
+describe("the fixer keeps its branch and its token apart", () => {
+  const workflow = (file: string) =>
+    (parse(
+      readFileSync(path.join(process.cwd(), ".github/workflows", file), "utf8"),
+    ) as { jobs?: Record<string, Job> }).jobs ?? {};
+
+  it("creates the branch before the agent, so a killed run keeps its work", () => {
+    const names = (workflow("factory-fix.yml").fix?.steps ?? []).map((s) => s.name ?? "");
+    const branch = names.indexOf("Start the Change branch");
+    const agent = names.indexOf("Run the Fixer");
+    expect(branch, "factory-fix.yml must pre-create the branch").toBeGreaterThanOrEqual(0);
+    expect(branch, "the branch must exist before the agent runs").toBeLessThan(agent);
+  });
+
+  it("gives the round a read-only token", () => {
+    const round = workflow("factory-fix-loop.yml").round;
+    const mint = round?.steps?.find((s) => s.uses === "actions/create-github-app-token@v3");
+    expect(mint?.with?.["permission-contents"]).toBe("read");
+    expect(round?.permissions).toEqual({
+      contents: "read",
+      "pull-requests": "read",
+      issues: "read",
+    });
+  });
+
+  it("never lets the write token into the job that runs the agent", () => {
+    // The round's job mints no write scope at all; the push job mints it and
+    // runs no agent. A push step sharing the agent's workspace would execute a
+    // `pre-push` hook the agent wrote, with the token already in its environ.
+    const jobs = workflow("factory-fix-loop.yml");
+    expect(usesOf(jobs.push ?? {})).not.toContain("anomalyco/opencode/github@latest");
+    expect(JSON.stringify(jobs.push?.permissions ?? {})).toBe("{}");
+    expect(JSON.stringify(jobs.round?.permissions ?? {})).not.toContain('"contents":"write"');
   });
 });
