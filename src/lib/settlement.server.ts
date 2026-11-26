@@ -405,10 +405,21 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
   // ADR 0007/0019: the ledger is the source of truth for money. Charge each
   // lineup player a `per_game_share` debit so the outstanding balance is real
   // (previously only `payment_received` credits existed, clamping the balance
-  // to zero). Frozen for played games, and reversed when a player is uncharged.
-  if (game?.status !== "played") {
-    await syncChargeDebits(db, gameId, eventId, charged, share, effective.currency);
-  }
+  // to zero). Runs for played games too, at the row's frozen amount, so a
+  // revived lineup player's debt is not missing from Home/the gate; only the
+  // pre-game sync reverses an uncharged player, because deleting a settled
+  // debit would rewrite money the group already played for.
+  const frozen = game?.status === "played";
+  const rows = await db.gamePayment.findMany({
+    where: { gameId, archivedAt: null },
+    select: { eventPlayerId: true, amount: true },
+  });
+  const amountByPlayer = new Map(rows.map((r) => [r.eventPlayerId, r.amount]));
+  const chargedWithAmount = charged.map((p) => ({
+    ...p,
+    amount: amountByPlayer.get(p.eventPlayer.id) ?? share,
+  }));
+  await syncChargeDebits(db, gameId, eventId, chargedWithAmount, effective.currency, !frozen);
 
   await applyPayer();
 }
@@ -416,17 +427,16 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
 /**
  * Keep the ledger's `per_game_share` charge side in step with the game's
  * charged players: a debit per charged player, removed for anyone no longer
- * charged (soft-archived GamePayment rows).
+ * charged (soft-archived GamePayment rows) unless the game's money is frozen.
  */
 async function syncChargeDebits(
   db: DbClient,
   gameId: string,
   eventId: string,
-  charged: Array<{ eventPlayer: { id: string; name: string; userId: string | null } }>,
-  share: number,
+  charged: Array<{ eventPlayer: { id: string; name: string; userId: string | null }; amount: number }>,
   currency: string,
+  reverseRemoved: boolean,
 ): Promise<void> {
-  const shareCents = Math.round(share * 100);
   const activeIds = new Set(charged.map((p) => p.eventPlayer.id));
 
   for (const p of charged) {
@@ -435,7 +445,7 @@ async function syncChargeDebits(
       {
         eventId,
         userId,
-        amountCents: shareCents,
+        amountCents: Math.round(p.amount * 100),
         currency,
         direction: "debit",
         reason: "per_game_share",
@@ -445,6 +455,8 @@ async function syncChargeDebits(
       db,
     );
   }
+
+  if (!reverseRemoved) return;
 
   // Reverse charges for players who are no longer charged (archived rows).
   const archived = await db.gamePayment.findMany({
