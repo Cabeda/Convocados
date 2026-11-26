@@ -219,6 +219,12 @@ describe("a two-way door", () => {
     expect(isTwoWayDoor(["src/lib/roster.ts", "src/test/roster.test.ts"]).eligible).toBe(true);
   });
 
+  it("is a notification sender, which is not a push credential", () => {
+    // `push.server.ts` sends web-push; flagging the word alone made the bot's
+    // own delivery Changes permanently unmergeable.
+    expect(isTwoWayDoor(["src/lib/push.server.ts"]).eligible).toBe(true);
+  });
+
   it.each([
     "prisma/migrations/20261126000000_add/migration.sql",
     "prisma/schema.prisma",

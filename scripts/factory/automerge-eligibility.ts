@@ -167,10 +167,10 @@ export const ONE_WAY_PATHS: Array<{ match: RegExp; why: string }> = [
   { match: /^prisma\/migrations\//, why: "a database migration" },
   { match: /^prisma\/schema\.prisma$/, why: "a schema change" },
   // Any server module whose name says auth, token, session, cron, scheduler or
-  // push. The first list named only `auth*.server.ts` and missed
-  // `googleToken.server.ts`, `calendarToken.server.ts`, `cronAuth.server.ts`
-  // and `scheduler.server.ts` — all verified two-way by the Reviewer.
-  { match: /^src\/lib\/[^/]*(auth|token|oauth|session|cron|schedul|push|vapid|apikey|jwks|secret|credential|admin)[^/]*\.server\.ts$/i, why: "auth, token or scheduler handling" },
+  // a push *credential*. `push` alone is not one: `push.server.ts` sends
+  // notifications, and flagging it made the bot's own delivery Changes
+  // unmergeable. The credential surfaces are the routes below.
+  { match: /^src\/lib\/[^/]*(auth|token|oauth|session|cron|schedul|vapid|apikey|jwks|secret|credential|admin)[^/]*\.server\.ts$/i, why: "auth, token or scheduler handling" },
   { match: /^src\/pages\/api\/auth\//, why: "an auth route" },
   { match: /^src\/pages\/api\/(cron|internal|admin)\//, why: "a privileged route" },
   { match: /^src\/pages\/api\/push\//, why: "push credentials" },
