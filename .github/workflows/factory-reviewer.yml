@@ -78,12 +78,13 @@ jobs:
         with:
           app-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
-          # Least privilege, stated per run: pull-requests to comment on the
-          # Change, issues to write the review comment itself (GitHub files a PR
-          # comment as an issue comment). Reads content, writes none — the Fixer
-          # pushes. No workflows permission, so the factory cannot edit the
-          # workflows that run it.
-          permission-contents: read
+          # The action refuses to start on a token without contents write, and
+          # a factory PR's actor is the App, whose repo permission is `none` —
+          # so this role is only reachable with a write token plus TOKEN. The
+          # review itself still writes nothing: its permission block denies
+          # edits and every push. No workflows permission, so the factory cannot
+          # edit the workflows that run it.
+          permission-contents: write
           permission-pull-requests: write
           permission-issues: write
       - name: Review the Change
@@ -95,6 +96,11 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The action asserts the *actor's* write permission and skips it only
+          # when TOKEN is set. A factory PR's actor is the App, whose repo
+          # permission is `none` (installation scopes do not change that), so
+          # without this the reviewer cannot run on a factory Change at all.
+          TOKEN: ${{ steps.app-token.outputs.token }}
           # Provider credentials for vars.FACTORY_MODEL. The unset ones are empty
           # strings, which is harmless: opencode picks the one the model needs.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

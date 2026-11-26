@@ -151,6 +151,11 @@ jobs:
           # The job's own token: read the repo and report. It cannot push or open
           # a Change even if it outlives the run.
           GITHUB_TOKEN: ${{ github.token }}
+          # The action asserts the *actor's* write permission and skips it only
+          # when TOKEN is set. A factory PR's actor is the App, whose repo
+          # permission is `none` (the installation scopes do not change that),
+          # so without this the reviewer cannot run on a factory Change at all.
+          TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}

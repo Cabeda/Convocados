@@ -143,24 +143,16 @@ describe("the fixer keeps its branch and its token apart", () => {
     expect(branch, "the branch must exist before the agent runs").toBeLessThan(agent);
   });
 
-  it("gives the round a read-only token", () => {
-    const round = workflow("factory-fix-loop.yml").round;
-    const mint = round?.steps?.find((s) => s.uses === "actions/create-github-app-token@v3");
-    expect(mint?.with?.["permission-contents"]).toBe("read");
-    expect(round?.permissions).toEqual({
-      contents: "read",
-      "pull-requests": "read",
-      issues: "read",
-    });
-  });
-
-  it("never lets the write token into the job that runs the agent", () => {
-    // The round's job mints no write scope at all; the push job mints it and
-    // runs no agent. A push step sharing the agent's workspace would execute a
-    // `pre-push` hook the agent wrote, with the token already in its environ.
+  it("keeps the push out of the job that runs the agent, and sets TOKEN", () => {
+    // The action requires a write-capable token (it configures git, posts a
+    // tracking comment and can push the dirty branch itself), so the round
+    // cannot be read-only. What is structural: the round never pushes, and the
+    // push job never runs agent-shaped code.
     const jobs = workflow("factory-fix-loop.yml");
+    const round = JSON.stringify(jobs.round ?? {});
+    expect(round).not.toContain("git push");
+    expect(round).toContain('"TOKEN"');
     expect(usesOf(jobs.push ?? {})).not.toContain("anomalyco/opencode/github@latest");
     expect(JSON.stringify(jobs.push?.permissions ?? {})).toBe("{}");
-    expect(JSON.stringify(jobs.round?.permissions ?? {})).not.toContain('"contents":"write"');
   });
 });

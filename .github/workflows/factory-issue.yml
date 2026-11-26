@@ -133,6 +133,11 @@ jobs:
           # The job's own token: read the repo, claim the Issue, and report a
           # failure. It cannot push or open a Change even if it outlives the run.
           GITHUB_TOKEN: ${{ github.token }}
+          # The action asserts the *actor's* write permission and skips it only
+          # when TOKEN is set. A factory PR's actor is the App, whose repo
+          # permission is `none` (installation scopes do not change that), so
+          # without this the reviewer cannot run on a factory Change at all.
+          TOKEN: ${{ github.token }}
           # Provider credentials for vars.FACTORY_MODEL. The unset ones are empty
           # strings, which is harmless: opencode picks the one the model needs.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

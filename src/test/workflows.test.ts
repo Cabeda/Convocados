@@ -338,3 +338,21 @@ describe("a factory commit carries an identity the CLA accepts", () => {
     }
   });
 });
+
+describe("the agent action can start on a bot-authored Change", () => {
+  // The action asserts the *actor's* repo permission and skips it only when
+  // TOKEN is set. A PR authored by the factory App has actor
+  // `convocarados-factory[bot]`, whose collaborator permission is `none` — the
+  // minted token's scopes do not change that — so the reviewer dies before its
+  // first thought with "User ... does not have write permissions". That is the
+  // factory's main customer, so every agent step must carry TOKEN.
+  const agentWorkflows = () =>
+    workflowFiles.filter((file) =>
+      readFileSync(join(workflowsDir, file), "utf8").includes("anomalyco/opencode/github"),
+    );
+
+  it.each(agentWorkflows())("%s sets TOKEN for the action", (file) => {
+    const raw = readFileSync(join(workflowsDir, file), "utf8");
+    expect(raw, `${file} must pass TOKEN to the action`).toMatch(/^ +TOKEN: /m);
+  });
+});
