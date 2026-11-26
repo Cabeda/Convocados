@@ -67,7 +67,7 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 | `fixer` | `schedule` (30 min): the oldest `factory:explored` Issue with no open Change, no `factory:blocked` and no live Claim — or a review that carries findings | reproduce, edit, commit, gate, write the handoff; in repair mode push to that `factory/*` branch | push in Issue mode, open a Change, merge, label, touch a human branch or a second Issue |
 | `factory` | Issue labelled `ready-for-agent` | edit, commit, write the handoff artifact | push, open a Change, merge, release, label, touch a human branch (the `deliver` job pushes and opens the Change with a token minted after the run) |
 | `repairer` | Gate red | same as factory, budget 3 | exceed its Attempt budget |
-| `reviewer` | `pull_request` opened/synchronize | comment, push fixes to `factory/*` | approve; edit a human branch; review a Change it cannot reach |
+| `reviewer` | `pull_request` opened/synchronize | comment, mark findings for the Fixer | approve; push; edit; review a Change it cannot reach |
 | `explorer-performance` | schedule (nightly) | read, run committed benchmarks, file Issues | edit code, label Issues |
 | `explorer-bugs` | schedule (weekly) | read, file Issues | edit code, label Issues |
 | `explorer-security` | dependency event + schedule | read, file Issues | edit code, label Issues |
@@ -174,7 +174,7 @@ Each step is independently shippable and ends with something you can watch work.
    `check_suite: completed` for the Repairer, and a 15-minute janitor for stale claims,
    orphan worktrees and stale states.
 6. **Reviewer** — the step that turns green into ready: Mission and Core Principles as
-   criteria, Hard Block categories that only report, push-to-`factory/*` only.
+   criteria, Hard Block categories that only report, findings marked for the Fixer rather than fixed.
 7. **Baselines** — commit k6 scenarios and thresholds, Lighthouse budgets. No agent touches
    a metric until this lands. ADR 0047.
 8. **Explorers** — Performance first (it is the only one with a Baseline), then Bugs,

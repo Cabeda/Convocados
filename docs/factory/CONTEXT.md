@@ -90,7 +90,7 @@ this state)
 The agent that reads a Change and decides whether it is ready for a human, against the
 Mission and Core Principles rather than against the Gates — the Gates already passed, so
 re-running them is not review. It holds no approval authority: its job is to argue in a
-comment and to fix what it can on a factory branch.
+comment and to mark what the Fixer must answer; it does not write, because a reviewer that repairs its own finding has stopped being an independent check.
 
 It watches every open Change **it can reach**, including human-authored ones, because a
 review that only inspects machine work is a rubber stamp. Reach is bounded by facts about the

@@ -1,0 +1,212 @@
+# The loop: a Change the Reviewer found fault with, or one whose CI went red.
+#
+# Two machines arguing forever is not convergence, so the loop is bounded: the
+# Reviewer states findings, the Fixer answers them on the same branch, and after
+# three rounds the disagreement is Cabeda's. The round count lives on GitHub
+# (`scripts/factory/attempt.ts` reads it from the PR's own comments), so a run
+# that dies does not get a free round. That ledger also bounds a nastier loop: a
+# failing run of *this* workflow completes a check suite on the branch, which
+# would re-trigger the `check_suite` path — at most three times, then it stops.
+name: "factory: fix loop"
+
+on:
+  # The Reviewer writes the findings marker into its review body. A review
+  # without it is either clean or not about findings, and costs no run.
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created]
+  check_suite:
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number to repair"
+        required: true
+        type: string
+
+# One round at a time, across every Change. The Fixer is a single writer: two
+# runs on the same branch race the push, and the second one loses silently.
+concurrency:
+  group: factory-fix-loop
+  cancel-in-progress: false
+
+# Nothing here needs the default token. The App token is minted in the job that
+# writes, so its scopes are the blast radius and they are stated per run.
+permissions: {}
+
+jobs:
+  # Resolve the event to a PR number and a branch, and stop early for anything
+  # that is not a Fixer branch. The event's `if:` cannot make an API call, and
+  # `issue_comment` has no branch in its payload.
+  resolve:
+    runs-on: ubuntu-latest
+    if: >-
+      vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_APP_ID != '' &&
+      vars.FACTORY_MODEL != '' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request_review' &&
+         contains(github.event.review.body, '<!-- factory:findings -->')) ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.pull_request != null &&
+         contains(github.event.comment.body, '<!-- factory:findings -->')) ||
+        (github.event_name == 'check_suite' &&
+         github.event.check_suite.conclusion == 'failure' &&
+         startsWith(github.event.check_suite.head_branch, 'factory/') &&
+         github.event.check_suite.pull_requests[0] != null)
+      )
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pr: ${{ steps.resolve.outputs.pr }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Resolve the Change
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REVIEW_PR: ${{ github.event.pull_request.number }}
+          COMMENT_PR: ${{ github.event.issue.number }}
+          SUITE_PR: ${{ github.event.check_suite.pull_requests[0].number }}
+          DISPATCH_PR: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          pr=""
+          case "$EVENT_NAME" in
+            pull_request_review) pr="$REVIEW_PR" ;;
+            issue_comment) pr="$COMMENT_PR" ;;
+            check_suite) pr="$SUITE_PR" ;;
+            workflow_dispatch) pr="$DISPATCH_PR" ;;
+          esac
+          if [ -z "$pr" ]; then
+            echo "No pull request in this event; nothing to repair."
+            exit 0
+          fi
+          branch="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName)"
+          case "$branch" in
+            factory/*) ;;
+            *)
+              echo "PR #$pr is on $branch — a human branch belongs to a human."
+              exit 0
+              ;;
+          esac
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+
+  fix:
+    needs: resolve
+    # The output is empty for every event this role does not own, which is the
+    # whole filter — a human branch never reaches the token.
+    if: >-
+      needs.resolve.outputs.pr != '' &&
+      vars.FACTORY_PAUSED != 'true' &&
+      vars.FACTORY_APP_ID != '' &&
+      vars.FACTORY_MODEL != ''
+    runs-on: ubuntu-latest
+    # Everything privileged happens under the minted App token below; the job's
+    # own token is not used at all.
+    permissions: {}
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Least privilege, stated per run: contents to push the factory/*
+          # branch, pull-requests and issues to read the findings and answer
+          # them. No workflows permission, so a round cannot edit the workflow
+          # that runs it.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Check the round budget
+        id: budget
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ needs.resolve.outputs.pr }}
+        run: |
+          set -euo pipefail
+          if ! node scripts/factory/attempt.ts "$PR" review; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body \
+              "factory: three fix rounds are spent. The findings that remain are a disagreement for Cabeda, not another round."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The third round's own record exits 1 (budget reached); that is the
+          # ledger being honest, not a failure to repair.
+          node scripts/factory/attempt.ts "$PR" review --set || true
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the Change
+        if: steps.budget.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ needs.resolve.outputs.pr }}
+        run: |
+          gh auth setup-git
+          gh pr checkout "$PR" --repo "$GITHUB_REPOSITORY"
+
+      - name: Answer the findings
+        if: steps.budget.outputs.run == 'true'
+        # The token was minted above and lives 60 minutes; this step must finish
+        # inside that window, not the job's.
+        timeout-minutes: 45
+        # Advisory: a round that cannot converge must not redden the very checks
+        # it exists to make green.
+        continue-on-error: true
+        uses: anomalyco/opencode/github@latest
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: ${{ vars.FACTORY_MODEL }}
+          agent: fixer
+          share: "false"
+          use_github_token: true
+          prompt: |
+            Repair pull request #${{ needs.resolve.outputs.pr }} as the Fixer, in repair mode.
+
+            Follow `.opencode/agents/fixer.md`. This is one of three rounds; the round is already
+            recorded on the Change. The workspace is already checked out on the Change's branch.
+
+            Read the evidence itself, never a summary:
+            - a review: `gh pr view ${{ needs.resolve.outputs.pr }} --json reviews --jq '.reviews[-1].body'`
+            - a red suite: `gh pr checks ${{ needs.resolve.outputs.pr }}`, then the failing job's log
+
+            Make the smallest change that answers the findings. Re-run `bash scripts/factory/gate.sh`
+            for the part you moved, then push to this same `factory/*` branch. Do not merge,
+            approve, close, or label.
+
+            If a finding is wrong, say why in one comment on the Change and leave that code alone.
+            If the Change is already correct, push nothing and say so in one comment. A round that
+            changes nothing is a valid answer.
