@@ -22,11 +22,18 @@ on:
         description: "Issue number to work. Empty drains the queue, oldest first."
         required: false
         type: string
+      lane:
+        description: "Lane index (0-based). Lanes partition the queue by Issue number."
+        required: false
+        type: string
+        default: "0"
 
-# One run at a time. A second run waits, and because it re-reads the queue when
-# it starts, a skipped tick loses nothing.
+# One run per lane. Lanes work disjoint slices of the queue (Issue number mod
+# LANES), so three can work at once without racing the same Issue. A second run
+# in the same lane waits, and because it re-reads the queue when it starts, a
+# skipped tick loses nothing.
 concurrency:
-  group: factory-fix-queue
+  group: factory-fix-queue-${{ inputs.lane || 0 }}
   cancel-in-progress: false
 
 permissions: {}
@@ -61,6 +68,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DISPATCH_ISSUE: ${{ inputs.issue }}
+          FACTORY_LANE: ${{ inputs.lane || 0 }}
+          FACTORY_LANES: "3"
         run: |
           if [ -n "${DISPATCH_ISSUE:-}" ]; then
             echo "issue=${DISPATCH_ISSUE}" >> "$GITHUB_OUTPUT"
