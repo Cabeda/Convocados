@@ -72,8 +72,10 @@ function main(): number {
     entries: reviewEntries(pr as never),
     failingChecks: ((pr as { statusCheckRollup?: Array<{ name?: string; context?: string; conclusion?: string; state?: string }> }).statusCheckRollup ?? [])
       .filter((c) => {
+        // Only a finished, bad check earns a round. PENDING and EXPECTED mean
+        // CI has not answered yet, and spending a round on them wastes one.
         const state = (c.conclusion ?? c.state ?? "").toUpperCase();
-        return state !== "" && state !== "SUCCESS" && state !== "NEUTRAL" && state !== "SKIPPED";
+        return ["FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"].includes(state);
       })
       .map((c) => c.name ?? c.context ?? "check"),
   }));

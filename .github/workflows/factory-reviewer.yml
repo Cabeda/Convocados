@@ -192,6 +192,40 @@ jobs:
             of a timeout. Writing it first means a run that dies mid-review never leaves an approval
             marker behind.
 
+      - name: Sign and post the review
+        # The agent writes the body; this step signs the head with the App key,
+        # appends both markers, and posts. The Fixer's job never holds the key,
+        # so a prompt-injected Fixer cannot write an approval the gate accepts.
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_KEY: ${{ secrets.FACTORY_APP_KEY }}
+          PR: ${{ needs.pick.outputs.pr }}
+        run: |
+          set -euo pipefail
+          body=.factory-review/review.md
+          verdict="$(cat .factory-review/verdict 2>/dev/null || echo "")"
+          if [ ! -f "$body" ]; then
+            echo "The Reviewer wrote no body; nothing to post." >&2
+            exit 0
+          fi
+          case "$verdict" in
+            approve|refuse) ;;
+            *) echo "No verdict; posting the body without a marker." >&2 ;;
+          esac
+          head="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
+          sig="$(printf '%s' "$head" | openssl dgst -sha256 -hmac "$APP_KEY" -hex | awk '{print $NF}')"
+          {
+            cat "$body"
+            echo
+            if [ -n "$verdict" ]; then echo "<!-- factory:verdict:$verdict -->"; fi
+            echo "<!-- factory:reviewed:$head:$sig -->"
+          } > .factory-review/post.md
+          # GitHub refuses a review on a PR the App authored; a comment carries
+          # the same markers and the merge reads both surfaces.
+          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --comment --body-file .factory-review/post.md \
+            || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
+
       - name: Record the verdict
         # The Reviewer writes this file as its last act. A missing file means the
         # review did not finish — and an unfinished review must fail, because a

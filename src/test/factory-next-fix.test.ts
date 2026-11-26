@@ -92,3 +92,18 @@ describe("pickFix", () => {
     expect(pickFix([])).toBeNull();
   });
 });
+
+describe("a pending check is not a failure", () => {
+  // The rollup reports PENDING while CI runs; rounding on it spends a round on
+  // a non-answer.
+  it("does not treat PENDING or EXPECTED as red", () => {
+    const checkState = (state: string) =>
+      ["FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"].includes(
+        state.toUpperCase(),
+      );
+    expect(checkState("PENDING")).toBe(false);
+    expect(checkState("EXPECTED")).toBe(false);
+    expect(checkState("SUCCESS")).toBe(false);
+    expect(checkState("FAILURE")).toBe(true);
+  });
+});

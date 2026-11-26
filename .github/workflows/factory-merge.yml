@@ -55,9 +55,16 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: read
+          # The decision reads the head's check-runs, which needs Checks: read.
+          # Listing permissions narrows the token, so omitting this made every
+          # run 403 and no Change could ever merge.
+          permission-checks: read
 
       - name: Merge the eligible Changes
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Verifies the Reviewer's signature. The Fixer's job never has it, so
+          # a prompt-injected Fixer cannot forge an approval.
+          FACTORY_APP_KEY: ${{ secrets.FACTORY_APP_KEY }}
           DRY_RUN: ${{ inputs.dry-run && 'true' || 'false' }}
         run: node scripts/factory/factory-merge-run.ts

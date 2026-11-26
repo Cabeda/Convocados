@@ -142,7 +142,9 @@ export function explain(pr: PullRequestFacts, verdict: Verdict): string {
 // human gate they always had.
 
 export const FACTORY_AUTHOR = "app/convocarados-factory";
-export const REVIEWED_MARKER = /<!-- factory:reviewed:([0-9a-f]{7,40}) -->/;
+export const REVIEWED_MARKER = /<!-- factory:reviewed:([0-9a-f]{7,40}):([0-9a-f]{64}) -->/;
+/** Legacy two-part marker, accepted only so an old comment cannot crash a run. */
+const UNSIGNED_MARKER = /<!-- factory:reviewed:([0-9a-f]{7,40}) -->/;
 export const VERDICT_MARKER = /<!-- factory:verdict:(approve|refuse) -->/;
 
 /** A path whose merge outlives a revert. Every entry is a real blast radius. */
@@ -155,6 +157,12 @@ export const ONE_WAY_PATHS: Array<{ match: RegExp; why: string }> = [
   // and `scheduler.server.ts` — all verified two-way by the Reviewer.
   { match: /^src\/lib\/[^/]*(auth|token|oauth|session|cron|schedul|push|vapid)[^/]*\.server\.ts$/i, why: "auth, token or scheduler handling" },
   { match: /^src\/pages\/api\/auth\//, why: "an auth route" },
+  { match: /^src\/pages\/api\/(cron|internal)\//, why: "a scheduled job route" },
+  { match: /^src\/pages\/api\/push\//, why: "push credentials" },
+  { match: /^src\/pages\/api\/(me\/calendar-token|oauth-callback|invite\/)/, why: "a token route" },
+  // The scheduler is its own service, with its own lockfile and image; the
+  // root `scripts/*schedul*` anchor did not cover it.
+  { match: /^scheduler\//, why: "the scheduler service" },
   { match: /^src\/lib\/oauth/, why: "OAuth and token handling" },
   { match: /^\.github\//, why: "the workflows that run the factory" },
   // The decision and the instructions are the most one-way files here: a Change
@@ -166,6 +174,8 @@ export const ONE_WAY_PATHS: Array<{ match: RegExp; why: string }> = [
   { match: /^android-app\/(gradle|libs\.versions\.toml|.*\.gradle\.kts?$)/, why: "the Android build" },
   { match: /^(fly\.toml|Dockerfile|deploy\/|litestream\.ya?ml$)/, why: "deploy configuration" },
   { match: /^scripts\/[^/]*(schedul|backfill|cron)/i, why: "the scheduler" },
+  // The checks the merge itself trusts. Editing one is editing the measurement.
+  { match: /^scripts\/(ci-gate|check-pr-closing-keyword|route-coverage)/, why: "a required check" },
   { match: /^(vitest|stryker|playwright)\.config\./, why: "the measurement itself" },
 ];
 
@@ -183,8 +193,12 @@ export function isTwoWayDoor(files: string[]): Verdict {
 
 export interface ReviewRecord {
   head: string;
+  signature: string | null;
   verdict: "approve" | "refuse" | null;
 }
+
+/** A verifier decides whether a marker could only have come from the Reviewer. */
+export type SignatureCheck = (head: string, signature: string) => boolean;
 
 export interface ReviewEntry {
   author: string;
@@ -207,15 +221,24 @@ function lastMatch(re: RegExp, body: string): string | null {
  * newer comment *before* an older review. Last marker wins because the prompt
  * hands the agent both literals and a review may quote the one it rejected.
  */
-export function latestReview(entries: ReviewEntry[]): ReviewRecord | null {
+export function latestReview(
+  entries: ReviewEntry[],
+  verify?: SignatureCheck,
+): ReviewRecord | null {
   const ordered = [...entries].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
   for (let i = ordered.length - 1; i >= 0; i -= 1) {
     const entry = ordered[i];
     if (!FACTORY_IDENTITY.test(entry.author ?? "")) continue;
-    const head = lastMatch(REVIEWED_MARKER, entry.body ?? "");
-    if (!head) continue;
+    const signed = [...(entry.body ?? "").matchAll(new RegExp(REVIEWED_MARKER.source, "g"))].at(-1);
+    const unsigned = UNSIGNED_MARKER.test(entry.body ?? "");
+    if (!signed && !unsigned) continue;
+    const head = signed?.[1] ?? UNSIGNED_MARKER.exec(entry.body ?? "")?.[1] ?? "";
+    const signature = signed?.[2] ?? null;
+    // A merge must not accept an unsigned marker: the Fixer shares the App's
+    // identity, so the signature is the only thing it cannot produce.
+    if (verify && (!signature || !verify(head, signature))) continue;
     const verdict = lastMatch(VERDICT_MARKER, entry.body ?? "") as ReviewRecord["verdict"];
-    return { head, verdict: verdict ?? null };
+    return { head, signature, verdict: verdict ?? null };
   }
   return null;
 }
@@ -224,6 +247,8 @@ export interface FactoryFacts extends PullRequestFacts {
   files: string[];
   reviews: ReviewEntry[];
   headRefOid: string;
+  /** Required for a merge: without it an unsigned marker is ignored. */
+  verify?: SignatureCheck;
 }
 
 /** The substring the merge runner looks for when a stale base is the only block. */
@@ -259,7 +284,10 @@ export function decideFactoryMerge(pr: FactoryFacts): Verdict {
   const door = isTwoWayDoor(pr.files);
   reasons.push(...door.reasons);
 
-  const review = latestReview(pr.reviews);
+  if (!pr.verify) {
+    reasons.push("no signature check is configured — an unsigned marker is not a review");
+  }
+  const review = latestReview(pr.reviews, pr.verify);
   if (!review) {
     reasons.push("no review has named its head");
   } else if (!pr.headRefOid.startsWith(review.head)) {

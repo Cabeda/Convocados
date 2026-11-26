@@ -110,17 +110,19 @@ nothing; if it refused with an argument, that is the disagreement Cabeda is ther
 - Put `<!-- factory:findings -->` on its own line in the review body when it carries at least one
   finding. That line is the whole trigger: no marker, no next round. It must be exact, and it must
   mean "there is work to do", never "I looked".
-- End the body with two markers: `<!-- factory:verdict:approve -->` or
+- The workflow appends two markers, so do not write them yourself: `<!-- factory:verdict:approve -->` or
   `<!-- factory:verdict:refuse -->`, then `<!-- factory:reviewed:<head sha> -->` naming the head
   you actually read (`gh pr view <n> --json headRefOid`). A scheduled run picks its next Change by
   the reviewed marker; the Merge gate merges on the verdict, and only when both name the current
-  head. A stale marker is a stale decision.
-- Write `.factory-review/verdict` **before** you post the review — the same word, `approve` or
-  `refuse`. That file is your check: **absent means the review did not finish, and an unfinished
-  review fails**. The order matters: die before the file and the check is red with no marker
-  anywhere; die after it, before the review, and there is still no marker, so the merge sees
-  nothing. Silence is never approval.
-- If the Change is genuinely ready, say so, with no marker — and leave `factory:review` in place.
-  The human gate is Cabeda's, and no agent merges, ever.
+  head and the signature verifies. A stale marker is a stale decision.
+- Do not post the review yourself. Write its body to `.factory-review/review.md` and the word to
+  `.factory-review/verdict` (`approve` or `refuse`) — that file is your check, and **absent means
+  the review did not finish, which fails**. The workflow signs the head with a key your own job
+  never sees and posts both, so an approval cannot be forged by the Fixer, which shares your
+  identity. Write the verdict before the body: a run that dies while writing never leaves a body
+  to post. Silence is never approval.
+- If the Change is genuinely ready, `approve` it — with the marker and the verdict file. A
+  two-way door that is green and approved is merged by the Merge gate; a one-way door (migrations,
+  auth, dependencies, workflows, deploy) is still Cabeda's, whatever your verdict says.
 - Push nothing. A reviewer that repairs its own finding is marking its own homework, and the
   second read is supposed to be a different session.

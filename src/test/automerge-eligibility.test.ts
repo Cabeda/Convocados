@@ -179,11 +179,15 @@ describe("explain() is usable as an audit line", () => {
 // ── Factory Changes and the two-way door ────────────────────────────────────
 
 const HEAD = "70d5e19ac8099eb60ba23386c24ca6aeb43a0617";
+const SIG = "a".repeat(64);
+const signed = (sha = HEAD) => `<!-- factory:reviewed:${sha}:${SIG} -->`;
+/** The merge always passes a verifier; tests stand in for the HMAC. */
+const verify = (_head: string, signature: string) => signature === SIG;
 
 function review(overrides: Partial<ReviewEntry> = {}): ReviewEntry {
   return {
     author: "convocarados-factory[bot]",
-    body: `No findings.\n<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`,
+    body: `No findings.\n<!-- factory:verdict:approve -->\n${signed()}`,
     createdAt: "2026-11-26T09:00:00Z",
     ...overrides,
   };
@@ -203,6 +207,7 @@ function factoryPr(overrides: Partial<FactoryFacts> = {}): FactoryFacts {
     checks: GREEN,
     files: ["src/lib/roster.ts", "src/test/roster.test.ts"],
     reviews: [review()],
+    verify,
     ...overrides,
   };
 }
@@ -244,10 +249,10 @@ describe("the review a merge reads", () => {
   it("takes the newest review and its verdict", () => {
     expect(
       latestReview([
-        review({ body: `<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->` }),
-        review({ body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`, createdAt: "2026-11-26T10:00:00Z" }),
+        review({ body: `<!-- factory:verdict:refuse -->\n${signed()}` }),
+        review({ body: `<!-- factory:verdict:approve -->\n${signed()}`, createdAt: "2026-11-26T10:00:00Z" }),
       ]),
-    ).toEqual({ head: HEAD, verdict: "approve" });
+    ).toEqual({ head: HEAD, signature: SIG, verdict: "approve" });
   });
 
   it("orders a comment after an older review by time, not by list", () => {
@@ -255,8 +260,8 @@ describe("the review a merge reads", () => {
     // read an older approval as the current word.
     expect(
       latestReview([
-        review({ body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD} -->`, createdAt: "2026-11-26T09:00:00Z" }),
-        review({ body: `<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->`, createdAt: "2026-11-26T09:05:00Z" }),
+        review({ body: `<!-- factory:verdict:approve -->\n${signed()}`, createdAt: "2026-11-26T09:00:00Z" }),
+        review({ body: `<!-- factory:verdict:refuse -->\n${signed()}`, createdAt: "2026-11-26T09:05:00Z" }),
       ])?.verdict,
     ).toBe("refuse");
   });
@@ -265,7 +270,7 @@ describe("the review a merge reads", () => {
     expect(
       latestReview([
         review({
-          body: `I considered <!-- factory:verdict:approve --> and rejected it.\n<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->`,
+          body: `I considered <!-- factory:verdict:approve --> and rejected it.\n<!-- factory:verdict:refuse -->\n${signed()}`,
         }),
       ])?.verdict,
     ).toBe("refuse");
@@ -279,6 +284,13 @@ describe("the review a merge reads", () => {
     expect(latestReview([review({ author: "Cabeda" })])).toBeNull();
   });
 
+  it("ignores a marker whose signature does not verify", () => {
+    // The Fixer shares the App's identity; the signature is the only thing it
+    // cannot produce. An unverifiable approval must not merge.
+    expect(latestReview([review()], () => false)).toBeNull();
+    expect(latestReview([review()], () => true)?.verdict).toBe("approve");
+  });
+
   it("returns null when nothing reviewed this Change", () => {
     expect(latestReview([review({ body: "just a comment" })])).toBeNull();
   });
@@ -290,13 +302,13 @@ describe("decideFactoryMerge", () => {
   });
 
   it("accepts an approval that abbreviated the head", () => {
-    const short = review({ body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD.slice(0, 7)} -->` });
+    const short = review({ body: `<!-- factory:verdict:approve -->\n${signed(HEAD.slice(0, 7))}` });
     expect(decideFactoryMerge(factoryPr({ reviews: [short] })).eligible).toBe(true);
   });
 
   it("refuses a Change the Reviewer refused", () => {
     const verdict = decideFactoryMerge(
-      factoryPr({ reviews: [review({ body: `<!-- factory:verdict:refuse -->\n<!-- factory:reviewed:${HEAD} -->` })] }),
+      factoryPr({ reviews: [review({ body: `<!-- factory:verdict:refuse -->\n${signed()}` })] }),
     );
     expect(verdict.eligible).toBe(false);
     expect(verdict.reasons.join(" ")).toContain("refuse");
@@ -304,7 +316,7 @@ describe("decideFactoryMerge", () => {
 
   it("refuses a Change whose only approval named an older head", () => {
     const verdict = decideFactoryMerge(
-      factoryPr({ reviews: [review({ body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:9999ffff -->` })] }),
+      factoryPr({ reviews: [review({ body: `<!-- factory:verdict:approve -->\n${signed("9999ffff")}` })] }),
     );
     expect(verdict.reasons.join(" ")).toContain("not the current head");
   });
@@ -325,6 +337,12 @@ describe("decideFactoryMerge", () => {
     expect(
       decideFactoryMerge(factoryPr({ labels: ["factory:blocked"] })).reasons.join(" "),
     ).toContain("factory:blocked");
+  });
+
+  it("refuses when no verifier is configured, rather than trusting an unsigned marker", () => {
+    expect(decideFactoryMerge(factoryPr({ verify: undefined })).reasons.join(" ")).toContain(
+      "no signature check",
+    );
   });
 
   it("refuses a human's Change", () => {

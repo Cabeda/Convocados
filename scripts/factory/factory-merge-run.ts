@@ -10,18 +10,29 @@
  *   DRY_RUN=true node scripts/factory/factory-merge-run.ts # report only
  */
 import { execFileSync } from "node:child_process";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   BEHIND_BASE,
   type Check,
   decideFactoryMerge,
   type FactoryFacts,
   explain,
-  type ReviewEntry,
   type Verdict,
+  reviewEntries,
 } from "./automerge-eligibility.ts";
 
 const REPO = process.env.GITHUB_REPOSITORY ?? "Cabeda/Convocados";
 const DRY_RUN = process.env.DRY_RUN === "true";
+/** The App key the Reviewer's job signs with and the Fixer's job never sees. */
+const APP_KEY = process.env.FACTORY_APP_KEY ?? "";
+
+/** Fail closed: no key means no signature can be verified, so nothing merges. */
+function verify(head: string, signature: string): boolean {
+  if (!APP_KEY) return false;
+  const expected = createHmac("sha256", APP_KEY).update(head).digest("hex");
+  if (signature.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(expected, "hex"));
+}
 
 interface RawPr {
   number: number;
@@ -36,8 +47,8 @@ interface RawPr {
 
 interface RawDetail {
   files: Array<{ path: string }>;
-  comments: Array<{ body: string; createdAt: string; author: { login: string } | null }>;
-  reviews: Array<{ body: string; createdAt: string; author: { login: string } | null }>;
+  comments: Array<{ body: string; createdAt?: string; author?: { login?: string } | null }>;
+  reviews: Array<{ body: string; submittedAt?: string; author?: { login?: string } | null }>;
 }
 
 function gh(args: string[]): string {
@@ -86,15 +97,10 @@ function factsFor(pr: RawPr): { facts: FactoryFacts; verdict: Verdict } {
     labels: pr.labels.map((l) => l.name),
     checks: checksFor(pr),
     files: detail.files.map((f) => f.path),
-    // Both surfaces, each carrying its author and its time: `latestReview`
-    // orders them itself, because two concatenated lists are not chronological.
-    reviews: [...detail.comments, ...detail.reviews].map(
-      (r): ReviewEntry => ({
-        author: r.author?.login ?? "",
-        body: r.body ?? "",
-        createdAt: r.createdAt,
-      }),
-    ),
+    // One normaliser for both surfaces. It reads `submittedAt` from reviews —
+    // `createdAt` does not exist there, and mapping it produced NaN ordering.
+    reviews: reviewEntries(detail),
+    verify,
   };
 
   return { facts, verdict: decideFactoryMerge(facts) };
