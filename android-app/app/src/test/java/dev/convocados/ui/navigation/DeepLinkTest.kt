@@ -204,6 +204,27 @@ class DeepLinkTest {
         )
     }
 
+    @Test
+    fun `payment details link becomes an absolute Custom Tab url on the configured server`() {
+        assertTrue(DeepLink.isPaymentDetailsLink("/users/user-abc#payment-details"))
+        assertEquals(
+            "https://staging.example/users/user-abc#payment-details",
+            DeepLink.paymentDetailsWebUrl(
+                "/users/user-abc#payment-details",
+                "https://staging.example/",
+            ),
+        )
+        assertFalse(DeepLink.isPaymentDetailsLink("/users/user-abc"))
+        assertNull(DeepLink.paymentDetailsWebUrl("/users/user-abc", "https://staging.example"))
+    }
+
+    @Test
+    fun `user id parsing does not swallow invites or events`() {
+        assertNull(DeepLink.userId("convocados://invite/tok-123"))
+        assertNull(DeepLink.userId("convocados://events/evt-abc"))
+        assertNull(DeepLink.userId("convocados://auth?code=abc"))
+    }
+
     // ── invite link survives sign-in ─────────────────────────────────────────
 
     @Test

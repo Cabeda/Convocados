@@ -60,6 +60,39 @@ object DeepLink {
             ?.takeIf(String::isNotBlank)
     }
 
+    /**
+     * Return a user id when the URL targets a Player Profile deep link.
+     *
+     * The path — not the fragment — carries the id, so
+     * `/users/<id>#payment-details` resolves to `<id>` and the fragment selects
+     * the card to open (GH #1722).
+     */
+    fun userId(url: String): String? {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
+        if (uri.scheme == "convocados" && uri.host == "auth") return null
+        val segments = deepLinkPath(uri).trim('/').split('/')
+        return segments.getOrNull(1)
+            ?.takeIf { segments.firstOrNull() == "user" || segments.firstOrNull() == "users" }
+            ?.takeIf(String::isNotBlank)
+    }
+
+    /** True when a Player Profile link points at the payment-details card. */
+    fun isPaymentDetailsLink(url: String): Boolean {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        return userId(url) != null && uri.fragment == "payment-details"
+    }
+
+    /**
+     * Absolute web URL for a payment-details link. Android has no payment
+     * editor, so the payer nudge opens the web card in a Custom Tab instead of
+     * a silent no-op (GH #1722, ADR 0055).
+     */
+    fun paymentDetailsWebUrl(url: String, serverUrl: String): String? {
+        if (!isPaymentDetailsLink(url)) return null
+        val id = userId(url) ?: return null
+        return "${serverUrl.trimEnd('/')}/users/$id#payment-details"
+    }
+
     /** Return whether an event deep link requests the payment prompt. */
     fun shouldAutoOpenPayment(url: String): Boolean {
         val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
@@ -115,6 +148,8 @@ object DeepLink {
      * - `convocados://events/<id>?action=pay` → `event/<id>?action=pay`
      * - `https://convocados.cabeda.dev/events/<id>` → `event/<id>`
      * - `http://localhost:4321/events/<id>` → `event/<id>`
+     * - `https://convocados.cabeda.dev/users/<id>` → `user/<id>`
+     * - `convocados://users/<id>#payment-details` → `user/<id>`
      * - `convocados://games` → `games`
      * - `convocados://create` → `create`
      * - `convocados://auth?code=...` → null (OAuth callback, not a nav target)
@@ -136,6 +171,12 @@ object DeepLink {
                 return Route.EventPayments.create(id)
             }
             return Route.EventDetail.create(id) + if (actionPay) "?action=pay" else ""
+        }
+
+        // Player profile: /users/<id> or /user/<id>, fragment ignored
+        val profileUserId = userId(url)
+        if (profileUserId != null) {
+            return Route.UserProfile.create(profileUserId)
         }
 
         // Invite link: /invite/<token> (https or convocados://)

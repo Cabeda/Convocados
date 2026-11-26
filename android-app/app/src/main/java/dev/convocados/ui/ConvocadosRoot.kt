@@ -140,6 +140,7 @@ fun ConvocadosRoot(deepLink: String? = null, intentVersion: Int = 0, viewModel: 
         AppNavigation(
             isAuthenticated = isAuthenticated,
             isReady = ready,
+            serverUrl = viewModel.tokenStore.getServerUrl(),
             deepLink = deepLink,
             processingAuth = processingAuth,
         )

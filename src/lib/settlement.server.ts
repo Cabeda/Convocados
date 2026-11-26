@@ -23,6 +23,7 @@ import { summarizePayments } from "./paymentSummary";
 import { systemUserId, ensureSystemUserId } from "./payerIdentity.server";
 import { ledgerKey, postLedgerEntry } from "./ledger.server";
 import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
+import { payerPaymentDetailsPath } from "./paymentDetailsLink";
 import { enqueueNotification } from "./notificationQueue.server";
 import { isGameEnded } from "./gameStatus";
 import { fireWebhooks } from "./webhook.server";
@@ -569,7 +570,7 @@ async function notifyPayerChange(
   const incoming = nextEventPlayerId ? byId.get(nextEventPlayerId) : null;
   const outgoing = previousEventPlayerId ? byId.get(previousEventPlayerId) : null;
   const incomingName = incoming?.name ?? nextExternalName ?? null;
-  const incomingUrl = incoming?.userId ? `/users/${incoming.userId}#payment-details` : `/events/${eventId}`;
+  const incomingUrl = incoming?.userId ? payerPaymentDetailsPath(incoming.userId) : `/events/${eventId}`;
   const url = `/events/${eventId}`;
  
   if (incoming?.userId && incoming.userId !== outgoing?.userId) {

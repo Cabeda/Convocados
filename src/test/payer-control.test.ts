@@ -37,6 +37,7 @@ import { hashPassword, buildAccessCookie } from "~/lib/eventAccess";
 import { POST as claim } from "~/pages/api/events/[id]/payments/payer/claim";
 import { POST as standDown } from "~/pages/api/events/[id]/payments/payer/stand-down";
 import { GET as getPayer } from "~/pages/api/events/[id]/payments/payer/index";
+import { payerPaymentDetailsPath } from "~/lib/paymentDetailsLink";
 
 const CTX = (id: string, body: unknown = {}) =>
   ({
@@ -322,6 +323,7 @@ describe("GET payer/index", () => {
     expect(json.isPayer).toBe(true);
     expect(json.isRosterPlayer).toBe(true);
     expect(json.vacant).toBe(false);
+    expect(json.payerDetailsUrl).toBe(payerPaymentDetailsPath(ana.id));
   });
 
   it("reports a vacant payer after a stand-down", async () => {

@@ -758,6 +758,14 @@ export default function UserProfilePage({ userId }: { userId: string }) {
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
+  // This page is client:only, so the browser's own fragment scroll runs before
+  // the payment card exists. Scroll again once the profile (and card) mounts.
+  useEffect(() => {
+    if (isLoading || !data?.isOwnProfile) return;
+    if (window.location.hash !== "#payment-details") return;
+    document.getElementById("payment-details")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [isLoading, data]);
+
   if (isLoading) {
     return (
       <ThemeModeProvider>

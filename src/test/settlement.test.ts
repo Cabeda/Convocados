@@ -23,6 +23,7 @@ vi.mock("~/lib/webhook.server", () => ({
 import { fireWebhooks } from "~/lib/webhook.server";
 import { getOutstandingBalance } from "~/lib/balance.server";
 import { resolvePaymentDetails } from "~/lib/paymentDetailsResolve.server";
+import { payerPaymentDetailsPath } from "~/lib/paymentDetailsLink";
 
 import {
   syncGamePayments,
@@ -1077,6 +1078,7 @@ describe("game_payer_set webhook (#1359)", () => {
     const payload = JSON.parse(job!.payload);
     expect(payload.recipientUserIds).toEqual(["user-ana-notified"]);
     expect(payload.key).toBe("payerAssignedBody");
+    expect(payload.url).toBe(payerPaymentDetailsPath("user-ana-notified"));
   });
 
   it("tells the displaced payer who took over", async () => {

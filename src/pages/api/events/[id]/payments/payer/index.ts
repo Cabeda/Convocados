@@ -6,6 +6,7 @@ import { getSession } from "~/lib/auth.helpers.server";
 import { canReadEventFinances } from "~/lib/eventReadAccess.server";
 
 import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
+import { payerPaymentDetailsPath } from "~/lib/paymentDetailsLink";
 
 /**
  * GET /api/events/[id]/payments/payer
@@ -69,7 +70,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       select: { paymentDetails: true, sharePaymentDetails: true },
     });
     if (!profile?.sharePaymentDetails || !profile.paymentDetails) {
-      payerDetailsUrl = `/users/${userId}#payment-details`;
+      payerDetailsUrl = payerPaymentDetailsPath(userId);
     }
   }
 

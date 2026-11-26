@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -53,6 +54,7 @@ import dev.convocados.ui.screen.history.EventHistoryScreen
 import dev.convocados.ui.screen.history.EventHistoryScreen
 import dev.convocados.ui.screen.map.MapPickerScreen
 import dev.convocados.ui.screen.invite.InviteScreen
+import dev.convocados.util.openInCustomTab
 
 data class BottomNavItem(val route: String, val label: String, val icon: @Composable () -> Unit)
 
@@ -61,10 +63,12 @@ data class BottomNavItem(val route: String, val label: String, val icon: @Compos
 fun AppNavigation(
     isAuthenticated: Boolean,
     isReady: Boolean,
+    serverUrl: String,
     deepLink: String? = null,
     processingAuth: Boolean = false,
 ) {
     val navController = rememberNavController()
+    val context = LocalContext.current
 
     // Fixed for the life of this composition. Recomputing it when
     // isAuthenticated flipped rebuilt the NavHost graph and reset the back
@@ -87,6 +91,13 @@ fun AppNavigation(
         if (deepLink == null) return@LaunchedEffect
         if (!isAuthenticated && !(dev.convocados.BuildConfig.DEBUG && deepLink.contains("/demo"))) return@LaunchedEffect
         val route = DeepLink.deepLinkToRoute(deepLink) ?: return@LaunchedEffect
+        // Android has no payment editor; open the web card the push points at
+        // rather than landing on a profile screen that cannot submit it (#1722).
+        val paymentDetailsUrl = DeepLink.paymentDetailsWebUrl(deepLink, serverUrl)
+        if (paymentDetailsUrl != null) {
+            context.openInCustomTab(paymentDetailsUrl)
+            return@LaunchedEffect
+        }
         val eventId = DeepLink.eventId(deepLink)
         // Arriving from sign-in: replace the Login wall with Games first, so
         // Back from the deep-linked screen returns to the app, not sign-in.
