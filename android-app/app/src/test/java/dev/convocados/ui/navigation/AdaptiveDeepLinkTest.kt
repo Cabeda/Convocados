@@ -53,6 +53,59 @@ class AdaptiveDeepLinkTest {
     }
 
     @Test
+    fun `event share deep links preserve their action`() {
+        assertTrue(DeepLink.shouldAutoOpenShare("convocados://events/evt-share?action=share"))
+        assertTrue(DeepLink.shouldAutoOpenShare("https://convocados.cabeda.dev/events/evt-share?action=share"))
+        assertFalse(DeepLink.shouldAutoOpenShare("convocados://events/evt-share"))
+        assertFalse(DeepLink.shouldAutoOpenShare("convocados://auth?action=share"))
+    }
+
+    @Test
+    fun `pending share action is consumed for its target event only once`() {
+        assertTrue(
+            DeepLink.shouldAutoOpenShareForEvent(
+                pending = true,
+                targetEventId = "evt-share",
+                deepLink = "convocados://events/evt-share?action=share",
+            ),
+        )
+        assertFalse(
+            DeepLink.shouldAutoOpenShareForEvent(
+                pending = false,
+                targetEventId = "evt-share",
+                deepLink = "convocados://events/evt-share?action=share",
+            ),
+        )
+        assertFalse(
+            DeepLink.shouldAutoOpenShareForEvent(
+                pending = true,
+                targetEventId = "evt-other",
+                deepLink = "convocados://events/evt-share?action=share",
+            ),
+        )
+    }
+
+    @Test
+    fun `compact event click carries the pending share action`() {
+        assertEquals(
+            "event/evt-share?action=share",
+            DeepLink.compactEventDetailRoute(
+                eventId = "evt-share",
+                shouldOpenPayment = false,
+                shouldOpenShare = true,
+            ),
+        )
+        assertEquals(
+            "event/evt-other",
+            DeepLink.compactEventDetailRoute(
+                eventId = "evt-other",
+                shouldOpenPayment = false,
+                shouldOpenShare = false,
+            ),
+        )
+    }
+
+    @Test
     fun `non-event links do not select an event`() {
         assertNull(DeepLink.eventId("convocados://games"))
         assertNull(DeepLink.eventId("convocados://auth?code=abc"))

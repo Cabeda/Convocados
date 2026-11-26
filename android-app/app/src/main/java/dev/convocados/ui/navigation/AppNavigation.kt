@@ -194,10 +194,20 @@ fun AppNavigation(
                                 targetEventId = eventId,
                                 deepLink = deepLink ?: "",
                             )
+                            val shouldOpenShare = DeepLink.shouldAutoOpenShareForEvent(
+                                pending = pendingAutoOpenShare,
+                                targetEventId = eventId,
+                                deepLink = deepLink ?: "",
+                            )
                             if (shouldOpenPayment) pendingAutoOpenPayment = false
-                            val route = Route.EventDetail.create(eventId) +
-                                if (shouldOpenPayment) "?action=pay" else ""
-                            navController.navigate(route)
+                            if (shouldOpenShare) pendingAutoOpenShare = false
+                            navController.navigate(
+                                DeepLink.compactEventDetailRoute(
+                                    eventId = eventId,
+                                    shouldOpenPayment = shouldOpenPayment,
+                                    shouldOpenShare = shouldOpenShare,
+                                ),
+                            )
                         },
                         onPayments = { navController.navigate(Route.EventPayments.create(it)) },
                         onCreateClick = { navController.navigate(Route.CreateEvent.route) },
@@ -319,7 +329,10 @@ fun AppNavigation(
                             pendingAutoOpenPayment = false
                         },
                         autoOpenShare = routeAutoOpenShare,
-                        onAutoOpenShareConsumed = { routeAutoOpenShare = false },
+                        onAutoOpenShareConsumed = {
+                            routeAutoOpenShare = false
+                            pendingAutoOpenShare = false
+                        },
                         onBack = { navController.popBackStack() },
                         onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
                         onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },

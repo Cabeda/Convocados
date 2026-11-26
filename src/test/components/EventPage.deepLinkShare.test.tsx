@@ -93,6 +93,8 @@ describe("EventPage — action=share deep link", () => {
     // Re-sharing a link that itself carries action=share would make every
     // recipient fire their own share sheet.
     expect(payload.url).not.toContain("action=share");
+    // The address bar must lose the action too, so a reload does not reopen it.
+    expect(window.location.search).not.toContain("action");
 
     // A background refetch of the event must not open the sheet again.
     window.dispatchEvent(new Event("focus"));

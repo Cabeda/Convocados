@@ -414,6 +414,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
     const url = new URL(window.location.href);
     url.searchParams.delete("action");
+    // Clear the action from the address bar too, so a reload or a copied link
+    // does not reopen the sheet for the recipient.
+    window.history.replaceState({}, "", url.toString());
     const details = {
       title: event.title,
       dateTime: new Date(event.dateTime),

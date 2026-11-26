@@ -86,6 +86,24 @@ object DeepLink {
         deepLink: String,
     ): Boolean = pending && eventId(deepLink) == targetEventId
 
+    /**
+     * Build the event detail route for a compact-layout click, carrying the
+     * pending action so the standalone screen opens it once. Payment wins if
+     * both are somehow pending, matching the order the deep link resolves.
+     */
+    fun compactEventDetailRoute(
+        eventId: String,
+        shouldOpenPayment: Boolean,
+        shouldOpenShare: Boolean,
+    ): String {
+        val action = when {
+            shouldOpenPayment -> "pay"
+            shouldOpenShare -> "share"
+            else -> null
+        }
+        return Route.EventDetail.create(eventId) + if (action != null) "?action=$action" else ""
+    }
+
     private fun deepLinkPath(uri: Uri): String = when {
         uri.scheme == "convocados" -> "/" + (uri.host.orEmpty() + uri.path.orEmpty()).removePrefix("/")
         else -> uri.path.orEmpty()
