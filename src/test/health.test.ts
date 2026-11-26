@@ -4,7 +4,14 @@ import { GET } from "~/pages/api/health";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
+const logWarn = vi.hoisted(() => vi.fn());
+vi.mock("~/lib/logger.server", () => ({
+  logger: { info: vi.fn(), warn: logWarn, error: vi.fn(), debug: vi.fn() },
+  createLogger: () => ({ info: vi.fn(), warn: logWarn, error: vi.fn(), debug: vi.fn() }),
+}));
+
 beforeEach(async () => {
+  logWarn.mockClear();
   // start.sh exports the normalized switch that health reads; tests do not run
   // start.sh, so simulate a production boot with replication available.
   delete process.env.BACKUPS_ENABLED;
@@ -46,6 +53,7 @@ describe("GET /api/health", () => {
     expect(body.db).toBeDefined();
     expect(body.db.journalMode).toBe("wal");
     expect(body.db.writable).toBe(true);
+    expect(body.db.provenance).toBe("known");
   });
 
   it("includes SQLite page/freelist counts and WAL size", async () => {
@@ -101,6 +109,19 @@ describe("GET /api/health", () => {
     expect(body.db.oldestMigrationAt).toBeNull();
     expect(body.db.createdThisBoot).toBe(false);
     expect(body.degraded).toBeUndefined();
+    // An unreadable shape is not proof of a fresh database, but it is not a
+    // healthy reading either: name the provenance unknown and log the raw value
+    // so production's shape can be identified instead of guessed.
+    expect(body.db.provenance).toBe("unknown");
+    expect(logWarn).toHaveBeenCalledTimes(1);
+    expect(logWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ rawOldestMigrationAt: "not-a-timestamp" }),
+      expect.stringContaining("_prisma_migrations"),
+    );
+
+    // Health is polled every few seconds; the unknown shape is logged once.
+    await GET(ctx());
+    expect(logWarn).toHaveBeenCalledTimes(1);
   });
 
   it("degrades an empty database whose migration is under an hour old", async () => {
