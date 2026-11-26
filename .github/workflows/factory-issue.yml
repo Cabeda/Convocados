@@ -96,6 +96,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set the committer identity
+        # The action sets a global `opencode-agent[bot]` identity, and the CLA
+        # check reads commit authors: a Change whose commits carry a name the
+        # allowlist does not list fails the CLA and can never be merged (#1807).
+        # Repo-local config wins over the action's global config.
+        run: |
+          git config user.name "convocarados-factory[bot]"
+          git config user.email "convocarados-factory[bot]@users.noreply.github.com"
+
       - uses: pnpm/action-setup@v6
         with:
           run_install: false
@@ -173,8 +182,8 @@ jobs:
           fi
           git add -A
           if ! git diff --cached --quiet; then
-            git -c user.name="convocados-factory[bot]" \
-                -c user.email="convocados-factory[bot]@users.noreply.github.com" \
+            git -c user.name="convocarados-factory[bot]" \
+                -c user.email="convocarados-factory[bot]@users.noreply.github.com" \
                 commit -m "factory: work in progress for #${{ github.event.issue.number || inputs.issue }}"
           fi
           if [ "$(git rev-list --count "origin/main..$branch")" = "0" ]; then

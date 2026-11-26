@@ -298,3 +298,43 @@ describe("the CLA allowlist names the factory App exactly", () => {
     ).toContain("convocarados-factory[bot]");
   });
 });
+describe("a factory commit carries an identity the CLA accepts", () => {
+  // A Change with a commit author the CLA allowlist does not name can never be
+  // merged: the bot cannot sign, and the check fails on every synchronize.
+  // #1807 shipped `convocados-factory[bot]` — one letter short of the App's
+  // login — and went red on the CLA with a green suite.
+  //
+  // Listed by hand rather than inferred: these are the four workflows whose
+  // agent implements, so these are the four that can author a commit.
+  const COMMITTING = [
+    "factory-issue.yml",
+    "factory-fix.yml",
+    "factory-fix-loop.yml",
+    "factory-repairer.yml",
+  ];
+
+  const allowlist = () => {
+    const raw = readFileSync(join(workflowsDir, "cla.yml"), "utf8");
+    return (/allowlist:\s*"([^"]+)"/.exec(raw)?.[1] ?? "")
+      .split(",")
+      .map((name) => name.trim());
+  };
+
+  it.each(COMMITTING)("%s names a committer the CLA exempts", (file) => {
+    const raw = readFileSync(join(workflowsDir, file), "utf8");
+    const names = [...raw.matchAll(/user\.name[= ]"([^"]+)"/g)].map((m) => m[1]);
+    expect(names.length, `${file} must set the committer identity`).toBeGreaterThan(0);
+    for (const name of names) {
+      expect(allowlist(), `${file} commits as ${name}, which the CLA does not exempt`).toContain(
+        name,
+      );
+    }
+  });
+
+  it.each(workflowFiles)("%s never commits under an unexempted name", (file) => {
+    const raw = readFileSync(join(workflowsDir, file), "utf8");
+    for (const [, name] of raw.matchAll(/user\.name[= ]"([^"]+)"/g)) {
+      expect(allowlist(), `${file} sets user.name ${name}`).toContain(name);
+    }
+  });
+});
