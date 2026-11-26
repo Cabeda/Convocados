@@ -250,6 +250,22 @@ export async function isGameParticipant(eventId: string, gameId: string, userId:
 }
 
 /**
+ * Whether a user is the game's player-payer. Unlike `isGameParticipant`, this is
+ * only true for the payer: an ordinary participant may settle their own share,
+ * but may not revert the whole game's payments.
+ */
+export async function isGamePayer(eventId: string, gameId: string, userId: string): Promise<boolean> {
+  if (!userId) return false;
+  const ep = await prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true } });
+  if (!ep) return false;
+  const payer = await prisma.game.findFirst({
+    where: { id: gameId, eventId, payerEventPlayerId: ep.id },
+    select: { id: true },
+  });
+  return !!payer;
+}
+
+/**
  * Reconcile GamePayment rows for a game against the players who actually played.
  * - Charges only lineup players; falls back to the ordered starters before teams exist.
  * - Creates/revives a pending row for each charged player at the current share.
