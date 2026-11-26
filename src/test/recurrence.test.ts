@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildRecurrenceRule,
   parseRecurrenceRule,
   serializeRecurrenceRule,
   nextOccurrence,
@@ -10,6 +11,37 @@ import {
 // ---------------------------------------------------------------------------
 // parseRecurrenceRule
 // ---------------------------------------------------------------------------
+describe("buildRecurrenceRule", () => {
+  it("anchors a monthly rule to the wall-clock day in its timezone", () => {
+    // 23:30 UTC is already 1 March in Lisbon (WET, UTC+0 in winter — use a
+    // summer instant instead: 2026-07-31T23:30Z is 1 Aug 00:30 WEST).
+    const rule = buildRecurrenceRule(
+      { freq: "monthly", interval: 1 },
+      new Date("2026-07-31T23:30:00Z"),
+      "Europe/Lisbon",
+    );
+    expect(rule.anchorDay).toBe(1);
+  });
+
+  it("does not anchor daily or weekly rules", () => {
+    const weekly = buildRecurrenceRule(
+      { freq: "weekly", interval: 1, byDay: "MO" },
+      new Date("2026-01-31T19:00:00Z"),
+      "UTC",
+    );
+    expect(weekly).not.toHaveProperty("anchorDay");
+  });
+
+  it("anchors a yearly rule", () => {
+    const yearly = buildRecurrenceRule(
+      { freq: "yearly", interval: 1 },
+      new Date("2028-02-29T19:00:00Z"),
+      "UTC",
+    );
+    expect(yearly.anchorDay).toBe(29);
+  });
+});
+
 describe("parseRecurrenceRule", () => {
   it("returns null for null input", () => {
     expect(parseRecurrenceRule(null)).toBeNull();
@@ -267,12 +299,46 @@ describe("nextOccurrence — monthly", () => {
     expect(next.toISOString().slice(0, 10)).toBe("2026-04-10");
   });
 
-  it("handles month-end overflow (Jan 31 -> Feb)", () => {
+  it("clamps month-end overflow and keeps the anchor day (Jan 31 -> Feb 28 -> Mar 31 -> Apr 30)", () => {
+    const jan31 = new Date("2026-01-31T18:00:00Z");
+    const rule: RecurrenceRule = { freq: "monthly", interval: 1, anchorDay: 31 };
+    const after = new Date("2026-01-31T19:00:00Z");
+
+    const feb = nextOccurrence(jan31, rule, after);
+    expect(feb.toISOString().slice(0, 10)).toBe("2026-02-28");
+
+    const mar = nextOccurrence(feb, rule, feb);
+    expect(mar.toISOString().slice(0, 10)).toBe("2026-03-31");
+
+    const apr = nextOccurrence(mar, rule, mar);
+    expect(apr.toISOString().slice(0, 10)).toBe("2026-04-30");
+  });
+
+  it("clamps a 2-month interval (Jan 31 -> Mar 31 -> May 31)", () => {
+    const jan31 = new Date("2026-01-31T18:00:00Z");
+    const rule: RecurrenceRule = { freq: "monthly", interval: 2, anchorDay: 31 };
+    const mar = nextOccurrence(jan31, rule, new Date("2026-01-31T19:00:00Z"));
+    expect(mar.toISOString().slice(0, 10)).toBe("2026-03-31");
+    const may = nextOccurrence(mar, rule, mar);
+    expect(may.toISOString().slice(0, 10)).toBe("2026-05-31");
+  });
+
+  it("falls back to the base day when a legacy rule has no anchorDay", () => {
     const jan31 = new Date("2026-01-31T18:00:00Z");
     const rule: RecurrenceRule = { freq: "monthly", interval: 1 };
-    const after = new Date("2026-01-31T19:00:00Z");
-    const next = nextOccurrence(jan31, rule, after);
-    expect(next.getTime()).toBeGreaterThan(after.getTime());
+    const next = nextOccurrence(jan31, rule, new Date("2026-01-31T19:00:00Z"));
+    expect(next.toISOString().slice(0, 10)).toBe("2026-02-28");
+  });
+
+  it("clamps a malformed stored anchor instead of rolling into another month", () => {
+    const jan15 = new Date("2026-01-15T18:00:00Z");
+    const after = new Date("2026-01-15T19:00:00Z");
+    // 0 would setUTCDate(0) = 31 Dec, 32 would roll into March, NaN would
+    // produce an Invalid Date. All three must stay inside February.
+    for (const anchorDay of [0, 32, Number.NaN]) {
+      const next = nextOccurrence(jan15, { freq: "monthly", interval: 1, anchorDay }, after);
+      expect(next.toISOString().slice(0, 7)).toBe("2026-02");
+    }
   });
 
   it("skips multiple months to get past after", () => {
@@ -310,12 +376,22 @@ describe("nextOccurrence — yearly", () => {
     expect(next.toISOString().slice(0, 10)).toBe("2027-03-10");
   });
 
-  it("handles leap year (Feb 29)", () => {
+  it("lands a Feb 29 series on Feb 28 in non-leap years and returns to Feb 29", () => {
     const feb29 = new Date("2028-02-29T18:00:00Z");
-    const rule: RecurrenceRule = { freq: "yearly", interval: 1 };
+    const rule: RecurrenceRule = { freq: "yearly", interval: 1, anchorDay: 29 };
     const after = new Date("2028-02-29T19:00:00Z");
-    const next = nextOccurrence(feb29, rule, after);
-    expect(next.getTime()).toBeGreaterThan(after.getTime());
+
+    const y2029 = nextOccurrence(feb29, rule, after);
+    expect(y2029.toISOString().slice(0, 10)).toBe("2029-02-28");
+
+    const y2030 = nextOccurrence(y2029, rule, y2029);
+    expect(y2030.toISOString().slice(0, 10)).toBe("2030-02-28");
+
+    const y2031 = nextOccurrence(y2030, rule, y2030);
+    expect(y2031.toISOString().slice(0, 10)).toBe("2031-02-28");
+
+    const y2032 = nextOccurrence(y2031, rule, y2031);
+    expect(y2032.toISOString().slice(0, 10)).toBe("2032-02-29");
   });
 
   it("skips multiple years to get past after", () => {

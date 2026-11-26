@@ -1,5 +1,5 @@
 import { prisma } from "./db.server";
-import { parseRecurrenceRule, nextOccurrence } from "./recurrence";
+import { anchorDayOf, parseRecurrenceRule, serializeRecurrenceRule, nextOccurrence } from "./recurrence";
 import { fireWebhooks } from "./webhook.server";
 import { autoPriorityEnroll } from "./priority.server";
 import { cancelEventJobs, scheduleEventReminders } from "./scheduler.server";
@@ -114,12 +114,23 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
   if (event.isRecurring) {
     const rule = parseRecurrenceRule(event.recurrenceRule);
     if (rule) {
-      const newDateTime = nextOccurrence(event.dateTime, rule, event.dateTime, event.timezone);
+      // Cancellation is a second advance path: backfill the anchor for legacy
+      // rules before dateTime is replaced, or the next advance anchors on the
+      // clamped day (#1788).
+      const needsAnchor =
+        (rule.freq === "monthly" || rule.freq === "yearly") && rule.anchorDay === undefined;
+      const effectiveRule = needsAnchor
+        ? { ...rule, anchorDay: anchorDayOf(event.dateTime, event.timezone) }
+        : rule;
+      const newDateTime = nextOccurrence(event.dateTime, effectiveRule, event.dateTime, event.timezone);
       const newNextResetAt = new Date(newDateTime.getTime() + event.durationMinutes * 60 * 1000);
 
       const claimed = await prisma.event.updateMany({
         where: { id: event.id, nextResetAt: event.nextResetAt },
-        data: { nextResetAt: newNextResetAt },
+        data: {
+          nextResetAt: newNextResetAt,
+          ...(needsAnchor ? { recurrenceRule: serializeRecurrenceRule(effectiveRule) } : {}),
+        },
       });
 
       if (claimed.count === 1) {

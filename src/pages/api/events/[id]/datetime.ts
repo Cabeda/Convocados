@@ -7,6 +7,11 @@ import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/schedul
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { getRosterCapacity } from "../../../../lib/roster.server";
+import {
+  anchorDayOf,
+  parseRecurrenceRule,
+  serializeRecurrenceRule,
+} from "../../../../lib/recurrence";
 
 const log = createLogger("datetime-api");
 
@@ -27,7 +32,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const dateTimeRaw = body.dateTime !== undefined ? String(body.dateTime) : null;
   const timezoneRaw = body.timezone !== undefined ? String(body.timezone).trim().slice(0, 100) : null;
 
-  const updates: { dateTime?: Date; timezone?: string } = {};
+  const updates: { dateTime?: Date; timezone?: string; recurrenceRule?: string } = {};
 
   if (dateTimeRaw !== null) {
     const dateTime = new Date(dateTimeRaw);
@@ -44,6 +49,30 @@ export const PUT: APIRoute = async ({ params, request }) => {
       return Response.json({ error: "Invalid timezone." }, { status: 400 });
     }
     updates.timezone = timezoneRaw;
+  }
+
+  // A reschedule that changes the day moves the series occurrence (same as
+  // before #1788). A time- or timezone-only edit must NOT re-anchor from a
+  // clamped occurrence: a 31st series sitting on Feb 28 would otherwise
+  // silently become a 28th series.
+  const existingRule = parseRecurrenceRule(event.recurrenceRule);
+  if (
+    (updates.dateTime || updates.timezone) &&
+    existingRule &&
+    (existingRule.freq === "monthly" || existingRule.freq === "yearly")
+  ) {
+    const currentDay = anchorDayOf(event.dateTime, event.timezone ?? "UTC");
+    const editedDay = anchorDayOf(
+      updates.dateTime ?? event.dateTime,
+      updates.timezone ?? event.timezone ?? "UTC",
+    );
+    const nextAnchor = editedDay === currentDay ? (existingRule.anchorDay ?? currentDay) : editedDay;
+    if (nextAnchor !== existingRule.anchorDay) {
+      updates.recurrenceRule = serializeRecurrenceRule({
+        ...existingRule,
+        anchorDay: nextAnchor,
+      });
+    }
   }
 
   if (Object.keys(updates).length === 0) {

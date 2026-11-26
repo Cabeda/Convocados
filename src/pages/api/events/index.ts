@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { checkRateLimit } from "../../../lib/rateLimit.server";
-import { serializeRecurrenceRule, type RecurrenceRule } from "../../../lib/recurrence";
+import { buildRecurrenceRule, serializeRecurrenceRule } from "../../../lib/recurrence";
 import { resolveLocation, type GeoResult } from "../../../lib/geocode";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
@@ -111,11 +111,11 @@ export const POST: APIRoute = async ({ request }) => {
   const durationMinutes = getDefaultDurationMinutes(sport);
 
   if (isRecurring && recurrenceFreq) {
-    const rule: RecurrenceRule = {
+    const rule = buildRecurrenceRule({
       freq: recurrenceFreq,
       interval: isNaN(recurrenceInterval) || recurrenceInterval < 1 ? 1 : recurrenceInterval,
       ...(recurrenceByDay ? { byDay: recurrenceByDay } : {}),
-    };
+    }, dateTime, timezone);
     recurrenceRule = serializeRecurrenceRule(rule);
     nextResetAt = new Date(dateTime.getTime() + durationMinutes * 60 * 1000);
   }

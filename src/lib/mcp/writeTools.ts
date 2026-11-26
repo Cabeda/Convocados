@@ -15,7 +15,7 @@ import { balanceTeams, processGame } from "../elo.server";
 import { applyFormationLayout } from "../teams";
 import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
-import { serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
+import { anchorDayOf, buildRecurrenceRule, parseRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
 import { getDefaultDurationMinutes } from "../sports";
 import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
 import { fromDateTimeLocalValue } from "../timezones";
@@ -351,11 +351,11 @@ async function createEvent(args: Record<string, unknown>, ctx: AuthContext) {
     const rawFreq = args.recurrenceFreq;
     const freq = rawFreq && (VALID_RECURRENCE_FREQS as readonly string[]).includes(rawFreq as string) ? (rawFreq as string) : null;
     if (freq) {
-      const rule: RecurrenceRule = {
+      const rule = buildRecurrenceRule({
         freq: freq as RecurrenceRule["freq"],
         interval: isNaN(parseInt(String(args.recurrenceInterval ?? "1"), 10)) ? 1 : Math.max(1, parseInt(String(args.recurrenceInterval ?? "1"), 10)),
         ...(typeof args.recurrenceByDay === "string" ? { byDay: args.recurrenceByDay } : {}),
-      };
+      }, dateTime, timezone);
       recurrenceRule = serializeRecurrenceRule(rule);
       nextResetAt = new Date(dateTime.getTime() + durationMinutes * 60 * 1000);
     }
@@ -398,7 +398,7 @@ async function createEvent(args: Record<string, unknown>, ctx: AuthContext) {
 async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string | undefined;
   if (!eventId) throw new McpError("eventId required", -32602, 400);
-  await requireEventAccess(ctx, eventId);
+  const event = await requireEventAccess(ctx, eventId);
 
   const data: {
     title?: string;
@@ -408,6 +408,7 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
     isPublic?: boolean;
     timezone?: string;
     dateTime?: Date;
+    recurrenceRule?: string;
   } = {};
 
   if (args.title !== undefined) {
@@ -447,6 +448,29 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
     if (isNaN(dateTime.getTime())) throw new McpError("Invalid dateTime", -32602, 400);
     if (dateTime.getTime() <= Date.now()) throw new McpError("dateTime must be in the future", -32602, 400);
     data.dateTime = dateTime;
+  }
+
+  // A reschedule that changes the day moves the series occurrence. A time- or
+  // timezone-only edit keeps the anchor: re-anchoring a 31st series from its
+  // clamped Feb 28 occurrence would silently move it to the 28th (#1788).
+  const existingRule = parseRecurrenceRule(event.recurrenceRule);
+  if (
+    (data.dateTime || data.timezone) &&
+    existingRule &&
+    (existingRule.freq === "monthly" || existingRule.freq === "yearly")
+  ) {
+    const currentDay = anchorDayOf(event.dateTime, event.timezone ?? "UTC");
+    const editedDay = anchorDayOf(
+      data.dateTime ?? event.dateTime,
+      data.timezone ?? event.timezone ?? "UTC",
+    );
+    const nextAnchor = editedDay === currentDay ? (existingRule.anchorDay ?? currentDay) : editedDay;
+    if (nextAnchor !== existingRule.anchorDay) {
+      data.recurrenceRule = serializeRecurrenceRule({
+        ...existingRule,
+        anchorDay: nextAnchor,
+      });
+    }
   }
 
   if (Object.keys(data).length === 0) {
