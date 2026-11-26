@@ -2,8 +2,7 @@ import { prisma } from "./db.server";
 import { isGameEnded } from "./gameStatus";
 import { getSession, checkOwnership } from "./auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
-import { isSettledGameParticipant } from "./participants.server";
-import { isHistoryParticipant } from "./snapshotParticipants";
+import { isSettledGameParticipant, isSettledGamePlayer } from "./participants.server";
 import { getWrapUpGameSettlement } from "./settlement.server";
 import { occurrencePaymentRoll } from "./paymentRoll.server";
 import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
@@ -147,7 +146,9 @@ export async function computePostGameStatus(
   // Unlike isParticipant, the Owner/Admin settlement override does NOT apply —
   // MVP voting is restricted to players, so an admin who didn't play must not
   // be offered the Vote MVP task nor have the banner held open by MVP state.
-  const isPlayer = session?.user ? isHistoryParticipant(latestHistory, session.user.name) : false;
+  const isPlayer = session?.user
+    ? await isSettledGamePlayer({ sessionUser: session.user, event, latestHistory })
+    : false;
 
   // ─── MVP voting completion ──────────────────────────────────────────
   let mvpComplete = true;

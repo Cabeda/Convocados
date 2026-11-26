@@ -70,6 +70,11 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
 }
 
 async function seedPlayer(eventId: string, name: string, userId?: string) {
+  await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId, name } },
+    create: { eventId, name, userId },
+    update: userId ? { userId } : {},
+  });
   return prisma.player.create({ data: { name, eventId, userId } });
 }
 
@@ -704,11 +709,12 @@ describe("POST mvp-vote (name-based)", () => {
     expect(body.error).toMatch(/yourself/i);
   });
 
-  it("allows vote when voter has no Player record (fully name-based after reset)", async () => {
+  it("allows vote when voter has no Player record (linked EventPlayer after reset)", async () => {
     const user = await seedUser("Alice");
     mockAuth(user.id, "Alice");
     const event = await seedEvent({ dateTime: new Date(Date.now() + 7 * 86400_000) });
-    // No Player records at all — both voter and target resolved by name
+    // No legacy Player records — the voter's account is linked on EventPlayer.
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: user.id } });
     const history = await seedHistory(event.id, {
       dateTime: new Date(Date.now() - 3600_000),
     });
@@ -726,6 +732,7 @@ describe("POST mvp-vote (name-based)", () => {
     const user = await seedUser("Alice");
     mockAuth(user.id, "Alice");
     const event = await seedEvent({ dateTime: new Date(Date.now() + 7 * 86400_000) });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: user.id } });
     const history = await seedHistory(event.id, {
       dateTime: new Date(Date.now() - 3600_000),
     });

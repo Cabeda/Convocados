@@ -520,6 +520,7 @@ describe("GET /api/events/:id/post-game-status", () => {
     await prisma.user.create({ data: { id: "u-alice4", name: "Alice", email: "alice4@test.com", emailVerified: false } });
     await prisma.user.create({ data: { id: "u-bob4", name: "Bob", email: "bob4@test.com", emailVerified: false } });
     await prisma.player.create({ data: { id: "p-alice4", name: "Alice", eventId: event.id, userId: "u-alice4", order: 0 } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alice4" } });
 
     const history = await prisma.gameHistory.create({
       data: {
@@ -569,6 +570,7 @@ describe("GET /api/events/:id/post-game-status", () => {
     });
     await prisma.user.create({ data: { id: "u-bob5", name: "Bob", email: "bob5@test.com", emailVerified: false } });
     await prisma.player.create({ data: { id: "p-bob5", name: "Bob", eventId: event.id, userId: "u-bob5", order: 0 } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob", userId: "u-bob5" } });
     await prisma.gameHistory.create({
       data: {
         eventId: event.id,
@@ -1231,9 +1233,10 @@ describe("isParticipant visibility rules (issue #658)", () => {
     mockCheckOwnership.mockResolvedValue(ownership as any);
   }
 
-  it("returns isParticipant=true when the user's name is in the settled game's teamsSnapshot", async () => {
+  it("returns isParticipant=true when the linked EventPlayer is in the settled game's teamsSnapshot", async () => {
     await login("u-alice", "Alice", { isOwner: false, isAdmin: false });
     const event = await endedEvent();
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alice" } });
     await settledHistory(event.id, { teams: JSON.stringify([
       { team: "A", players: [{ name: "Alice", order: 0 }] },
       { team: "B", players: [{ name: "Bob", order: 0 }] },
@@ -1245,9 +1248,10 @@ describe("isParticipant visibility rules (issue #658)", () => {
     expect(json.isPlayer).toBe(true);
   });
 
-  it("returns isPlayer=true for a player in the settled game's teamsSnapshot even when not the owner", async () => {
+  it("returns isPlayer=true for a linked player in the settled game's teamsSnapshot even when not the owner", async () => {
     await login("u-bob", "Bob", { isOwner: false, isAdmin: false });
     const event = await endedEvent();
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob", userId: "u-bob" } });
     await settledHistory(event.id, { teams: JSON.stringify([
       { team: "A", players: [{ name: "Alice", order: 0 }] },
       { team: "B", players: [{ name: "Bob", order: 0 }] },
@@ -1287,7 +1291,7 @@ describe("isParticipant visibility rules (issue #658)", () => {
     expect(json.isPlayer).toBe(false);
   });
 
-  it("returns isParticipant=true for an unpaid player on the settled game's payment roll even when not in the teams", async () => {
+  it("returns isParticipant=true for an unpaid linked player on the settled game's payment roll even when not in the teams", async () => {
     await login("u-carol", "Carol", { isOwner: false, isAdmin: false });
     const event = await endedEvent();
     const history = await settledHistory(event.id, {
@@ -1301,7 +1305,7 @@ describe("isParticipant visibility rules (issue #658)", () => {
     const game = await prisma.game.create({
       data: { eventId: event.id, dateTime: history.dateTime, status: "played" },
     });
-    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Carol" } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Carol", userId: "u-carol" } });
     await prisma.gamePayment.create({
       data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Carol", amount: 25, status: "pending" },
     });
