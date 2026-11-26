@@ -13,6 +13,8 @@ on:
   # last touched this file, so the schedule is how machine Changes get read.
   schedule:
     - cron: "*/30 * * * *"
+  repository_dispatch:
+    types: [factory-review]
   workflow_dispatch:
     inputs:
       pr:

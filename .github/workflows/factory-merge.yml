@@ -13,6 +13,8 @@ name: "factory: merge"
 on:
   schedule:
     - cron: "7,37 * * * *" # off the janitor's :00/:30 and automerge's :23/:53
+  repository_dispatch:
+    types: [factory-merge]
   workflow_dispatch:
     inputs:
       dry-run:
