@@ -60,6 +60,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set the committer identity
+        # The action sets a global `opencode-agent[bot]` identity, and the CLA
+        # check reads commit authors: a Change whose commits carry a name the
+        # allowlist does not list fails the CLA and can never be merged (#1807).
+        # Repo-local config wins over the action's global config.
+        run: |
+          git config user.name "convocarados-factory[bot]"
+          git config user.email "convocarados-factory[bot]@users.noreply.github.com"
+
       - uses: pnpm/action-setup@v6
         with:
           run_install: false
@@ -97,6 +106,11 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The action asserts the *actor's* write permission and skips it only
+          # when TOKEN is set. A factory PR's actor is the App, whose repo
+          # permission is `none` (installation scopes do not change that), so
+          # without this the reviewer cannot run on a factory Change at all.
+          TOKEN: ${{ steps.app-token.outputs.token }}
           # Provider credentials for vars.FACTORY_MODEL. The unset ones are empty
           # strings, which is harmless: opencode picks the one the model needs.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

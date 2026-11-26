@@ -142,15 +142,28 @@ jobs:
     needs: ledger
     if: needs.ledger.outputs.run == 'true'
     runs-on: ubuntu-latest
+    # The action requires a write-capable token — it configures git, opens a
+    # tracking comment, and pushes the branch itself when the tree is dirty —
+    # so the round cannot be read-only. What stays structural is the split: the
+    # round's job never pushes, and main is protected against the App anyway.
     permissions:
-      contents: read
+      contents: write
       pull-requests: read
-      issues: read
+      issues: write
     timeout-minutes: 70
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Set the committer identity
+        # The action sets a global `opencode-agent[bot]` identity, and the CLA
+        # check reads commit authors: a Change whose commits carry a name the
+        # allowlist does not list fails the CLA and can never be merged (#1807).
+        # Repo-local config wins over the action's global config.
+        run: |
+          git config user.name "convocarados-factory[bot]"
+          git config user.email "convocarados-factory[bot]@users.noreply.github.com"
 
       - uses: pnpm/action-setup@v6
         with:
@@ -172,11 +185,12 @@ jobs:
         with:
           app-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
-          # Read the findings and the branch, nothing else. The push token is
-          # minted in a different job, after this one is gone.
-          permission-contents: read
+          # The action refuses a token without write scope, so this one can
+          # write; the push itself still happens in a different job, after this
+          # one is gone. See the job comment.
+          permission-contents: write
           permission-pull-requests: read
-          permission-issues: read
+          permission-issues: write
 
       - name: Check out the Change
         env:
@@ -196,6 +210,11 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The action asserts the *actor's* write permission and skips it only
+          # when TOKEN is set. A factory PR's actor is the App, whose repo
+          # permission is `none` (the installation scopes do not change that),
+          # so without this the reviewer cannot run on a factory Change at all.
+          TOKEN: ${{ steps.app-token.outputs.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
@@ -234,8 +253,8 @@ jobs:
           branch="${{ needs.ledger.outputs.branch }}"
           git add -A
           if ! git diff --cached --quiet; then
-            git -c user.name="convocados-factory[bot]" \
-                -c user.email="convocados-factory[bot]@users.noreply.github.com" \
+            git -c user.name="convocarados-factory[bot]" \
+                -c user.email="convocarados-factory[bot]@users.noreply.github.com" \
                 commit -m "factory: work in progress on PR #${{ needs.ledger.outputs.pr }}"
           fi
           if [ "$(git rev-list --count "origin/$branch..HEAD")" = "0" ]; then
