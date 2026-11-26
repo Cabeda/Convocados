@@ -16,17 +16,29 @@ on:
     - cron: "*/30 * * * *"
   issues:
     types: [labeled]
+  # The janitor's hand-off. `gh workflow run` needs `actions: write`, which this
+  # App's installation does not grant; a repository dispatch needs only
+  # `contents: write`, which it has.
+  repository_dispatch:
+    types: [factory-tick]
   workflow_dispatch:
     inputs:
       issue:
         description: "Issue number to work. Empty drains the queue, oldest first."
         required: false
         type: string
+      lane:
+        description: "Lane index (0-based). Lanes partition the queue by Issue number."
+        required: false
+        type: string
+        default: "0"
 
-# One run at a time. A second run waits, and because it re-reads the queue when
-# it starts, a skipped tick loses nothing.
+# One run per lane. Lanes work disjoint slices of the queue (Issue number mod
+# LANES), so three can work at once without racing the same Issue. A second run
+# in the same lane waits, and because it re-reads the queue when it starts, a
+# skipped tick loses nothing.
 concurrency:
-  group: factory-fix-queue
+  group: factory-fix-queue-${{ inputs.lane || 0 }}
   cancel-in-progress: false
 
 permissions: {}
@@ -61,6 +73,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DISPATCH_ISSUE: ${{ inputs.issue }}
+          FACTORY_LANE: ${{ inputs.lane || github.event.client_payload.lane || 0 }}
+          FACTORY_LANES: "3"
         run: |
           if [ -n "${DISPATCH_ISSUE:-}" ]; then
             echo "issue=${DISPATCH_ISSUE}" >> "$GITHUB_OUTPUT"
@@ -189,6 +203,9 @@ jobs:
             or update the branch. The only commands in your budget are the reproduction, the fix,
             and the Gate.
 
+            Wrap every test command in `timeout 300 ...` (and the Gate in `timeout 3600 ...`). A
+            vitest process that ignores its own timeout has now eaten a whole run twice.
+
             Commit twice, not once: as soon as the reproduction is red, and again when the Gate is
             green. A run that dies between the two keeps the test that proves the defect.
 
@@ -208,7 +225,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .factory-handoff
-          branch="$(cat .factory-handoff/branch 2>/dev/null || git branch --show-current)"
+          branch="$(cat .factory-handoff/branch 2>/dev/null || true)"
+          [ -n "$branch" ] || branch="$(git branch --show-current)"
           case "$branch" in
             factory/*) ;;
             *) echo "No factory branch; nothing to deliver."; exit 0 ;;
@@ -217,6 +235,12 @@ jobs:
             echo "Branch $branch does not exist; nothing to deliver."
             exit 0
           fi
+          # A run killed before its handoff has no `branch` file, and `deliver`
+          # reads the branch from that file only — so the work was committed to
+          # `factory/<issue>-work` and then never pushed (#1710, run 45769102112:
+          # 77 minutes of work, blocked with no branch). The step that knows the
+          # branch writes it down before the bundle is built.
+          printf '%s\n' "$branch" > .factory-handoff/branch
           git add -A
           if ! git diff --cached --quiet; then
             git -c user.name="convocarados-factory[bot]" \

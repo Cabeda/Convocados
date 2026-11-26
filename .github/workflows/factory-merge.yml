@@ -1,0 +1,71 @@
+# The Merge gate: a factory Change that walks back out the same door.
+#
+# A machine merges only a **two-way door** — a Change whose revert is the whole
+# undo. Migrations, auth routes, dependencies, workflows and deploy config are
+# one-way doors: the code reverts, the data, tokens and pipeline do not. Those
+# keep the human gate.
+#
+# The judgement is a list of named predicates in
+# `scripts/factory/automerge-eligibility.ts`, not a model: merging deploys, and
+# an unauditable answer twice a minute is not a gate.
+name: "factory: merge"
+
+on:
+  schedule:
+    - cron: "7,37 * * * *" # off the janitor's :00/:30 and automerge's :23/:53
+  repository_dispatch:
+    types: [factory-merge]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Report what would merge, without merging"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: factory-merge
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  merge:
+    # Inert until the factory's identity exists, the same activation as every
+    # other role.
+    if: vars.FACTORY_PAUSED != 'true' && vars.FACTORY_APP_ID != ''
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Mint an installation token for our App
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_KEY }}
+          # Merge needs contents:write on the merge endpoint; pull-requests:write
+          # reads the reviews the decision depends on. No workflows permission,
+          # so a merge cannot edit the workflows that run it.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: read
+          # No `checks: read`: the installation does not grant it, and asking for
+          # a permission the App lacks makes the mint fail 422. The rollup is read
+          # through the pull request instead.
+
+      - name: Merge the eligible Changes
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Verifies the Reviewer's signature. The Fixer's job never has it, so
+          # a prompt-injected Fixer cannot forge an approval.
+          FACTORY_APP_KEY: ${{ secrets.FACTORY_APP_KEY }}
+          DRY_RUN: ${{ inputs.dry-run && 'true' || 'false' }}
+        run: node scripts/factory/factory-merge-run.ts

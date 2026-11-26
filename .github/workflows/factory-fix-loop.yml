@@ -92,6 +92,8 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
+          # The picker verifies the Reviewer's signature.
+          FACTORY_APP_KEY: ${{ secrets.FACTORY_APP_KEY }}
           EVENT_NAME: ${{ github.event_name }}
           REVIEW_PR: ${{ github.event.pull_request.number }}
           COMMENT_PR: ${{ github.event.issue.number }}
@@ -106,7 +108,10 @@ jobs:
             pull_request_review) pr="$REVIEW_PR" ;;
             issue_comment) pr="$COMMENT_PR" ;;
             check_suite) pr="$SUITE_PR" ;;
-            workflow_dispatch) pr="$DISPATCH_PR" ;;
+            # A dispatch with no PR is the tick: pick the Change the Reviewer
+            # just refused, the same way the schedule does. Without this, a
+            # refusal waits on a cron GitHub has never fired on time here.
+            workflow_dispatch) pr="${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}" ;;
           esac
           if [ -z "$pr" ]; then
             echo "No Change is waiting for a round; nothing to repair."

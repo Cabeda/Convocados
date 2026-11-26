@@ -42,6 +42,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set the committer identity
+        # The action commits whatever the agent leaves in the tree — now
+        # including the Reviewer's verdict file — so every agent workflow needs
+        # an identity, and the CLA must exempt it (#1807).
+        run: |
+          git config user.name "convocarados-factory[bot]"
+          git config user.email "convocarados-factory[bot]@users.noreply.github.com"
+
       - uses: pnpm/action-setup@v6
         with:
           run_install: false
@@ -69,28 +77,35 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: write
-          # Dispatch the Fixer. A newly added scheduled workflow has proven
-          # unreliable here — `factory: fix` has never fired on its own cron —
-          # while this one runs. One dispatch per tick keeps the drain moving.
-          permission-actions: write
-      - name: Wake the Fixer when the queue has work
+          # No `actions: write`: the installation does not grant it, and asking
+          # for a permission the App lacks fails the whole mint with 422. The
+          # hand-off is a repository dispatch over `contents: write` instead.
+      - name: Wake the machine
+        # `gh workflow run` needs `actions: write`, which this installation does
+        # not grant. A repository dispatch needs only `contents: write`: each
+        # event_type below is an `on: repository_dispatch` in the target file.
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           if [ "${{ vars.FACTORY_PAUSED }}" = "true" ]; then exit 0; fi
-          active=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-fix.yml \
-            --limit 20 --json status \
-            --jq '[.[] | select(.status == "in_progress" or .status == "queued")] | length')
-          if [ "$active" != "0" ]; then
-            echo "A Fixer run is already going."; exit 0
-          fi
+          tick() {
+            gh api "repos/$GITHUB_REPOSITORY/dispatches" -X POST \
+              -f event_type="$1" ${2:+-F client_payload[lane]="$2"}
+          }
           queued=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
             --label factory:explored --limit 1 --json number --jq length)
-          if [ "$queued" = "0" ]; then
-            echo "The queue is empty."; exit 0
+          if [ "$queued" != "0" ]; then
+            for lane in 0 1 2; do tick factory-tick "$lane"; done
+            echo "Fed three Fixer lanes."
+          else
+            echo "The queue is empty."
           fi
-          gh workflow run factory-fix.yml --repo "$GITHUB_REPOSITORY"
+          # Two reviews and one merge per tick: with three lanes producing, one
+          # review per 15 minutes is the bottleneck, not the Fixer.
+          tick factory-review
+          tick factory-review
+          tick factory-merge
 
       - name: Housekeeping
         # The real budget. A step that times out exits non-zero, and this absorbs

@@ -13,6 +13,8 @@ on:
   # last touched this file, so the schedule is how machine Changes get read.
   schedule:
     - cron: "*/30 * * * *"
+  repository_dispatch:
+    types: [factory-review]
   workflow_dispatch:
     inputs:
       pr:
@@ -48,6 +50,9 @@ jobs:
         id: pick
         env:
           GH_TOKEN: ${{ github.token }}
+          # The picker verifies the Reviewer's signature, so a forged marker
+          # cannot make it skip a Change it should read.
+          FACTORY_APP_KEY: ${{ secrets.FACTORY_APP_KEY }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_PR: ${{ github.event.pull_request.number }}
           DISPATCH_PR: ${{ inputs.pr }}
@@ -108,6 +113,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Set the committer identity
+        # The action commits whatever the agent leaves in the tree — now
+        # including the Reviewer's verdict file — so every agent workflow needs
+        # an identity, and the CLA must exempt it (#1807).
+        run: |
+          git config user.name "convocarados-factory[bot]"
+          git config user.email "convocarados-factory[bot]@users.noreply.github.com"
 
       - uses: pnpm/action-setup@v6
         with:
@@ -173,7 +186,70 @@ jobs:
             and deploy config, and coverage-threshold edits as Hard Block: report, do not judge.
 
             You may not approve, merge, push, or touch a human branch: the Fixer writes, you judge.
-            Put `<!-- factory:findings -->` on its own line in the review body when it carries at
-            least one finding — that marker starts the Fixer's next round, and a review without it
-            ends the loop. Always end the body with `<!-- factory:reviewed:<head sha> -->` for the
-            head you read: that marker is how a scheduled run knows this commit has been seen.
+            Put `<!-- factory:findings -->` on its own line in the body when it carries at least one
+            finding — that marker starts the Fixer's next round. Do not write the verdict or reviewed
+            markers: the workflow appends them, signed.
+
+            Do not post the review yourself. Write its body to `.factory-review/review.md` and the
+            word (`approve` or `refuse`) to `.factory-review/verdict`; the workflow signs the head
+            and your verdict with a key your job never sees, appends both markers, and posts. Write
+            the verdict first: a run that dies while writing the body then leaves nothing to post,
+            and the check fails — the honest reading of a timeout.
+
+      - name: Sign and post the review
+        # The agent writes the body; this step signs the head with the App key,
+        # appends both markers, and posts. The Fixer's job never holds the key,
+        # so a prompt-injected Fixer cannot write an approval the gate accepts.
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_KEY: ${{ secrets.FACTORY_APP_KEY }}
+          PR: ${{ needs.pick.outputs.pr }}
+        run: |
+          set -euo pipefail
+          body=.factory-review/review.md
+          verdict="$(cat .factory-review/verdict 2>/dev/null || echo "")"
+          if [ ! -f "$body" ]; then
+            # A verdict with no review is a green check nobody can read. Fail.
+            echo "The Reviewer wrote no body; the review did not finish." >&2
+            exit 1
+          fi
+          case "$verdict" in
+            approve|refuse) ;;
+            *) echo "No verdict; posting the body without a marker." >&2 ;;
+          esac
+          head="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
+          # Sign head **and** verdict: a refusal's signature replayed with an
+          # approve marker was a real hole in the first draft.
+          sig="$(printf '%s' "$head|$verdict" | openssl dgst -sha256 -hmac "$APP_KEY" -hex | awk '{print $NF}')"
+          {
+            cat "$body"
+            echo
+            if [ -n "$verdict" ]; then echo "<!-- factory:verdict:$verdict -->"; fi
+            echo "<!-- factory:reviewed:$head:$sig -->"
+          } > .factory-review/post.md
+          # GitHub refuses a review on a PR the App authored; a comment carries
+          # the same markers and the merge reads both surfaces.
+          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --comment --body-file .factory-review/post.md \
+            || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
+
+      - name: Record the verdict
+        # The Reviewer writes this file as its last act. A missing file means the
+        # review did not finish — and an unfinished review must fail, because a
+        # silent timeout used to read exactly like an approval.
+        if: always()
+        id: verdict
+        run: |
+          set -euo pipefail
+          verdict="$(cat .factory-review/verdict 2>/dev/null || echo "")"
+          case "$verdict" in
+            approve) echo "Reviewer approved." ;;
+            refuse)
+              echo "Reviewer refused — the findings are in the review comment." >&2
+              exit 1
+              ;;
+            *)
+              echo "The review did not finish: no verdict was written." >&2
+              exit 1
+              ;;
+          esac

@@ -304,14 +304,13 @@ describe("a factory commit carries an identity the CLA accepts", () => {
   // #1807 shipped `convocados-factory[bot]` — one letter short of the App's
   // login — and went red on the CLA with a green suite.
   //
-  // Listed by hand rather than inferred: these are the four workflows whose
-  // agent implements, so these are the four that can author a commit.
-  const COMMITTING = [
-    "factory-issue.yml",
-    "factory-fix.yml",
-    "factory-fix-loop.yml",
-    "factory-repairer.yml",
-  ];
+  // Every workflow that runs the agent commits: the action commits whatever the
+  // agent leaves in the tree, and the Reviewer's own verdict file is enough to
+  // make the tree dirty. A workflow missing the identity dies before its first
+  // thought ("empty ident name … not allowed").
+  const COMMITTING = workflowFiles.filter((file) =>
+    readFileSync(join(workflowsDir, file), "utf8").includes("anomalyco/opencode/github"),
+  );
 
   const allowlist = () => {
     const raw = readFileSync(join(workflowsDir, "cla.yml"), "utf8");
@@ -384,7 +383,77 @@ describe("a Fixer cycle stays inside its budget", () => {
 
   it("lets the janitor start the drain, because the cron does not", () => {
     const raw = readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
-    expect(raw).toContain("Wake the Fixer when the queue has work");
-    expect(raw).toContain("permission-actions: write");
+    expect(raw).toContain("Wake the machine");
+    // The hand-off must not ask for Actions write: the installation lacks it
+    // and the mint fails 422 before any dispatch happens.
+    expect(raw).not.toContain("permission-actions: write");
+    expect(raw).toContain("repos/$GITHUB_REPOSITORY/dispatches");
+  });
+});
+
+describe("a dead run still hands over its branch", () => {
+  // `deliver.ts` reads the branch from `.factory-handoff/branch` only. A run
+  // killed before writing that file committed to `factory/<issue>-work` and had
+  // it silently dropped (#1710: 77 minutes, blocked with no branch). The
+  // packaging step knows the branch, so it must write it down.
+  it("records the branch before bundling it", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix.yml"), "utf8");
+    const records = raw.indexOf("> .factory-handoff/branch");
+    const bundles = raw.indexOf("git bundle create");
+    expect(records, "the packaging step must write the branch file").toBeGreaterThan(0);
+    expect(records, "it must be written before the bundle").toBeLessThan(bundles);
+  });
+});
+
+describe("the merge gate and the Reviewer's verdict", () => {
+  it("merges only through the tested decision, on the commit it decided about", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-merge.yml"), "utf8");
+    expect(raw).toContain("factory-merge-run.ts");
+    const run = readFileSync(join(process.cwd(), "scripts/factory/factory-merge-run.ts"), "utf8");
+    expect(run).toContain("--match-head-commit");
+  });
+
+  it("fails the review when no verdict was written", () => {
+    // Silence used to read as approval: the reviewer's step had
+    // continue-on-error, so a 25-minute timeout posted nothing and passed.
+    const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+    expect(raw).toContain("Record the verdict");
+    expect(raw).toContain("no verdict was written");
+  });
+
+  it("lets the Reviewer write the verdict file and nothing else", () => {
+    const raw = readFileSync(join(process.cwd(), ".opencode/agents/reviewer.md"), "utf8");
+    expect(raw).toContain('".factory-review/**": allow');
+  });
+});
+
+describe("three lanes work the backlog without racing", () => {
+  const fix = () => readFileSync(join(workflowsDir, "factory-fix.yml"), "utf8");
+  const janitor = () => readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
+
+  it("keys the concurrency group by lane", () => {
+    // One group for every lane would serialise the whole backlog again.
+    expect(fix()).toContain("group: factory-fix-queue-${{ inputs.lane || 0 }}");
+  });
+
+  it("tells the picker which slice of the queue to take", () => {
+    expect(fix()).toContain('FACTORY_LANES: "3"');
+    // A repository dispatch carries the lane in client_payload, not inputs.
+    expect(fix()).toContain("FACTORY_LANE: ${{ inputs.lane || github.event.client_payload.lane || 0 }}");
+  });
+
+  it("feeds every lane from the one cron that fires", () => {
+    expect(janitor()).toContain("for lane in 0 1 2");
+    expect(janitor()).toContain("tick factory-review");
+    expect(janitor()).toContain("tick factory-merge");
+  });
+});
+
+describe("a refused Change gets its round from the tick", () => {
+  it("falls back to the picker on a dispatch with no PR", () => {
+    // The reviewer signs a refuse and nothing happens until the loop runs; its
+    // own cron is unreliable, so the tick must be able to start it.
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    expect(raw).toContain("workflow_dispatch) pr=\"${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}\"");
   });
 });

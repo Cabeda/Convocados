@@ -15,21 +15,32 @@ import { appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  type ReviewEntry,
+  reviewEntries,
+  reviewedAt,
+  type SignatureCheck,
+  signedVerifier,
+} from "./automerge-eligibility.ts";
+
+/** Only a marker the Reviewer's job could sign counts, even for picking. */
+const verify: SignatureCheck = (head, verdict, signature) =>
+  signedVerifier(process.env.FACTORY_APP_KEY ?? "")(head, verdict, signature);
 
 export interface ReviewCandidate {
   number: number;
   headRefName: string;
   headRefOid: string;
-  comments: Array<{ body: string }>;
+  /** Comments and formal reviews, already normalised by `reviewEntries`. */
+  entries: ReviewEntry[];
 }
 
-export function reviewedMarker(sha: string): string {
-  return `<!-- factory:reviewed:${sha} -->`;
-}
-
-/** Only a review that names this exact head counts. */
+/**
+ * Only a review by the factory App that names this exact head counts. Formal
+ * reviews and issue comments both count — the Reviewer posts either way.
+ */
 export function needsReview(pr: ReviewCandidate): boolean {
-  return !(pr.comments ?? []).some((c) => (c.body ?? "").includes(reviewedMarker(pr.headRefOid)));
+  return !reviewedAt(pr.entries ?? [], pr.headRefOid, verify);
 }
 
 export function pickReview(candidates: ReviewCandidate[]): ReviewCandidate | null {
@@ -48,10 +59,18 @@ function gh<T>(args: string[]): T {
 
 function main(): number {
   const repo = process.env.GITHUB_REPOSITORY ?? "Cabeda/Convocados";
-  const prs = gh<ReviewCandidate[]>([
+  const raw = gh<
+    Array<{ number: number; headRefName: string; headRefOid: string; comments: unknown[]; reviews: unknown[] }>
+  >([
     "pr", "list", "--repo", repo, "--state", "open", "--limit", "100",
-    "--json", "number,headRefName,headRefOid,comments",
+    "--json", "number,headRefName,headRefOid,comments,reviews",
   ]);
+  const prs: ReviewCandidate[] = raw.map((pr) => ({
+    number: pr.number,
+    headRefName: pr.headRefName,
+    headRefOid: pr.headRefOid,
+    entries: reviewEntries(pr as never),
+  }));
 
   const next = pickReview(prs);
   const file = process.env.GITHUB_OUTPUT;

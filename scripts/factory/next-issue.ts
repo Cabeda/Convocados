@@ -55,12 +55,29 @@ export function isQueued(issue: IssueSummary, headRefs: string[], now: number): 
   );
 }
 
+/**
+ * Lanes partition the queue by Issue number so two runs can work at once
+ * without racing the same Issue. A Claim comment is written after the pick, so
+ * two lanes picking simultaneously would both win the read; a deterministic
+ * partition removes the race instead of trying to win it.
+ */
+export interface Lane {
+  lane: number;
+  lanes: number;
+}
+
+export function inLane(issue: IssueSummary, { lane, lanes }: Lane): boolean {
+  return lanes <= 1 || issue.number % lanes === lane;
+}
+
 export function pickNext(
   issues: IssueSummary[],
   headRefs: string[],
   now: number,
+  partition: Lane = { lane: 0, lanes: 1 },
 ): IssueSummary | null {
   const next = issues
+    .filter((issue) => inLane(issue, partition))
     .filter((issue) => isQueued(issue, headRefs, now))
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.number - b.number)[0];
   return next ?? null;
@@ -82,7 +99,10 @@ function main(): number {
     "pr", "list", "--repo", repo, "--state", "open", "--limit", "200", "--json", "headRefName",
   ]);
 
-  const next = pickNext(issues, changes.map((p) => p.headRefName), Date.now());
+  const lane = Number(process.env.FACTORY_LANE ?? "0");
+  const lanes = Number(process.env.FACTORY_LANES ?? "1");
+  const partition = { lane: Number.isInteger(lane) ? lane : 0, lanes: lanes > 0 ? lanes : 1 };
+  const next = pickNext(issues, changes.map((p) => p.headRefName), Date.now(), partition);
   const file = process.env.GITHUB_OUTPUT;
   if (file) {
     appendFileSync(file, `issue=${next?.number ?? ""}\n`);

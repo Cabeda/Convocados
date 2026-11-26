@@ -1,7 +1,8 @@
 # The Delivery Factory
 
 Automation that turns Issues into ready-to-prod Changes, and watches for work nobody has
-asked for. It never merges.
+asked for. It merges only a **two-way door** — a Change whose undo is one revert, Reviewed and
+green — and nothing else. See *Merging* below.
 
 The contract lives in [`AGENTS.md`](../../AGENTS.md) (Mission, Core Principles, Merge
 Authority, The Delivery Factory). The vocabulary lives in
@@ -17,17 +18,19 @@ factory:explored Issue (an Explorer or the daily review filed it)
                      open the Change with `Closes #<issue>`
   → Reviewer: independent review against Mission + Core Principles
   → findings → Fixer again on the same branch (≤3 rounds), then Cabeda decides
-  → CABEDA. Always Cabeda.
+  → Merge gate: green · Reviewer approved · **two-way door** → merged
+  → CABEDA for a one-way door. Always Cabeda.
 
 ready-for-agent Issue (Cabeda's label)
   → Factory: the same Gate 1 and the same delivery, without the reproduction contract
   → Gate 2 (GitHub CI)         → red: Repairer, fresh session, same branch
   → Reviewer: independent review against Mission + Core Principles
   → Handoff: label factory:review, comment the summary and transcript
-  → CABEDA. Always Cabeda.
+  → the Merge gate for a two-way door; CABEDA for a one-way door.
 ```
 
-Nothing above is "done". Every path ends at a human or at **Blocked**.
+Nothing above is "done". Every path ends at a human, at **Blocked**, or — for a two-way door that
+is green and approved — at the Merge gate, which is still a human's policy expressed as code.
 
 ## Gates
 
@@ -67,7 +70,7 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 | `fixer` | `schedule` (30 min): the oldest `factory:explored` Issue with no open Change, no `factory:blocked` and no live Claim — or a review that carries findings | reproduce, edit, commit, gate, write the handoff; in repair mode push to that `factory/*` branch | push in Issue mode, open a Change, merge, label, touch a human branch or a second Issue |
 | `factory` | Issue labelled `ready-for-agent` | edit, commit, write the handoff artifact | push, open a Change, merge, release, label, touch a human branch (the `deliver` job pushes and opens the Change with a token minted after the run) |
 | `repairer` | Gate red | same as factory, budget 3 | exceed its Attempt budget |
-| `reviewer` | `pull_request` opened/synchronize | comment, mark findings for the Fixer | approve; push; edit; review a Change it cannot reach |
+| `reviewer` | `pull_request`, `schedule` | comment, mark findings for the Fixer, write its verdict | approve; push; edit anything but the verdict; review a Change it cannot reach |
 | `explorer-performance` | schedule (nightly) | read, run committed benchmarks, file Issues | edit code, label Issues |
 | `explorer-bugs` | schedule (weekly) | read, file Issues | edit code, label Issues |
 | `explorer-security` | dependency event + schedule | read, file Issues | edit code, label Issues |
@@ -78,6 +81,10 @@ Each role is a **primary agent** in `.opencode/agents/` — primary, because the
 `repairer` is the same agent as `factory` with a lower `steps` budget. Separate file,
 identical permissions, so a repair cannot quietly inherit more authority than an
 implementation.
+
+The **Merge gate** is not an agent and has no row above: it is `factory-merge.yml` plus
+`scripts/factory/factory-merge-run.ts`, because a merge decision must be reproducible. It merges
+what `decideFactoryMerge` allows and nothing else.
 
 `sweeper` is the inverse of `repairer`: it finds broken Changes instead of fixing them, and its
 authority stops at an Issue. It runs on a schedule rather than a `pull_request` trigger on purpose —
@@ -103,6 +110,26 @@ docs/explorations/<focus>/     # Explorer memory
 The gate lives in a script, not in a prompt. A prompt can be ignored; a script that exits
 non-zero cannot. Every rule about measurements lives in `AGENTS.md` and is enforced by that
 script, and the two must be changed in the same PR.
+
+## Merging: the two-way door
+
+A machine merges only what a human could undo by reverting one commit. That is the whole rule, and
+it is a list of paths, not a judgement: `scripts/factory/automerge-eligibility.ts` names every
+**one-way door** — migrations, schema, auth and token handling, workflows, `AGENTS.md`,
+dependencies, the Android build, deploy config, the scheduler, the measurement — and
+`factory-merge.yml` merges nothing that contains one.
+
+Three conditions, all required:
+
+- **the required Checks are green on the head** (`CI` and its members, `Analyze
+  (javascript-typescript)`, `PR Links Issue` — a missing check is not a pass);
+- **the Reviewer's verdict is `approve` and names that exact head** — the merge reads the marker,
+  not the job status, because a scheduled review's check attaches to the default branch, not the PR;
+- **the Change is not behind its base and not a draft** — a green run on a stale base proves
+  nothing about the base it lands on (#1256).
+
+The merge uses `--match-head-commit`, so a push between the decision and the merge cannot land
+untested code.
 
 ## Enforcement
 

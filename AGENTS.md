@@ -60,7 +60,9 @@ and the terms an Explorer must name when it files an issue. An issue that serves
 is not filed.
 
 **Where we strive**: every change lands as a *ready-to-prod* Change — green CI, independently
-reviewed, evidence attached, one human click from merging. Nothing reaches `main` by machine.
+reviewed, evidence attached, one human click from merging. A machine merges only a **two-way
+door**: a Change whose undo is one revert, Reviewed and green. Everything else reaches `main` by
+hand.
 
 ## Core Principles
 
@@ -198,12 +200,16 @@ Never `git push origin main` directly. Always:
 
 ### Merge Authority
 
-`.github/CODEOWNERS` is `* @Cabeda`, so GitHub requests Cabeda's review on every Change. What
-**stops a machine from merging** is not that request — the rulesets set
-`required_approving_review_count: 0` and `require_code_owner_review: false` — but the factory
-App's own permissions: `convocados-factory[bot]` holds no approve, merge, or workflow-edit
-right, so a green Change it authored still cannot be merged by it. Review is the process; the
-App's permission is the mechanism. Do not conflate them.
+`.github/CODEOWNERS` is `* @Cabeda`, so GitHub requests Cabeda's review on every Change. GitHub
+will not stop a machine from merging — the rulesets set `required_approving_review_count: 0`, and
+the App is minted `contents: write`, which is what the merge endpoint needs. What stops it is the
+**Merge gate**, and that is a deliberate policy rather than an absent permission: a named list of
+one-way doors in `scripts/factory/automerge-eligibility.ts`, the Reviewer's verdict on the exact
+head, and the required Checks green on that head. Say it plainly rather than implying a mechanism
+that is not there.
+
+An App also cannot approve or request changes on a Change it authored; GitHub refuses both. That
+is why a verdict is a marker and a check, never a review state.
 
 **A green PR merges on its own.** Three rulesets guard `main`, and each one speaks to a
 different failure:
@@ -260,7 +266,8 @@ track, and deploys the scheduler. One click is production.
 
 The factory turns Issues into ready-to-prod Changes without being asked, by two paths: the
 **Fixer** works the Issues the Explorers filed, and the **Factory** works the Issues Cabeda
-labelled `ready-for-agent`. It proposes improvements nobody asked for. It never merges.
+labelled `ready-for-agent`. It proposes improvements nobody asked for. It merges nothing a human
+would have to read twice: only a two-way door that is green and Reviewer-approved.
 
 **Gates (how GATE 1 actually runs), roles, reach, budgets, handoff and the automerge
 exception** are documented in [`docs/factory/README.md`](docs/factory/README.md); the
@@ -269,9 +276,15 @@ relate in [`CONTEXT-MAP.md`](CONTEXT-MAP.md). Reach for them when writing or rev
 factory Change, or when a label, a gate or a budget is in question. The rules every session
 obeys without reaching for anything:
 
-- **Only Cabeda applies or removes `ready-for-agent`, and only Cabeda merges** — no agent
-  merges, ever, including after approval. An Explorer applies `factory:explored` to what it
-  files, and no other label.
+- **Only Cabeda applies or removes `ready-for-agent`.** An Explorer applies `factory:explored` to
+  what it files, and no other label.
+- **A machine merges only a two-way door.** The Merge gate may merge a `factory/*` Change when it
+  is green on its head, the Reviewer approved that exact head, and the diff touches no one-way
+  door: migrations, schema, auth and token handling, dependencies, workflows, `AGENTS.md`, the
+  Android build, deploy config, the scheduler, or the measurement itself. Those are merged by
+  Cabeda, always — the code reverts, the data, tokens and pipeline do not. The list is code, in
+  `scripts/factory/automerge-eligibility.ts`, so adding a door is a reviewed change to a tested
+  predicate rather than a sentence someone remembers.
 - **An Issue an Explorer filed is a standing offer to the Fixer; nothing else is.** The Fixer
   works Issues labelled `factory:explored` that carry no `factory:blocked` and no
   `ready-for-agent`, oldest first, one Change at a time. It may not pull a human-filed Issue,

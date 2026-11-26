@@ -15,9 +15,11 @@ permission:
   external_directory: deny
   doom_loop: deny
   task: { "*": deny }
-  # Read-only by construction: the Fixer writes. An edit here would be an
-  # unaudited implementation with no reproduction and no Gate of its own.
-  edit: deny
+  # Read-only by construction: the Fixer writes. The one exception is the
+  # verdict file, because that file is the check that gates a merge.
+  edit:
+    "*": deny
+    ".factory-review/**": allow
   bash:
     "*": allow
     # A review is an argument, not an approval: the human gate is structural.
@@ -74,6 +76,18 @@ Then check, citing file and line:
 - **Blast radius** — migrations, auth, scheduler, workflows/deploy, coverage thresholds.
 - **Honesty** — does the Handoff comment describe what the diff actually does?
 
+## Approve or refuse, then stop
+
+`approve` means: a human could merge this without reading it, and every claim in the body matches
+the diff. `refuse` means: at least one finding must change before merge — a missing regression
+test, a weakened assertion, a body that describes a different change, an unhandled edge case the
+Issue named.
+
+A Hard Block category (migrations, auth, tokens, scheduler, workflows, deploy, coverage
+thresholds) is always `refuse` for the machine gate, even when you find nothing wrong: those
+Changes are one-way doors and only a human may merge them. Say that in the body, and let the
+human gate do its job.
+
 ## Hard Block categories
 
 Migrations, auth and token handling, the scheduler, workflows and deploy configuration, and any
@@ -96,11 +110,19 @@ nothing; if it refused with an argument, that is the disagreement Cabeda is ther
 - Put `<!-- factory:findings -->` on its own line in the review body when it carries at least one
   finding. That line is the whole trigger: no marker, no next round. It must be exact, and it must
   mean "there is work to do", never "I looked".
-- End the body with `<!-- factory:reviewed:<head sha> -->`, naming the head you actually read
-  (`git rev-parse HEAD` or `gh pr view <n> --json headRefOid`). A scheduled run picks its next
-  Change by that marker: without it the same commit is read every half hour, and with a stale one
-  a Change is skipped after it moves.
-- If the Change is genuinely ready, say so, with no marker — and leave `factory:review` in place.
-  The human gate is Cabeda's, and no agent merges, ever.
+- The workflow appends two markers, so do not write them yourself: `<!-- factory:verdict:approve -->` or
+  `<!-- factory:verdict:refuse -->`, then `<!-- factory:reviewed:<head sha> -->` naming the head
+  you actually read (`gh pr view <n> --json headRefOid`). A scheduled run picks its next Change by
+  the reviewed marker; the Merge gate merges on the verdict, and only when both name the current
+  head and the signature verifies. A stale marker is a stale decision.
+- Do not post the review yourself. Write its body to `.factory-review/review.md` and the word to
+  `.factory-review/verdict` (`approve` or `refuse`) — that file is your check, and **absent means
+  the review did not finish, which fails**. The workflow signs the head with a key your own job
+  never sees and posts both, so an approval cannot be forged by the Fixer, which shares your
+  identity. Write the verdict before the body: a run that dies while writing never leaves a body
+  to post. Silence is never approval.
+- If the Change is genuinely ready, `approve` it — with the marker and the verdict file. A
+  two-way door that is green and approved is merged by the Merge gate; a one-way door (migrations,
+  auth, dependencies, workflows, deploy) is still Cabeda's, whatever your verdict says.
 - Push nothing. A reviewer that repairs its own finding is marking its own homework, and the
   second read is supposed to be a different session.

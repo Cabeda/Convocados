@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLAIM_TTL_MS,
   type IssueSummary,
+  inLane,
   isQueued,
   pickNext,
 } from "../../scripts/factory/next-issue";
@@ -88,5 +89,33 @@ describe("isQueued", () => {
       ],
     });
     expect(isQueued(reclaimed, [], NOW)).toBe(false);
+  });
+});
+
+describe("lanes partition the queue without racing", () => {
+  // Three runs work the backlog at once. A Claim is written after the pick, so
+  // two lanes reading at the same moment would both choose the oldest Issue;
+  // the partition makes that impossible instead of hoping.
+  const a = issue({ number: 1711 });
+  const b = issue({ number: 1712 });
+  const c = issue({ number: 1713 });
+
+  it("assigns each Issue to exactly one lane", () => {
+    const lanes = [0, 1, 2].map((lane) =>
+      [a, b, c].filter((i) => inLane(i, { lane, lanes: 3 })).map((i) => i.number),
+    );
+    expect(lanes.flat().sort()).toEqual([1711, 1712, 1713]);
+    for (const lane of lanes) expect(lane.length).toBeLessThanOrEqual(2);
+  });
+
+  it("is the whole queue when there is one lane", () => {
+    expect(inLane(a, { lane: 0, lanes: 1 })).toBe(true);
+    expect(pickNext([b, a], [], NOW, { lane: 0, lanes: 1 })?.number).toBe(1711);
+  });
+
+  it("does not let a lane pick another lane's Issue", () => {
+    // 1711 % 3 === 1, so lane 0 must not see it.
+    expect(pickNext([a], [], NOW, { lane: 1, lanes: 3 })?.number).toBe(1711);
+    expect(pickNext([a], [], NOW, { lane: 0, lanes: 3 })).toBeNull();
   });
 });
