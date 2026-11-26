@@ -491,8 +491,15 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
 
       // A pending invite that is now added directly must be activated, not
       // rejected as a duplicate: the GameParticipant exists but has not
-      // accepted yet (#1793 review).
-      if (existing && !existing.archivedAt && event.currentGameId) {
+      // accepted yet (#1793 review). A pending *self*-invite is excluded: the
+      // linkToAccount branch below accepts the PlayerInvite itself, and
+      // activating here would return before that promotion.
+      if (
+        existing &&
+        !existing.archivedAt &&
+        event.currentGameId &&
+        !pendingSelfInviteEventPlayerId
+      ) {
         const pendingIdentity = await prisma.eventPlayer.findFirst({
           where: {
             eventId,
