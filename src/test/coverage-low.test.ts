@@ -131,6 +131,61 @@ describe("PUT /api/events/[id]/reorder-players", () => {
     const res = await reorderPlayers(putCtx({ id: event.id }, { playerIds: [p2.id, p1.id] }));
     expect(res.status).toBe(200);
   });
+
+  it("reorders the live roster by EventPlayer ids when a current game is set", async () => {
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+    const event = await seedEvent();
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    const alice = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice" } });
+    const bob = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob" } });
+    const charlie = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Charlie" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: alice.id, order: 0 } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: bob.id, order: 1 } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: charlie.id, order: 2 } });
+
+    const res = await reorderPlayers(putCtx({ id: event.id }, { playerIds: [charlie.id, alice.id, bob.id] }));
+    expect(res.status).toBe(200);
+
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: game.id },
+      include: { eventPlayer: true },
+      orderBy: { order: "asc" },
+    });
+    expect(participants.map((p) => p.eventPlayer.name)).toEqual(["Charlie", "Alice", "Bob"]);
+  });
+
+  it("ignores archived GameParticipants when validating the live set", async () => {
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+    const event = await seedEvent();
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    const alice = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice" } });
+    const bob = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob" } });
+    const departed = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Departed" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: alice.id, order: 0 } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: bob.id, order: 1 } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: departed.id, order: 2, archivedAt: new Date() } });
+
+    const res = await reorderPlayers(putCtx({ id: event.id }, { playerIds: [bob.id, alice.id] }));
+    expect(res.status).toBe(200);
+
+    const archived = await prisma.gameParticipant.findFirst({ where: { gameId: game.id, archivedAt: { not: null } } });
+    expect(archived?.order).toBe(2);
+  });
+
+  it("ignores archived legacy players when validating the live set", async () => {
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+    const event = await seedEvent();
+    const p1 = await prisma.player.create({ data: { name: "P1", eventId: event.id, order: 0 } });
+    const p2 = await prisma.player.create({ data: { name: "P2", eventId: event.id, order: 1 } });
+    await prisma.player.create({ data: { name: "Departed", eventId: event.id, order: 2, archivedAt: new Date() } });
+
+    const res = await reorderPlayers(putCtx({ id: event.id }, { playerIds: [p2.id, p1.id] }));
+    expect(res.status).toBe(200);
+  });
 });
 
 // ─── POST /api/events/[id]/randomize (uncovered branches) ───────────────────

@@ -184,6 +184,64 @@ class EventDetailViewModelTest {
     }
 
     @Test
+    fun `movePlayerUp reorders from the rendered event`() = runTest {
+        val rosterEvent = mockEvent.copy(
+            players = listOf(
+                Player("p1", "Alice", 0),
+                Player("p2", "Bob", 1),
+                Player("p3", "Caio", 2),
+            ),
+        )
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(rosterEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(rosterEvent.players)
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+
+            viewModel.movePlayerUp(eventId, "p3")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { api.reorderPlayers(eventId, listOf("p1", "p3", "p2")) }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failed reorder surfaces the server error`() = runTest {
+        val rosterEvent = mockEvent.copy(
+            players = listOf(
+                Player("p1", "Alice", 0),
+                Player("p2", "Bob", 1),
+                Player("p3", "Caio", 2),
+            ),
+        )
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(rosterEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(rosterEvent.players)
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.reorderPlayers(eventId, any()) } throws RuntimeException(
+            """{"error":"playerIds must contain exactly the current players."}"""
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+
+            viewModel.movePlayerUp(eventId, "p3")
+            advanceUntilIdle()
+
+            assertEquals(
+                "playerIds must contain exactly the current players.",
+                expectMostRecentItem().error,
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `load fetches event details and history`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
