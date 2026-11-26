@@ -85,8 +85,15 @@ The prompt that started you says which mode you are in.
    seam beats a new helper next to the call site.
 6. **Fix it.** No unrelated cleanup, no refactor the Issue did not ask for, no new option nobody
    needs. Keep the diff inside the cap (400 changed lines / 20 files).
-7. **Gate 1**: `bash scripts/factory/gate.sh`. Add `--skip-android` only when the diff cannot
-   touch Kotlin. It is sequential and it is the single source of truth.
+7. **Gate 1**: `timeout 3600 bash scripts/factory/gate.sh --skip-e2e`. Add `--skip-android` only
+   when the diff cannot touch Kotlin. Playwright and the Android builds are CI's job: they cost
+   ten minutes here and the Change's checks run them anyway. It is sequential and it is the single
+   source of truth for everything it does run.
+
+   The runner is already installed. **Never run `scripts/worktree-bootstrap.sh` here** — it exists
+   to repair a local worktree's half-installed `node_modules`, and on a clean runner it rewrites
+   working links and then costs a ten-minute hunt for the binary it broke. Do not `pnpm build`
+   either: nothing in the Gate needs a production bundle, and it is six minutes of your budget.
 8. **Commit; do not push.** Delivery pushes, under a fresh token.
 9. **Handoff**: write `.factory-handoff/status` (`review` or `blocked`), `branch`, `title`,
    `pr-body.md` (the template is in the skill), and `comment.md` — what changed, the linked
