@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, cleanup, waitFor } from "@testing-library/react";
+import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
@@ -93,6 +93,53 @@ describe("EventPage — API calls go through the typed client", () => {
 
     expect(await screen.findByText("Monday Football")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/api/events/evt-1", { method: "GET" });
+  });
+
+
+  it("surfaces a reorder failure and refetches the event", async () => {
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    const fetchMock = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/reorder-players")) {
+        return json({ error: "playerIds must contain exactly the current players." }, 400);
+      }
+      if (u.includes("/known-players")) return json({ players: [] });
+      if (u.includes("/rsvp")) return json({});
+      if (u.includes("/co-players")) return json({ players: [] });
+      if (u.includes("/suggestions")) return json({ suggestions: [] });
+      if (u.includes("/balance")) return json({ callerBalance: { amount: 0 } });
+      if (u.includes("/api/events/evt-1")) {
+        return json({
+          ...makeEvent(),
+          ownerId: "u-1",
+          players: [
+            { id: "p1", name: "Alice", order: 0 },
+            { id: "p2", name: "Bob", order: 1 },
+          ],
+        });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    renderWithTheme(<EventPage eventId="evt-1" />);
+
+    const aliceRow = (await screen.findByTestId("remove-player-p1")).closest("li")!;
+    const bobRow = screen.getByTestId("remove-player-p2").closest("li")!;
+    fireEvent.dragStart(aliceRow);
+    fireEvent.dragOver(bobRow);
+    fireEvent.drop(bobRow);
+
+    expect(
+      await screen.findByText("playerIds must contain exactly the current players."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      const eventGets = fetchMock.mock.calls.filter(
+        ([url]) => String(url).endsWith("/api/events/evt-1"),
+      );
+      expect(eventGets.length).toBeGreaterThan(1);
+    });
   });
 
   it("sends the join write through the client with its JSON body and headers", async () => {

@@ -798,11 +798,16 @@ class EventDetailViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { api.reorderPlayers(eventId, playerIds) }
                 .onSuccess { repository.refreshEventDetail(eventId) }
+                .onFailure { e ->
+                    val msg = parseApiErrorMessage(e) ?: "Failed to reorder players"
+                    _state.value = _state.value.copy(error = msg)
+                    repository.refreshEventDetail(eventId)
+                }
         }
     }
 
     fun movePlayerUp(eventId: String, playerId: String) {
-        val ids = _state.value.event?.players?.map { it.id }?.toMutableList() ?: return
+        val ids = state.value.event?.players?.map { it.id }?.toMutableList() ?: return
         val idx = ids.indexOf(playerId)
         if (idx <= 0) return
         ids.removeAt(idx)
@@ -811,7 +816,7 @@ class EventDetailViewModel @Inject constructor(
     }
 
     fun movePlayerDown(eventId: String, playerId: String) {
-        val ids = _state.value.event?.players?.map { it.id }?.toMutableList() ?: return
+        val ids = state.value.event?.players?.map { it.id }?.toMutableList() ?: return
         val idx = ids.indexOf(playerId)
         if (idx < 0 || idx >= ids.lastIndex) return
         ids.removeAt(idx)

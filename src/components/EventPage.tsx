@@ -889,12 +889,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Player reorder ──────────────────────────────────────────────────────────
 
   const reorderPlayers = useCallback(async (reorderedIds: string[]) => {
-    await apiRequest("PUT /api/events/{id}/reorder-players", {
-      params: { id: eventId },
-      body: { playerIds: reorderedIds },
-    }).catch(() => undefined);
+    try {
+      await apiRequest("PUT /api/events/{id}/reorder-players", {
+        params: { id: eventId },
+        body: { playerIds: reorderedIds },
+      });
+    } catch (e) {
+      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
+    }
     fetchEvent();
-  }, [eventId, fetchEvent]);
+  }, [eventId, fetchEvent, t]);
 
   const resetPlayerOrder = useCallback(async () => {
     try {
