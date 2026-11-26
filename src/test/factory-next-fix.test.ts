@@ -5,12 +5,23 @@
  * It reads formal reviews as well as comments: the Reviewer posts a *review*,
  * so a picker that read `comments` only could never see a finding marker.
  */
-import { describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
+import { beforeEach, describe, expect, it } from "vitest";
 import { type FixCandidate, needsFix, pickFix } from "../../scripts/factory/next-fix";
 
 const HEAD = "aaaa1111bbbb2222";
+const KEY = "test-key";
 const FINDINGS = "<!-- factory:findings -->";
-const reviewed = (sha: string) => `<!-- factory:reviewed:${sha} -->`;
+
+function sign(sha: string, verdict: string): string {
+  return createHmac("sha256", KEY).update(`${sha}|${verdict}`).digest("hex");
+}
+
+beforeEach(() => {
+  process.env.FACTORY_APP_KEY = KEY;
+});
+const reviewed = (sha: string, verdict = "refuse") =>
+  `<!-- factory:verdict:${verdict} -->\n<!-- factory:reviewed:${sha}:${sign(sha, verdict)} -->`;
 const verdict = (v: string) => `<!-- factory:verdict:${v} -->`;
 
 function entry(body: string, createdAt = "2026-11-26T09:00:00Z", author = "convocarados-factory[bot]") {
@@ -22,7 +33,7 @@ function pr(overrides: Partial<FixCandidate> = {}): FixCandidate {
     number: 1800,
     headRefName: "factory/1708-work",
     headRefOid: HEAD,
-    entries: [entry(`${verdict("refuse")}\n${FINDINGS}\nTwo findings.\n${reviewed(HEAD)}`)],
+    entries: [entry(`${FINDINGS}\nTwo findings.\n${reviewed(HEAD)}`)],
     failingChecks: [],
     ...overrides,
   };
@@ -34,13 +45,13 @@ describe("needsFix", () => {
   });
 
   it("waits when the Reviewer approved", () => {
-    expect(needsFix(pr({ entries: [entry(`${verdict("approve")}\n${reviewed(HEAD)}`)] }))).toBe(false);
+    expect(needsFix(pr({ entries: [entry(reviewed(HEAD, "approve"))] }))).toBe(false);
   });
 
   it("waits when the review named an older head, because the push answered it", () => {
     const pushed = pr({
       headRefOid: "cccc3333",
-      entries: [entry(`${verdict("refuse")}\n${reviewed("aaaa1111")}`)],
+      entries: [entry(reviewed("aaaa1111"))],
     });
     expect(needsFix(pushed)).toBe(false);
   });
@@ -48,8 +59,8 @@ describe("needsFix", () => {
   it("takes the newest review, not any earlier one", () => {
     const clean = pr({
       entries: [
-        entry(`${verdict("refuse")}\n${reviewed(HEAD)}`, "2026-11-26T09:00:00Z"),
-        entry(`${verdict("approve")}\n${reviewed(HEAD)}`, "2026-11-26T09:10:00Z"),
+        entry(reviewed(HEAD), "2026-11-26T09:00:00Z"),
+        entry(reviewed(HEAD, "approve"), "2026-11-26T09:10:00Z"),
       ],
     });
     expect(needsFix(clean)).toBe(false);
@@ -70,7 +81,7 @@ describe("needsFix", () => {
   it("stops at the round budget, because a no-op round never clears the marker", () => {
     const spent = pr({
       entries: [
-        entry(`${verdict("refuse")}\n${FINDINGS}\n${reviewed(HEAD)}`),
+        entry(`${FINDINGS}\n${reviewed(HEAD)}`),
         entry("factory: attempt <review> (1/3)"),
         entry("factory: attempt <review> (2/3)"),
         entry("factory: attempt <review> (3/3)"),

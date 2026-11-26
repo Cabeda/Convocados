@@ -4,6 +4,7 @@
  * These are the conditions under which a machine merges a PR into a repo where
  * merging deploys. Each block is a way the answer went wrong before.
  */
+import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   BEHIND_BASE,
@@ -14,6 +15,7 @@ import {
   isTwoWayDoor,
   latestReview,
   REQUIRED_CHECKS,
+  signedVerifier,
   type Check,
   type PullRequestFacts,
   type ReviewEntry,
@@ -182,7 +184,7 @@ const HEAD = "70d5e19ac8099eb60ba23386c24ca6aeb43a0617";
 const SIG = "a".repeat(64);
 const signed = (sha = HEAD) => `<!-- factory:reviewed:${sha}:${SIG} -->`;
 /** The merge always passes a verifier; tests stand in for the HMAC. */
-const verify = (_head: string, signature: string) => signature === SIG;
+const verify = (_head: string, _verdict: string, signature: string) => signature === SIG;
 
 function review(overrides: Partial<ReviewEntry> = {}): ReviewEntry {
   return {
@@ -289,6 +291,22 @@ describe("the review a merge reads", () => {
     // cannot produce. An unverifiable approval must not merge.
     expect(latestReview([review()], () => false)).toBeNull();
     expect(latestReview([review()], () => true)?.verdict).toBe("approve");
+  });
+
+  it("rejects a refusal's signature replayed as an approval", () => {
+    // The hole: signing only the head meant the same bytes approved a refusal.
+    const key = "test-key";
+    const sigOf = (verdict: string) =>
+      createHmac("sha256", key).update(`${HEAD}|${verdict}`).digest("hex");
+    const replayed = review({
+      body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD}:${sigOf("refuse")} -->`,
+    });
+    expect(latestReview([replayed], signedVerifier(key))).toBeNull();
+
+    const honest = review({
+      body: `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${HEAD}:${sigOf("approve")} -->`,
+    });
+    expect(latestReview([honest], signedVerifier(key))?.verdict).toBe("approve");
   });
 
   it("returns null when nothing reviewed this Change", () => {

@@ -48,6 +48,9 @@ jobs:
         id: pick
         env:
           GH_TOKEN: ${{ github.token }}
+          # The picker verifies the Reviewer's signature, so a forged marker
+          # cannot make it skip a Change it should read.
+          FACTORY_APP_KEY: ${{ secrets.FACTORY_APP_KEY }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_PR: ${{ github.event.pull_request.number }}
           DISPATCH_PR: ${{ inputs.pr }}
@@ -181,16 +184,15 @@ jobs:
             and deploy config, and coverage-threshold edits as Hard Block: report, do not judge.
 
             You may not approve, merge, push, or touch a human branch: the Fixer writes, you judge.
-            Put `<!-- factory:findings -->` on its own line in the review body when it carries at
-            least one finding — that marker starts the Fixer's next round. End the body with
-            `<!-- factory:verdict:approve -->` or `<!-- factory:verdict:refuse -->`, then
-            `<!-- factory:reviewed:<head sha> -->` for the head you read: the first gates the merge,
-            the second tells a scheduled run this commit has been seen.
+            Put `<!-- factory:findings -->` on its own line in the body when it carries at least one
+            finding — that marker starts the Fixer's next round. Do not write the verdict or reviewed
+            markers: the workflow appends them, signed.
 
-            Write `.factory-review/verdict` with the same word **before** you post the review. No
-            file means the review did not finish, and the check fails — which is the honest reading
-            of a timeout. Writing it first means a run that dies mid-review never leaves an approval
-            marker behind.
+            Do not post the review yourself. Write its body to `.factory-review/review.md` and the
+            word (`approve` or `refuse`) to `.factory-review/verdict`; the workflow signs the head
+            and your verdict with a key your job never sees, appends both markers, and posts. Write
+            the verdict first: a run that dies while writing the body then leaves nothing to post,
+            and the check fails — the honest reading of a timeout.
 
       - name: Sign and post the review
         # The agent writes the body; this step signs the head with the App key,
@@ -214,7 +216,9 @@ jobs:
             *) echo "No verdict; posting the body without a marker." >&2 ;;
           esac
           head="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
-          sig="$(printf '%s' "$head" | openssl dgst -sha256 -hmac "$APP_KEY" -hex | awk '{print $NF}')"
+          # Sign head **and** verdict: a refusal's signature replayed with an
+          # approve marker was a real hole in the first draft.
+          sig="$(printf '%s' "$head|$verdict" | openssl dgst -sha256 -hmac "$APP_KEY" -hex | awk '{print $NF}')"
           {
             cat "$body"
             echo

@@ -15,7 +15,17 @@ import { appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { latestReview, type ReviewEntry, reviewEntries } from "./automerge-eligibility.ts";
+import {
+  latestReview,
+  type ReviewEntry,
+  reviewEntries,
+  type SignatureCheck,
+  signedVerifier,
+} from "./automerge-eligibility.ts";
+
+/** Only a marker the Reviewer's job could sign counts, even for picking. */
+const verify: SignatureCheck = (head, verdict, signature) =>
+  signedVerifier(process.env.FACTORY_APP_KEY ?? "")(head, verdict, signature);
 
 export const ROUND_BUDGET = 3;
 const ATTEMPT = "factory: attempt <review>";
@@ -41,7 +51,7 @@ export function needsFix(pr: FixCandidate): boolean {
 
   // `latestReview` is author-scoped and time-ordered, so a forged or older
   // marker cannot start a round against the wrong head.
-  const latest = latestReview(entries);
+  const latest = latestReview(entries, verify);
   if (!latest || !pr.headRefOid.startsWith(latest.head)) return false;
   return latest.verdict !== "approve";
 }

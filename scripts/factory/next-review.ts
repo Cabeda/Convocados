@@ -15,7 +15,17 @@ import { appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { type ReviewEntry, reviewEntries, reviewedAt } from "./automerge-eligibility.ts";
+import {
+  type ReviewEntry,
+  reviewEntries,
+  reviewedAt,
+  type SignatureCheck,
+  signedVerifier,
+} from "./automerge-eligibility.ts";
+
+/** Only a marker the Reviewer's job could sign counts, even for picking. */
+const verify: SignatureCheck = (head, verdict, signature) =>
+  signedVerifier(process.env.FACTORY_APP_KEY ?? "")(head, verdict, signature);
 
 export interface ReviewCandidate {
   number: number;
@@ -30,7 +40,7 @@ export interface ReviewCandidate {
  * reviews and issue comments both count — the Reviewer posts either way.
  */
 export function needsReview(pr: ReviewCandidate): boolean {
-  return !reviewedAt(pr.entries ?? [], pr.headRefOid);
+  return !reviewedAt(pr.entries ?? [], pr.headRefOid, verify);
 }
 
 export function pickReview(candidates: ReviewCandidate[]): ReviewCandidate | null {

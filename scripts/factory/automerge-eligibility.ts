@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 /**
  * Auto-merge eligibility.
  *
@@ -155,9 +157,9 @@ export const ONE_WAY_PATHS: Array<{ match: RegExp; why: string }> = [
   // push. The first list named only `auth*.server.ts` and missed
   // `googleToken.server.ts`, `calendarToken.server.ts`, `cronAuth.server.ts`
   // and `scheduler.server.ts` — all verified two-way by the Reviewer.
-  { match: /^src\/lib\/[^/]*(auth|token|oauth|session|cron|schedul|push|vapid)[^/]*\.server\.ts$/i, why: "auth, token or scheduler handling" },
+  { match: /^src\/lib\/[^/]*(auth|token|oauth|session|cron|schedul|push|vapid|apikey|jwks|secret|credential|admin)[^/]*\.server\.ts$/i, why: "auth, token or scheduler handling" },
   { match: /^src\/pages\/api\/auth\//, why: "an auth route" },
-  { match: /^src\/pages\/api\/(cron|internal)\//, why: "a scheduled job route" },
+  { match: /^src\/pages\/api\/(cron|internal|admin)\//, why: "a privileged route" },
   { match: /^src\/pages\/api\/push\//, why: "push credentials" },
   { match: /^src\/pages\/api\/(me\/calendar-token|oauth-callback|invite\/)/, why: "a token route" },
   // The scheduler is its own service, with its own lockfile and image; the
@@ -197,8 +199,27 @@ export interface ReviewRecord {
   verdict: "approve" | "refuse" | null;
 }
 
-/** A verifier decides whether a marker could only have come from the Reviewer. */
-export type SignatureCheck = (head: string, signature: string) => boolean;
+/**
+ * A signature covers the head **and** the verdict. Covering only the head let a
+ * refusal's signature be replayed with an `approve` marker — same head, same
+ * bytes, opposite decision.
+ */
+export type SignatureCheck = (head: string, verdict: string, signature: string) => boolean;
+
+/** The exact bytes both the Reviewer's job and the Merge job sign. */
+export function signedMessage(head: string, verdict: string): string {
+  return `${head}|${verdict}`;
+}
+
+/** One verifier for the gate and both pickers: HMAC over head|verdict. */
+export function signedVerifier(key: string): SignatureCheck {
+  return (head, verdict, signature) => {
+    if (!key) return false;
+    const expected = createHmac("sha256", key).update(signedMessage(head, verdict)).digest("hex");
+    if (signature.length !== expected.length) return false;
+    return timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(expected, "hex"));
+  };
+}
 
 export interface ReviewEntry {
   author: string;
@@ -234,10 +255,11 @@ export function latestReview(
     if (!signed && !unsigned) continue;
     const head = signed?.[1] ?? UNSIGNED_MARKER.exec(entry.body ?? "")?.[1] ?? "";
     const signature = signed?.[2] ?? null;
-    // A merge must not accept an unsigned marker: the Fixer shares the App's
-    // identity, so the signature is the only thing it cannot produce.
-    if (verify && (!signature || !verify(head, signature))) continue;
     const verdict = lastMatch(VERDICT_MARKER, entry.body ?? "") as ReviewRecord["verdict"];
+
+    // When a verifier is supplied, an unsigned marker — or one whose signature
+    // does not cover this head **and** this verdict — is not a review at all.
+    if (verify && (!signature || !verdict || !verify(head, verdict, signature))) continue;
     return { head, signature, verdict: verdict ?? null };
   }
   return null;
@@ -319,8 +341,17 @@ export function reviewEntries(raw: {
   return entries.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 }
 
-/** True when the factory App reviewed this exact head — approved or refused. */
-export function reviewedAt(entries: ReviewEntry[], headOid: string): boolean {
-  const review = latestReview(entries);
+/**
+ * True when the factory App reviewed this exact head — approved or refused.
+ *
+ * With a verifier, only a signed review counts: an unsigned marker lets the
+ * Fixer (same App identity) suppress a review it does not want.
+ */
+export function reviewedAt(
+  entries: ReviewEntry[],
+  headOid: string,
+  verify?: SignatureCheck,
+): boolean {
+  const review = latestReview(entries, verify);
   return review !== null && headOid.startsWith(review.head);
 }

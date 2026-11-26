@@ -92,6 +92,8 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
+          # The picker verifies the Reviewer's signature.
+          FACTORY_APP_KEY: ${{ secrets.FACTORY_APP_KEY }}
           EVENT_NAME: ${{ github.event_name }}
           REVIEW_PR: ${{ github.event.pull_request.number }}
           COMMENT_PR: ${{ github.event.issue.number }}

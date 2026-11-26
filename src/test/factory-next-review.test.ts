@@ -6,10 +6,20 @@
  * It counts formal reviews, not only comments: the Reviewer posts a review, and
  * a picker that read `comments` only would re-review the same head forever.
  */
-import { describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
+import { beforeEach, describe, expect, it } from "vitest";
 import { type ReviewCandidate, needsReview, pickReview } from "../../scripts/factory/next-review";
 
 const HEAD = "aaaa1111bbbb2222";
+const KEY = "test-key";
+
+function sign(sha: string, verdict: string): string {
+  return createHmac("sha256", KEY).update(`${sha}|${verdict}`).digest("hex");
+}
+
+beforeEach(() => {
+  process.env.FACTORY_APP_KEY = KEY;
+});
 
 function entry(body: string, createdAt = "2026-11-26T09:00:00Z") {
   return { author: "convocarados-factory[bot]", body, createdAt };
@@ -25,7 +35,8 @@ function pr(overrides: Partial<ReviewCandidate> = {}): ReviewCandidate {
   };
 }
 
-const reviewed = (sha: string) => `<!-- factory:reviewed:${sha} -->`;
+const reviewed = (sha: string) =>
+  `<!-- factory:verdict:approve -->\n<!-- factory:reviewed:${sha}:${sign(sha, "approve")} -->`;
 
 describe("needsReview", () => {
   it("is true for a Change nobody has read", () => {

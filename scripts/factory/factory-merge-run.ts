@@ -10,7 +10,6 @@
  *   DRY_RUN=true node scripts/factory/factory-merge-run.ts # report only
  */
 import { execFileSync } from "node:child_process";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   BEHIND_BASE,
   type Check,
@@ -19,6 +18,7 @@ import {
   explain,
   type Verdict,
   reviewEntries,
+  signedVerifier,
 } from "./automerge-eligibility.ts";
 
 const REPO = process.env.GITHUB_REPOSITORY ?? "Cabeda/Convocados";
@@ -27,12 +27,7 @@ const DRY_RUN = process.env.DRY_RUN === "true";
 const APP_KEY = process.env.FACTORY_APP_KEY ?? "";
 
 /** Fail closed: no key means no signature can be verified, so nothing merges. */
-function verify(head: string, signature: string): boolean {
-  if (!APP_KEY) return false;
-  const expected = createHmac("sha256", APP_KEY).update(head).digest("hex");
-  if (signature.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(expected, "hex"));
-}
+const verify = signedVerifier(APP_KEY);
 
 interface RawPr {
   number: number;
