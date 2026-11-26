@@ -2,9 +2,12 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { authorizeEventMutation } from "~/lib/eventAuthz.server";
-import { buildAccessCookie } from "~/lib/eventAccess";
+import { buildAccessCookie, hashPassword } from "~/lib/eventAccess";
 
 import { syncGamePayments } from "~/lib/settlement.server";
+
+import { PATCH as patchHistory } from "~/pages/api/events/[id]/history/[historyId]";
+import { PUT as updateTeams } from "~/pages/api/events/[id]/teams";
 
 import { POST as randomize } from "~/pages/api/events/[id]/randomize";
 import { POST as undoRemove } from "~/pages/api/events/[id]/undo-remove";
@@ -52,7 +55,7 @@ async function seedUserWithToken(prefix: string) {
   return { userId, token };
 }
 
-async function seedEvent(opts: { ownerId?: string | null; isPublic?: boolean; players?: string[] } = {}) {
+async function seedEvent(opts: { ownerId?: string | null; isPublic?: boolean; players?: string[]; accessPassword?: string } = {}) {
   const event = await prisma.event.create({
     data: {
       title: "Authz Event",
@@ -62,6 +65,7 @@ async function seedEvent(opts: { ownerId?: string | null; isPublic?: boolean; pl
       teamTwoName: "Gunas",
       ownerId: opts.ownerId ?? null,
       isPublic: opts.isPublic ?? false,
+      accessPassword: opts.accessPassword ?? null,
     },
   });
   let order = 0;
@@ -71,9 +75,10 @@ async function seedEvent(opts: { ownerId?: string | null; isPublic?: boolean; pl
   return event;
 }
 
-function ctx(params: Record<string, string>, body: unknown, token?: string, method = "POST") {
+function ctx(params: Record<string, string>, body: unknown, token?: string, method = "POST", cookie?: string) {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (token) headers.authorization = `Bearer ${token}`;
+  if (cookie) headers.cookie = cookie;
   const request = new Request("http://localhost/api/test", {
     method,
     headers,
@@ -293,6 +298,31 @@ const ROOT_EVENT_MUTATIONS = [
     afterGate: 200,
     call: (id: string, token?: string) => setNotificationDefaults(ctx({ id }, {}, token, "PUT")),
   },
+  {
+    route: "PATCH history",
+    denied: "Only the event owner or a participant can edit this.",
+    afterGate: 200,
+    call: async (id: string, token?: string) => {
+      // The route requires a signed-in caller, so the ownerless link-holder case
+      // uses a token: the link is the capability, not anonymity.
+      const bearer = token ?? otherToken;
+      const event = await prisma.event.findUniqueOrThrow({ where: { id } });
+      const history = await prisma.gameHistory.create({
+        data: {
+          eventId: id,
+          dateTime: event.dateTime,
+          status: "played",
+          teamOneName: "Ninjas",
+          teamTwoName: "Gunas",
+          teamsSnapshot: JSON.stringify([
+            { team: "Ninjas", players: [] },
+            { team: "Gunas", players: [] },
+          ]),
+        },
+      });
+      return patchHistory(ctx({ id, historyId: history.id }, {}, bearer, "PATCH"));
+    },
+  },
 ];
 
 describe("root Event mutation routes ask one authorization question", () => {
@@ -417,6 +447,91 @@ describe("settlement entry points", () => {
     const { event, game, brunoId } = await seedSettableEvent({ ownerId });
     expect((await settlementSummary(ctx({ id: event.id }, undefined, undefined, "GET"))).status).toBe(401);
     expect((await settleShare(ctx({ id: event.id }, { gameId: game.id, eventPlayerId: brunoId }, undefined, "PUT"))).status).toBe(403);
+  });
+});
+
+describe("password-locked Event mutations (#1727)", () => {
+  async function seedHistoryEntry(eventId: string, teamsSnapshot?: string) {
+    const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
+    return prisma.gameHistory.create({
+      data: {
+        eventId,
+        dateTime: event.dateTime,
+        status: "played",
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        teamsSnapshot: teamsSnapshot ?? JSON.stringify([
+          { team: "Ninjas", players: [] },
+          { team: "Gunas", players: [] },
+        ]),
+      },
+    });
+  }
+
+  it("PATCH history refuses score, teams and payments on a locked Event", async () => {
+    const event = await seedEvent({ ownerId: null, isPublic: false, accessPassword: hashPassword("secret") });
+    const history = await seedHistoryEntry(event.id);
+    const bodies = [
+      { scoreOne: 9, scoreTwo: 0 },
+      { teamsSnapshot: [{ team: "Ninjas", players: [{ name: "Mallory", order: 0 }] }] },
+      { paymentsSnapshot: [{ playerName: "Mallory", amount: 0, status: "paid" }] },
+    ];
+    for (const body of bodies) {
+      const res = await patchHistory(ctx({ id: event.id, historyId: history.id }, body, otherToken, "PATCH"));
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ locked: true });
+    }
+    const row = await prisma.gameHistory.findUniqueOrThrow({ where: { id: history.id } });
+    expect(row.scoreOne).toBeNull();
+    expect(row.teamsSnapshot).toBe(history.teamsSnapshot);
+    expect(row.paymentsSnapshot).toBeNull();
+  });
+
+  it("PATCH history denies before materialising a snapshot for a played live Game", async () => {
+    const event = await seedEvent({ ownerId: null, isPublic: false, accessPassword: hashPassword("secret") });
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: new Date(), status: "played" } });
+    const res = await patchHistory(ctx({ id: event.id, historyId: game.id }, { scoreOne: 9, scoreTwo: 0 }, otherToken, "PATCH"));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ locked: true });
+    expect(await prisma.gameHistory.count({ where: { eventId: event.id } })).toBe(0);
+  });
+
+  it("PUT teams refuses a roster player who never unlocked the Event", async () => {
+    const event = await seedEvent({ ownerId: null, isPublic: false, accessPassword: hashPassword("secret") });
+    await prisma.player.create({ data: { eventId: event.id, name: "Other", order: 0, userId: otherUserId } });
+    const res = await updateTeams(ctx({ id: event.id }, { matches: [] }, otherToken, "PUT"));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ locked: true });
+    expect(await prisma.teamResult.count({ where: { eventId: event.id } })).toBe(0);
+  });
+
+  it("admits the owner, an admin and an access-cookie holder on a locked Event", async () => {
+    const event = await seedEvent({ ownerId, accessPassword: hashPassword("secret") });
+    const history = await seedHistoryEntry(event.id);
+
+    expect((await patchHistory(ctx({ id: event.id, historyId: history.id }, { scoreOne: 1, scoreTwo: 0 }, ownerToken, "PATCH"))).status).toBe(200);
+
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: otherUserId } });
+    expect((await patchHistory(ctx({ id: event.id, historyId: history.id }, { scoreOne: 2, scoreTwo: 0 }, otherToken, "PATCH"))).status).toBe(200);
+
+    const { token: cookieToken } = await seedUserWithToken("cookie");
+    const cookie = buildAccessCookie(null, event.id, event.accessPassword!);
+    expect((await patchHistory(ctx({ id: event.id, historyId: history.id }, { scoreOne: 3, scoreTwo: 0 }, cookieToken, "PATCH", cookie))).status).toBe(200);
+  });
+
+  it("still lets a settled participant edit history on an UNLOCKED Event", async () => {
+    const event = await seedEvent({ ownerId });
+    const history = await seedHistoryEntry(
+      event.id,
+      JSON.stringify([{ team: "Ninjas", players: [{ name: "other", order: 0 }] }, { team: "Gunas", players: [] }]),
+    );
+    expect((await patchHistory(ctx({ id: event.id, historyId: history.id }, { scoreOne: 1, scoreTwo: 0 }, otherToken, "PATCH"))).status).toBe(200);
+  });
+
+  it("still lets a roster player update teams on an UNLOCKED Event", async () => {
+    const event = await seedEvent({ ownerId });
+    await prisma.player.create({ data: { eventId: event.id, name: "Other", order: 0, userId: otherUserId } });
+    expect((await updateTeams(ctx({ id: event.id }, { matches: [] }, otherToken, "PUT"))).status).toBe(200);
   });
 });
 
