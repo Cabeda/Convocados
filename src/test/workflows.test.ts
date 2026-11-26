@@ -304,14 +304,13 @@ describe("a factory commit carries an identity the CLA accepts", () => {
   // #1807 shipped `convocados-factory[bot]` — one letter short of the App's
   // login — and went red on the CLA with a green suite.
   //
-  // Listed by hand rather than inferred: these are the four workflows whose
-  // agent implements, so these are the four that can author a commit.
-  const COMMITTING = [
-    "factory-issue.yml",
-    "factory-fix.yml",
-    "factory-fix-loop.yml",
-    "factory-repairer.yml",
-  ];
+  // Every workflow that runs the agent commits: the action commits whatever the
+  // agent leaves in the tree, and the Reviewer's own verdict file is enough to
+  // make the tree dirty. A workflow missing the identity dies before its first
+  // thought ("empty ident name … not allowed").
+  const COMMITTING = workflowFiles.filter((file) =>
+    readFileSync(join(workflowsDir, file), "utf8").includes("anomalyco/opencode/github"),
+  );
 
   const allowlist = () => {
     const raw = readFileSync(join(workflowsDir, "cla.yml"), "utf8");
@@ -400,5 +399,27 @@ describe("a dead run still hands over its branch", () => {
     const bundles = raw.indexOf("git bundle create");
     expect(records, "the packaging step must write the branch file").toBeGreaterThan(0);
     expect(records, "it must be written before the bundle").toBeLessThan(bundles);
+  });
+});
+
+describe("the merge gate and the Reviewer's verdict", () => {
+  it("merges only through the tested decision, on the commit it decided about", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-merge.yml"), "utf8");
+    expect(raw).toContain("factory-merge-run.ts");
+    const run = readFileSync(join(process.cwd(), "scripts/factory/factory-merge-run.ts"), "utf8");
+    expect(run).toContain("--match-head-commit");
+  });
+
+  it("fails the review when no verdict was written", () => {
+    // Silence used to read as approval: the reviewer's step had
+    // continue-on-error, so a 25-minute timeout posted nothing and passed.
+    const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+    expect(raw).toContain("Record the verdict");
+    expect(raw).toContain("no verdict was written");
+  });
+
+  it("lets the Reviewer write the verdict file and nothing else", () => {
+    const raw = readFileSync(join(process.cwd(), ".opencode/agents/reviewer.md"), "utf8");
+    expect(raw).toContain('".factory-review/**": allow');
   });
 });

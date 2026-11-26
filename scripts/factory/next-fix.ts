@@ -15,34 +15,47 @@ import { appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  latestReview,
+  type ReviewEntry,
+  reviewEntries,
+  type SignatureCheck,
+  signedVerifier,
+} from "./automerge-eligibility.ts";
+
+/** Only a marker the Reviewer's job could sign counts, even for picking. */
+const verify: SignatureCheck = (head, verdict, signature) =>
+  signedVerifier(process.env.FACTORY_APP_KEY ?? "")(head, verdict, signature);
 
 export const ROUND_BUDGET = 3;
-const FINDINGS = "<!-- factory:findings -->";
-const REVIEWED = /<!-- factory:reviewed:([0-9a-f]{7,40}) -->/;
 const ATTEMPT = "factory: attempt <review>";
 
 export interface FixCandidate {
   number: number;
   headRefName: string;
   headRefOid: string;
-  comments: Array<{ body: string }>;
+  /** Comments and formal reviews, already normalised by `reviewEntries`. */
+  entries: ReviewEntry[];
+  /** Required checks that did not pass. A red one is always worth a round. */
+  failingChecks: string[];
 }
 
 export function needsFix(pr: FixCandidate): boolean {
   if (!pr.headRefName.startsWith("factory/")) return false;
 
-  const comments = pr.comments ?? [];
-  const rounds = comments.filter((c) => (c.body ?? "").includes(ATTEMPT)).length;
+  const entries = pr.entries ?? [];
+  const rounds = entries.filter((c) => (c.body ?? "").includes(ATTEMPT)).length;
   if (rounds >= ROUND_BUDGET) return false;
 
-  // The API returns comments oldest-first; the last review is the current word.
-  const latest = comments
-    .filter((c) => REVIEWED.test(c.body ?? ""))
-    .at(-1);
-  if (!latest) return false;
+  if ((pr.failingChecks ?? []).length > 0) return true;
 
-  const reviewedHead = REVIEWED.exec(latest.body)?.[1];
-  return reviewedHead === pr.headRefOid && latest.body.includes(FINDINGS);
+  // `latestReview` is author-scoped and time-ordered, so a forged or older
+  // marker cannot start a round against the wrong head.
+  const latest = latestReview(entries, verify);
+  if (!latest || !pr.headRefOid.startsWith(latest.head)) return false;
+  // A refusal with no findings is a Hard Block a human must take: a round would
+  // change code the Reviewer did not ask to change.
+  return latest.verdict === "refuse" && latest.body.includes("<!-- factory:findings -->");
 }
 
 export function pickFix(candidates: FixCandidate[]): FixCandidate | null {
@@ -57,10 +70,27 @@ function gh<T>(args: string[]): T {
 
 function main(): number {
   const repo = process.env.GITHUB_REPOSITORY ?? "Cabeda/Convocados";
-  const prs = gh<FixCandidate[]>([
+  const raw = gh<
+    Array<{ number: number; headRefName: string; headRefOid: string; comments: unknown[]; reviews: unknown[] }>
+  >([
     "pr", "list", "--repo", repo, "--state", "open", "--limit", "100",
-    "--json", "number,headRefName,headRefOid,comments",
+    "--json", "number,headRefName,headRefOid,comments,reviews,statusCheckRollup",
   ]);
+
+  const prs: FixCandidate[] = raw.map((pr) => ({
+    number: pr.number,
+    headRefName: pr.headRefName,
+    headRefOid: pr.headRefOid,
+    entries: reviewEntries(pr as never),
+    failingChecks: ((pr as { statusCheckRollup?: Array<{ name?: string; context?: string; conclusion?: string; state?: string }> }).statusCheckRollup ?? [])
+      .filter((c) => {
+        // Only a finished, bad check earns a round. PENDING and EXPECTED mean
+        // CI has not answered yet, and spending a round on them wastes one.
+        const state = (c.conclusion ?? c.state ?? "").toUpperCase();
+        return ["FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"].includes(state);
+      })
+      .map((c) => c.name ?? c.context ?? "check"),
+  }));
 
   const next = pickFix(prs);
   const file = process.env.GITHUB_OUTPUT;

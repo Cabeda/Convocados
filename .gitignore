@@ -118,5 +118,10 @@ src/lib/__generated__/
 # Factory handoff: the agent's bundle and summary, delivered by the next job
 .factory-handoff/
 
+# The Reviewer's verdict. Gitignored so the agent action leaves the tree clean:
+# an untracked file makes it commit and push, and a pull_request checkout has no
+# credentials for that push ("could not read Username for 'https://github.com'").
+.factory-review/
+
 # Demo recording output (local only)
 tmp/demo-video/
