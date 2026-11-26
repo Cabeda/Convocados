@@ -258,8 +258,9 @@ track, and deploys the scheduler. One click is production.
 
 ## The Delivery Factory
 
-The factory turns `ready-for-agent` Issues into ready-to-prod Changes without being asked,
-and proposes improvements nobody asked for. It never merges.
+The factory turns Issues into ready-to-prod Changes without being asked, by two paths: the
+**Fixer** works the Issues the Explorers filed, and the **Factory** works the Issues Cabeda
+labelled `ready-for-agent`. It proposes improvements nobody asked for. It never merges.
 
 **Gates (how GATE 1 actually runs), roles, reach, budgets, handoff and the automerge
 exception** are documented in [`docs/factory/README.md`](docs/factory/README.md); the
@@ -269,11 +270,20 @@ factory Change, or when a label, a gate or a budget is in question. The rules ev
 obeys without reaching for anything:
 
 - **Only Cabeda applies or removes `ready-for-agent`, and only Cabeda merges** — no agent
-  merges, ever, including after approval. Explorers may not label their own output, and the
-  Factory may not pull work that was not offered.
+  merges, ever, including after approval. An Explorer applies `factory:explored` to what it
+  files, and no other label.
+- **An Issue an Explorer filed is a standing offer to the Fixer; nothing else is.** The Fixer
+  works Issues labelled `factory:explored` that carry no `factory:blocked` and no
+  `ready-for-agent`, oldest first, one Change at a time. It may not pull a human-filed Issue,
+  a `wayfinder:grilling` Issue, or anything it labelled itself. `ready-for-agent` stays
+  Cabeda's label for human-filed work: applying it to an Explorer's Issue hands that Issue to
+  the Factory instead.
+- **The Fixer answers the Reviewer, and stops after three rounds.** A review that carries
+  findings restarts the Fixer on the same branch; past the third round it hands the remaining
+  disagreement to Cabeda. Two machines arguing is not convergence.
 - **`wayfinder:grilling` marks an Issue whose spec is not yet implementable** — it needs a
-  grilling session first. The Factory ignores it; promotion to `ready-for-agent` is
-  Cabeda's call.
+  grilling session first. Both the Fixer and the Factory ignore it; promotion to
+  `ready-for-agent` is Cabeda's call.
 - **`FACTORY_AUTOMERGE=true` (a repo variable) arms auto-merge for machine-authored
   Dependabot bumps only**, off by default; a human-authored Change is never auto-merged at
   any gate state. Its four narrowing properties are in

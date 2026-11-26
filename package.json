@@ -68,7 +68,7 @@
     "react-leaflet": "^5.0.0",
     "recharts": "^3.10.1",
     "resend": "^6.37.0",
-    "web-push": "^3.6.7"
+    "web-push": "^4.0.0"
   },
   "devDependencies": {
     "@eslint-react/eslint-plugin": "^5.28.8",

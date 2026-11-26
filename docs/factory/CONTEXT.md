@@ -16,11 +16,22 @@ _Avoid_: Manager (that is the dispatch step), orchestrator (too vague — it nam
 not the role), CI
 
 ## Issue
-A unit of work with an acceptance criterion, small enough to finish in one session. Issues
-are the only thing the Factory accepts as input, and only when a human has marked them
-Ready. Explorers propose Issues; they never make them Ready.
+A unit of work with an acceptance criterion, small enough to finish in one session. Explorers
+propose Issues and label them `factory:explored`, which puts them in the Fixer's queue. Cabeda
+labels an Issue `ready-for-agent` to hand it to the Factory instead, and an Explorer never
+promotes its own finding.
 _Avoid_: task (that is a dex task, a human ledger entry), ticket (use Issue), bug (an Issue
 may be a bug, a feature, or a chore)
+
+## Fixer
+The agent that drains the Explorer queue: it takes the oldest `factory:explored` Issue with no
+Change open, reproduces the defect with a test that fails first, and produces a Change that
+carries that evidence. It holds the Factory's permissions; its extra obligation is the
+reproduction, so a reviewer can see the defect rather than infer it from the fix.
+
+It also answers the Reviewer on the Change's own branch, for at most three rounds. Past that the
+disagreement is Cabeda's, because two machines arguing is not convergence.
+_Avoid_: triager (it does the work), auto-fixer (the name hides the reproduction contract), bot
 
 ## Change
 A proposed modification to the repository, materialised as a pull request. The Factory's
