@@ -13,9 +13,23 @@ interface EventJsonLdInput {
   url: string;
 }
 
+/**
+ * JSON.stringify does not escape `</script>`. Emitted raw into a
+ * `<script type="application/ld+json">` block it closes the tag, and the rest
+ * of a user-supplied title becomes markup. Escape the HTML-significant
+ * characters as JSON unicode escapes: JSON.parse decodes them back, while the
+ * HTML parser never sees a closing tag.
+ */
+function stringifyForScript(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[<>&]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
 /** Generate Schema.org SportsEvent JSON-LD string */
 export function generateEventJsonLd(event: EventJsonLdInput): string {
-  return JSON.stringify({
+  return stringifyForScript({
     "@context": "https://schema.org",
     "@type": "SportsEvent",
     name: event.title,
