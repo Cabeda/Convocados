@@ -13,31 +13,34 @@ const JOB_CONCURRENCY = 10;
 /** Dead-letter jobs older than this are pruned on each drain run */
 const DEAD_LETTER_TTL_DAYS = 30;
 
-export type NotificationJobType =
-  | "player_joined"
-  | "player_left"
-  | "player_joined_bench"
-  | "player_left_bench"
-  | "player_left_promoted"
-  | "event_details"
-  | "reminder"
-  | "post_game"
-  | "game_full"
-  | "spot_available"
-  | "rsvp_request"
-  | "game_cancelled"
-  | "game_invite"
-  | "bench_promoted_capacity"
-  | "payment_confirmed"
-  | "payment_self_reported"
-  | "payer_assigned"
-  | "payer_changed"
-  | "payer_vacant"
-  | "recruitment"
-  | "few_spots_left"
-  | "player_invited"
-  | "crew_captain_nominated"
-  | "crew_captain_accepted";
+export const NOTIFICATION_JOB_TYPES = [
+  "player_joined",
+  "player_left",
+  "player_joined_bench",
+  "player_left_bench",
+  "player_left_promoted",
+  "event_details",
+  "reminder",
+  "post_game",
+  "game_full",
+  "spot_available",
+  "rsvp_request",
+  "game_cancelled",
+  "game_invite",
+  "bench_promoted_capacity",
+  "payment_confirmed",
+  "payment_self_reported",
+  "payer_assigned",
+  "payer_changed",
+  "payer_vacant",
+  "recruitment",
+  "few_spots_left",
+  "player_invited",
+  "crew_captain_nominated",
+  "crew_captain_accepted",
+] as const;
+
+export type NotificationJobType = (typeof NOTIFICATION_JOB_TYPES)[number];
 
 export interface NotificationJobPayload {
   title: string;
