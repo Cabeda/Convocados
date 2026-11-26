@@ -6,6 +6,10 @@ import { createLogger } from "../../lib/logger.server";
 
 const log = createLogger("health");
 
+/** Health is polled every few seconds; an unreadable migration shape is worth
+ * reporting once per boot, not on every poll. */
+let loggedUnreadableMigration = false;
+
 /** Scheduler polls every 5–30s; anything older than 3min means it's down.
  * (3min tolerates maintenance timeouts + rotating deploys without false alarms.) */
 const SCHEDULER_STALE_MS = 3 * 60 * 1000;
@@ -92,7 +96,21 @@ export const GET: APIRoute = async () => {
     const oldestResult = await prisma.$queryRawUnsafe(
       "SELECT MIN(started_at) AS oldestMigrationAt FROM _prisma_migrations",
     ) as { oldestMigrationAt: string | null }[];
-    const oldestMigrationAt = parseMigrationTimestamp(oldestResult[0]?.oldestMigrationAt);
+    const rawOldestMigrationAt = oldestResult[0]?.oldestMigrationAt ?? null;
+    const oldestMigrationAt = parseMigrationTimestamp(rawOldestMigrationAt);
+    // A raw value the parser cannot read is not proof of a fresh database, but
+    // it is not a healthy reading either. Name the provenance unknown and log
+    // the raw value once so production's shape is identified, not guessed.
+    // Degrading here would fire after every routine migration deploy.
+    const provenanceUnknown =
+      oldestMigrationAt === null && rawOldestMigrationAt !== null;
+    if (provenanceUnknown && !loggedUnreadableMigration) {
+      loggedUnreadableMigration = true;
+      log.warn(
+        { rawOldestMigrationAt },
+        "unreadable _prisma_migrations.started_at; database provenance unknown",
+      );
+    }
     const eventCount = await prisma.event.count();
     const createdThisBoot =
       oldestMigrationAt !== null && oldestMigrationAt.getTime() >= resolveBootAt();
@@ -111,6 +129,7 @@ export const GET: APIRoute = async () => {
         freelistCount: Number(Object.values(freelistResult[0] ?? {})[0] ?? 0),
         walSizeBytes,
         createdThisBoot,
+        provenance: provenanceUnknown ? "unknown" : "known",
         oldestMigrationAt: oldestMigrationAt?.toISOString() ?? null,
       },
     };
