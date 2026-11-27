@@ -291,24 +291,23 @@ describe("the reviewer is exempt only where it cannot review", () => {
   });
 });
 
-describe("a review that did not finish does not redden the Change", () => {
-  // The merge decision is the signature: the gate accepts only a verdict signed
-  // over the current head, so a review that wrote nothing is refused there. A
-  // red `reviewer` check added no decision and made every open Change look
-  // broken — 28 of them, on 2026-11-27.
-  const stepRuns = () => {
+describe("the reviewer check is the gate, not a comment", () => {
+  // `reviewer` is a required status check, so a refusal has to fail it. #1866
+  // showed "Verdict: refuse" beside a green reviewer job: the findings were
+  // readable and mergeable anyway, which is a review nobody has to answer.
+  const verdictStep = () => {
     const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
       jobs?: Record<string, { steps?: Array<{ name?: string; run?: string }> }>;
     };
-    return (doc.jobs?.reviewer?.steps ?? [])
-      .filter((s) => s.name === "Record the verdict" || s.name === "Sign and post the review")
-      .map((s) => s.run ?? "");
+    return (doc.jobs?.reviewer?.steps ?? []).find((s) => s.name === "Record the verdict")?.run ?? "";
   };
 
-  it("reports a missing verdict instead of failing the job", () => {
-    for (const run of stepRuns()) {
-      expect(run).not.toMatch(/^\s*exit 1\s*$/m);
-    }
+  it("fails the check on refuse and on a missing verdict", () => {
+    const run = verdictStep();
+    // Two `exit 1`: one for `refuse`, one for the empty verdict. An approval is
+    // the only path that leaves the check green.
+    expect([...run.matchAll(/exit 1/g)]).toHaveLength(2);
+    expect(run).toContain("approve) echo");
   });
 });
 
