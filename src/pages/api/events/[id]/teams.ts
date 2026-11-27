@@ -2,7 +2,8 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { authenticateRequest, requireScope } from "../../../../lib/authenticate.server";
 import { insufficientScopeChallenge } from "../../../../lib/mcp/protocol";
-import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
+import { getSession } from "../../../../lib/auth.helpers.server";
+import { authorizeEventMutation, eventMutationDenied, hasEventPasswordAccess } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { applyFormationLayout } from "../../../../lib/teams";
 import { splitRoster } from "../../../../lib/rosterCapacity";
@@ -119,11 +120,20 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
 	const allPlayers = await getActivePlayers(eventId, event.currentGameId);
 
-	const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+	const authz = await authorizeEventMutation(request, event, session);
+	const passwordHeld = event.accessPassword
+		? await hasEventPasswordAccess(request, event, session)
+		: false;
 	const isPlayer = allPlayers.some((p) => p.userId === session.user.id);
 
-	if (!isOwner && !isAdmin && !isPlayer) {
-		return Response.json({ error: "You must be the event owner, an admin, or a player in this game to update teams." }, { status: 403 });
+	// The seam settles owner/admin and the ownerless link; a roster player keeps
+	// the #658 team edit only while the Event is unlocked. A password-locked
+	// Event denies that player unless the password (or an invite) was produced.
+	if (!authz.isOwner && !authz.isAdmin && !passwordHeld && !(isPlayer && !event.accessPassword)) {
+		return eventMutationDenied(
+			event.accessPassword ? { ...authz, reason: "password_required" } : authz,
+			"You must be the event owner, an admin, or a player in this game to update teams.",
+		);
 	}
 
 	interface MatchInput {
