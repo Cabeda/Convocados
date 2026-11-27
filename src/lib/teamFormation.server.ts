@@ -5,6 +5,7 @@
  * importing from an API route.
  */
 import { prisma } from "./db.server";
+import { syncGamePayments } from "./settlement.server";
 import type { Prisma } from "./db.server";
 import { getRosterCapacity } from "./roster.server";
 import { balanceTeams } from "./elo.server";
@@ -309,6 +310,14 @@ export async function finishRosterAdd(
   await addPlayerToTeams(eventId, rosterName, currentGameId);
   await validateTeams(eventId, maxPlayers, currentGameId);
   await autoRandomizeIfFull(eventId, maxPlayers, currentGameId);
+
+  // Settlement reads the lineup, so the payment roll must be re-synced AFTER
+  // placement: syncing before it charges a returning player who is not yet in
+  // the draw nothing. Idempotent through the share ledgerKey, and the
+  // cancelled-game guard still applies.
+  if (currentGameId) {
+    await syncGamePayments(currentGameId, eventId);
+  }
 }
 
 /**
