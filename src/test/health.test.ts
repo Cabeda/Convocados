@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { GET } from "~/pages/api/health";
+import { GET as GET_STRICT } from "~/pages/api/health/strict";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
@@ -515,6 +516,57 @@ describe("GET /api/health", () => {
       expect(body.message).toBeUndefined();
     } finally {
       spy.mockRestore();
+    }
+  });
+});
+
+describe("GET /api/health/strict", () => {
+  it("returns 503 when the scheduler heartbeat is stale", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    process.env.BACKUPS_ENABLED_NORMALIZED = "false";
+    process.env.BACKUPS_ACTIVE = "false";
+    try {
+      const stale = new Date(Date.now() - 10 * 60 * 1000);
+      await prisma.schedulerHeartbeat.upsert({
+        where: { id: "scheduler" },
+        create: { id: "scheduler", lastSeenAt: stale },
+        update: { lastSeenAt: stale },
+      });
+
+      const res = await GET_STRICT(ctx());
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.degraded).toBe(true);
+      expect(body.scheduler).toEqual({ running: false, failedJobs: 0 });
+    } finally {
+      process.env.BACKUPS_ENABLED_NORMALIZED = "true";
+      process.env.BACKUPS_ACTIVE = "true";
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("returns 200 when the scheduler heartbeat is fresh", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    process.env.BACKUPS_ENABLED_NORMALIZED = "false";
+    process.env.BACKUPS_ACTIVE = "false";
+    try {
+      await prisma.schedulerHeartbeat.upsert({
+        where: { id: "scheduler" },
+        create: { id: "scheduler", lastSeenAt: new Date() },
+        update: { lastSeenAt: new Date() },
+      });
+
+      const res = await GET_STRICT(ctx());
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.degraded).toBeUndefined();
+      expect(body.scheduler).toEqual({ running: true, failedJobs: 0 });
+    } finally {
+      process.env.BACKUPS_ENABLED_NORMALIZED = "true";
+      process.env.BACKUPS_ACTIVE = "true";
+      process.env.NODE_ENV = oldNodeEnv;
     }
   });
 });
