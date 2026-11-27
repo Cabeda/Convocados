@@ -7,6 +7,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
+import { isGameEnded } from "../../../../lib/gameStatus";
 import { splitRoster } from "../../../../lib/rosterCapacity";
 import { getActivePlayers } from "../../../../lib/teamAssignment.server";
 import { applyFormationLayout } from "../../../../lib/teams";
@@ -22,6 +23,13 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  if (isGameEnded(event.dateTime, event.durationMinutes)) {
+    return Response.json(
+      { error: "The game has already ended — teams can no longer be randomized." },
+      { status: 409 },
+    );
+  }
 
   // Owner or admin only. Ownerless events are openly manageable while unlisted
   // (the link is the secret), but a public ownerless event is discoverable and

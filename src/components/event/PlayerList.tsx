@@ -408,7 +408,7 @@ export function PlayerList({
           {bench.length > 0 && (
             <Chip icon={<AirlineSeatReclineNormalIcon />} label={t("benchPlayers", { n: bench.length })} size="small" color="warning" />
           )}
-          {isOwner && (
+          {isOwner && !rosterLocked && (
             <Tooltip title={t("resetPlayerOrder")}>
               <IconButton size="small" onClick={onResetPlayerOrder}><RestartAltIcon fontSize="small" /></IconButton>
             </Tooltip>
@@ -422,7 +422,8 @@ export function PlayerList({
           const isFull = spotsLeft <= 0;
           // ponytail: momentum messages at different fill levels.
           // Ceiling: static thresholds. Upgrade path: A/B test copy.
-          const nudge = isFull ? t("momentumFull")
+          const nudge = rosterLocked ? null
+            : isFull ? t("momentumFull")
             : fillPct >= 0.8 ? t("momentumFillingFast", { n: String(spotsLeft) })
             : fillPct >= 0.5 ? t("momentumAlmostHalf", { n: String(spotsLeft) })
             : null;
@@ -751,7 +752,7 @@ export function PlayerList({
                     "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.04) },
                   }}
                   secondaryAction={
-                    canRemovePlayer(player) ? (
+                    !rosterLocked && canRemovePlayer(player) ? (
                       <IconButton edge="end" size="small" data-testid={`remove-player-${player.id}`} onClick={() => openLeaveDialog(player.id, "organizer")}>
                         <CloseIcon fontSize="small" />
                       </IconButton>
@@ -843,7 +844,7 @@ export function PlayerList({
                         "&:hover": { bgcolor: alpha(theme.palette.warning.main, 0.04) },
                       }}
                       secondaryAction={
-                        canRemovePlayer(player) ? (
+                        !rosterLocked && canRemovePlayer(player) ? (
                           <IconButton edge="end" size="small" data-testid={`remove-bench-player-${player.id}`} onClick={() => openLeaveDialog(player.id, "organizer")}>
                             <CloseIcon fontSize="small" />
                           </IconButton>
@@ -1079,7 +1080,7 @@ export function PlayerList({
           </>
         )}
 
-        {isOwner && (
+        {isOwner && !rosterLocked && (
           <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
             <Button variant="contained" size="large" startIcon={<ShuffleIcon />}
               disabled={active.length < 2 || isRandomizing}

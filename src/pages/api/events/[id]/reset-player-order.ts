@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { isGameEnded } from "../../../../lib/gameStatus";
 import { validateTeams } from "../../../../lib/teamFormation.server";
 
 /** POST — reset player order to original signup order (createdAt). Authorization is the shared event-mutation seam (ADR 0035). */
@@ -12,6 +13,13 @@ export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  if (isGameEnded(event.dateTime, event.durationMinutes)) {
+    return Response.json(
+      { error: "The game has already ended — player order can no longer be reset." },
+      { status: 409 },
+    );
+  }
 
   const authz = await authorizeEventMutation(request, event);
   if (!authz.allowed) return Response.json({ error: "Only the event owner can reset player order." }, { status: 403 });
