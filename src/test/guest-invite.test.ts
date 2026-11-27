@@ -264,6 +264,32 @@ describe("frictionless guest acceptance (no account)", () => {
   });
 });
 
+describe("invite kick-off is the invited game in the event timezone", () => {
+  it("returns the PlayerInvite Game's dateTime and the Event timezone", async () => {
+    const { owner, event, gameId } = await seedOwnerAndEvent();
+    const eventDate = new Date(Date.now() + 48 * 3600_000);
+    const gameDate = new Date(Date.now() + 24 * 3600_000);
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { dateTime: eventDate, timezone: "Europe/Lisbon" },
+    });
+    await prisma.game.update({ where: { id: gameId }, data: { dateTime: gameDate } });
+
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    const created = await createInviteRoute(req({ id: event.id }, { name: "Manecas" }));
+    const { inviteUrl } = await created.json();
+    const token = (inviteUrl as string).split("/invite/")[1];
+
+    const lookup = await inviteLookup(req({ token }));
+    const body = await lookup.json();
+
+    // The token expires on the Game (`expirePendingInvites`), so the screen
+    // must format that same row, not the Event's next date.
+    expect(body.game.dateTime).toBe(gameDate.toISOString());
+    expect(body.game.timezone).toBe("Europe/Lisbon");
+  });
+});
+
 describe("binding an accepted guest row to an account", () => {
   async function seedAcceptedGuest() {
     const { owner, event, gameId, token } = await (async () => {

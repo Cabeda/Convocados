@@ -129,6 +129,24 @@ describe("InvitePage — frictionless guest acceptance", () => {
     expect(screen.queryByTestId("invite-join-guest")).toBeNull();
   });
 
+  it("renders the kick-off in the event timezone, not the viewer's device zone", async () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = "Europe/Berlin"; // viewer abroad: +1h ahead of the venue
+    try {
+      // 19:00 UTC is 20:00 in Lisbon (the Event timezone) but 21:00 in Berlin.
+      mockLookup(lookup({
+        game: { ...GAME, dateTime: "2024-07-15T19:00:00.000Z", timezone: "Europe/Lisbon" },
+      }));
+      const { container } = renderWithTheme(<InvitePage token="tok-1" />);
+      await waitFor(() => expect(screen.getByText("Ninjas da Areosa")).toBeTruthy());
+      expect(container.textContent).toContain("20:00");
+      expect(container.textContent).not.toContain("21:00");
+    } finally {
+      if (previousTz === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTz;
+    }
+  });
+
   it("anonymous visitor on a claimed invite sees game details, not a bare login wall", async () => {
     mockLookup(lookup({ claimable: false, claimPlayerId: null, isInvitee: false, authenticated: false }));
     renderWithTheme(<InvitePage token="tok-1" />);
