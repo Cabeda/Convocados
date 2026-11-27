@@ -34,8 +34,8 @@ on:
   workflow_dispatch:
     inputs:
       pr:
-        description: "Pull request number to repair"
-        required: true
+        description: "Pull request to repair. Empty picks the oldest refused Change."
+        required: false
         type: string
 
 # One round at a time, across every Change. The Fixer is a single writer: two
