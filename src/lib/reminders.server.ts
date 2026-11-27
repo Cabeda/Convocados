@@ -241,6 +241,7 @@ export async function deliverReminder(eventId: string, type: ReminderType): Prom
               spotsLeft,
               eventUrl: `${APP_URL}/events/${event.id}`,
               reminderType: type,
+              timezone: event.timezone,
             });
           try {
             await send();

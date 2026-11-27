@@ -390,7 +390,7 @@ export const POST: APIRoute = async ({ params, request }) => {
         name: existingUser.name,
       } });
     }
-    const event = await prisma.event.findUnique({ where: { id: season.eventId }, select: { title: true, dateTime: true, location: true } });
+    const event = await prisma.event.findUnique({ where: { id: season.eventId }, select: { title: true, dateTime: true, location: true, timezone: true } });
     if (!event) return Response.json({ error: "Event not found." }, { status: 404 });
     const existingInvite = await prisma.crewProposalInvite.findFirst({ where: { seasonId: season.id, email, status: "pending" }, select: { id: true, token: true } });
     const invite = existingInvite ?? await prisma.crewProposalInvite.create({
@@ -405,6 +405,7 @@ export const POST: APIRoute = async ({ params, request }) => {
         location: event.location,
         eventUrl: `${origin}/events/${season.eventId}/seasons/${season.id}?crewInviteToken=${encodeURIComponent(invite.token)}`,
         inviterName: session.user.name ?? null,
+        timezone: event.timezone,
       });
     } catch {
       if (!existingInvite) await prisma.crewProposalInvite.delete({ where: { id: invite.id } });
