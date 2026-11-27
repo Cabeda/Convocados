@@ -19,12 +19,13 @@ export const GET: APIRoute = async ({ params, request }) => {
     where: { token },
     include: {
       invitedBy: { select: { name: true } },
+      game: { select: { dateTime: true } },
       eventPlayer: {
         select: {
           name: true,
           userId: true,
           event: {
-            select: { id: true, title: true, location: true, dateTime: true, maxPlayers: true },
+            select: { id: true, title: true, location: true, dateTime: true, timezone: true, maxPlayers: true },
           },
         },
       },
@@ -79,7 +80,8 @@ export const GET: APIRoute = async ({ params, request }) => {
       id: invite.eventPlayer.event.id,
       title: invite.eventPlayer.event.title,
       location: invite.eventPlayer.event.location,
-      dateTime: invite.eventPlayer.event.dateTime,
+      dateTime: invite.game.dateTime,
+      timezone: invite.eventPlayer.event.timezone,
       maxPlayers,
     },
   });

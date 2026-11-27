@@ -5,6 +5,8 @@ import {
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
+import { formatDateInTz } from "~/lib/timezones";
 import { apiRequest, ApiError } from "~/lib/api/client";
 
 interface InviteData {
@@ -28,6 +30,7 @@ interface InviteData {
     title: string;
     location: string;
     dateTime: string;
+    timezone: string;
     maxPlayers: number;
   };
 }
@@ -184,9 +187,9 @@ export function InvitePage({ token }: { token: string }) {
         <Typography variant="h5" fontWeight={700}>{data.game.title}</Typography>
         <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
           {data.game.location && <Chip size="small" label={data.game.location} variant="outlined" />}
-          <Chip size="small" label={new Intl.DateTimeFormat(undefined, {
+          <Chip size="small" label={formatDateInTz(new Date(data.game.dateTime), detectLocale(), data.game.timezone, {
             weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-          }).format(new Date(data.game.dateTime))} variant="outlined" />
+          })} variant="outlined" />
           {typeof data.spotsLeft === "number" && data.spotsLeft > 0 && (
             <Chip
               size="small"

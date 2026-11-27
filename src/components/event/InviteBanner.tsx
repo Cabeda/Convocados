@@ -5,6 +5,8 @@ import {
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
+import { formatDateInTz } from "~/lib/timezones";
 import { ApiError, apiRequest } from "~/lib/api/client";
 
 interface InviteData {
@@ -21,12 +23,18 @@ interface InviteData {
     title: string;
     location: string;
     dateTime: string;
+    timezone: string;
     maxPlayers: number;
   };
 }
 
 export function InviteBanner({ token, eventId, onAccepted }: { token: string; eventId: string; onAccepted?: () => void }) {
   const t = useT();
+  const locale = detectLocale();
+  const kickoffLabel = (dateTime: string, timezone: string) =>
+    formatDateInTz(new Date(dateTime), locale, timezone, {
+      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    });
   const [data, setData] = useState<InviteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +152,7 @@ export function InviteBanner({ token, eventId, onAccepted }: { token: string; ev
         </Typography>
         <Stack direction="row" spacing={1} justifyContent="center" sx={{ mt: 1, flexWrap: "wrap" }}>
           {data.game.location && <Chip size="small" label={data.game.location} variant="outlined" />}
-          <Chip size="small" label={new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(data.game.dateTime))} variant="outlined" />
+          <Chip size="small" label={kickoffLabel(data.game.dateTime, data.game.timezone)} variant="outlined" />
         </Stack>
         <Alert severity="info" sx={{ mt: 2, textAlign: "left" }}>{t("inviteSignInCta")}</Alert>
         <Button
@@ -182,7 +190,7 @@ export function InviteBanner({ token, eventId, onAccepted }: { token: string; ev
       <Typography variant="h6" fontWeight={700}>{data.game.title}</Typography>
       <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
         {data.game.location && <Chip size="small" label={data.game.location} variant="outlined" />}
-        <Chip size="small" label={new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(data.game.dateTime))} variant="outlined" />
+        <Chip size="small" label={kickoffLabel(data.game.dateTime, data.game.timezone)} variant="outlined" />
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
         {t("inviteBannerDesc" as any) || `You've been invited to join this game. Accept to join the roster, or decline if you can't make it.`}
