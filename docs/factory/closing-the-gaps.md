@@ -90,7 +90,7 @@ the 35.
 **Proposal.** Widen the guard so the one blocker the machine may clear alone actually gets cleared.
 
 The obvious widening — ignore only a *stale* refuse — does nothing: all 34 refused Changes carry
-`the Reviewer's verdict on this head is refuse` (`automerge-eligibility.ts:341`), a verdict that
+`the Reviewer's verdict on this head is refuse` (`automerge-eligibility.ts:343`), a verdict that
 names the **current** head, so the guard would still never fire. The active refuse is the one to
 ignore, because a refresh invalidates it by construction: the verdict is bound to a head SHA,
 `update-branch` rewrites the head, and the Reviewer's schedule picks the new head and reads it
@@ -103,15 +103,23 @@ refreshable(pr) =
   and isTwoWayDoor(pr.files).reasons.length === 0   // a one-way door is a human's, who can
                                                  // press "Update branch" himself
   and no check concluded FAILURE                 // refresh is for rot, not for red
-  and not refreshed in the last 24h              // bounded: MAX_OPEN_CHANGES caps it at 20
+  and now - headCommittedAt > 24h               // no more than one refresh a day
 ```
 
-Note what it is computed from: the structured facts (`commitsBehindBase`, `isTwoWayDoor`,
-`latestCheck`, `latestReview`), never the rendered `reasons` strings — the review record holds
-the head, so the rule must read `latestReview`, not substring-match a reason. That means
-`decideAutomerge` stops being the only consumer of `PullRequestFacts`: add a sibling predicate
-`refreshable(facts)` next to it, with the counter-example from #1256 (a green run on a stale base
-reverted a lockfile pin) holding it honest.
+Note what it is computed from: the structured facts, never the rendered `reasons` strings — the
+review record holds the head, so the rule must read `latestReview`, not substring-match a reason.
+
+The 24h bound needs a field that does not exist yet, so this item adds one: `FactoryFacts` gains
+`headCommittedAt` (ISO), taken from the head commit's `committedDate` by adding `commits` to the
+field list of the `gh pr view` call the merge run already makes. A refresh rewrites the head, so
+its commit date is the refresh time. A Fixer push moves it too, which
+makes the bound stricter than advertised and never looser — the acceptable direction, since a
+fresh fix is a good reason not to rebase the same branch again today. `MAX_OPEN_CHANGES` is not
+this bound: it caps how many Changes exist, never how often one is refreshed.
+
+That means `decideAutomerge` stops being the only consumer of `PullRequestFacts`: add a sibling
+predicate `refreshable(facts)` next to it, with the counter-example from #1256 (a green run on a
+stale base reverted a lockfile pin) holding it honest.
 
 **What it does not rescue:** the refused Changes still have to clear review after the rebase. A
 `refuse` that survives the new head is exactly the disagreement that should reach Cabeda — which
@@ -173,8 +181,11 @@ not behaviour. There is no existing dependency event to ride.
 **Proposal.** One `factory-explore.yml`, staggered weekly per focus: bugs (Mon), security (Tue,
 including a `pull_request`-triggered dependency pass it owns itself), design (monthly). Performance
 stays dark until the ADR 0047 Baseline is committed — an Explorer measuring against nothing
-produces opinions. Explorers are read-only, so the workflow publishes the Exploration itself:
-a step after the agent run commits `docs/explorations/<focus>/<date>.md`.
+produces opinions. Explorers are read-only, so the workflow publishes the Exploration itself —
+as a **Change, never a push to `main`** (AGENTS.md: *all changes go through PRs*). A delivery step
+opens `factory/exploration-<focus>-<date>` containing `docs/explorations/<focus>-<yyyy-mm-dd>/`,
+the exact path the agents already write to (`.opencode/agents/explorer-bugs.md:44`), so the next
+run reads back what the last one wrote.
 
 Turned on only when the published digest has shown the queue draining: a repo variable arms it when open
 `factory:review` holds under `MAX_OPEN_CHANGES` for two consecutive days. Supply cannot outrun a
@@ -187,16 +198,24 @@ Explorer agents stay untouched.
 
 | Order | Item | Closes | Lands as | Door |
 |---|---|---|---|---|
-| 1 | Refresh a behind Change (§2) | the deadlock (behind + refuse) | 1 Change | two-way: scripts and their tests |
-| 2 | Publish the verdicts (§1) | 35 Changes with no decision surface | 1 Change | **one-way**: adds a job to `factory-merge.yml` |
-| 3 | Reviewer reach filter | Dependabot / fork Changes unread | 1 Change | two-way |
-| 4 | Post-merge watcher | merged ≠ live | 1 Change | **one-way**: a new workflow |
-| 5 | Explorer triggers | roles with no trigger | 1 Change, variable-gated | **one-way**: a new workflow |
+| 1 | Refresh a behind Change (§2) | the deadlock (behind + refuse) | 1 Change | one-way: `scripts/factory/*` |
+| 2 | Publish the verdicts (§1) | 35 Changes with no decision surface | 1 Change | one-way: `factory-merge.yml` |
+| 3 | Reviewer reach filter | Dependabot / fork Changes unread | 1 Change | one-way: `next-review.ts` |
+| 4 | Post-merge watcher | merged ≠ live | 1 Change | one-way: a new workflow |
+| 5 | Explorer triggers | roles with no trigger | 1 Change, variable-gated | one-way: a new workflow |
 
-The refresh goes first because it is the only one of the five that the Factory can land on its own,
-and it is what stops the rot recurring while the rest is being decided. The publish job follows
-immediately, and is Cabeda's to merge: it needs no new App scope, but it does add a job to a
-workflow file. Items 3–5 are independent.
+**Every item is a one-way door, and that is not a defect in the plan.** `ONE_WAY_PATHS` matches
+`/^scripts\/factory\//` ("the factory's own decision code"), `.github/`, and `.opencode/agents/`
+(`automerge-eligibility.ts:195`, pinned by `automerge-eligibility.test.ts:241-244`), so a Change
+that rewrites the decision code is green, approved, and executes on the next tick — exactly the
+kind of Change that must not merge itself. Moving the logic out of `scripts/factory/` to dodge the
+classification would be the gate being gamed, not satisfied: a refresh predicate belongs with the
+merge decision it widens.
+
+So the order is a judgement about impact per human click, not about doors. The refresh is first
+because it is the smaller diff and the only item that stops the rot recurring; the digest is second
+because it is what makes the next pass over the other 34 cheap. A week of Cabeda merging five small
+Changes, not twenty.
 
 ## What this deliberately does not do
 
@@ -206,6 +225,8 @@ workflow file. Items 3–5 are independent.
 - No second Reviewer workflow: the schedule and its early exit exist.
 - No machine merge beyond the two-way-door rule already in `AGENTS.md`, and no machine promotion
   of an Issue.
+- No change to `ONE_WAY_PATHS`: every item here is Cabeda's, including this document's own
+  subject matter. Widening what a machine may merge is not on the table.
 - No widening of the App token's scopes: anything that needs to write away from a branch
   uses the workflow's own `GITHUB_TOKEN` job, as `factory-issue.yml` already does (ADR 0046).
 - No remediation: the watcher files and stops (ADR 0045).
