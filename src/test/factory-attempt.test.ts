@@ -70,6 +70,9 @@ describe("recording an Attempt", () => {
     expect(result.status).toBe(2);
     expect(result.stdout).not.toContain("recorded");
     expect(result.stderr).toContain("could not be recorded");
+    // gh's own message, not just the command line: a 403 that prints only the
+    // invocation cost an hour of guessing on 2026-11-27.
+    expect(result.stderr).toContain("HTTP 403");
   });
 
   it("exits 1, not 2, when the round spends the budget", () => {
