@@ -456,6 +456,39 @@ describe("acceptPlayerInvite", () => {
     expect(follow).toBeTruthy();
   });
 
+  it("accepting an invite places the player once and puts them on the roll", async () => {
+    const { invitee, ev, invite } = await seedInvite();
+    await prisma.eventCost.create({
+      data: { eventId: ev.id, totalAmount: 100, currency: "EUR" },
+    });
+    const other = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Other" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: other.id, order: 20, status: "active" },
+    });
+    const team = await prisma.teamResult.create({
+      data: { name: "Ninjas", eventId: ev.id, formation: "1-1" },
+    });
+    await prisma.teamMember.create({
+      data: { name: "Other", order: 0, slot: 0, teamResultId: team.id },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: invitee.id, name: invitee.name } });
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
+    expect(res.status).toBe(200);
+
+    const ep = await prisma.eventPlayer.findFirstOrThrow({
+      where: { eventId: ev.id, userId: invitee.id },
+    });
+    // One accepted invite = one roster slot: the route owns placement, so the
+    // lib must not add a second TeamMember.
+    expect(await prisma.teamMember.count({ where: { teamResultId: team.id, name: ep.name } })).toBe(1);
+    const payment = await prisma.gamePayment.findUnique({
+      where: { gameId_eventPlayerId: { gameId: ev.currentGameId, eventPlayerId: ep.id } },
+    });
+    expect(payment?.archivedAt).toBeNull();
+    expect(payment?.amount).toBe(10);
+  });
+
   it("is first-come-first-served when two accepts race for the same token", async () => {
     const { invitee, ev, invite } = await seedInvite();
     const results = await Promise.allSettled([
