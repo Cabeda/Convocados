@@ -4,6 +4,7 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 import { GET as getCost } from "~/pages/api/events/[id]/cost";
 import { GET as getPayments } from "~/pages/api/events/[id]/payments";
+import { POST as postClaim } from "~/pages/api/events/[id]/claim";
 import { POST as postRsvp } from "~/pages/api/events/[id]/rsvp";
 import { GET as getUserProfile } from "~/pages/api/users/[id]/index";
 import { hashPassword, buildAccessCookie } from "~/lib/eventAccess";
@@ -187,6 +188,36 @@ describe("password-locked Event finance reads (#1619)", () => {
     const event = await seedEvent(null, false, { accessPassword: hashPassword("secret") });
     expect((await getCost(ctx({ id: event.id }))).status).toBe(403);
     expect((await getPayments(ctx({ id: event.id }))).status).toBe(403);
+  });
+});
+
+describe("POST /api/events/[id]/claim on a password-locked ownerless Event (#1747)", () => {
+  it("denies a bare link holder and admits the access-cookie holder", async () => {
+    const event = await seedEvent(null, false, { accessPassword: hashPassword("secret") });
+
+    const denied = await postClaim(ctx({ id: event.id }, otherToken, "POST"));
+    expect(denied.status).toBe(403);
+    expect((await prisma.event.findUnique({ where: { id: event.id } }))?.ownerId).toBeNull();
+
+    const cookie = buildAccessCookie(null, event.id, event.accessPassword!);
+    const allowed = await postClaim(ctx({ id: event.id }, otherToken, "POST", cookie));
+    expect(allowed.status).toBe(200);
+    expect((await prisma.event.findUnique({ where: { id: event.id } }))?.ownerId).toBe(otherId);
+  });
+
+  it("admits an invitee and an Event admin", async () => {
+    const inviteEvent = await seedEvent(null, false, { accessPassword: hashPassword("secret") });
+    await prisma.eventInvite.create({ data: { eventId: inviteEvent.id, userId: otherId } });
+    expect((await postClaim(ctx({ id: inviteEvent.id }, otherToken, "POST"))).status).toBe(200);
+
+    const adminEvent = await seedEvent(null, false, { accessPassword: hashPassword("secret") });
+    await prisma.eventAdmin.create({ data: { eventId: adminEvent.id, userId: participantId } });
+    expect((await postClaim(ctx({ id: adminEvent.id }, participantToken, "POST"))).status).toBe(200);
+  });
+
+  it("still claims an unlocked ownerless UNLISTED Event for any signed-in link holder", async () => {
+    const event = await seedEvent(null, false);
+    expect((await postClaim(ctx({ id: event.id }, otherToken, "POST"))).status).toBe(200);
   });
 });
 
