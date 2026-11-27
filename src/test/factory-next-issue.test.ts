@@ -119,3 +119,28 @@ describe("lanes partition the queue without racing", () => {
     expect(pickNext([a], [], NOW, { lane: 0, lanes: 3 })).toBeNull();
   });
 });
+
+describe("a full queue stops the machine opening more", () => {
+  // Three lanes every fifteen minutes outran the Reviewer on 2026-11-27: 42 open
+  // Changes, none landing. The cap is the queue admitting it is full.
+  const issue = (n: number) => ({
+    number: n,
+    createdAt: "2026-11-20T00:00:00Z",
+    labels: [{ name: "factory:explored" }],
+    comments: [],
+  });
+  const refs = (count: number) => Array.from({ length: count }, (_, i) => `factory/${1000 + i}-work`);
+
+  it("takes nothing when the machine already has the cap open", () => {
+    expect(pickNext([issue(2000)], refs(20), NOW, { lane: 0, lanes: 3 }, 20)).toBeNull();
+  });
+
+  it("takes the next Issue while there is room", () => {
+    expect(pickNext([issue(2001)], refs(19), NOW, { lane: 0, lanes: 3 }, 20)?.number).toBe(2001);
+  });
+
+  it("counts only the machine's own Changes", () => {
+    const human = Array.from({ length: 40 }, (_, i) => `fix/human-${i}`);
+    expect(pickNext([issue(2000)], human, NOW, { lane: 0, lanes: 1 }, 20)?.number).toBe(2000);
+  });
+});
