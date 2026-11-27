@@ -81,6 +81,8 @@ fun AppNavigation(
 
     val initialOpenPayment = DeepLink.shouldAutoOpenPayment(deepLink ?: "")
     var pendingAutoOpenPayment by rememberSaveable(deepLink) { mutableStateOf(initialOpenPayment) }
+    val initialOpenShare = DeepLink.shouldAutoOpenShare(deepLink ?: "")
+    var pendingAutoOpenShare by rememberSaveable(deepLink) { mutableStateOf(initialOpenShare) }
 
     // Handle deep link navigation
     LaunchedEffect(deepLink, isAuthenticated) {
@@ -211,6 +213,12 @@ fun AppNavigation(
                                     deepLink = deepLink ?: "",
                                 ),
                                 onAutoOpenPaymentConsumed = { pendingAutoOpenPayment = false },
+                                autoOpenShare = DeepLink.shouldAutoOpenShareForEvent(
+                                    pending = pendingAutoOpenShare,
+                                    targetEventId = eventId,
+                                    deepLink = deepLink ?: "",
+                                ),
+                                onAutoOpenShareConsumed = { pendingAutoOpenShare = false },
                                 onBack = onClose,
                                 onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
                                 onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },
@@ -300,6 +308,9 @@ fun AppNavigation(
                     var routeAutoOpenPay by rememberSaveable(eventId) {
                         mutableStateOf(entry.arguments?.getString("action") == "pay")
                     }
+                    var routeAutoOpenShare by rememberSaveable(eventId) {
+                        mutableStateOf(entry.arguments?.getString("action") == "share")
+                    }
                     EventDetailScreen(
                         eventId = eventId,
                         autoOpenPay = routeAutoOpenPay,
@@ -307,6 +318,8 @@ fun AppNavigation(
                             routeAutoOpenPay = false
                             pendingAutoOpenPayment = false
                         },
+                        autoOpenShare = routeAutoOpenShare,
+                        onAutoOpenShareConsumed = { routeAutoOpenShare = false },
                         onBack = { navController.popBackStack() },
                         onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
                         onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },

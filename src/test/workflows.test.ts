@@ -448,3 +448,12 @@ describe("three lanes work the backlog without racing", () => {
     expect(janitor()).toContain("tick factory-merge");
   });
 });
+
+describe("a refused Change gets its round from the tick", () => {
+  it("falls back to the picker on a dispatch with no PR", () => {
+    // The reviewer signs a refuse and nothing happens until the loop runs; its
+    // own cron is unreliable, so the tick must be able to start it.
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    expect(raw).toContain("workflow_dispatch) pr=\"${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}\"");
+  });
+});
