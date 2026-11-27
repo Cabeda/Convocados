@@ -669,13 +669,44 @@ describe("POST /api/events/[id]/claim-player", () => {
     expect(newRating?.rating).toBe(1200);
   });
 
-  it("updates GameHistory teamsSnapshot when claiming anonymous player", async () => {
+  it("updates an unsettled GameHistory teamsSnapshot when claiming anonymous player", async () => {
     const user = await seedUser({ name: "Test User" });
     mockAuth(user.id, user.name);
     const id = await seedEvent();
     const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
 
-    // Create game history with the anonymous name in the snapshot
+    // A live game history has no score yet — claiming may still attribute it.
+    const snapshot = JSON.stringify([
+      { team: "Ninjas", players: [{ name: "Anon", order: 0 }, { name: "Alice", order: 1 }] },
+      { team: "Gunas", players: [{ name: "Bob", order: 0 }, { name: "Charlie", order: 1 }] },
+    ]);
+    const h = await testPrisma.gameHistory.create({
+      data: {
+        eventId: id,
+        dateTime: new Date(),
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        teamsSnapshot: snapshot,
+      },
+    });
+
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(200);
+
+    // Verify: snapshot should now contain the user's name instead of "Anon"
+    const updated = await testPrisma.gameHistory.findUnique({ where: { id: h.id } });
+    const parsed = JSON.parse(updated!.teamsSnapshot!);
+    const allNames = parsed.flatMap((t: any) => t.players.map((p: any) => p.name));
+    expect(allNames).toContain("Test User");
+    expect(allNames).not.toContain("Anon");
+  });
+
+  it("never rewrites a settled GameHistory teamsSnapshot when claiming", async () => {
+    const user = await seedUser({ name: "Test User" });
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+
     const snapshot = JSON.stringify([
       { team: "Ninjas", players: [{ name: "Anon", order: 0 }, { name: "Alice", order: 1 }] },
       { team: "Gunas", players: [{ name: "Bob", order: 0 }, { name: "Charlie", order: 1 }] },
@@ -696,63 +727,82 @@ describe("POST /api/events/[id]/claim-player", () => {
     const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
     expect(res.status).toBe(200);
 
-    // Verify: snapshot should now contain the user's name instead of "Anon"
+    // The game is settled: the frozen snapshot must not follow the rename.
     const updated = await testPrisma.gameHistory.findUnique({ where: { id: h.id } });
-    const parsed = JSON.parse(updated!.teamsSnapshot!);
-    const allNames = parsed.flatMap((t: any) => t.players.map((p: any) => p.name));
-    expect(allNames).toContain("Test User");
-    expect(allNames).not.toContain("Anon");
+    expect(updated!.teamsSnapshot).toBe(snapshot);
   });
 
-  it("preserves ELO rating after recalculateAllRatings following a claim", async () => {
+  it("never moves a PlayerRating that already carries settled games", async () => {
     const user = await seedUser({ name: "Test User" });
     mockAuth(user.id, user.name);
     const id = await seedEvent();
     const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
 
-    // Create a played game with scores and snapshot
-    const snapshot = JSON.stringify([
-      { team: "Ninjas", players: [{ name: "Anon", order: 0 }] },
-      { team: "Gunas", players: [{ name: "Bob", order: 0 }] },
-    ]);
-    await testPrisma.gameHistory.create({
-      data: {
-        eventId: id,
-        dateTime: new Date(),
-        teamOneName: "Ninjas",
-        teamTwoName: "Gunas",
-        teamsSnapshot: snapshot,
-        scoreOne: 3,
-        scoreTwo: 1,
-        eloProcessed: true,
-      },
+    await testPrisma.playerRating.create({
+      data: { eventId: id, name: "Anon", rating: 1020, gamesPlayed: 1, wins: 1 },
     });
 
-    // Create the rating that would exist from the processed game
-    await testPrisma.playerRating.create({ data: { eventId: id, name: "Anon", rating: 1020, gamesPlayed: 1, wins: 1 } });
-    await testPrisma.playerRating.create({ data: { eventId: id, name: "Bob", rating: 980, gamesPlayed: 1, losses: 1 } });
-
-    // Claim the anonymous player
     const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
     expect(res.status).toBe(200);
 
-    // Now recalculate all ratings from scratch (replays from snapshots)
-    const { recalculateAllRatings } = await import("~/lib/elo.server");
-    await recalculateAllRatings(id);
-
-    // After recalculation, the rating should be under "Test User", not "Anon"
-    const joseRating = await testPrisma.playerRating.findUnique({
-      where: { eventId_name: { eventId: id, name: "Test User" } },
-    });
-    expect(joseRating).not.toBeNull();
-    expect(joseRating!.gamesPlayed).toBe(1);
-    expect(joseRating!.wins).toBe(1);
-
-    // "Anon" should not exist
+    // The ELO row carries a settled game, so it stays with the guest identity.
     const anonRating = await testPrisma.playerRating.findUnique({
       where: { eventId_name: { eventId: id, name: "Anon" } },
     });
-    expect(anonRating).toBeNull();
+    expect(anonRating?.gamesPlayed).toBe(1);
+    await expect(
+      testPrisma.playerRating.findUnique({
+        where: { eventId_name: { eventId: id, name: "Test User" } },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("refuses an archived player", async () => {
+    const user = await seedUser({ name: "Test User" });
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({
+      data: { name: "Anon", eventId: id, archivedAt: new Date() },
+    });
+
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(409);
+
+    const player = await testPrisma.player.findUnique({ where: { id: p.id } });
+    expect((player as any)?.userId).toBeNull();
+    expect(player?.name).toBe("Anon");
+  });
+
+  it("returns 403 to a stranger on a locked event, then 200 with the matching invite token", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const stranger = await seedUser({ name: "Stranger", email: "stranger@test.com" });
+    mockAuth(stranger.id, stranger.name);
+    const id = await seedEvent({ ownerId: owner.id, accessPassword: "scrypt$00$00" });
+    const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+    const ep = await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Anon" } });
+    const game = await testPrisma.game.create({
+      data: { eventId: id, dateTime: new Date(Date.now() + 86_400_000) },
+    });
+    const invite = await testPrisma.playerInvite.create({
+      data: {
+        gameId: game.id,
+        eventPlayerId: ep.id,
+        invitedByUserId: owner.id,
+        token: `invite-${Date.now()}`,
+        status: "accepted",
+      },
+    });
+
+    const denied = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(denied.status).toBe(403);
+    expect((await denied.json()).locked).toBe(true);
+
+    const allowed = await claimPlayerEndpoint(
+      ctx({ id }, { playerId: p.id, inviteToken: invite.token }),
+    );
+    expect(allowed.status).toBe(200);
+    const claimed = await testPrisma.player.findUnique({ where: { id: p.id } });
+    expect((claimed as any)?.userId).toBe(stranger.id);
   });
 
   it("creates EventFollow when claiming a player", async () => {
