@@ -5,7 +5,6 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { finishRosterAdd } from "../../../../lib/teamFormation.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
-import { syncGamePayments } from "../../../../lib/settlement.server";
 
 const UNDO_WINDOW_MS = 60_000; // 60 seconds
 
@@ -88,9 +87,6 @@ export const POST: APIRoute = async ({ params, request }) => {
         create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
         update: { status: "yes", respondedAt: new Date() },
       });
-      // Removal archived the GamePayment and deleted the share debit; undo
-      // must restore the money half too, not just the participant row.
-      await syncGamePayments(event.currentGameId, eventId);
     }
   }
 

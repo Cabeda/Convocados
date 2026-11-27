@@ -187,6 +187,18 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
       data: { eventId: event.id, name: "Bia", userId: bia.id, order: 1 },
     });
 
+    // Teams are drawn: settlement charges the lineup, so the rejoin must place
+    // the player before it re-syncs (the bug this test pins).
+    const team = await prisma.teamResult.create({
+      data: { name: "Ninjas", eventId: event.id, formation: "1-1" },
+    });
+    await prisma.teamMember.createMany({
+      data: [
+        { name: "Ana", order: 0, slot: 0, teamResultId: team.id },
+        { name: "Bia", order: 1, slot: 1, teamResultId: team.id },
+      ],
+    });
+
     await syncGamePayments(event.currentGameId!, event.id);
     const debits = (userId: string) =>
       prisma.walletTransaction.findMany({

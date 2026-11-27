@@ -28,6 +28,7 @@ import { enqueueNotification } from "./notificationQueue.server";
 import { createT, type Locale } from "./i18n";
 import { checkEventAdmin } from "./auth.helpers.server";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
+import { finishRosterAdd } from "./teamFormation.server";
 
 const log = createLogger("invite");
 
@@ -580,6 +581,11 @@ export async function acceptPlayerInvite(opts: {
       });
     }
   });
+
+  // Accepting an invite restores an active participant; it belongs in the draw
+  // and on the payment roll like any other join (finishRosterAdd re-syncs
+  // settlement after placement).
+  await finishRosterAdd(eventId, invite.eventPlayer.name, maxPlayers, gameId);
 
   const url = `${process.env.PUBLIC_URL ?? "https://convocados.cabeda.dev"}/events/${eventId}`;
   const [event, user] = await Promise.all([

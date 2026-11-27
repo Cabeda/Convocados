@@ -5,7 +5,6 @@
  * rule live in one place instead of three near-identical copies.
  */
 import { prisma } from "./db.server";
-import { syncGamePayments } from "./settlement.server";
 import { nextGameParticipantOrder } from "./game.server";
 import { activeParticipantsWhere } from "./activeParticipants.server";
 import { upsertGameParticipantForRoster } from "./rosterCore.server";
@@ -90,16 +89,4 @@ export async function rejoinPlayerToCurrentGame(
     update: { status: "yes", respondedAt: new Date() },
   });
 
-  // The leave flow archived the GamePayment and deleted the per_game_share
-  // debit. Restoring the participant half alone brings the player back on the
-  // roster and off the roll, so the group silently collects one share fewer.
-  // syncGamePayments is idempotent through ledgerKey(share, eventId, userId,
-  // gameId), so already-charged players are untouched.
-  const eventPlayer = await prisma.eventPlayer.findUnique({
-    where: { id: eventPlayerId },
-    select: { eventId: true },
-  });
-  if (eventPlayer) {
-    await syncGamePayments(gameId, eventPlayer.eventId);
-  }
 }

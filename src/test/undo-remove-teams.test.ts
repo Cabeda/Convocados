@@ -136,6 +136,16 @@ describe("undo-remove restores the player onto their team", () => {
         { gameId: game.id, eventPlayerId: bobEp.id, order: 1, status: "active" },
       ],
     });
+    const team = await prisma.teamResult.create({
+      data: { name: "Ninjas", eventId: event.id, formation: "1-1" },
+    });
+    await prisma.teamMember.createMany({
+      data: [
+        { name: "Alice", order: 0, slot: 0, teamResultId: team.id },
+        { name: "Bob", order: 1, slot: 1, teamResultId: team.id },
+      ],
+    });
+
     const debits = () =>
       prisma.walletTransaction.count({
         where: {
