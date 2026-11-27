@@ -11,6 +11,8 @@ import { prisma } from "~/lib/db.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { POST as undoRemove } from "~/pages/api/events/[id]/undo-remove";
+import { archiveAndLeave } from "~/lib/leave.server";
+import { syncGamePayments } from "~/lib/settlement.server";
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -27,6 +29,9 @@ beforeEach(async () => {
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.notificationJob.deleteMany();
+  await prisma.walletTransaction.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.eventCost.deleteMany();
   await prisma.teamMember.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.gameParticipant.deleteMany();
@@ -104,5 +109,67 @@ describe("undo-remove restores the player onto their team", () => {
       where: { team: { eventId: event.id } },
     });
     expect(members.map((m) => m.name).sort()).toEqual(["Alice", "Bob", "Charlie", "Dave"].sort());
+  });
+
+  it("restores the payment roll and share debit when the removal is undone", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Costed Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        maxPlayers: 10,
+      },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 100, currency: "EUR" },
+    });
+
+    const aliceEp = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice" } });
+    const bobEp = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob" } });
+    await prisma.gameParticipant.createMany({
+      data: [
+        { gameId: game.id, eventPlayerId: aliceEp.id, order: 0, status: "active" },
+        { gameId: game.id, eventPlayerId: bobEp.id, order: 1, status: "active" },
+      ],
+    });
+    const debits = () =>
+      prisma.walletTransaction.count({
+        where: {
+          eventId: event.id,
+          eventInstanceId: game.id,
+          reason: "per_game_share",
+          direction: "debit",
+        },
+      });
+
+    await syncGamePayments(game.id, event.id);
+    expect(await debits()).toBe(2);
+
+    await archiveAndLeave({
+      eventId: event.id,
+      name: "Bob",
+      actor: { kind: "organizer", userId: null },
+    });
+    expect(await debits()).toBe(1);
+    const archived = await prisma.gamePayment.findUnique({
+      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: bobEp.id } },
+    });
+    expect(archived?.archivedAt).toBeTruthy();
+
+    const res = await undoRemove(
+      ctx({ id: event.id }, { name: "Bob", order: 1, userId: null, removedAt: Date.now() }),
+    );
+    expect(res.status).toBe(200);
+
+    expect(await debits()).toBe(2);
+    const restored = await prisma.gamePayment.findUnique({
+      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: bobEp.id } },
+    });
+    expect(restored?.archivedAt).toBeNull();
+    expect(restored?.amount).toBe(10);
   });
 });
