@@ -27,6 +27,11 @@ describe("OpenAPI spec", () => {
     expect(openApiSpec.paths["/api/events/{id}/teams"]).toBeDefined();
   });
 
+  it("includes the per-event reminder timings endpoint", () => {
+    expect(openApiSpec.paths["/api/events/{id}/reminder-timings"]?.get).toBeDefined();
+    expect(openApiSpec.paths["/api/events/{id}/reminder-timings"]?.put).toBeDefined();
+  });
+
   it("includes health endpoint", () => {
     expect(openApiSpec.paths["/api/health"]).toBeDefined();
   });
