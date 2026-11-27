@@ -215,8 +215,8 @@ describe("email footer links", () => {
     const token = await getOrCreateUnsubscribeToken(user.id);
 
     const cases = [
-      [() => sendGameInvite(user.email, { eventTitle: "Futsal", dateTime: new Date().toISOString(), location: "Gym", eventUrl: "http://x/e" }), "gameInvite"],
-      [() => sendReminder(user.email, { eventTitle: "Futsal", dateTime: new Date().toISOString(), location: "Gym", spotsLeft: 2, eventUrl: "http://x/e", reminderType: "24h" }), "gameReminder"],
+      [() => sendGameInvite(user.email, { eventTitle: "Futsal", dateTime: new Date().toISOString(), location: "Gym", eventUrl: "http://x/e", timezone: "UTC" }), "gameInvite"],
+      [() => sendReminder(user.email, { eventTitle: "Futsal", dateTime: new Date().toISOString(), location: "Gym", spotsLeft: 2, eventUrl: "http://x/e", reminderType: "24h", timezone: "UTC" }), "gameReminder"],
       [() => sendPaymentReminder(user.email, { eventTitle: "Futsal", amount: "5.00€", eventUrl: "http://x/e" }), "paymentReminder"],
       [() => sendWeeklySummary(user.email, { userName: "T", upcoming: [], results: [], dashboardUrl: "http://x/d" }), "weeklySummary"],
     ] as const;
@@ -261,7 +261,7 @@ describe("email footer links", () => {
 
   it("falls back gracefully when the recipient is not a registered user", async () => {
     await sendGameInvite("stranger@example.com", {
-      eventTitle: "Futsal", dateTime: new Date().toISOString(), location: "Gym", eventUrl: "http://x/e",
+      eventTitle: "Futsal", dateTime: new Date().toISOString(), location: "Gym", eventUrl: "http://x/e", timezone: "UTC",
     });
 
     const call = mockSend.mock.calls[0][0];

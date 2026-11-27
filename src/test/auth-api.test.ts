@@ -850,6 +850,29 @@ describe("POST /api/events/[id]/undo-remove", () => {
     expect(players.map((p) => p.name)).toEqual(["Alice", "Bob", "Charlie"]);
   });
 
+  it("undoes a real soft-archiving removal by reviving the archived Player row", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
+    const bob = await testPrisma.player.create({ data: { name: "Bob", eventId: id, order: 1 } });
+    await testPrisma.player.create({ data: { name: "Charlie", eventId: id, order: 2 } });
+
+    // The real removal path soft-archives the Player row — it does not delete it.
+    const del = await deletePlayer(deleteCtx({ id }, { playerId: bob.id }));
+    expect(del.status).toBe(200);
+    const { undo } = await del.json();
+    expect(await testPrisma.player.count({ where: { eventId: id, name: "Bob", archivedAt: null } })).toBe(0);
+
+    const res = await undoRemove(ctx({ id }, undo));
+    expect(res.status).toBe(200);
+
+    const players = await testPrisma.player.findMany({ where: { eventId: id }, orderBy: { order: "asc" } });
+    expect(players.map((p) => p.name)).toEqual(["Alice", "Bob", "Charlie"]);
+    const rev = await testPrisma.player.findFirst({ where: { eventId: id, name: "Bob" } });
+    expect(rev?.id).toBe(bob.id);
+    expect(rev?.archivedAt).toBeNull();
+  });
+
   it("resets RSVP to yes when restoring a player into the current game", async () => {
     mockAnonymous();
     const id = await seedEvent();

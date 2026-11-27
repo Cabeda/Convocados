@@ -22,6 +22,15 @@ on:
         required: false
         type: string
 
+# One review at a time, never two. Serialised rather than cancel-in-progress:
+# the janitor dispatches `factory-review` twice per tick, so cancelling the
+# in-flight run lets a tick kill the review it just picked — observed 2026-11-27
+# on #1881, where a 45-second-old review was cancelled and wrote no verdict.
+# Queueing wastes at most one run; cancelling loses the work and posts nothing.
+concurrency:
+  group: factory-review
+  cancel-in-progress: false
+
 # Everything flows through the App token minted in the job below. The
 # default GITHUB_TOKEN needs no scope and must not carry one: it sits in
 # the runner environment for the whole run, so its scopes are blast radius
@@ -148,7 +157,9 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          # `app-id` is deprecated in v3; GitHub accepts the App ID as the JWT
+          # issuer under the new name, so no new variable is needed.
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # The action refuses to start on a token without contents write, and
           # a factory PR's actor is the App, whose repo permission is `none` —
@@ -160,9 +171,12 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Review the Change
-        # The real budget. A step that times out exits non-zero, and this absorbs
-        # it, so the job — and therefore the Change's check list — stays green.
-        timeout-minutes: 25
+        # 12, not 25. Every review that finished took 3-5 minutes; the only runs
+        # that used the full 25 wrote no verdict at all. The shorter cap turns a
+        # stuck run into a cheap miss instead of half an hour of billed minutes.
+        # A step that times out exits non-zero, and `continue-on-error` absorbs
+        # it, so the job stays green and the verdict step reports the miss.
+        timeout-minutes: 12
         # Advisory, not a gate: see factory-issue.yml for why.
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
@@ -192,6 +206,11 @@ jobs:
             the Gates, which already passed. Report findings with `path:line` and the concrete
             failure each one causes. Treat migrations, auth and tokens, the scheduler, workflows
             and deploy config, and coverage-threshold edits as Hard Block: report, do not judge.
+
+            Do not install, build, or run anything: no `pnpm install`, `pnpm test`, `pnpm typecheck`,
+            Gradle, Playwright or Lighthouse. Those results already exist as checks on the Change and
+            reading them is free; producing them again spends the review's minute budget and is not
+            review. Read the diff and the files it names, then argue.
 
             You may not approve, merge, push, or touch a human branch: the Fixer writes, you judge.
             Put `<!-- factory:findings -->` on its own line in the body when it carries at least one
@@ -240,17 +259,21 @@ jobs:
             if [ -n "$verdict" ]; then echo "<!-- factory:verdict:$verdict -->"; fi
             echo "<!-- factory:reviewed:$head:$sig -->"
           } > .factory-review/post.md
-          # GitHub refuses a review on a PR the App authored; a comment carries
-          # the same markers and the merge reads both surfaces.
-          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --comment --body-file .factory-review/post.md \
-            || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
+          # Post as a comment, always. GitHub refuses a review on a PR the App
+          # authored, so the comment fallback was already the only path that
+          # worked for every machine Change — and a formal review lands in a
+          # separate tab that the conversation never shows. The adversarial
+          # review is the point: it belongs in the thread a human reads.
+          # The daemon reads both surfaces, so nothing downstream changes.
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
 
       - name: Record the verdict
-        # Informational, not a gate. The merge decision is the signature: the
-        # gate accepts only a verdict signed over this head, so a review that
-        # wrote nothing is refused there with or without a red check here.
-        # A refusal is a legitimate outcome too — reddening the Change for it
-        # made every refused PR look broken to a human reading the list.
+        # This check IS the gate: `reviewer` is a required status check, so a
+        # refusal must fail it. Anything else makes "Verdict: refuse" a comment
+        # next to a green tick, which is a review nobody has to answer.
+        #
+        # A missing verdict fails too. Silence is not approval, and a Change
+        # whose review never finished has not been read.
         if: always()
         id: verdict
         run: |
@@ -259,9 +282,11 @@ jobs:
           case "$verdict" in
             approve) echo "::notice title=Reviewer::approve" ;;
             refuse)
-              echo "::warning title=Reviewer::refuse — the findings are in the review comment"
+              echo "::error title=Reviewer::refuse — the findings are in the review comment"
+              exit 1
               ;;
             *)
-              echo "::warning title=Reviewer::no verdict was written — the review did not finish; the merge gate reads that as a refusal"
+              echo "::error title=Reviewer::no verdict was written — the review did not finish"
+              exit 1
               ;;
           esac

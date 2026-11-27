@@ -90,9 +90,14 @@ test, a weakened assertion, a body that describes a different change, an unhandl
 Issue named.
 
 A Hard Block category (migrations, auth, tokens, scheduler, workflows, deploy, coverage
-thresholds) is always `refuse` for the machine gate, even when you find nothing wrong: those
-Changes are one-way doors and only a human may merge them. Say that in the body, and let the
-human gate do its job.
+thresholds) is not a finding. Since `reviewer` became a required status check, `refuse` blocks
+the Change — so refusing a clean one-way door would block the very Changes a human has to merge
+by hand, and force an override every time.
+
+So: `refuse` only when something must change. A one-way door you find nothing wrong with is
+`approve`, with a line in the body that a human still merges it. Nothing is lost by that — the
+merge gate reads the paths and refuses a one-way door for the machine on its own, whatever the
+verdict says.
 
 ## Hard Block categories
 

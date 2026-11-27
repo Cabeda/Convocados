@@ -3,10 +3,10 @@ import { prisma } from "../../../../lib/db.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
-import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { getRosterCapacity } from "../../../../lib/roster.server";
+import { syncOccurrenceTime } from "../../../../lib/advanceOccurrence.server";
 import {
   anchorDayOf,
   parseRecurrenceRule,
@@ -81,19 +81,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   await prisma.event.update({ where: { id: params.id as string }, data: updates });
 
-  // Reschedule reminder jobs if dateTime changed
-  const eventId = params.id as string;
+  // A moved occurrence drags its stored deadline and reminder jobs with it.
   if (updates.dateTime) {
-    const updatedEvent = await prisma.event.findUnique({ where: { id: eventId } });
-    if (updatedEvent) {
-      await cancelEventJobs(eventId);
-      try {
-        await scheduleEventReminders(eventId, updatedEvent.dateTime, updatedEvent.durationMinutes);
-      } catch {
-        // ignore scheduling failures
-      }
-    }
+    await syncOccurrenceTime(event, { dateTime: updates.dateTime });
   }
+  const eventId = params.id as string;
   const actor = authz.session?.user?.name ?? null;
   const actorId = authz.session?.user?.id ?? null;
 

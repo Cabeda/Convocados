@@ -10,6 +10,7 @@ import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sendPushToUser } from "../../../../lib/push.server";
 import { getNotificationPrefs } from "../../../../lib/notificationPrefs.server";
+import { applyNoShowTransition } from "../../../../lib/priority.server";
 
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -49,25 +50,18 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Participant not found." }, { status: 404 });
   }
 
-  await prisma.gameParticipant.update({
-    where: { id: participant.id },
-    data: { noShow },
+  const userId = participant.eventPlayer.userId;
+  const changed = await applyNoShowTransition({
+    participantId: participant.id,
+    eventId,
+    userId,
+    noShow,
   });
 
-  // If marking as no-show (not unmarking), notify the player and update priority
-  if (noShow && participant.eventPlayer.userId) {
-    const userId = participant.eventPlayer.userId;
-
-    // Update noShowStreak on PriorityEnrollment if it exists
-    await prisma.priorityEnrollment.updateMany({
-      where: { eventId, userId },
-      data: { noShowStreak: { increment: 1 } },
-    }).catch(() => {});
-
-    // Notify the player
+  // Notify only on a real false→true transition, so a retry cannot double-push.
+  if (changed && noShow && userId) {
     const prefs = await getNotificationPrefs(userId);
     if (prefs.pushEnabled) {
-      // Get current streak
       const enrollment = await prisma.priorityEnrollment.findUnique({
         where: { eventId_userId: { eventId, userId } },
         select: { noShowStreak: true },
@@ -76,14 +70,6 @@ export const POST: APIRoute = async ({ params, request }) => {
       const body = `You missed ${event.title}. No-show streak: ${streak}.${streak >= 2 ? " Priority may be affected." : ""}`;
       await sendPushToUser(userId, event.title, body, `/events/${eventId}`).catch(() => {});
     }
-  }
-
-  // If unmarking (noShow=false), decrement streak
-  if (!noShow && participant.eventPlayer.userId) {
-    await prisma.priorityEnrollment.updateMany({
-      where: { eventId, userId: participant.eventPlayer.userId, noShowStreak: { gt: 0 } },
-      data: { noShowStreak: { decrement: 1 } },
-    }).catch(() => {});
   }
 
   return Response.json({ ok: true, noShow });

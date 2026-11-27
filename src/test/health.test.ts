@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
-import { GET, resetHealthProvenanceLog } from "~/pages/api/health";
+import { GET, resetHealthCache, resetHealthProvenanceLog } from "~/pages/api/health";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
@@ -34,6 +34,7 @@ beforeEach(async () => {
   await prisma.user.deleteMany();
   resetRateLimitStore();
   resetApiRateLimitStore();
+  resetHealthCache();
   resetHealthProvenanceLog();
 });
 

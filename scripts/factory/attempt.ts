@@ -87,7 +87,22 @@ if (flags.includes("--set")) {
   const body = gate
     ? `${ATTEMPT_MARKER} <${gate}> (${spent + 1}/${budget}) — see Gate log for the failure this Attempt addresses.`
     : `${ATTEMPT_MARKER} (${spent + 1}/${budget})`;
-  gh([kind, "comment", ref, "--body", body, "--repo", "Cabeda/Convocados"]);
+  // Not through `gh()`: that helper swallows every error so a probe can fail
+  // quietly, and a swallowed write here reports a round GitHub never recorded.
+  // The budget then reads as zero forever, the Change is picked again, and the
+  // three-round handoff to Cabeda can never fire. Reproduced 2026-11-27 on
+  // #1873: "Attempt 1 recorded" in the log, no comment on the Change.
+  try {
+    execFileSync("gh", [kind, "comment", ref, "--body", body, "--repo", "Cabeda/Convocados"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    // Exit 2, not 1: 1 already means "this round spent the budget", and the
+    // ledger tolerates that one. A lost write must look different or the round
+    // runs unrecorded and the budget reads zero forever.
+    console.error(`${scope}: the Attempt could not be recorded — ${String(error)}`);
+    process.exit(2);
+  }
   console.log(`${scope}: Attempt ${spent + 1} recorded (budget ${budget})`);
 }
 

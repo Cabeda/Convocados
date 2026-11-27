@@ -192,6 +192,46 @@ export async function getUserConfirmation(eventId: string, userId: string, gameD
   });
 }
 
+/**
+ * Apply a no-show toggle and move the streak only on a real transition.
+ *
+ * The prior flag is read inside the same transaction as the write, so a repeat
+ * request (double-tap, retry after a lost response) is a no-op instead of a
+ * second increment. Returns whether the participant's noShow actually changed.
+ */
+export async function applyNoShowTransition(params: {
+  participantId: string;
+  eventId: string;
+  userId: string | null;
+  noShow: boolean;
+}): Promise<boolean> {
+  const { participantId, eventId, userId, noShow } = params;
+  return prisma.$transaction(async (tx) => {
+    const participant = await tx.gameParticipant.findUnique({
+      where: { id: participantId },
+      select: { noShow: true },
+    });
+    if (!participant || participant.noShow === noShow) return false;
+
+    await tx.gameParticipant.update({ where: { id: participantId }, data: { noShow } });
+
+    if (userId) {
+      if (noShow) {
+        await tx.priorityEnrollment.updateMany({
+          where: { eventId, userId },
+          data: { noShowStreak: { increment: 1 } },
+        });
+      } else {
+        await tx.priorityEnrollment.updateMany({
+          where: { eventId, userId, noShowStreak: { gt: 0 } },
+          data: { noShowStreak: { decrement: 1 } },
+        });
+      }
+    }
+    return true;
+  });
+}
+
 /** Record a no-show: increment noShowStreak on enrollment */
 export async function recordNoShow(eventId: string, userId: string) {
   await prisma.priorityEnrollment.updateMany({

@@ -1090,6 +1090,29 @@ describe("MCP write tools — update_event", () => {
     updated = await prisma.event.findUnique({ where: { id: event.id } });
     expect(JSON.parse(updated!.recurrenceRule!).anchorDay).toBe(5);
   });
+
+  it("moves nextResetAt when rescheduling a recurring event", async () => {
+    const owner = await createOwner();
+    const start = new Date(Date.now() + 86400_000);
+    const event = await createEvent(owner.id, {
+      dateTime: start,
+      durationMinutes: 75,
+      isRecurring: true,
+      recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
+      nextResetAt: new Date(start.getTime() + 75 * 60_000),
+    });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+
+    const moved = new Date(start.getTime() + 86400_000);
+    const res = await POST(ctx(callTool("convocados_update_event", {
+      eventId: event.id, dateTime: moved.toISOString(),
+    })));
+    expect(res.status).toBe(200);
+
+    const updated = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(updated.dateTime.toISOString()).toBe(moved.toISOString());
+    expect(updated.nextResetAt!.getTime()).toBe(moved.getTime() + 75 * 60_000);
+  });
 });
 
 describe("MCP write tools — cancel_event", () => {

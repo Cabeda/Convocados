@@ -274,10 +274,17 @@ describe("Data integrity during recurrence advancement", () => {
     const body1 = await res1.json();
     expect(body1.wasReset).toBe(true);
 
-    // Set up for second advancement
+    // Set up for second advancement: move the current occurrence into the past
+    // (a stale deadline alone must not advance a future occurrence, #1764).
+    const due = new Date(Date.now() - 2 * 3600_000);
+    const current = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    await prisma.game.update({
+      where: { id: current.currentGameId! },
+      data: { dateTime: due },
+    });
     await prisma.event.update({
       where: { id: event.id },
-      data: { nextResetAt: new Date(Date.now() - 1000) }, // force next reset
+      data: { dateTime: due, nextResetAt: new Date(due.getTime() + 3600_000) },
     });
 
     // Second advancement
