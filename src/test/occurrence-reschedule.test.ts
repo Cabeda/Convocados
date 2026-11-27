@@ -10,6 +10,7 @@ import { advanceDueRecurringEvent } from "~/lib/advanceOccurrence.server";
 import { POST as cronAdvance } from "~/pages/api/cron/advance-recurring";
 import { PUT as updateDateTime } from "~/pages/api/events/[id]/datetime";
 import { PUT as updateDuration } from "~/pages/api/events/[id]/duration";
+import type * as Settlement from "~/lib/settlement.server";
 
 vi.mock("~/lib/webhook.server", () => ({
   fireWebhooks: vi.fn().mockResolvedValue(undefined),
@@ -21,7 +22,7 @@ vi.mock("~/lib/autoConfirm.server", () => ({
   applyAutoConfirm: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("~/lib/settlement.server", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("~/lib/settlement.server")>();
+  const actual = await importOriginal<typeof Settlement>();
   return {
     ...actual,
     syncGamePayments: vi.fn().mockResolvedValue(undefined),

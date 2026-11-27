@@ -17,7 +17,8 @@ import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
 import { anchorDayOf, buildRecurrenceRule, parseRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
 import { getDefaultDurationMinutes } from "../sports";
-import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
+import { scheduleEventReminders } from "../scheduler.server";
+import { syncOccurrenceTime } from "../advanceOccurrence.server";
 import { fromDateTimeLocalValue } from "../timezones";
 import { cancelCurrentGame, CancelError } from "../cancelEvent.server";
 import { upsertRsvp, RsvpIdentityConflictError } from "../rsvp.server";
@@ -479,16 +480,9 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
 
   await prisma.event.update({ where: { id: eventId }, data });
 
+  // Reschedule reminder jobs and move the occurrence deadline with the new time.
   if (data.dateTime) {
-    const updated = await prisma.event.findUnique({ where: { id: eventId } });
-    if (updated) {
-      await bestEffort(cancelEventJobs(eventId));
-      try {
-        await scheduleEventReminders(eventId, updated.dateTime, updated.durationMinutes);
-      } catch {
-        // best-effort rescheduling
-      }
-    }
+    await syncOccurrenceTime(event, { dateTime: data.dateTime });
   }
 
   bestEffort(logEvent(eventId, "event_updated", null, ctx.userId, {
