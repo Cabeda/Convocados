@@ -177,6 +177,9 @@ interface Props {
   /** Hide all add-player surfaces (input, submit, recent chips). Used when the
    *  game has ended and the roster is frozen — roster fixes go via game history. */
   rosterLocked?: boolean;
+  /** Whether the viewer may add players. Signed-out visitors see a read-only
+   *  roster and the sign-in prompt; their submissions have no session to act on. */
+  canAddPlayers?: boolean;
   /** Set the current user's own RSVP. */
   onSetMyRsvp?: (status: "yes" | "no") => Promise<void>;
   /** Called by AttendanceCta's "Going" button when the user is NOT on the list. The parent
@@ -232,6 +235,7 @@ export function PlayerList({
   onJoinAsSelf: _onJoinAsSelf,
   eventDateTime,
   rosterLocked = false,
+  canAddPlayers = true,
   declined,
   invited,
   canManageInvites = false,
@@ -445,7 +449,7 @@ export function PlayerList({
 
         {playerError && <Alert severity="error" onClose={() => onPlayerErrorChange(null)}>{playerError}</Alert>}
 
-        {!rosterLocked && (<>
+        {!rosterLocked && canAddPlayers && (<>
         <Stack direction="row" spacing={1} alignItems="stretch">
           <Autocomplete<PlayerOption, false, false, true>
             sx={{ flex: 1, minWidth: 0 }}

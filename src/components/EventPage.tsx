@@ -1379,6 +1379,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 : undefined}
               eventDateTime={event.dateTime}
               rosterLocked={gameEnded}
+              canAddPlayers={isAuthenticated}
               declined={event.declined}
               invited={event.invited}
               canManageInvites={canManageInvites}
