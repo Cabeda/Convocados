@@ -75,9 +75,10 @@ export function wantsPushForJobType(prefs: NotificationPrefs, type: Notification
     case "bench_promoted_capacity":
     case "payment_confirmed":
     case "payment_self_reported":
+      return prefs.playerActivityPush;
     case "payer_assigned":
     case "payer_changed":
-      return prefs.playerActivityPush;
+      return prefs.paymentReminderPush;
     case "payer_vacant":
       return prefs.eventDetailsPush;
     case "event_details":

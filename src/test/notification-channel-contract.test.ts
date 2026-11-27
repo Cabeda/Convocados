@@ -66,23 +66,57 @@ const LEGACY_CHANNEL_TYPES = new Set([
   "payment_reminder",
 ]);
 
+/**
+ * Direct-push types that never enter the queue union but still reach the FCM
+ * client, so the channel map must carry a branch for each.
+ */
+const DIRECT_PUSH_TYPES = ["payment_payer_check_in"] as const;
+
 function parseKotlinChannelMap(): Map<string, AndroidChannel> {
   const source = readFileSync(KOTLIN_SOURCE, "utf-8");
-  const start = source.indexOf("fun channelIdFor");
-  if (start === -1) throw new Error("channelIdFor not found in ConvocadosFcmService.kt");
-  const end = source.indexOf("\n    }", start);
-  if (end === -1) throw new Error("channelIdFor body not closed in ConvocadosFcmService.kt");
+  const fnStart = source.indexOf("fun channelIdFor");
+  if (fnStart === -1) throw new Error("channelIdFor not found in ConvocadosFcmService.kt");
+
+  // Slice exactly the `when (type) { … }` body by brace depth, so a branch
+  // added to a neighbouring function can never be mistaken for this map.
+  const whenStart = source.indexOf("when (type)", fnStart);
+  if (whenStart === -1) throw new Error("channelIdFor when block not found in ConvocadosFcmService.kt");
+  const openBrace = source.indexOf("{", whenStart);
+  if (openBrace === -1) throw new Error("channelIdFor when block has no opening brace in ConvocadosFcmService.kt");
+
+  let depth = 0;
+  let closeBrace = -1;
+  for (let i = openBrace; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}" && --depth === 0) {
+      closeBrace = i;
+      break;
+    }
+  }
+  if (closeBrace === -1) throw new Error("channelIdFor when block not closed in ConvocadosFcmService.kt");
 
   const map = new Map<string, AndroidChannel>();
-  const body = source.slice(start, end).replace(/\/\/.*$/gm, "");
-  const entry = /((?:"[^"]+"\s*,?\s*)+)->\s*(CHANNEL_[A-Z_]+)/g;
-  for (const match of body.matchAll(entry)) {
-    for (const name of match[1].matchAll(/"([^"]+)"/g)) {
-      map.set(name[1], match[2] as AndroidChannel);
+  const body = source.slice(openBrace + 1, closeBrace).replace(/\/\/.*$/gm, "");
+  let pending: string[] = [];
+  for (const line of body.split("\n")) {
+    pending.push(...[...line.matchAll(/"([^"]+)"/g)].map((match) => match[1]));
+    if (!line.includes("->")) continue;
+    const channel = line.match(/CHANNEL_[A-Z_]+/)?.[0] as AndroidChannel | undefined;
+    if (channel) {
+      for (const name of pending) map.set(name, channel);
     }
+    pending = [];
+  }
+  if (pending.length > 0) {
+    throw new Error(`channelIdFor has an unterminated branch: ${pending.join(", ")}`);
   }
   return map;
 }
+
+const EXPECTED_TYPES = new Set<string>([
+  ...NOTIFICATION_JOB_TYPES,
+  ...DIRECT_PUSH_TYPES,
+]);
 
 describe("Android notification channel contract", () => {
   const channelMap = parseKotlinChannelMap();
@@ -91,7 +125,12 @@ describe("Android notification channel contract", () => {
     expect(channelMap.size).toBeGreaterThan(0);
   });
 
-  for (const type of NOTIFICATION_JOB_TYPES) {
+  it("covers every server and direct-push type", () => {
+    const expectedKeys = new Set(Object.keys(EXPECTED_CHANNEL));
+    expect([...EXPECTED_TYPES].filter((type) => !expectedKeys.has(type))).toEqual([]);
+  });
+
+  for (const type of Object.keys(EXPECTED_CHANNEL) as (NotificationJobType | (typeof DIRECT_PUSH_TYPES)[number])[]) {
     it(`${type} maps to ${EXPECTED_CHANNEL[type]}`, () => {
       expect(
         channelMap.get(type),
@@ -100,8 +139,8 @@ describe("Android notification channel contract", () => {
     });
   }
 
-  it("maps only job types and known legacy aliases", () => {
-    const allowed = new Set<string>([...NOTIFICATION_JOB_TYPES, ...LEGACY_CHANNEL_TYPES]);
-    expect([...channelMap.keys()].filter((type) => !allowed.has(type))).toEqual([]);
+  it("maps exactly the server, direct-push, and known legacy types", () => {
+    const expected = new Set<string>([...EXPECTED_TYPES, ...LEGACY_CHANNEL_TYPES]);
+    expect(new Set(channelMap.keys())).toEqual(expected);
   });
 });

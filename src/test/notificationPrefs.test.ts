@@ -34,6 +34,26 @@ describe("wantsPushForJobType", () => {
     expect(wantsPushForJobType(prefs, "player_left_promoted")).toBe(true);
   });
 
+  it("returns paymentReminderPush for payer assignment types", () => {
+    const paymentOff: NotificationPrefs = {
+      ...DEFAULTS,
+      pushEnabled: true,
+      playerActivityPush: true,
+      paymentReminderPush: false,
+    };
+    expect(wantsPushForJobType(paymentOff, "payer_assigned")).toBe(false);
+    expect(wantsPushForJobType(paymentOff, "payer_changed")).toBe(false);
+
+    const activityOff: NotificationPrefs = {
+      ...DEFAULTS,
+      pushEnabled: true,
+      playerActivityPush: false,
+      paymentReminderPush: true,
+    };
+    expect(wantsPushForJobType(activityOff, "payer_assigned")).toBe(true);
+    expect(wantsPushForJobType(activityOff, "payer_changed")).toBe(true);
+  });
+
   it("returns eventDetailsPush for event_details", () => {
     const prefs: NotificationPrefs = { ...DEFAULTS, pushEnabled: true, eventDetailsPush: false };
     expect(wantsPushForJobType(prefs, "event_details")).toBe(false);

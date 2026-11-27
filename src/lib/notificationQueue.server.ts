@@ -30,7 +30,6 @@ export const NOTIFICATION_JOB_TYPES = [
   "bench_promoted_capacity",
   "payment_confirmed",
   "payment_self_reported",
-  "payment_payer_check_in",
   "payer_assigned",
   "payer_changed",
   "payer_vacant",
