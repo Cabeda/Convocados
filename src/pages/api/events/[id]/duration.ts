@@ -3,7 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
-import { fireWebhooks } from "../../../../lib/webhook.server";
+import { announceEventDetailsChange } from "../../../../lib/eventDetailsAnnouncement.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -32,10 +32,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data: { durationMinutes: raw },
   });
 
-  // Fire game_rescheduled webhook (non-blocking) — lean fact, client re-fetches
-  // state. Only on an actual change: a same-value PUT is a no-op.
+  // Announce only on an actual change: a same-value PUT is a no-op.
   if (event.durationMinutes !== raw) {
-    fireWebhooks(event.id, "game_rescheduled", {}).catch(() => {});
+    await announceEventDetailsChange(event, authz.session?.user?.id);
   }
 
   return Response.json({ ok: true, durationMinutes: raw });

@@ -2,18 +2,13 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
-import { fireWebhooks } from "../../../../lib/webhook.server";
-import { createLogger } from "../../../../lib/logger.server";
-import { getRosterCapacity } from "../../../../lib/roster.server";
+import { announceEventDetailsChange } from "../../../../lib/eventDetailsAnnouncement.server";
 import {
   anchorDayOf,
   parseRecurrenceRule,
   serializeRecurrenceRule,
 } from "../../../../lib/recurrence";
-
-const log = createLogger("datetime-api");
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -113,26 +108,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   // Notify subscribers only if dateTime actually changed
   const dateTimeActuallyChanged = updates.dateTime && updates.dateTime.getTime() !== event.dateTime.getTime();
   if (dateTimeActuallyChanged) {
-    // Fire game_rescheduled webhook (non-blocking) — lean fact, client re-fetches state
-    fireWebhooks(eventId, "game_rescheduled", {}).catch(() => {});
-    // ADR 0016: spotsLeft from the game-scoped roster (legacy Player rows
-    // accumulate across recurring occurrences and would wrongly read 0).
-    const { spotsLeft } = await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
-    const url = `/events/${eventId}`;
-    await enqueueNotification(eventId, "event_details", {
-      title: event.title,
-      key: "notifyEventDetailsChanged" as const,
-      params: { title: event.title },
-      url,
-      spotsLeft,
-    }, authz.session?.user?.id);
-
-    // Drain notification queue before responding so push is sent immediately.
-    if (!process.env.VITEST) {
-      await drainNotificationQueue().catch((err) => {
-        log.error({ eventId, err }, "Failed to drain notification queue");
-      });
-    }
+    await announceEventDetailsChange(event, authz.session?.user?.id);
   }
 
   return Response.json({

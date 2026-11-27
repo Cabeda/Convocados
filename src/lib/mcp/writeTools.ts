@@ -17,6 +17,7 @@ import { anchorDayOf, buildRecurrenceRule, parseRecurrenceRule, serializeRecurre
 import { applyRosterChange } from "../applyRosterChange.server";
 import { getDefaultDurationMinutes } from "../sports";
 import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
+import { announceEventDetailsChange } from "../eventDetailsAnnouncement.server";
 import { fromDateTimeLocalValue } from "../timezones";
 import { cancelCurrentGame, CancelError } from "../cancelEvent.server";
 import { upsertRsvp, RsvpIdentityConflictError } from "../rsvp.server";
@@ -490,6 +491,20 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
         // best-effort rescheduling
       }
     }
+  }
+
+  const dateTimeChanged = data.dateTime && data.dateTime.getTime() !== event.dateTime.getTime();
+  const locationChanged = data.location !== undefined && data.location !== event.location;
+  if (dateTimeChanged || locationChanged) {
+    await announceEventDetailsChange(
+      {
+        id: event.id,
+        title: data.title ?? event.title,
+        maxPlayers: data.maxPlayers ?? event.maxPlayers,
+        currentGameId: event.currentGameId,
+      },
+      ctx.userId,
+    );
   }
 
   bestEffort(logEvent(eventId, "event_updated", null, ctx.userId, {
