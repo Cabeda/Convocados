@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { TOOLS } from "~/lib/mcp/tools";
+import { findDiscoverableUpcomingEvents } from "~/lib/discoverableEvents.server";
 import { GET } from "~/pages/api/me/games";
+import { GET as getPublicEvents } from "~/pages/api/events/public";
+import { GET as getUserProfile } from "~/pages/api/users/[id]";
 import { getSession } from "~/lib/auth.helpers.server";
 import { authenticateRequest } from "~/lib/authenticate.server";
 
@@ -39,6 +42,7 @@ async function seedFixture() {
       location: "Pitch",
       dateTime: new Date(Date.now() + 86_400_000),
       maxPlayers: 10,
+      isPublic: true,
       isRecurring: true,
       recurrenceRule: "FREQ=WEEKLY",
       ownerId: user.id,
@@ -66,6 +70,47 @@ function requestCtx() {
     params: {},
     url,
   } as any;
+}
+
+function publicEventsCtx() {
+  const url = new URL("http://localhost/api/events/public");
+  return {
+    request: new Request(url, { method: "GET" }),
+    params: {},
+    url,
+  } as any;
+}
+
+function userProfileCtx(userId: string) {
+  const url = new URL(`http://localhost/api/users/${userId}`);
+  return {
+    request: new Request(url, { method: "GET" }),
+    params: { id: userId },
+    url,
+  } as any;
+}
+
+async function seedNoCurrentGame() {
+  const user = await prisma.user.create({
+    data: { id: "roster-surfaces-legacy-user", name: "Organizer", email: "legacy@test.com", emailVerified: true },
+  });
+  const event = await prisma.event.create({
+    data: {
+      title: "Legacy Futsal",
+      location: "Pitch",
+      dateTime: new Date(Date.now() + 86_400_000),
+      maxPlayers: 10,
+      isPublic: true,
+      ownerId: user.id,
+    },
+  });
+  await prisma.player.createMany({
+    data: [
+      { eventId: event.id, name: "Active", order: 0 },
+      { eventId: event.id, name: "Archived", order: 1, archivedAt: new Date() },
+    ],
+  });
+  return { user, event };
 }
 
 beforeEach(async () => {
@@ -111,5 +156,67 @@ describe("roster count surfaces", () => {
     expect(listedGame.spotsLeft).toBe(2);
     expect(routeGame.playerCount).toBe(8);
     expect(routeGame.spotsLeft).toBe(2);
+  });
+
+  it("agrees on the same roster on Discover and GET /api/events/public", async () => {
+    const { event } = await seedFixture();
+
+    const discover = await findDiscoverableUpcomingEvents({ now: new Date(), take: 10 });
+    const discovered = discover.find((g) => g.id === event.id);
+    expect(discovered).toBeDefined();
+    expect(discovered!.playerCount).toBe(8);
+    expect(discovered!.spotsLeft).toBe(2);
+
+    const res = await getPublicEvents(publicEventsCtx());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const listed = body.data.find((g: { id: string }) => g.id === event.id);
+    expect(listed.playerCount).toBe(8);
+    expect(listed.spotsLeft).toBe(2);
+  });
+
+  it("reports the current Game's roster on GET /api/users/[id]", async () => {
+    const { user, event } = await seedFixture();
+    mockGetSession.mockResolvedValue(null);
+
+    const res = await getUserProfile(userProfileCtx(user.id));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const owned = body.owned.find((g: { id: string }) => g.id === event.id);
+    expect(owned.playerCount).toBe(8);
+  });
+
+  it("agrees on active legacy Player rows when the Event has no current Game", async () => {
+    const { user, event } = await seedNoCurrentGame();
+    const authCtx = { userId: user.id, scopes: ["read:events"], authMethod: "oauth" as const };
+
+    const getGame = TOOLS.find((t) => t.name === "convocados_get_game");
+    const listMyGames = TOOLS.find((t) => t.name === "convocados_list_my_games");
+    const fromGetGame = (await getGame!.handler({ eventId: event.id }, authCtx)) as any;
+    const fromListMyGames = (await listMyGames!.handler({}, authCtx)) as any;
+    const listedGame = fromListMyGames.owned.find((g: any) => g.id === event.id);
+
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const res = await GET(requestCtx());
+    const fromRoute = await res.json();
+    const routeGame = fromRoute.owned.find((g: any) => g.id === event.id);
+
+    const discover = await findDiscoverableUpcomingEvents({ now: new Date(), take: 10 });
+    const discovered = discover.find((g) => g.id === event.id);
+    const publicRes = await getPublicEvents(publicEventsCtx());
+    const publicBody = await publicRes.json();
+    const listedPublic = publicBody.data.find((g: { id: string }) => g.id === event.id);
+
+    expect(fromGetGame.playerCount).toBe(1);
+    expect(fromGetGame.spotsLeft).toBe(9);
+    expect(listedGame.playerCount).toBe(1);
+    expect(listedGame.spotsLeft).toBe(9);
+    expect(routeGame.playerCount).toBe(1);
+    expect(routeGame.spotsLeft).toBe(9);
+    expect(discovered!.playerCount).toBe(1);
+    expect(discovered!.spotsLeft).toBe(9);
+    expect(listedPublic.playerCount).toBe(1);
+    expect(listedPublic.spotsLeft).toBe(9);
   });
 });
