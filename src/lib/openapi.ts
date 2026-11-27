@@ -823,6 +823,35 @@ export const openApiSpec = {
         responses: { "200": { description: "Opted out" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/reminder-timings": {
+      get: {
+        summary: "Get the event's reminder timing gates",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Reminder timings" }, ...errorResponses },
+      },
+      put: {
+        summary: "Update the event's reminder timing gates",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  reminder24h: { type: "boolean" },
+                  reminder2h: { type: "boolean" },
+                  reminder1h: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Reminder timings updated" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/notification-defaults": {
       get: {
         summary: "Get the event's notification defaults",

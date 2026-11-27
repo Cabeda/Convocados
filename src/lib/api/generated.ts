@@ -545,6 +545,21 @@ export interface ApiOperations {
     };
     body: Record<string, unknown>;
   };
+  "GET /api/events/{id}/reminder-timings": {
+    params: {
+      id: string;
+    };
+  };
+  "PUT /api/events/{id}/reminder-timings": {
+    params: {
+      id: string;
+    };
+    body: {
+      reminder24h?: boolean;
+      reminder2h?: boolean;
+      reminder1h?: boolean;
+    };
+  };
   "GET /api/events/{id}/notification-defaults": {
     params: {
       id: string;

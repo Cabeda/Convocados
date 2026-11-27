@@ -34,6 +34,7 @@ import { deriveEventPermissions } from "~/lib/eventView";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { WebhookSettings } from "./event/WebhookSettings";
+import { EventReminderTimings } from "./event/EventReminderTimings";
 import { ApiError, apiRequest } from "~/lib/api/client";
 import type { ApiOperation } from "~/lib/api/client";
 import type { ApiOperations } from "~/lib/api/generated";
@@ -739,6 +740,11 @@ export default function EventSettingsPage({ eventId }: Props) {
             />
           </Tooltip>
         </Stack>
+      </SectionCard>
+
+      {/* ── Notifications ── */}
+      <SectionCard title={t("gameReminders")} icon={<EmailIcon color="action" />}>
+        <EventReminderTimings eventId={eventId} canEdit={canEdit} />
       </SectionCard>
 
       {/* ── Priority Enrollment ── */}
