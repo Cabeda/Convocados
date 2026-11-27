@@ -25,6 +25,7 @@ import {
 } from "~/pages/api/events/[id]/invites";
 import { createPlayerInvite, acceptPlayerInvite, declinePlayerInvite, expirePendingInvites, getInviteChannels } from "~/lib/invite.server";
 import * as inviteServer from "~/lib/invite.server";
+import { cancelCurrentGame } from "~/lib/cancelEvent.server";
 import * as pushServer from "~/lib/push.server";
 import * as emailServer from "~/lib/email.server";
 
@@ -1012,5 +1013,65 @@ describe("getInviteChannels — ADR 0025 notification channels", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.channels).toEqual({ email: false, webPush: false, appPush: true });
+  });
+});
+
+describe("invites for a cancelled or carried-over Game", () => {
+  async function seedPendingInvite() {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    const invite = await createPlayerInvite({
+      eventId: ev.id,
+      gameId: ev.currentGameId,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://x.dev",
+    });
+    const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: ev.id, userId: invitee.id } });
+    return { owner, invitee, ev, invite, ep };
+  }
+
+  it("returns 409 and leaves no roster row when the invite's Game is cancelled", async () => {
+    const { invitee, ev, invite, ep } = await seedPendingInvite();
+    await prisma.game.update({ where: { id: ev.currentGameId }, data: { status: "cancelled" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: invitee.id } });
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/cancelled/i);
+    expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+    expect(await prisma.notificationJob.count({ where: { eventId: ev.id, type: { in: ["player_joined", "player_joined_bench"] } } })).toBe(0);
+  });
+
+  it("returns 410 when the invite's Game is no longer the Event's current Game", async () => {
+    const { invitee, ev, invite, ep } = await seedPendingInvite();
+    const next = await prisma.game.create({ data: { eventId: ev.id, dateTime: new Date(Date.now() + 72 * 3600_000) } });
+    await prisma.event.update({ where: { id: ev.id }, data: { currentGameId: next.id } });
+
+    mockGetSession.mockResolvedValue({ user: { id: invitee.id } });
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
+
+    expect(res.status).toBe(410);
+    expect((await res.json()).error).toMatch(/current game/i);
+    expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+    expect(await prisma.notificationJob.count({ where: { eventId: ev.id, type: { in: ["player_joined", "player_joined_bench"] } } })).toBe(0);
+  });
+
+  it("expires pending invites with the cancel, so a later accept adds no participant or player_joined job", async () => {
+    const { owner, invitee, ev, invite, ep } = await seedPendingInvite();
+
+    await cancelCurrentGame(ev.id, { id: owner.id, name: owner.name });
+
+    const saved = await prisma.playerInvite.findUniqueOrThrow({ where: { id: invite.inviteId } });
+    expect(saved.status).toBe("expired");
+    expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+
+    mockGetSession.mockResolvedValue({ user: { id: invitee.id } });
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
+    expect([409, 410]).toContain(res.status);
+    expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+    expect(await prisma.notificationJob.count({ where: { eventId: ev.id, type: { in: ["player_joined", "player_joined_bench"] } } })).toBe(0);
   });
 });

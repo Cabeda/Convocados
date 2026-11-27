@@ -119,12 +119,13 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const game = await prisma.game.findUnique({
     where: { id: invite.gameId },
-    select: { eventId: true, dateTime: true },
+    select: { eventId: true, dateTime: true, status: true, event: { select: { currentGameId: true } } },
   });
   if (!game) return Response.json({ error: "Game not found." }, { status: 404 });
-  if (game.dateTime <= new Date()) {
-    // Expire + clean the pending roster ghost the invite planted (same
-    // transactional shape as expirePendingInvites — see invite.server.ts).
+
+  // Expire + clean the pending roster ghost the invite planted (same
+  // transactional shape as expirePendingInvites — see invite.server.ts).
+  const refuse = async (error: string, status: number) => {
     await prisma.$transaction([
       prisma.playerInvite.update({ where: { id: invite.id }, data: { status: "expired" } }),
       prisma.gameParticipant.deleteMany({
@@ -132,7 +133,17 @@ export const POST: APIRoute = async ({ params, request }) => {
       }),
       prisma.rsvp.deleteMany({ where: { gameId: invite.gameId, eventPlayerId: invite.eventPlayerId } }),
     ]);
-    return Response.json({ error: "This invite has expired." }, { status: 410 });
+    return Response.json({ error }, { status });
+  };
+
+  // Cancelling the Game freezes that occurrence's roster, and a recurring
+  // Event has already advanced currentGameId — so the invite can never join.
+  if (game.status === "cancelled") return refuse("This game has been cancelled.", 409);
+  if (invite.gameId !== game.event.currentGameId) {
+    return refuse("This invite is no longer for the current game.", 410);
+  }
+  if (game.dateTime <= new Date()) {
+    return refuse("This invite has expired.", 410);
   }
 
   try {
