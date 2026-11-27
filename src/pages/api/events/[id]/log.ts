@@ -1,5 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
+import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
+import { checkAccess } from "../../../../lib/eventAccess";
 
 const PAGE_SIZE = 50;
 
@@ -9,11 +11,34 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true },
+    select: { id: true, ownerId: true, accessPassword: true },
   });
 
   if (!event) {
     return Response.json({ error: "Not found." }, { status: 404 });
+  }
+
+  if (event.accessPassword) {
+    const session = await getSession(request);
+    const isInvited = session?.user
+      ? (await prisma.eventInvite.count({ where: { eventId, userId: session.user.id } })) > 0
+      : false;
+    const isEventAdmin = session?.user
+      ? await checkEventAdmin(eventId, session.user.id)
+      : false;
+
+    const access = checkAccess({
+      eventOwnerId: event.ownerId,
+      accessPassword: event.accessPassword,
+      requestUserId: session?.user?.id ?? null,
+      cookieHeader: request.headers.get("cookie"),
+      eventId,
+      isInvited: isInvited || isEventAdmin,
+    });
+
+    if (!access.granted) {
+      return Response.json({ error: "Access denied." }, { status: 403 });
+    }
   }
 
   const url = new URL(request.url);
