@@ -67,3 +67,55 @@ export async function resolvePayerUserId(eventId: string, playerName: string): P
   const linked = await resolveLinkedUserId(eventId, playerName);
   return linked ?? (await ensureSystemUserId(eventId, playerName));
 }
+
+type LedgerDbClient = Pick<typeof prisma, "walletTransaction">;
+
+/**
+ * Move a player's ledger rows onto the account that now owns their roster row.
+ * A claimed or merged identity inherits all history, money included (ADR 0026).
+ *
+ * The share/received/self-reported idempotency keys embed the userId, so the
+ * row's owner and its key move together: leaving the key behind orphans the
+ * debit (the new account reads 0) and lets the next sync post a second charge
+ * under the new key. A key the target already owns wins, so a repeated claim
+ * cannot duplicate a debt.
+ */
+export async function movePlayerLedger(
+  client: LedgerDbClient,
+  opts: { eventId: string; fromUserId: string; toUserId: string },
+): Promise<void> {
+  const { eventId, fromUserId, toUserId } = opts;
+  if (!fromUserId || !toUserId || fromUserId === toUserId) return;
+
+  const rows = await client.walletTransaction.findMany({
+    where: { eventId, userId: fromUserId },
+    select: { id: true, idempotencyKey: true },
+  });
+  if (rows.length === 0) return;
+
+  const marker = `:${fromUserId}:`;
+  for (const row of rows) {
+    const nextKey = row.idempotencyKey?.includes(marker)
+      ? row.idempotencyKey.split(marker).join(`:${toUserId}:`)
+      : row.idempotencyKey;
+
+    if (nextKey) {
+      const existing = await client.walletTransaction.findUnique({
+        where: { idempotencyKey: nextKey },
+        select: { id: true },
+      });
+      if (existing && existing.id !== row.id) {
+        await client.walletTransaction.delete({ where: { id: row.id } });
+        continue;
+      }
+    }
+
+    await client.walletTransaction.update({
+      where: { id: row.id },
+      data: {
+        userId: toUserId,
+        ...(nextKey !== row.idempotencyKey ? { idempotencyKey: nextKey } : {}),
+      },
+    });
+  }
+}

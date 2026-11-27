@@ -27,6 +27,7 @@ import { fireWebhooks } from "./webhook.server";
 import { enqueueNotification } from "./notificationQueue.server";
 import { createT, type Locale } from "./i18n";
 import { checkEventAdmin } from "./auth.helpers.server";
+import { movePlayerLedger, systemUserId } from "./payerIdentity.server";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
 
 const log = createLogger("invite");
@@ -541,7 +542,7 @@ export async function acceptPlayerInvite(opts: {
   const bench = order >= maxPlayers;
 
   await prisma.$transaction(async (tx) => {
-    if (claimingGuest) {
+    if (claimingGuest && userId) {
       // Claim the anonymous shell for the accepting account. Guard against a
       // concurrent claim: only update while the row is still unlinked.
       const claimed = await tx.eventPlayer.updateMany({
@@ -549,6 +550,12 @@ export async function acceptPlayerInvite(opts: {
         data: { userId },
       });
       if (claimed.count === 0) throw new Error("This invite was already claimed by another account.");
+      // The claimant inherits the guest's money history (ADR 0026).
+      await movePlayerLedger(tx, {
+        eventId,
+        fromUserId: systemUserId(eventId, invite.eventPlayer.name),
+        toUserId: userId,
+      });
     }
     // First-come-first-served: claim the pending invite atomically. Two
     // concurrent accepts both pass the pre-check above, so the transition must

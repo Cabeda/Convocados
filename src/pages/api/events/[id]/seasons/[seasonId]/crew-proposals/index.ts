@@ -5,6 +5,7 @@ import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { sendPlayerInviteToRegister } from "~/lib/email.server";
 import { authorizeSeasonRequest, getSeasonForEvent, isSeasonRegistrationOpen } from "~/lib/seasonSetup.server";
 import { notifyCaptainNominated, proposalInclude, serializeProposal } from "~/lib/crewProposals.server";
+import { movePlayerLedger, systemUserId } from "~/lib/payerIdentity.server";
 
 type ProposalMemberInput = {
   membershipId?: string;
@@ -82,6 +83,13 @@ async function resolveProposalMemberships(
       eventPlayer = sameName
         ? await tx.eventPlayer.update({ where: { id: sameName.id }, data: { userId: user.id } })
         : await tx.eventPlayer.create({ data: { eventId, name: displayName, userId: user.id } });
+      if (sameName) {
+        await movePlayerLedger(tx, {
+          eventId,
+          fromUserId: systemUserId(eventId, sameName.name),
+          toUserId: user.id,
+        });
+      }
     }
 
     const existing = await tx.seasonMembership.findUnique({ where: { seasonId_userId: { seasonId, userId: user.id } } });
@@ -127,6 +135,13 @@ async function claimInvite(
       eventPlayer = sameName
         ? await tx.eventPlayer.update({ where: { id: sameName.id }, data: { userId: user.id } })
         : await tx.eventPlayer.create({ data: { eventId: season.eventId, name: displayName, userId: user.id } });
+      if (sameName) {
+        await movePlayerLedger(tx, {
+          eventId: season.eventId,
+          fromUserId: systemUserId(season.eventId, sameName.name),
+          toUserId: user.id,
+        });
+      }
     }
 
     const existing = await tx.seasonMembership.findUnique({ where: { seasonId_userId: { seasonId: season.id, userId: user.id } } });

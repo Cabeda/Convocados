@@ -14,7 +14,7 @@
 import { prisma } from "./db.server";
 import { normalizeForMatch } from "./stringMatch";
 import { nextGameParticipantOrder } from "./game.server";
-import { isSystemUserId } from "./payerIdentity.server";
+import { isSystemUserId, movePlayerLedger, systemUserId } from "./payerIdentity.server";
 
 export type RosterTarget = {
   /** Resolved display name (trimmed, 50 chars) — always present. */
@@ -119,7 +119,7 @@ export async function resolveRosterTarget(
 export async function upsertEventPlayerForRoster(
   eventId: string,
   target: RosterTarget,
-  client: Pick<typeof prisma, "eventPlayer"> = prisma,
+  client: Pick<typeof prisma, "eventPlayer" | "walletTransaction"> = prisma,
 ): Promise<{ id: string; name: string; userId: string | null }> {
   // Account-linked identities are event-scoped, not name-scoped. Reuse an
   // existing identity even when the caller's display name has changed; this
@@ -136,6 +136,16 @@ export async function upsertEventPlayerForRoster(
     }
   }
 
+  // Whether the name-keyed row about to be linked was an anonymous player
+  // whose money sits on a synthetic ledger id (ADR 0026: a claimed row
+  // inherits its history).
+  const existingByName = target.userId
+    ? await client.eventPlayer.findUnique({
+        where: { eventId_name: { eventId, name: target.name } },
+        select: { userId: true },
+      })
+    : null;
+
   const ep = await client.eventPlayer.upsert({
     where: { eventId_name: { eventId, name: target.name } },
     create: { eventId, name: target.name, userId: target.userId, position: target.position ?? null },
@@ -145,6 +155,15 @@ export async function upsertEventPlayerForRoster(
       invitationOptOutAt: null,
     },
   });
+
+  if (target.userId && existingByName && !existingByName.userId) {
+    await movePlayerLedger(client, {
+      eventId,
+      fromUserId: systemUserId(eventId, target.name),
+      toUserId: target.userId,
+    });
+  }
+
   return ep;
 }
 

@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { createLogger } from "./logger.server";
+import { ensureSystemUserId, movePlayerLedger, systemUserId } from "./payerIdentity.server";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -59,6 +60,22 @@ export async function mergePlayerIdentity(
     tx.eventPlayer.findUnique({ where: { eventId_name: { eventId, name: sourceName } } }),
     tx.eventPlayer.findUnique({ where: { eventId_name: { eventId, name: targetName } } }),
   ]);
+
+  // Money follows the collapsed identity too (ADR 0026). Resolve both ids from
+  // the pre-rename rows so the source's ledger is not lost when its roster row
+  // is deleted below; only create a target system user when there is money to
+  // move.
+  const fromUserId = sourceEp?.userId ?? systemUserId(eventId, sourceName);
+  const sourceHasLedger = await tx.walletTransaction.findFirst({
+    where: { eventId, userId: fromUserId },
+    select: { id: true },
+  });
+  if (sourceHasLedger) {
+    const toUserId = targetEp?.userId
+      ?? mergedUserId
+      ?? (await ensureSystemUserId(eventId, targetName, tx));
+    await movePlayerLedger(tx, { eventId, fromUserId, toUserId });
+  }
 
   // 1. Rewrite teamsSnapshot history.
   for (const h of histories) {

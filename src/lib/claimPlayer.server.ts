@@ -1,5 +1,6 @@
 import type { Player } from "@prisma/client";
 import { prisma } from "./db.server";
+import { movePlayerLedger, systemUserId } from "./payerIdentity.server";
 import { enqueuePushSetupHintSafe } from "./pushSetupHint";
 
 export interface ClaimPlayerInput {
@@ -83,6 +84,16 @@ export async function claimPlayer(
         });
         if (claimed.count === 0) throw new Error("CLAIM_RACE");
       }
+
+      // Money follows the roster identity (ADR 0026): move the anonymous
+      // player's ledger and rewrite its name-derived keys in the same
+      // transaction, or the claimed account reads 0 and the next sync
+      // charges the share again under the new id.
+      await movePlayerLedger(tx, {
+        eventId,
+        fromUserId: systemUserId(eventId, oldName),
+        toUserId: userId,
+      });
 
       await tx.teamMember.updateMany({
         where: { name: oldName, team: { eventId } },
