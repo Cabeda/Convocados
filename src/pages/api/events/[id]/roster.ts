@@ -3,12 +3,10 @@ import { prisma } from "~/lib/db.server";
 import { getSession, checkEventAdmin } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { isGameEnded } from "~/lib/gameStatus";
-import { getRosterCapacity } from "~/lib/roster.server";
 import { createPlayerInvite, createGuestPlayerInvite } from "~/lib/invite.server";
 import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.server";
-import { resolveRosterTarget, upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "~/lib/rosterCore.server";
-import { syncGamePayments } from "~/lib/settlement.server";
-import { finishRosterAdd } from "../../../../lib/teamFormation.server";
+import { resolveRosterTarget, upsertEventPlayerForRoster } from "~/lib/rosterCore.server";
+import { applyRosterChange } from "~/lib/applyRosterChange.server";
 
 /**
  * POST /api/events/[id]/roster — unified roster mutation (ADR 0025, #814).
@@ -71,10 +69,9 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const eventId = params.id ?? "";
   const session = await getSession(request);
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { id: true, ownerId: true, currentGameId: true, dateTime: true, durationMinutes: true, maxPlayers: true },
-  });
+  // Full row: the join seam reads title/location/timezone for notifications,
+  // emails and webhooks, so a narrow select would silently degrade them.
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
   if (!event.currentGameId) return Response.json({ error: "This event has no current game." }, { status: 400 });
   if (isGameEnded(event.dateTime, event.durationMinutes)) {
@@ -175,30 +172,31 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
 
-  const rosterState = await getRosterCapacity(eventId, event.maxPlayers, event.currentGameId);
-  if (rosterState.totalCount >= event.maxPlayers * 2) {
-    return Response.json({ error: `The bench is full (maximum ${event.maxPlayers} bench players).` }, { status: 400 });
+  // Direct add goes through the same post-body core as POST /players: writes,
+  // capacity notifications, invite email/push, owner email, webhooks and the
+  // cancelled/ended Game guards all live in applyRosterChange (#1793).
+  // Pass the request's own fields, not the resolved target: a userId the
+  // caller did not send would read as an explicit account link and bypass the
+  // duplicate guard (unique-name auto-link is not that intent).
+  const result = await applyRosterChange({
+    eventId,
+    origin,
+    session,
+    body: {
+      name: typeof body.name === "string" ? body.name : null,
+      email: typeof body.email === "string" ? body.email : null,
+      userId: typeof body.userId === "string" ? body.userId : null,
+      linkToAccount: false,
+    },
+    event,
+  });
+  if (result.status !== 200) {
+    return Response.json(result.body, { status: result.status });
   }
 
-  // Direct add uses rosterCore — same as POST /players
-  const ep = await upsertEventPlayerForRoster(eventId, target);
-  const existingParticipant = await prisma.gameParticipant.findUnique({
-    where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: ep.id } },
-    select: { archivedAt: true, status: true },
+  return Response.json({
+    ok: true,
+    name: (result.body.resolvedName as string | undefined) ?? target.name,
+    userId: target.userId,
   });
-  if (existingParticipant && !existingParticipant.archivedAt && existingParticipant.status !== "pending") {
-    return Response.json({ error: `"${target.name}" is already in the list.` }, { status: 409 });
-  }
-
-  await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: ep.id, status: "active" });
-  await prisma.player.upsert({
-    where: { eventId_name: { eventId, name: target.name } },
-    create: { eventId, name: target.name, userId: target.userId, order: rosterState.totalCount },
-    update: { userId: target.userId ?? undefined, archivedAt: null },
-  });
-  await syncGamePayments(event.currentGameId, eventId);
-  // Team sync seam: place when active, evict stale members, draw when full.
-  await finishRosterAdd(eventId, ep.name, event.maxPlayers, event.currentGameId);
-
-  return Response.json({ ok: true, name: target.name, userId: target.userId });
 };
