@@ -341,6 +341,11 @@ jobs:
           # adjudicate them.
           permission-contents: write
           permission-issues: write
+          # The reply is a PR comment, and `gh pr comment` posts through the
+          # pull-requests API: without this the push succeeded and the job died
+          # on "GraphQL: Resource not accessible by integration (addComment)"
+          # (run 46080012846, 2026-11-27).
+          permission-pull-requests: write
 
       - name: Push the round and post its reply
         env:
