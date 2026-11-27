@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
 import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
+import { syncOccurrenceTime } from "../../../../lib/advanceOccurrence.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -31,6 +32,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
     where: { id: params.id },
     data: { durationMinutes: raw },
   });
+
+  // The deadline is dateTime + durationMinutes, so a duration edit moves it.
+  await syncOccurrenceTime(event, { durationMinutes: raw });
 
   // Fire game_rescheduled webhook (non-blocking) — lean fact, client re-fetches
   // state. Only on an actual change: a same-value PUT is a no-op.
