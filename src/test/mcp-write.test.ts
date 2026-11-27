@@ -278,6 +278,113 @@ describe("MCP write tools — add_player", () => {
     const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id })));
     expect(res.status).toBe(400);
   });
+
+  it("enqueues game_full when add_player fills the last spot", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id, { maxPlayers: 1 });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Solo" })));
+    expect(res.status).toBe(200);
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: event.id, type: "game_full" },
+    });
+    expect(job).toBeTruthy();
+  });
+
+  it("rejects add_player with 409 when the current game is cancelled", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    await prisma.game.update({ where: { id: event.currentGameId! }, data: { status: "cancelled" } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Alice" })));
+    expect(res.status).toBe(409);
+    const player = await prisma.eventPlayer.findFirst({ where: { eventId: event.id, name: "Alice" } });
+    expect(player).toBeNull();
+  });
+
+  it("is idempotent for an invited participant with no Player row", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Invited" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Invited" })));
+    expect(res.status).toBe(200);
+    // Idempotent means no second write, not a duplicate row.
+    expect(await prisma.player.count({ where: { eventId: event.id, name: "Invited" } })).toBe(0);
+  });
+
+  it("does not re-announce a name-only duplicate that auto-links to an account", async () => {
+    const owner = await createOwner();
+    await prisma.user.create({
+      data: {
+        id: `mcpw-twin-${crypto.randomUUID().slice(0, 8)}`,
+        name: "Twin",
+        email: `mcpw-twin-${crypto.randomUUID().slice(0, 8)}@test.com`,
+        emailVerified: true,
+      },
+    });
+    const event = await createEvent(owner.id);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Twin" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Twin" })));
+    expect(res.status).toBe(200);
+    expect(await prisma.player.count({ where: { eventId: event.id, name: "Twin" } })).toBe(0);
+    const joins = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "player_joined" },
+    });
+    expect(joins).toHaveLength(0);
+  });
+
+  it("creates the follow and rating when promoting a pending invite", async () => {
+    const owner = await createOwner();
+    const member = await prisma.user.create({
+      data: {
+        id: `mcpw-promoted-${crypto.randomUUID().slice(0, 8)}`,
+        name: "Promoted",
+        email: `mcpw-promoted-${crypto.randomUUID().slice(0, 8)}@test.com`,
+        emailVerified: true,
+      },
+    });
+    const event = await createEvent(owner.id);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Promoted" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "pending", order: 0 },
+    });
+    await prisma.player.create({ data: { eventId: event.id, name: "Promoted", order: 0 } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, userId: member.id })));
+    expect(res.status).toBe(200);
+    const follow = await prisma.eventFollow.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: member.id } },
+    });
+    expect(follow).toBeTruthy();
+    const rating = await prisma.playerRating.findUnique({
+      where: { eventId_name: { eventId: event.id, name: "Promoted" } },
+    });
+    expect(rating).toBeTruthy();
+  });
+
+  it("does not notify the actor about their own add", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, userId: owner.id })));
+    expect(res.status).toBe(200);
+    const invites = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "game_invite" },
+    });
+    expect(invites).toHaveLength(0);
+  });
 });
 
 describe("MCP write tools — remove_player", () => {

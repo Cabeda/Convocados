@@ -4,7 +4,6 @@ import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { expirePendingInvites, acceptPlayerInvite, declinePlayerInvite } from "~/lib/invite.server";
 import { finishRosterAdd } from "~/lib/teamFormation.server";
-import { syncGamePayments } from "~/lib/settlement.server";
 import { activeParticipantsWhere } from "~/lib/activeParticipants.server";
 import { splitRoster } from "~/lib/rosterCapacity";
 
@@ -151,7 +150,6 @@ export const POST: APIRoute = async ({ params, request }) => {
       // Team sync seam (placement keyed on the canonical roster name) +
       // per-game payments in sync with the new participant.
       await finishRosterAdd(invite.eventPlayer.eventId, invite.eventPlayer.name, event?.maxPlayers ?? 0, invite.gameId);
-      await syncGamePayments(invite.gameId, invite.eventPlayer.eventId);
 
       return Response.json({ ok: true, action: "accepted", bench: result.bench });
     }
