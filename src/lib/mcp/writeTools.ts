@@ -445,7 +445,13 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
     data.timezone = timezone;
   }
   if (args.dateTime !== undefined) {
-    const dateTime = new Date(String(args.dateTime));
+    const dateTimeRaw = String(args.dateTime);
+    const looksLikeUtc = /[Zz]$/.test(dateTimeRaw) || /[+-]\d{2}:\d{2}$/.test(dateTimeRaw);
+    const timezone = data.timezone ?? event.timezone ?? "UTC";
+    const dateTime =
+      !looksLikeUtc && timezone !== "UTC"
+        ? new Date(fromDateTimeLocalValue(dateTimeRaw, timezone))
+        : new Date(dateTimeRaw);
     if (isNaN(dateTime.getTime())) throw new McpError("Invalid dateTime", -32602, 400);
     if (dateTime.getTime() <= Date.now()) throw new McpError("dateTime must be in the future", -32602, 400);
     data.dateTime = dateTime;
