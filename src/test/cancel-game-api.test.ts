@@ -547,4 +547,49 @@ describe("PUT /api/events/[id]/cancel", () => {
     expect(eventAfter?.recruitment48hSent).toBe(false);
     expect(eventAfter?.recruitment24hSent).toBe(false);
   });
+
+  it("rolls back the cancellation when the recurring advance fails, so a retry advances (#1759)", async () => {
+    const TRIGGER = "test_fail_game_insert_cancel_1759";
+    await seedUser();
+    const future = new Date(Date.now() + 86400_000);
+    const event = await seedEvent({
+      ownerId: "user1",
+      isRecurring: true,
+      recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+      dateTime: future,
+    });
+    const oldGame = await seedGame(event.id);
+    const before = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    // The replacement Game insert fails inside the recurring advance, after
+    // the old Game was marked cancelled and the reset was claimed.
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER ${TRIGGER} BEFORE INSERT ON Game BEGIN SELECT RAISE(ABORT, 'injected game.create failure'); END;`,
+    );
+    try {
+      await expect(cancelGame(putCtx({ id: event.id }))).rejects.toThrow(
+        /injected game.create failure/,
+      );
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${TRIGGER}`);
+    }
+
+    // Nothing from the failed cancel survives, so the next call is not 400.
+    const afterFailure = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(afterFailure.currentGameId).toBe(oldGame.id);
+    expect(afterFailure.nextResetAt!.getTime()).toBe(before.nextResetAt!.getTime());
+    expect((await prisma.game.findUniqueOrThrow({ where: { id: oldGame.id } })).status).toBe(
+      "upcoming",
+    );
+    expect(mockFireWebhooks).not.toHaveBeenCalled();
+
+    const retry = await cancelGame(putCtx({ id: event.id }));
+    expect(retry.status).toBe(200);
+
+    const afterRetry = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(afterRetry.currentGameId).not.toBe(oldGame.id);
+  });
 });

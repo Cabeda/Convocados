@@ -231,6 +231,45 @@ describe("advanceDueRecurringEvent", () => {
   });
 });
 
+describe("advanceDueRecurringEvent — atomic occurrence advance (#1759)", () => {
+  const TRIGGER = "test_fail_game_insert_1759";
+
+  afterEach(async () => {
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${TRIGGER}`);
+  });
+
+  it("rolls back the claim when game.create throws, so a retry advances", async () => {
+    const { event: seeded, game } = await seedRecurring();
+    const before = (await load(seeded.id))!;
+    const resetBefore = before.nextResetAt!.getTime();
+
+    // A real DB-level failure at game.create: the same code path fires whether
+    // the insert runs inside or outside a transaction, so the test proves the
+    // boundary itself rather than a mocked client.
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER ${TRIGGER} BEFORE INSERT ON Game BEGIN SELECT RAISE(ABORT, 'injected game.create failure'); END;`,
+    );
+
+    await expect(advanceDueRecurringEvent(before)).rejects.toThrow(
+      /injected game.create failure/,
+    );
+
+    const afterFailure = await prisma.event.findUniqueOrThrow({ where: { id: seeded.id } });
+    expect(afterFailure.nextResetAt!.getTime()).toBe(resetBefore);
+    expect(afterFailure.currentGameId).toBe(game.id);
+    expect((await prisma.game.findUniqueOrThrow({ where: { id: game.id } })).status).toBe(
+      "upcoming",
+    );
+    // Webhooks fire only after commit, never from a rolled-back advance.
+    expect(fireWebhooks).not.toHaveBeenCalledWith(seeded.id, "game_reset", expect.anything());
+
+    await prisma.$executeRawUnsafe(`DROP TRIGGER ${TRIGGER}`);
+
+    const retry = (await load(seeded.id))!;
+    expect(await advanceDueRecurringEvent(retry)).toBe("advanced");
+  });
+});
+
 describe("POST /api/cron/advance-recurring", () => {
   function ctx(secret?: string) {
     return {
