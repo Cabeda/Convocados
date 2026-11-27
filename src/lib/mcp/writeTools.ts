@@ -28,6 +28,7 @@ import { logEvent } from "../eventLog.server";
 import { assignTeams, getActivePlayers } from "../teamAssignment.server";
 import { setEventCost } from "../eventCost.server";
 import { claimPlayer as claimPlayerFn } from "../claimPlayer.server";
+import { applyNoShowTransition } from "../priority.server";
 
 /**
  * MCP write tools (V1.5). All mutations reuse the same server-side libs as
@@ -677,27 +678,22 @@ async function setNoShow(args: Record<string, unknown>, ctx: AuthContext) {
   });
   if (!participant) throw new McpError("Participant not found.", -32001, 404);
 
-  await prisma.gameParticipant.update({ where: { id: participant.id }, data: { noShow } });
-
   const userId = participant.eventPlayer.userId;
-  if (userId) {
-    if (noShow) {
-      await bestEffort(prisma.priorityEnrollment.updateMany({
-        where: { eventId, userId },
-        data: { noShowStreak: { increment: 1 } },
-      }));
-      await bestEffort(enqueueNoShowNotification({
-        userId,
-        eventId,
-        title: event.title,
-        streak: await noShowStreak(eventId, userId),
-      }));
-    } else {
-      await bestEffort(prisma.priorityEnrollment.updateMany({
-        where: { eventId, userId, noShowStreak: { gt: 0 } },
-        data: { noShowStreak: { decrement: 1 } },
-      }));
-    }
+  const changed = await applyNoShowTransition({
+    participantId: participant.id,
+    eventId,
+    userId,
+    noShow,
+  });
+
+  // A repeated request is a no-op, so it must not enqueue a second push.
+  if (changed && userId && noShow) {
+    await bestEffort(enqueueNoShowNotification({
+      userId,
+      eventId,
+      title: event.title,
+      streak: await noShowStreak(eventId, userId),
+    }));
   }
 
   // No event-log entry: EventAction has no no-show verb and the REST route
