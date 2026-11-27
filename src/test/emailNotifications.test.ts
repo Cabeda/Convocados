@@ -28,6 +28,7 @@ describe("sendGameInvite", () => {
       dateTime: "2026-03-20T19:00:00Z",
       location: "Sports Center",
       eventUrl: "https://convocados.fly.dev/events/abc",
+      timezone: "UTC",
     });
 
     expect(mockSend).toHaveBeenCalledOnce();
@@ -48,6 +49,7 @@ describe("sendGameInvite", () => {
         dateTime: "2026-03-20T19:00:00Z",
         location: "Loc",
         eventUrl: "https://convocados.fly.dev/events/x",
+        timezone: "UTC",
       }),
     ).rejects.toThrow("Failed to send game invite");
   });
@@ -60,6 +62,7 @@ describe("sendGameInvite", () => {
       dateTime: "2026-03-20T19:00:00Z",
       location: "Loc",
       eventUrl: "https://convocados.fly.dev/events/x",
+      timezone: "UTC",
     });
 
     const html = mockSend.mock.calls[0][0].html;
@@ -79,6 +82,7 @@ describe("sendReminder", () => {
       spotsLeft: 3,
       eventUrl: "https://convocados.fly.dev/events/def",
       reminderType: "24h",
+      timezone: "UTC",
     });
 
     expect(mockSend).toHaveBeenCalledOnce();
@@ -101,6 +105,7 @@ describe("sendReminder", () => {
         spotsLeft: 0,
         eventUrl: "https://convocados.fly.dev/events/x",
         reminderType: "2h",
+        timezone: "UTC",
       }),
     ).rejects.toThrow("Failed to send reminder");
   });
@@ -112,7 +117,7 @@ describe("sendWeeklySummary", () => {
 
     await sendWeeklySummary("player@example.com", {
       userName: "Test User",
-      upcoming: [{ title: "Futsal Friday", dateTime: "2026-03-20T19:00:00Z", location: "Gym" }],
+      upcoming: [{ title: "Futsal Friday", dateTime: "2026-03-20T19:00:00Z", location: "Gym", timezone: "UTC" }],
       results: [{ title: "Last Game", scoreOne: 3, scoreTwo: 2 }],
       dashboardUrl: "https://convocados.fly.dev/dashboard",
     });

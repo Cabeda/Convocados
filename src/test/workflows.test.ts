@@ -291,24 +291,23 @@ describe("the reviewer is exempt only where it cannot review", () => {
   });
 });
 
-describe("a review that did not finish does not redden the Change", () => {
-  // The merge decision is the signature: the gate accepts only a verdict signed
-  // over the current head, so a review that wrote nothing is refused there. A
-  // red `reviewer` check added no decision and made every open Change look
-  // broken — 28 of them, on 2026-11-27.
-  const stepRuns = () => {
+describe("the reviewer check is the gate, not a comment", () => {
+  // `reviewer` is a required status check, so a refusal has to fail it. #1866
+  // showed "Verdict: refuse" beside a green reviewer job: the findings were
+  // readable and mergeable anyway, which is a review nobody has to answer.
+  const verdictStep = () => {
     const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
       jobs?: Record<string, { steps?: Array<{ name?: string; run?: string }> }>;
     };
-    return (doc.jobs?.reviewer?.steps ?? [])
-      .filter((s) => s.name === "Record the verdict" || s.name === "Sign and post the review")
-      .map((s) => s.run ?? "");
+    return (doc.jobs?.reviewer?.steps ?? []).find((s) => s.name === "Record the verdict")?.run ?? "";
   };
 
-  it("reports a missing verdict instead of failing the job", () => {
-    for (const run of stepRuns()) {
-      expect(run).not.toMatch(/^\s*exit 1\s*$/m);
-    }
+  it("fails the check on refuse and on a missing verdict", () => {
+    const run = verdictStep();
+    // Two `exit 1`: one for `refuse`, one for the empty verdict. An approval is
+    // the only path that leaves the check green.
+    expect([...run.matchAll(/exit 1/g)]).toHaveLength(2);
+    expect(run).toContain("approve) echo");
   });
 });
 
@@ -501,5 +500,110 @@ describe("a refused Change gets its round from the tick", () => {
     // own cron is unreliable, so the tick must be able to start it.
     const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
     expect(raw).toContain("workflow_dispatch) pr=\"${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}\"");
+  });
+});
+
+describe("the review is readable where a human reads it", () => {
+  // A formal review lands in a separate tab the conversation never shows, and
+  // GitHub refuses one on an App-authored PR anyway. The adversarial review is
+  // the product: it goes in the thread.
+  it("posts the review as a PR comment", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+    expect(raw).toContain('gh pr comment "$PR"');
+    expect(raw).not.toContain("gh pr review");
+  });
+});
+
+describe("a tick can start the round the Reviewer just refused", () => {
+  // `ledger` already falls back to `next-fix.ts` when a dispatch carries no PR,
+  // and nothing could reach that path: `pr` was a required input, so every
+  // dispatch had to name one. A refusal therefore waited on a run that a newer
+  // refusal cancelled — 31 Changes with findings and no round on 2026-11-27.
+  it("does not require a PR number on dispatch", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      on?: unknown;
+    } & Record<string, unknown>;
+    const trigger = (doc.on ?? doc["true"]) as {
+      workflow_dispatch?: { inputs?: Record<string, { required?: boolean }> };
+    };
+    expect(trigger.workflow_dispatch?.inputs?.pr?.required).toBe(false);
+  });
+});
+
+describe("every App token is minted under the input v3 keeps", () => {
+  // #1875 renamed one workflow; the other eight sat on `app-id:` until a human
+  // noticed. v3 accepts both and deprecates the old name, so nothing goes red —
+  // and when v4 drops it every factory role silently stops minting a token.
+  const files = () => readdirSync(workflowsDir).filter((f) => f.endsWith(".yml"));
+
+  it("never uses the deprecated app-id input", () => {
+    for (const file of files()) {
+      const raw = readFileSync(join(workflowsDir, file), "utf8");
+      expect(/\n\s+app-id:/.test(raw), `${file} uses app-id:`).toBe(false);
+    }
+  });
+
+  it("gives every create-github-app-token@v3 step a client-id", () => {
+    for (const file of files()) {
+      const doc = parse(readFileSync(join(workflowsDir, file), "utf8")) as {
+        jobs?: Record<string, { steps?: Array<{ uses?: string; with?: Record<string, unknown> }> }>;
+      };
+      for (const [name, job] of Object.entries(doc.jobs ?? {})) {
+        for (const step of job.steps ?? []) {
+          if (!/actions\/create-github-app-token@v3/.test(step.uses ?? "")) continue;
+          expect(step.with?.["client-id"], `${file} ${name}: token step without client-id`).toBeDefined();
+        }
+      }
+    }
+  });
+});
+
+describe("a round's bundle carries the branch the push job fetches", () => {
+  // The round job packages its work as a bundle and the push job fetches
+  // `refs/heads/$branch` out of it. A range bundle (`origin/$branch..HEAD`)
+  // stores its tip as `HEAD` with no ref, so that fetch fails with "couldn't
+  // find remote ref" — after the Attempt had already been recorded. Reproduced
+  // 2026-11-27 with PR #1815's round (run 46033882168, push job).
+  it("names the ref instead of relying on a range", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    // The command wraps across a continuation line, so match the command as a
+    // block rather than per line.
+    expect(raw).toMatch(/git bundle create[\s\S]{0,200}?refs\/heads\/\$branch/);
+    expect(raw).not.toMatch(/git bundle create[\s\S]{0,120}?\.\.HEAD/);
+  });
+});
+
+describe("a lost Attempt stops the round instead of hiding in a budget of zero", () => {
+  // `attempt.ts` exits 2 when the Attempt comment cannot be written, and 1 when
+  // the round spent the budget. The ledger tolerated both with `|| true`, so a
+  // failed write still ran the round, the count stayed at zero, and the same
+  // Change was picked again — the three-round handoff could never fire.
+  it("tolerates the budget exit and nothing else", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    expect(raw).not.toMatch(/attempt\.ts "\$PR" review --set \|\| true/);
+    expect(raw).toContain('if [ "$spent" -ne 0 ] && [ "$spent" -ne 1 ]; then');
+  });
+});
+
+describe("a review is bounded by minutes that buy a verdict", () => {
+  // On 2026-11-27 reviews used 66 of ~107 workflow minutes, and the only runs
+  // that used their full budget wrote no verdict. Every review that finished
+  // took 3-5 minutes.
+  const reviewer = () =>
+    parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      concurrency?: unknown;
+      jobs?: Record<string, { steps?: Array<{ name?: string; "timeout-minutes"?: number }> }>;
+    };
+
+  it("caps the step and cancels a superseded run", () => {
+    const doc = reviewer();
+    expect(doc.concurrency).toEqual({ group: "factory-review", "cancel-in-progress": true });
+    const step = doc.jobs?.reviewer?.steps?.find((s) => s.name === "Review the Change");
+    expect(step?.["timeout-minutes"]).toBeLessThanOrEqual(12);
+  });
+
+  it("forbids rebuilding what the checks already produced", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+    expect(raw).toContain("no `pnpm install`, `pnpm test`, `pnpm typecheck`");
   });
 });

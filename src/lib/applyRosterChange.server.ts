@@ -779,6 +779,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
             dateTime: event.dateTime.toISOString(),
             location: event.location,
             eventUrl: url,
+            timezone: event.timezone,
           });
         }
         // ADR 0017: Send game_invite push when player is added by Owner/Admin (Tier 1, via queue)
@@ -858,6 +859,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
           location: event.location,
           eventUrl: url,
           inviterName,
+          timezone: event.timezone,
         });
         recordInviteEmail(eventId, senderId, inviteUnregisteredEmail);
         inviteResult = "emailed";

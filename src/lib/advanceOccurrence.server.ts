@@ -22,6 +22,40 @@ export type EventForAdvance = Prisma.EventGetPayload<{
 }>;
 
 /**
+ * Keep a moved occurrence's stored deadline and reminder jobs in step.
+ *
+ * `nextResetAt` is a stored copy of `dateTime + durationMinutes` and the only
+ * deadline the advance sweep reads. Rescheduling or re-timing an occurrence
+ * without recomputing it leaves the old deadline live, so the sweep advances
+ * the occurrence the organizer just moved (phantom history, cleared teams).
+ * Recurring Events own a deadline; every occurrence-time edit must call this.
+ */
+export async function syncOccurrenceTime(
+  event: { id: string; isRecurring: boolean; dateTime: Date; durationMinutes: number },
+  changes: { dateTime?: Date; durationMinutes?: number },
+): Promise<void> {
+  const dateTime = changes.dateTime ?? event.dateTime;
+  const durationMinutes = changes.durationMinutes ?? event.durationMinutes;
+
+  if (event.isRecurring) {
+    const nextResetAt = new Date(dateTime.getTime() + durationMinutes * 60_000);
+    await prisma.event.update({ where: { id: event.id }, data: { nextResetAt } });
+  }
+
+  const timeChanged =
+    dateTime.getTime() !== event.dateTime.getTime() ||
+    durationMinutes !== event.durationMinutes;
+  if (timeChanged) {
+    try {
+      await cancelEventJobs(event.id);
+      await scheduleEventReminders(event.id, dateTime, durationMinutes);
+    } catch {
+      // A scheduling failure must not fail the edit itself.
+    }
+  }
+}
+
+/**
  * Advance a due recurring occurrence (issue #1176): the single CAS reset path
  * shared by the lazy reset (event GET) and the eager cron sweep. Winning the
  * `nextResetAt` compare-and-swap guarantees exactly one snapshot per
@@ -40,6 +74,10 @@ export async function advanceDueRecurringEvent(
   }
   const now = new Date();
   if (event.nextResetAt > now) return "not-due";
+  // A stale deadline can sit in the past while the occurrence it belongs to is
+  // still ahead (a reschedule or duration edit that missed the deadline). Only
+  // advance an occurrence that has actually started, never a future one.
+  if (event.dateTime > now) return "not-due";
   const rule = parseRecurrenceRule(event.recurrenceRule);
   if (!rule) return "not-due";
 
@@ -170,6 +208,7 @@ export async function advanceDueRecurringEvent(
         rsvpSummarySent: false,
         recruitment48hSent: false,
         recruitment24hSent: false,
+        fewSpotsLeftNotified: false,
       },
     }),
   ]);

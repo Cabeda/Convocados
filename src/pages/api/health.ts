@@ -20,6 +20,20 @@ const LITESTREAM_SOCKET = "/var/run/litestream.sock";
  * recreated by `migrate deploy` leaves behind. Widen only with evidence. */
 const FRESH_DB_WINDOW_MS = 60 * 60 * 1000;
 
+/** Fly probes every few seconds; one DB pass per window answers the platform's
+ * liveness question. Keep this at 5s or less so a cached body is never older
+ * than a single probe timeout (fly.toml). */
+const HEALTH_CACHE_TTL_MS = 5_000;
+
+let cachedHealth: { body: Record<string, unknown>; expiresAt: number } | null = null;
+let inFlightHealth: Promise<Response> | null = null;
+
+/** Test-only hook: the module-level cache survives between cases in a file. */
+export function resetHealthCache(): void {
+  cachedHealth = null;
+  inFlightHealth = null;
+}
+
 function resolveDbPath(): string {
   const url = process.env.DATABASE_URL || "file:./prisma/dev.db";
   return url.replace(/^file:/, "");
@@ -60,7 +74,7 @@ function parseMigrationTimestamp(value: unknown): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export const GET: APIRoute = async () => {
+async function probeHealth(): Promise<Response> {
   try {
     // Surface startup-pragma failures instead of silently swallowing them:
     // if WAL/optimize/etc. couldn't be applied, the DB is not healthy.
@@ -221,5 +235,30 @@ export const GET: APIRoute = async () => {
     // Log the detail server-side; never echo internal error text publicly.
     log.error({ err }, "health check failed");
     return Response.json({ status: "error" }, { status: 503 });
+  }
+}
+
+export const GET: APIRoute = async () => {
+  const cached = cachedHealth;
+  if (cached && Date.now() < cached.expiresAt) {
+    return Response.json(cached.body);
+  }
+
+  // Share one live computation between concurrent probes: a burst must not
+  // queue N DB passes behind an empty cache. This is the same in-flight
+  // result, not a stored body, so a degraded answer is never retained.
+  const pending = inFlightHealth ?? probeHealth();
+  inFlightHealth = pending;
+  try {
+    const res = await pending;
+    const body = (await res.clone().json()) as Record<string, unknown>;
+    // Cache only a healthy body. A degraded scheduler or replica must be
+    // re-checked on the next probe, never hidden behind the TTL.
+    if (res.status === 200 && !body.degraded) {
+      cachedHealth = { body, expiresAt: Date.now() + HEALTH_CACHE_TTL_MS };
+    }
+    return res;
+  } finally {
+    if (inFlightHealth === pending) inFlightHealth = null;
   }
 };

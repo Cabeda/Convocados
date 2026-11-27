@@ -247,7 +247,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # Least privilege, stated per run: contents to push factory/*,
           # pull-requests to open Changes and comment, issues to label and file

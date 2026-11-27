@@ -119,6 +119,52 @@ describe("POST /api/events/[id]/no-show", () => {
     expect(enrollment!.noShowStreak).toBe(1);
   });
 
+  it("does not increment the streak on a repeated no-show request", async () => {
+    await prisma.priorityEnrollment.create({
+      data: { eventId: event.id, userId: user.id, noShowStreak: 0 },
+    });
+    vi.mocked(sendPushToUser).mockClear();
+
+    await POST(ctx(event.id, { gameId: game.id, eventPlayerId: player.id, noShow: true }));
+    await POST(ctx(event.id, { gameId: game.id, eventPlayerId: player.id, noShow: true }));
+
+    const enrollment = await prisma.priorityEnrollment.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: user.id } },
+    });
+    expect(enrollment!.noShowStreak).toBe(1);
+    expect(sendPushToUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not decrement the streak on a repeated unmark request", async () => {
+    await prisma.gameParticipant.update({ where: { id: participant.id }, data: { noShow: true } });
+    await prisma.priorityEnrollment.create({
+      data: { eventId: event.id, userId: user.id, noShowStreak: 2 },
+    });
+
+    await POST(ctx(event.id, { gameId: game.id, eventPlayerId: player.id, noShow: false }));
+    await POST(ctx(event.id, { gameId: game.id, eventPlayerId: player.id, noShow: false }));
+
+    const enrollment = await prisma.priorityEnrollment.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: user.id } },
+    });
+    expect(enrollment!.noShowStreak).toBe(1);
+  });
+
+  it("returns to one after a genuine unmark and re-mark cycle", async () => {
+    await prisma.priorityEnrollment.create({
+      data: { eventId: event.id, userId: user.id, noShowStreak: 0 },
+    });
+
+    await POST(ctx(event.id, { gameId: game.id, eventPlayerId: player.id, noShow: true }));
+    await POST(ctx(event.id, { gameId: game.id, eventPlayerId: player.id, noShow: false }));
+    await POST(ctx(event.id, { gameId: game.id, eventPlayerId: player.id, noShow: true }));
+
+    const enrollment = await prisma.priorityEnrollment.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: user.id } },
+    });
+    expect(enrollment!.noShowStreak).toBe(1);
+  });
+
   it("does not send push when user has push disabled", async () => {
     vi.mocked(getNotificationPrefs).mockResolvedValue({ pushEnabled: false, emailEnabled: false } as any);
     vi.mocked(sendPushToUser).mockClear();

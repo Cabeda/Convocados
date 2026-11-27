@@ -34,8 +34,8 @@ on:
   workflow_dispatch:
     inputs:
       pr:
-        description: "Pull request number to repair"
-        required: true
+        description: "Pull request to repair. Empty picks the oldest refused Change."
+        required: false
         type: string
 
 # One round at a time, across every Change. The Fixer is a single writer: two
@@ -144,9 +144,19 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # The third round's own record exits 1 (budget reached); that is the
-          # ledger being honest, not a failure to repair.
-          node scripts/factory/attempt.ts "$PR" review --set || true
+          # Exit 1 means this round spent the budget — honest, and the round still
+          # runs. Exit 2 means the Attempt could not be written, and the round
+          # must not: an unrecorded round leaves the count at zero, so the same
+          # Change is picked forever and the three-round handoff never fires.
+          # `|| true` here masked both, which is what made the budget a fiction.
+          set +e
+          node scripts/factory/attempt.ts "$PR" review --set
+          spent=$?
+          set -e
+          if [ "$spent" -ne 0 ] && [ "$spent" -ne 1 ]; then
+            echo "::error title=Attempt ledger::the Attempt could not be recorded; refusing to run an unrecorded round"
+            exit "$spent"
+          fi
           echo "run=true" >> "$GITHUB_OUTPUT"
 
   # The round itself. Read-only on purpose: this is the only job that runs code
@@ -196,7 +206,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # The action refuses a token without write scope, so this one can
           # write; the push itself still happens in a different job, after this
@@ -274,7 +284,13 @@ jobs:
             echo "Round made no commits."
             exit 0
           fi
-          git bundle create .factory-handoff/round.bundle "origin/$branch..HEAD"
+          # Name the ref. A range bundle (`origin/$branch..HEAD`) stores the tip
+          # as `HEAD` and no other ref, so the push job's fetch of
+          # `refs/heads/$branch` fails with "couldn't find remote ref" — the
+          # round is lost after its Attempt was already spent. Reproduced
+          # 2026-11-27 on PR #1815's round (run 46033882168, push job).
+          git bundle create .factory-handoff/round.bundle \
+            "refs/heads/$branch" --not "refs/remotes/origin/$branch"
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -314,7 +330,7 @@ jobs:
         id: push-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # contents to push the factory/* branch, issues to post the round's
           # reply. No pull-requests write: a round reads findings, it does not

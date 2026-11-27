@@ -85,7 +85,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # Matches the other factory roles (ADR 0048) so the audit trail is
           # authored by convenedos-factory[bot] rather than github-actions[bot].

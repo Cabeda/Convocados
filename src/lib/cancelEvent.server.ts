@@ -49,7 +49,26 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
   if (gameEnd < now) throw new CancelError("Cannot cancel a game that has already ended.", 400);
 
   // ── Cancel the current game ──────────────────────────────────────────────
-  await prisma.game.update({ where: { id: game.id }, data: { status: "cancelled" } });
+  // Expire this occurrence's pending invites atomically with the status flip:
+  // an invite that survives the cancel would still accept onto a game nobody
+  // will play, and leave the pending roster ghost behind.
+  await prisma.$transaction(async (tx) => {
+    await tx.game.update({ where: { id: game.id }, data: { status: "cancelled" } });
+    const pending = await tx.playerInvite.findMany({
+      where: { gameId: game.id, status: "pending" },
+      select: { id: true, eventPlayerId: true },
+    });
+    if (pending.length === 0) return;
+    const eventPlayerIds = pending.map((i) => i.eventPlayerId);
+    await tx.playerInvite.updateMany({
+      where: { id: { in: pending.map((i) => i.id) } },
+      data: { status: "expired", respondedAt: new Date() },
+    });
+    await tx.gameParticipant.deleteMany({
+      where: { gameId: game.id, eventPlayerId: { in: eventPlayerIds }, status: "pending" },
+    });
+    await tx.rsvp.deleteMany({ where: { gameId: game.id, eventPlayerId: { in: eventPlayerIds } } });
+  });
 
   // ── Reverse the cancelled game's payments (ADR 0009) ─────────────────────
   await prisma.gamePayment.updateMany({
@@ -176,7 +195,7 @@ export async function cancelCurrentGame(eventId: string, actor: CancelActor) {
 
         await prisma.event.update({
           where: { id: event.id },
-          data: { dateTime: newDateTime, rsvpCutoffSent: false, rsvpSummarySent: false, recruitment48hSent: false, recruitment24hSent: false },
+          data: { dateTime: newDateTime, rsvpCutoffSent: false, rsvpSummarySent: false, recruitment48hSent: false, recruitment24hSent: false, fewSpotsLeftNotified: false },
         });
 
         fireWebhooks(event.id, "game_reset", {

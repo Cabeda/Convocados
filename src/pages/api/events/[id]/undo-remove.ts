@@ -38,26 +38,35 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
-  // Check the name isn't already taken (someone else re-added with the same name)
-  const existing = event.players.find((p) => p.name === name);
+  // Removal soft-archives the Player row, so the undo must revive that row
+  // rather than insert a second one: the unique (eventId, name) constraint sees
+  // the archived row. Only a genuinely active player blocks the undo.
+  const active = event.players.filter((p) => p.archivedAt === null);
+  const existing = active.find((p) => p.name === name);
   if (existing) {
     return Response.json({ error: `"${name}" is already in the list.` }, { status: 409 });
   }
+  const archived = event.players.find((p) => p.name === name && p.archivedAt !== null);
 
-  // Shift players at or after the original position to make room
-  const toShift = event.players.filter((p) => p.order >= order);
+  // Shift active players at or after the original position to make room
+  const toShift = active.filter((p) => p.order >= order);
   await prisma.$transaction([
     ...toShift.map((p) =>
       prisma.player.update({ where: { id: p.id }, data: { order: p.order + 1 } })
     ),
-    prisma.player.create({
-      data: {
-        name,
-        eventId,
-        order,
-        userId: userId ?? null,
-      },
-    }),
+    archived
+      ? prisma.player.update({
+          where: { id: archived.id },
+          data: { archivedAt: null, order, userId: userId ?? archived.userId },
+        })
+      : prisma.player.create({
+          data: {
+            name,
+            eventId,
+            order,
+            userId: userId ?? null,
+          },
+        }),
   ]);
 
   // Restore follow if the player had a linked account

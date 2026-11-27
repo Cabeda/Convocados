@@ -16,7 +16,8 @@ import { recordReceived } from "../payments.server";
 import { anchorDayOf, buildRecurrenceRule, parseRecurrenceRule, serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
 import { applyRosterChange } from "../applyRosterChange.server";
 import { getDefaultDurationMinutes } from "../sports";
-import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
+import { scheduleEventReminders } from "../scheduler.server";
+import { syncOccurrenceTime } from "../advanceOccurrence.server";
 import { fromDateTimeLocalValue } from "../timezones";
 import { cancelCurrentGame, CancelError } from "../cancelEvent.server";
 import { upsertRsvp, RsvpIdentityConflictError } from "../rsvp.server";
@@ -28,6 +29,7 @@ import { logEvent } from "../eventLog.server";
 import { assignTeams, getActivePlayers } from "../teamAssignment.server";
 import { setEventCost } from "../eventCost.server";
 import { claimPlayer as claimPlayerFn } from "../claimPlayer.server";
+import { applyNoShowTransition } from "../priority.server";
 
 /**
  * MCP write tools (V1.5). All mutations reuse the same server-side libs as
@@ -480,16 +482,9 @@ async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
 
   await prisma.event.update({ where: { id: eventId }, data });
 
+  // Reschedule reminder jobs and move the occurrence deadline with the new time.
   if (data.dateTime) {
-    const updated = await prisma.event.findUnique({ where: { id: eventId } });
-    if (updated) {
-      await bestEffort(cancelEventJobs(eventId));
-      try {
-        await scheduleEventReminders(eventId, updated.dateTime, updated.durationMinutes);
-      } catch {
-        // best-effort rescheduling
-      }
-    }
+    await syncOccurrenceTime(event, { dateTime: data.dateTime });
   }
 
   bestEffort(logEvent(eventId, "event_updated", null, ctx.userId, {
@@ -677,27 +672,22 @@ async function setNoShow(args: Record<string, unknown>, ctx: AuthContext) {
   });
   if (!participant) throw new McpError("Participant not found.", -32001, 404);
 
-  await prisma.gameParticipant.update({ where: { id: participant.id }, data: { noShow } });
-
   const userId = participant.eventPlayer.userId;
-  if (userId) {
-    if (noShow) {
-      await bestEffort(prisma.priorityEnrollment.updateMany({
-        where: { eventId, userId },
-        data: { noShowStreak: { increment: 1 } },
-      }));
-      await bestEffort(enqueueNoShowNotification({
-        userId,
-        eventId,
-        title: event.title,
-        streak: await noShowStreak(eventId, userId),
-      }));
-    } else {
-      await bestEffort(prisma.priorityEnrollment.updateMany({
-        where: { eventId, userId, noShowStreak: { gt: 0 } },
-        data: { noShowStreak: { decrement: 1 } },
-      }));
-    }
+  const changed = await applyNoShowTransition({
+    participantId: participant.id,
+    eventId,
+    userId,
+    noShow,
+  });
+
+  // A repeated request is a no-op, so it must not enqueue a second push.
+  if (changed && userId && noShow) {
+    await bestEffort(enqueueNoShowNotification({
+      userId,
+      eventId,
+      title: event.title,
+      streak: await noShowStreak(eventId, userId),
+    }));
   }
 
   // No event-log entry: EventAction has no no-show verb and the REST route

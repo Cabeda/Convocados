@@ -179,6 +179,11 @@ describe("PUT /api/events/[id]/cancel", () => {
       dateTime: future,
     });
     await seedGame(event.id);
+    // The previous fill cycle already nudged; the advance must re-arm the dedupe.
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { fewSpotsLeftNotified: true },
+    });
 
     mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
     mockCheckEventAdmin.mockResolvedValue(false);
@@ -199,6 +204,7 @@ describe("PUT /api/events/[id]/cancel", () => {
 
     const eventAfter = await prisma.event.findUnique({ where: { id: event.id } });
     expect(eventAfter?.currentGameId).toBe(newGame!.id);
+    expect(eventAfter?.fewSpotsLeftNotified).toBe(false);
 
     const cancelledHistory = await prisma.gameHistory.findFirst({
       where: { eventId: event.id, status: "cancelled" },

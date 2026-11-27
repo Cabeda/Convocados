@@ -5,7 +5,7 @@ import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.serv
 import { authorizeEventMutation } from "../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
-import { buildSettlementRows, resolveGameLineups, type PaymentMode } from "../../../../../lib/settlement.server";
+import { buildSettlementRows, chargedParticipants, resolveGameLineups, type PaymentMode } from "../../../../../lib/settlement.server";
 import { buildMvpSummaries } from "../../../../../lib/mvp.server";
 import { occurrenceRosterNamesMap } from "../../../../../lib/gameRoster.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
@@ -191,14 +191,11 @@ export const GET: APIRoute = async ({ params, request }) => {
   // source Game share a dateTime, so the Game is in the page window whenever
   // the GameHistory is.
   const totalFor = (g: (typeof playedGames)[number]) => g.costTotalAmount ?? eventCost?.totalAmount ?? 0;
-  // Only lineup players owe; fall back to the ordered starters when no lineup.
+  // Only players who played owe; same rule as the roll.
   const lineups = await resolveGameLineups(prisma, event, playedGames.map((g) => ({ id: g.id, dateTime: g.dateTime })));
   const paymentConfigByDate = new Map<string, unknown>();
   for (const g of playedGames) {
-    const lineup = lineups.get(g.id);
-    const participants = lineup
-      ? g.participants.filter((p) => lineup.has(p.eventPlayer.name))
-      : g.participants.filter((p) => p.order < event.maxPlayers);
+    const participants = chargedParticipants(g.participants, lineups.get(g.id), event.maxPlayers);
     paymentConfigByDate.set(g.dateTime.toISOString(), {
       gameId: g.id,
       mode: (g.paymentMode as PaymentMode | null) ?? "tracked",
