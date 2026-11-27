@@ -99,7 +99,9 @@ async function addPlayer(args: Record<string, unknown>, ctx: AuthContext) {
     eventId,
     origin: process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev",
     session: actor ? { user: actor } : null,
-    body: { name: target.name, userId: target.userId, linkToAccount: false },
+    // Raw arguments: a userId derived by name auto-link must not read as an
+    // explicit link intent (it would bypass the duplicate guard).
+    body: { name: args.name, email: args.email, userId: args.userId, linkToAccount: false },
     event,
   });
 

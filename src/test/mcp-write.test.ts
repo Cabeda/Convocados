@@ -317,6 +317,32 @@ describe("MCP write tools — add_player", () => {
     expect(await prisma.player.count({ where: { eventId: event.id, name: "Invited" } })).toBe(0);
   });
 
+  it("does not re-announce a name-only duplicate that auto-links to an account", async () => {
+    const owner = await createOwner();
+    await prisma.user.create({
+      data: {
+        id: `mcpw-twin-${crypto.randomUUID().slice(0, 8)}`,
+        name: "Twin",
+        email: `mcpw-twin-${crypto.randomUUID().slice(0, 8)}@test.com`,
+        emailVerified: true,
+      },
+    });
+    const event = await createEvent(owner.id);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Twin" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Twin" })));
+    expect(res.status).toBe(200);
+    expect(await prisma.player.count({ where: { eventId: event.id, name: "Twin" } })).toBe(0);
+    const joins = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "player_joined" },
+    });
+    expect(joins).toHaveLength(0);
+  });
+
   it("does not notify the actor about their own add", async () => {
     const owner = await createOwner();
     const event = await createEvent(owner.id);

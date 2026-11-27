@@ -405,8 +405,10 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
       });
       // A guest row with no account and an account resolved for this add is a
       // *link*, not a duplicate: the P2002 merge below sets Player.userId.
-      // Rejecting it left the guest unlinked for good (reviewer finding).
-      const linksThisIdentity = linkedUserId !== null && !existingIdentity.userId;
+      // Only an explicit email/userId counts as that intent — a unique-name
+      // auto-link must not turn a duplicate add into a re-announcement.
+      const explicitLink = Boolean(explicitUserId) || Boolean(normalizedEmail);
+      const linksThisIdentity = explicitLink && linkedUserId !== null && !existingIdentity.userId;
       if (
         participant &&
         !participant.archivedAt &&

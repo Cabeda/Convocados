@@ -149,6 +149,20 @@ describe("POST /api/events/[id]/roster (#814 unified endpoint)", () => {
     expect(await prisma.player.count({ where: { eventId: ev.id, name: "Invited" } })).toBe(0);
   });
 
+  it("rejects a name-only duplicate even when a same-named account exists", async () => {
+    await seedUser("Twin", "twin@example.com");
+    const ev = await seedEventWithGame(null);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Twin" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Twin" }));
+    expect(res.status).toBe(409);
+    // The unique-name auto-link must not be read as "link this guest".
+    expect(await prisma.player.count({ where: { eventId: ev.id, name: "Twin" } })).toBe(0);
+  });
+
   it("links an existing guest to an account instead of rejecting the re-add", async () => {
     const guest = await seedUser("Guest", "guest-link@example.com");
     const ev = await seedEventWithGame(null);

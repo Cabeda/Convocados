@@ -175,11 +175,19 @@ export const POST: APIRoute = async ({ params, request }) => {
   // Direct add goes through the same post-body core as POST /players: writes,
   // capacity notifications, invite email/push, owner email, webhooks and the
   // cancelled/ended Game guards all live in applyRosterChange (#1793).
+  // Pass the request's own fields, not the resolved target: a userId the
+  // caller did not send would read as an explicit account link and bypass the
+  // duplicate guard (unique-name auto-link is not that intent).
   const result = await applyRosterChange({
     eventId,
     origin,
     session,
-    body: { name: target.name, userId: target.userId, linkToAccount: false },
+    body: {
+      name: typeof body.name === "string" ? body.name : null,
+      email: typeof body.email === "string" ? body.email : null,
+      userId: typeof body.userId === "string" ? body.userId : null,
+      linkToAccount: false,
+    },
     event,
   });
   if (result.status !== 200) {
