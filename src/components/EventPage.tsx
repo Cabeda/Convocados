@@ -42,6 +42,7 @@ import {
   InviteBanner,
   type AddPlayerIntent,
 } from "./event";
+import { buildEventShareText, shareEvent } from "./event/shareEvent";
 import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
@@ -85,6 +86,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   });
   // ponytail: backward compat — autoOpenPay still works for existing links
   const autoOpenPay = deepLinkAction === "pay";
+  const deepLinkShareHandled = useRef(false);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [playerError, setPlayerError] = useState<string | null>(null);
@@ -403,6 +405,33 @@ export default function EventPage({ eventId }: { eventId: string }) {
       window.location.href = `/events/${eventId}/payments`;
     }
   }, [autoOpenPay, deepLinkAction, deepLinkPlayer, refreshBalance, eventId, gameEnded]);
+
+  // ADR 0018: the T-24h recruitment push asks the owner to share — honour it
+  // once the event is loaded, without letting a background refetch reopen it.
+  useEffect(() => {
+    if (deepLinkAction !== "share" || !event || deepLinkShareHandled.current) return;
+    deepLinkShareHandled.current = true;
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("action");
+    const details = {
+      title: event.title,
+      dateTime: new Date(event.dateTime),
+      timezone: event.timezone,
+      location: event.location,
+      maxPlayers: event.maxPlayers,
+      playerCount: event.players.length,
+      url: url.toString(),
+    };
+    const text = buildEventShareText(details, locale, {
+      spotsLeft: (n) => t("spotsLeft", { n }),
+      full: t("full"),
+    });
+
+    shareEvent({ title: details.title, text, url: details.url })
+      .then((copied) => { if (copied) setSnackbar(t("linkCopiedFull")); })
+      .catch(() => {});
+  }, [deepLinkAction, event, locale, t]);
 
   const mergedSuggestions = useMemo(() => {
     const qjName = getQjName().trim();
