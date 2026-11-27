@@ -61,6 +61,9 @@ interface SeedOpts {
   isPublic?: boolean;
   ownerId?: string | null;
   status?: string;
+  /** Create the occurrence Game with the schema default ("upcoming"). */
+  createGame?: boolean;
+  durationMinutes?: number;
   maxPlayers?: number;
   sport?: string;
   latitude?: number;
@@ -76,16 +79,17 @@ async function seedEvent(opts: SeedOpts = {}) {
       maxPlayers: opts.maxPlayers ?? 10,
       isPublic: opts.isPublic ?? false,
       ownerId: opts.ownerId ?? null,
+      ...(opts.durationMinutes !== undefined ? { durationMinutes: opts.durationMinutes } : {}),
       ...(opts.sport ? { sport: opts.sport } : {}),
       ...(opts.latitude !== undefined ? { latitude: opts.latitude } : {}),
       ...(opts.longitude !== undefined ? { longitude: opts.longitude } : {}),
     },
   });
-  if (opts.status) {
+  if (opts.status || opts.createGame) {
     const game = await prisma.game.create({
-      data: { eventId: event.id, dateTime: event.dateTime, status: opts.status },
+      data: { eventId: event.id, dateTime: event.dateTime, ...(opts.status ? { status: opts.status } : {}) },
     });
-    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    return prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
   }
   return event;
 }
@@ -133,21 +137,42 @@ describe("GET /api/me/home", () => {
     expect(body.upNext).toEqual([]);
   });
 
-  it("pins in_progress games first, then orders by kickoff ascending", async () => {
+  it("pins a game that kicked off 10 minutes ago, then orders by kickoff ascending", async () => {
     const user = await seedUser();
     authAs(user.id);
     await seedEvent({ title: "Later", ownerId: user.id, dateTime: new Date(Date.now() + 3 * DAY) });
     await seedEvent({ title: "Sooner", ownerId: user.id, dateTime: new Date(Date.now() + DAY) });
+    // No production path writes status "in_progress": the live phase is derived
+    // from kickoff + duration, so seed only the Game row a real write creates.
     await seedEvent({
       title: "Live",
       ownerId: user.id,
-      dateTime: new Date(Date.now() - HOUR),
-      status: "in_progress",
+      dateTime: new Date(Date.now() - 10 * 60 * 1000),
+      createGame: true,
     });
     const res = await GET(ctx());
     const body = await res.json();
     expect(body.upNext.map((g: { title: string }) => g.title)).toEqual(["Live", "Sooner", "Later"]);
     expect(body.upNext[0].status).toBe("in_progress");
+  });
+
+  it("marks a game played after kickoff + duration even without a score", async () => {
+    const user = await seedUser();
+    authAs(user.id);
+    const event = await seedEvent({
+      title: "Ended",
+      ownerId: user.id,
+      dateTime: new Date(Date.now() - 90 * 60 * 1000),
+      durationMinutes: 60,
+      createGame: true,
+    });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.upNext).toEqual([]);
+    const game = await prisma.game.findUniqueOrThrow({ where: { id: event.currentGameId! } });
+    expect(game.status).toBe("played");
+    expect(game.scoreOne).toBeNull();
+    expect(game.scoreTwo).toBeNull();
   });
 
   it("caps upNext at 3", async () => {
