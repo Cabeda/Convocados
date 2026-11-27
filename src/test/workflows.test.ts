@@ -261,14 +261,20 @@ describe("the reviewer is exempt only where it cannot review", () => {
     // The action asserts the *actor's* repo permission. When the App pushed the
     // branch, the App is the actor and its permission is `none`, so this run
     // exits in two seconds without reading anything — and leaves a red
-    // `reviewer` check on a head a scheduled run reviews fine. The exemption is
-    // about the event, not the author: `next-review.ts` still picks App-authored
-    // Changes on a schedule, which is the only path that works for them.
-    expect(reviewerJobIf()).toContain(
-      "github.event.pull_request.user.login != 'convocarados-factory[bot]'",
-    );
-    // A second, broader exemption (a bot-wide filter or an allowlist) would hide
-    // the role's main customer from the schedule too. This one names one login.
+    // `reviewer` check on a head a scheduled run reviews fine. The predicate is
+    // on the actor, which is what the failure is about: a human who pushes to a
+    // factory branch is a human actor, and that run can review.
+    expect(reviewerJobIf()).toContain("github.actor != 'convocarados-factory[bot]'");
+    // Assert the complete set of author exemptions, not one member: an extra
+    // `!= 'somebody'` exempts a human login from the `pull_request` run, and the
+    // schedule only picks `factory/*` branches, so that login is then reviewed
+    // by neither path.
+    const comparisons = [
+      ...reviewerJobIf().matchAll(
+        /github\.event\.pull_request\.user\.login\s*(?:[!=]==?)\s*['"]([^'"]+)['"]/g,
+      ),
+    ].map((m) => m[1]);
+    expect(comparisons).toEqual(["dependabot[bot]"]);
     expect(reviewerJobIf(), "no bot-wide author filter").not.toMatch(
       /contains\s*\([^)]*user\.login/,
     );
