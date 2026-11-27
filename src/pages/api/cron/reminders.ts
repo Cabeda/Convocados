@@ -267,29 +267,17 @@ export const POST: APIRoute = async ({ request }) => {
         continue;
       }
 
-      // Get active player userIds to exclude from recruitment
-      const playerUsers = await prisma.player.findMany({
-        where: { eventId: event.id, archivedAt: null, userId: { not: null } },
-        select: { userId: true },
-      });
-      const playerUserIds = new Set(playerUsers.map((p) => p.userId as string));
-
-      // Get followers who are NOT playing
-      const follows = await prisma.eventFollow.findMany({
-        where: { eventId: event.id, muteReminders: { not: true } },
-        select: { userId: true },
-      });
-      const nonPlayingFollowers = follows.filter((f) => !playerUserIds.has(f.userId));
-
-      // Route through notification queue for locale-aware delivery + tier resolution
+      // Route through notification queue for locale-aware delivery + tier resolution.
+      // Only off-roster followers: a player already in the game cannot join it (#1750).
       await enqueueNotification(event.id, "recruitment", {
         title: event.title,
         key: "notifyRecruitment",
         params: { title: event.title },
         url: `/events/${event.id}?action=join`,
         spotsLeft,
+        nonPlayingOnly: true,
       });
-      recruitmentPingsSent.push(`${event.id}:${nonPlayingFollowers.length}`);
+      recruitmentPingsSent.push(`${event.id}:48h`);
 
       // Fire recruitment webhook (non-blocking) — lean domain facts, client renders
       fireWebhooks(event.id, "recruitment", {
@@ -322,13 +310,16 @@ export const POST: APIRoute = async ({ request }) => {
         continue;
       }
 
-      // Urgent recruitment to non-playing followers
+      // Urgent recruitment to non-playing followers. The owner gets the share
+      // prompt below instead, so they receive at most one recruitment push (#1750).
       await enqueueNotification(event.id, "recruitment", {
         title: event.title,
         key: "notifyRecruitmentUrgent",
         params: { title: event.title, n: String(spotsLeft) },
         url: `/events/${event.id}?action=join`,
         spotsLeft,
+        nonPlayingOnly: true,
+        excludeOwner: true,
       });
       recruitmentPingsSent.push(`${event.id}:24h`);
 

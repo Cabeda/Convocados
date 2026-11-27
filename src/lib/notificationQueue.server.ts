@@ -52,6 +52,10 @@ export interface NotificationJobPayload {
    * "who follows the event", so the drain must not re-derive its audience.
    */
   recipientUserIds?: string[];
+  /** Recruitment pings: deliver only to users off the current Game's Roster (#1750). */
+  nonPlayingOnly?: boolean;
+  /** Remove the owner even when they follow; a companion push covers them (#1750). */
+  excludeOwner?: boolean;
 }
 
 /**
@@ -321,6 +325,8 @@ async function _doDrain(): Promise<number> {
             const audience = await resolveJobAudience(job.eventId, type, {
               excludeUserIds: job.senderClientId ? [job.senderClientId] : [],
               ...(payload.recipientUserIds ? { onlyUserIds: payload.recipientUserIds } : {}),
+              ...(payload.nonPlayingOnly ? { nonPlayingOnly: true } : {}),
+              ...(payload.excludeOwner ? { excludeOwner: true } : {}),
             });
             await sendPushToEvent(
               job.eventId,

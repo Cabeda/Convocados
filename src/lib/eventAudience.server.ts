@@ -56,6 +56,8 @@ export function isPingSuppressedType(type: string): boolean {
 export interface ResolveEventAudienceOptions {
   /** Include the Event Owner even when they do not follow. Default true. */
   includeOwner?: boolean;
+  /** Remove the Event Owner even when they follow (a companion push covers them). */
+  excludeOwner?: boolean;
   /** User ids to remove from the audience (e.g. the sender). */
   excludeUserIds?: Iterable<string>;
   /** Apply ADR 0025 ping suppression (declined / opted-out users). */
@@ -68,6 +70,14 @@ export interface ResolveEventAudienceOptions {
    * moment of the fact; the queue must not re-derive a different one.
    */
   onlyUserIds?: Iterable<string>;
+  /**
+   * Drop everyone on the current Game's Roster, active or bench (#1750).
+   *
+   * A recruitment ping asks people to join; a player already in the game cannot
+   * act on it, and joining creates a follow, so the roster is inside the default
+   * follower audience.
+   */
+  nonPlayingOnly?: boolean;
 }
 
 export async function resolveEventAudience(
@@ -97,11 +107,20 @@ export async function resolveEventAudience(
 
   const recipientIds = new Set(follows.map((f) => f.userId));
   if ((opts.includeOwner ?? true) && event?.ownerId) recipientIds.add(event.ownerId);
+  if (opts.excludeOwner && event?.ownerId) recipientIds.delete(event.ownerId);
   for (const id of opts.excludeUserIds ?? []) recipientIds.delete(id);
 
   if (opts.suppressPingDeclines) {
     const suppressed = await getPingSuppressedUserIds(eventId);
     for (const id of suppressed) recipientIds.delete(id);
+  }
+
+  const maxPlayers = event?.maxPlayers;
+  if (opts.nonPlayingOnly && typeof maxPlayers === "number") {
+    const capacity = await getRosterCapacity(eventId, maxPlayers, event?.currentGameId);
+    for (const member of [...capacity.active, ...capacity.bench]) {
+      if (member.userId) recipientIds.delete(member.userId);
+    }
   }
 
   return {

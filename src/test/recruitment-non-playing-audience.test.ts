@@ -94,14 +94,13 @@ async function runCron() {
 }
 
 /** The audience handed to the push transport for [key], if it was sent. */
-function audienceFor(key: string): string[] | undefined {
+function audienceFor(key: string): { userIds: string[] } | undefined {
   const call = sendPushToEvent.mock.calls.find((args) => args[2] === key);
   return call?.[9] as { userIds: string[] } | undefined;
 }
 
 function recipientIdsFor(key: string): string[] {
-  const audience = audienceFor(key) as unknown as { userIds: string[] } | undefined;
-  return audience?.userIds ?? [];
+  return audienceFor(key)?.userIds ?? [];
 }
 
 beforeEach(async () => {
