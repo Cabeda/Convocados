@@ -291,6 +291,27 @@ describe("the reviewer is exempt only where it cannot review", () => {
   });
 });
 
+describe("a review that did not finish does not redden the Change", () => {
+  // The merge decision is the signature: the gate accepts only a verdict signed
+  // over the current head, so a review that wrote nothing is refused there. A
+  // red `reviewer` check added no decision and made every open Change look
+  // broken — 28 of them, on 2026-11-27.
+  const stepRuns = () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      jobs?: Record<string, { steps?: Array<{ name?: string; run?: string }> }>;
+    };
+    return (doc.jobs?.reviewer?.steps ?? [])
+      .filter((s) => s.name === "Record the verdict" || s.name === "Sign and post the review")
+      .map((s) => s.run ?? "");
+  };
+
+  it("reports a missing verdict instead of failing the job", () => {
+    for (const run of stepRuns()) {
+      expect(run).not.toMatch(/^\s*exit 1\s*$/m);
+    }
+  });
+});
+
 describe("a run never leaves the checkout", () => {
   // A read outside the checkout resolves to a permission request, and an
   // unattended run has nobody to answer it: the step waits for its timeout and
@@ -435,9 +456,12 @@ describe("the merge gate and the Reviewer's verdict", () => {
     expect(run).toContain("--match-head-commit");
   });
 
-  it("fails the review when no verdict was written", () => {
+  it("names a missing verdict instead of letting silence read as approval", () => {
     // Silence used to read as approval: the reviewer's step had
     // continue-on-error, so a 25-minute timeout posted nothing and passed.
+    // The gate now refuses on the absent signature, so the check reports the
+    // miss by name; it no longer reddens the Change for a decision the gate
+    // already makes.
     const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
     expect(raw).toContain("Record the verdict");
     expect(raw).toContain("no verdict was written");
