@@ -9,13 +9,16 @@
  * open after the fix ships, and the next agent reads solved work as live
  * (#1114 closed by hand 20h late, #1199 11 days late).
  *
- * The `no-issue` label exempts a PR that genuinely closes nothing.
+ * The `no-issue` label exempts a PR that genuinely closes nothing. Dependabot
+ * cannot apply a label, so its exact login is exempt too — a dependency bump
+ * closes no issue by design. Every other author (human or bot) still needs a
+ * keyword, and an unknown author fails closed.
  *
- * CLI: reads PR_BODY and PR_LABELS (comma-separated) from the environment, as
- * the CI job does. It also accepts the body as a file argument, plus a
- * `--no-issue` flag, so the same decision can be reached *before* the PR
- * exists — `node scripts/check-pr-closing-keyword.mjs body.md`. Checking after
- * `gh pr create` always costs a second trip.
+ * CLI: reads PR_BODY, PR_LABELS (comma-separated) and optionally PR_AUTHOR from
+ * the environment, as the CI job does. It also accepts the body as a file
+ * argument, plus a `--no-issue` flag, so the same decision can be reached
+ * *before* the PR exists — `node scripts/check-pr-closing-keyword.mjs body.md`.
+ * Checking after `gh pr create` always costs a second trip.
  */
 
 import { readFileSync } from "node:fs";
@@ -26,6 +29,9 @@ export const CLOSING_KEYWORD = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?
 /** The escape hatch: a PR that legitimately closes no issue. */
 export const EXEMPT_LABEL = "no-issue";
 
+/** The dependency bot cannot apply a label, so its bumps are exempt by author. */
+export const EXEMPT_BOT_AUTHOR = "dependabot[bot]";
+
 export function hasClosingKeyword(body) {
   return CLOSING_KEYWORD.test(body ?? "");
 }
@@ -34,11 +40,32 @@ export function isExempt(labels) {
   return (labels ?? []).includes(EXEMPT_LABEL);
 }
 
+export function isExemptBot(author) {
+  return author === EXEMPT_BOT_AUTHOR;
+}
+
 /**
- * @returns {{ ok: boolean, reason: "exempt" | "keyword" | "missing" }}
+ * The PR author is already in the event payload GitHub writes for every run, so
+ * the workflow needs no extra input to hand it over. A malformed or absent
+ * payload leaves the author unknown, which fails closed.
  */
-export function evaluate({ body, labels }) {
+function authorFromEventFile(path) {
+  if (!path) return undefined;
+  try {
+    const event = JSON.parse(readFileSync(path, "utf8"));
+    return event?.pull_request?.user?.login;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * @param {{ body?: string | null, labels?: string[] | null, author?: string | null }} input
+ * @returns {{ ok: boolean, reason: "exempt" | "bot" | "keyword" | "missing" }}
+ */
+export function evaluate({ body, labels, author }) {
   if (isExempt(labels)) return { ok: true, reason: "exempt" };
+  if (isExemptBot(author)) return { ok: true, reason: "bot" };
   if (hasClosingKeyword(body)) return { ok: true, reason: "keyword" };
   return { ok: false, reason: "missing" };
 }
@@ -56,16 +83,17 @@ export function resolveInput({ argv, env }) {
     .map((label) => label.trim())
     .filter(Boolean);
   const labels = argv.includes("--no-issue") ? [...fromEnv, EXEMPT_LABEL] : fromEnv;
-  return { body, labels };
+  const author = env.PR_AUTHOR || authorFromEventFile(env.GITHUB_EVENT_PATH);
+  return { body, labels, author };
 }
 
 function main() {
-  const { body, labels } = resolveInput({
+  const input = resolveInput({
     argv: process.argv.slice(2),
     env: process.env,
   });
 
-  const result = evaluate({ body, labels });
+  const result = evaluate(input);
   if (result.ok) {
     console.log(`ok (${result.reason})`);
     return;
