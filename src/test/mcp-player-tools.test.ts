@@ -372,7 +372,7 @@ describe("convocados_set_no_show", () => {
     }))?.noShowStreak).toBe(2);
   });
 
-  it("decrements the streak when unmarking, and never below zero", async () => {
+  it("decrements the streak only on a real unmark, and never below zero", async () => {
     const event = await createEvent(USER.id);
     const { eventPlayer, gameId } = await seedPlayer(event.id, USER.name, USER.id);
     await prisma.gameParticipant.updateMany({ where: { gameId }, data: { noShow: true } });
@@ -388,12 +388,47 @@ describe("convocados_set_no_show", () => {
     });
     expect(enrollment?.noShowStreak).toBe(1);
 
+    // Repeating the same unmark is a no-op, not a second decrement.
+    await run("convocados_set_no_show", {
+      eventId: event.id, gameId, eventPlayerId: eventPlayer.id, noShow: false,
+    });
+    expect((await prisma.priorityEnrollment.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: USER.id } },
+    }))?.noShowStreak).toBe(1);
+
+    // A real transition from an already-zero streak must not go negative.
+    await prisma.priorityEnrollment.update({
+      where: { eventId_userId: { eventId: event.id, userId: USER.id } },
+      data: { noShowStreak: 0 },
+    });
+    await prisma.gameParticipant.updateMany({ where: { gameId }, data: { noShow: true } });
     await run("convocados_set_no_show", {
       eventId: event.id, gameId, eventPlayerId: eventPlayer.id, noShow: false,
     });
     expect((await prisma.priorityEnrollment.findUnique({
       where: { eventId_userId: { eventId: event.id, userId: USER.id } },
     }))?.noShowStreak).toBe(0);
+  });
+
+  it("does not increment the streak on a repeated no-show", async () => {
+    const event = await createEvent(USER.id);
+    const { eventPlayer, gameId } = await seedPlayer(event.id, USER.name, USER.id);
+    await prisma.priorityEnrollment.create({
+      data: { eventId: event.id, userId: USER.id, noShowStreak: 0 },
+    });
+    mockPush.mockClear();
+
+    await run("convocados_set_no_show", {
+      eventId: event.id, gameId, eventPlayerId: eventPlayer.id, noShow: true,
+    });
+    await run("convocados_set_no_show", {
+      eventId: event.id, gameId, eventPlayerId: eventPlayer.id, noShow: true,
+    });
+
+    expect((await prisma.priorityEnrollment.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: USER.id } },
+    }))?.noShowStreak).toBe(1);
+    expect(mockPush).toHaveBeenCalledOnce();
   });
 
   it("leaves an unlinked participant's streak alone", async () => {
