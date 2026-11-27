@@ -86,6 +86,13 @@ jobs:
     #     attention at all (docs/factory/README.md → Reach).
     #   * Drafts — `opened` fires on a draft too, so an unfinished Change paid
     #     for a full review and then paid again on `ready_for_review`.
+    #   * Factory-authored Changes — the agent action asserts the *actor's* repo
+    #     permission, and a push by the App makes the App the actor, whose
+    #     permission is `none`. The `pull_request` run therefore dies in two
+    #     seconds without reading the diff, and leaves a permanently red
+    #     `reviewer` check on a head that a scheduled run then reviews fine.
+    #     Skip on the actor, which is what the failure is about: a human who
+    #     pushes to a factory branch is a human actor and can be reviewed here.
     # Name Dependabot exactly, not "any bot": `factory/*` Changes are authored by
     # the factory App and must still be reviewed — they are this role's customer.
     if: >-
@@ -95,6 +102,7 @@ jobs:
       vars.FACTORY_MODEL != '' &&
       (github.event_name != 'pull_request' ||
        (github.event.pull_request.user.login != 'dependabot[bot]' &&
+        github.actor != 'convocarados-factory[bot]' &&
         github.event.pull_request.head.repo.full_name == github.repository &&
         !github.event.pull_request.draft))
     runs-on: ubuntu-latest
@@ -210,9 +218,13 @@ jobs:
           body=.factory-review/review.md
           verdict="$(cat .factory-review/verdict 2>/dev/null || echo "")"
           if [ ! -f "$body" ]; then
-            # A verdict with no review is a green check nobody can read. Fail.
-            echo "The Reviewer wrote no body; the review did not finish." >&2
-            exit 1
+            # Nothing to post. This is not a merge decision: the gate reads the
+            # signed verdict marker, and a review that wrote none is `no review
+            # has named its head` — a refusal it reaches on its own. Failing the
+            # step instead reddened `reviewer` on every open Change, which read
+            # as "all PRs are broken" while telling the gate nothing new.
+            echo "::warning title=Review did not finish::The Reviewer wrote no body and no verdict. The merge gate treats a missing verdict as a refusal."
+            exit 0
           fi
           case "$verdict" in
             approve|refuse) ;;
@@ -234,22 +246,22 @@ jobs:
             || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
 
       - name: Record the verdict
-        # The Reviewer writes this file as its last act. A missing file means the
-        # review did not finish — and an unfinished review must fail, because a
-        # silent timeout used to read exactly like an approval.
+        # Informational, not a gate. The merge decision is the signature: the
+        # gate accepts only a verdict signed over this head, so a review that
+        # wrote nothing is refused there with or without a red check here.
+        # A refusal is a legitimate outcome too — reddening the Change for it
+        # made every refused PR look broken to a human reading the list.
         if: always()
         id: verdict
         run: |
           set -euo pipefail
           verdict="$(cat .factory-review/verdict 2>/dev/null || echo "")"
           case "$verdict" in
-            approve) echo "Reviewer approved." ;;
+            approve) echo "::notice title=Reviewer::approve" ;;
             refuse)
-              echo "Reviewer refused — the findings are in the review comment." >&2
-              exit 1
+              echo "::warning title=Reviewer::refuse — the findings are in the review comment"
               ;;
             *)
-              echo "The review did not finish: no verdict was written." >&2
-              exit 1
+              echo "::warning title=Reviewer::no verdict was written — the review did not finish; the merge gate reads that as a refusal"
               ;;
           esac
