@@ -93,6 +93,8 @@ async function deliverWebhook(
         headers,
         body: payload,
         signal: controller.signal,
+        // A 3xx could point at a private host validateWebhookUrl never saw.
+        redirect: "manual",
       });
       clearTimeout(timeout);
 
