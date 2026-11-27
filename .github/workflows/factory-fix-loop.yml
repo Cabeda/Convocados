@@ -286,7 +286,13 @@ jobs:
             echo "Round made no commits."
             exit 0
           fi
-          git bundle create .factory-handoff/round.bundle "origin/$branch..HEAD"
+          # Name the ref. A range bundle (`origin/$branch..HEAD`) stores the tip
+          # as `HEAD` and nothing else, so the push job's fetch of
+          # `refs/heads/$branch` fails with "couldn't find remote ref" — the
+          # round's work is discarded after its Attempt is spent. Reproduced on
+          # 2026-11-27: PR #1815's round died exactly there.
+          git bundle create .factory-handoff/round.bundle \
+            "refs/heads/$branch" --not "refs/remotes/origin/$branch"
 
       - uses: actions/upload-artifact@v7
         if: always()
