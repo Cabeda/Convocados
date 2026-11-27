@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { advanceDueRecurringEvent } from "~/lib/advanceOccurrence.server";
+import { applyRosterChange } from "~/lib/applyRosterChange.server";
 import { POST as cronAdvance } from "~/pages/api/cron/advance-recurring";
 import { deliverReminder, markReminderSent } from "~/lib/reminders.server";
 import { fireWebhooks } from "~/lib/webhook.server";
@@ -66,6 +67,7 @@ async function seedRecurring(
       rsvpCutoffSent: true,
       recruitment48hSent: true,
       recruitment24hSent: true,
+      fewSpotsLeftNotified: true,
     },
   });
   const game = await prisma.game.create({
@@ -86,6 +88,7 @@ async function load(eventId: string) {
 }
 
 beforeEach(async () => {
+  await prisma.notificationJob.deleteMany();
   await prisma.scheduledJob.deleteMany();
   await prisma.reminderLog.deleteMany();
   await prisma.player.deleteMany();
@@ -118,6 +121,7 @@ describe("advanceDueRecurringEvent", () => {
     expect(fresh!.rsvpCutoffSent).toBe(false);
     expect(fresh!.recruitment48hSent).toBe(false);
     expect(fresh!.recruitment24hSent).toBe(false);
+    expect(fresh!.fewSpotsLeftNotified).toBe(false);
 
     const oldGame = await prisma.game.findUnique({ where: { id: game.id } });
     expect(oldGame!.status).toBe("played");
@@ -139,6 +143,32 @@ describe("advanceDueRecurringEvent", () => {
     await expect(deliverReminder(seeded.id, "24h")).resolves.toBe("delivered");
     await markReminderSent(seeded.id, "24h");
     expect(await prisma.reminderLog.count({ where: { eventId: seeded.id, type: "24h" } })).toBe(1);
+  });
+
+  it("re-arms the few-spots nudge on the new occurrence", async () => {
+    const { event: seeded } = await seedRecurring();
+    expect(await advanceDueRecurringEvent((await load(seeded.id))!)).toBe("advanced");
+
+    // Fill the new occurrence to the recruitment threshold (max 10, default
+    // threshold 3): the seventh join leaves three spots and must enqueue the
+    // nudge — a stale fewSpotsLeftNotified from the previous occurrence would
+    // silently suppress it for the rest of the series.
+    for (let i = 0; i < 7; i++) {
+      const current = (await load(seeded.id))!;
+      const result = await applyRosterChange({
+        eventId: current.id,
+        origin: "http://localhost",
+        session: null,
+        body: { name: `Player ${i}` },
+        event: current,
+      });
+      expect(result.status).toBe(200);
+    }
+
+    const jobs = await prisma.notificationJob.findMany({
+      where: { eventId: seeded.id, type: "few_spots_left" },
+    });
+    expect(jobs).toHaveLength(1);
   });
 
   it("seeds the new occurrence from the Event default payer", async () => {
