@@ -171,4 +171,19 @@ describe("POST /api/events/[id]/payments/settlement/bulk-undo (who may undo)", (
     expect(bob.status).toBe("pending");
     expect(cara.status).toBe("pending");
   });
+
+  it("returns 403 to a stood-down payer and changes no payment row", async () => {
+    const { event, game, alice, aliceEp, bobEp, caraEp } = await seedSettlementGame();
+    await prisma.game.update({ where: { id: game.id }, data: { payerStoodDownAt: new Date() } });
+
+    const res = await undoRequest(event.id, {
+      gameId: game.id,
+      eventPlayerIds: [aliceEp.id, bobEp.id, caraEp.id],
+    }, alice.token);
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Only the event owner can do this." });
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows.every((row) => row.status === "paid")).toBe(true);
+  });
 });
