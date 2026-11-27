@@ -10,6 +10,7 @@ import {
   type MatchEventType,
 } from "../../../../../../lib/matchEvents";
 import { isHistoryParticipant } from "../../../../../../lib/snapshotParticipants";
+import { authorizeEventMutation, eventMutationDenied, hasEventPasswordAccess } from "../../../../../../lib/eventAuthz.server";
 
 const EVENT_TYPES: MatchEventType[] = ["goal", "assist"];
 const TEAMS: MatchEventTeam[] = ["one", "two", "unknown"];
@@ -128,15 +129,17 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Match events can only be logged on played games." }, { status: 400 });
   }
 
-  const isOwner = !!event.ownerId && event.ownerId === userId;
-  const admin = isOwner
-    ? null
-    : await prisma.eventAdmin.findUnique({
-        where: { eventId_userId: { eventId: params.id ?? "", userId } },
-      });
   const isParticipant = isHistoryParticipant(history, session?.user?.name);
-  if (!isOwner && !admin && !isParticipant) {
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const authz = await authorizeEventMutation(request, event, session);
+  const passwordHeld = event.accessPassword
+    ? await hasEventPasswordAccess(request, event, session)
+    : false;
+
+  if (!authz.isOwner && !authz.isAdmin && !passwordHeld && !(isParticipant && !event.accessPassword)) {
+    return eventMutationDenied(
+      event.accessPassword ? { ...authz, reason: "password_required" } : authz,
+      "Forbidden.",
+    );
   }
 
   const body = await request.json();

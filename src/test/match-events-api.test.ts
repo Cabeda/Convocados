@@ -8,8 +8,9 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   checkOwnership: vi.fn(),
 }));
 
-import { getSession } from "~/lib/auth.helpers.server";
+import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
 const mockGetSession = vi.mocked(getSession);
+const mockCheckOwnership = vi.mocked(checkOwnership);
 
 import { GET as listEvents, POST as createEvent } from "~/pages/api/events/[id]/history/[historyId]/match-events";
 
@@ -75,6 +76,13 @@ function mockAuth(userId: string, userName: string) {
 beforeEach(async () => {
   vi.clearAllMocks();
   mockGetSession.mockResolvedValue(null);
+  mockCheckOwnership.mockImplementation(async (_request, ownerId, existingSession, eventId) => {
+    const session = existingSession ?? await mockGetSession(_request);
+    const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
+    const isAdmin = !isOwner && !!(session?.user && eventId)
+      && (await prisma.eventAdmin.count({ where: { eventId, userId: session.user.id } })) > 0;
+    return { isOwner, isAdmin, session } as any;
+  });
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.matchEvent.deleteMany();

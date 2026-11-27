@@ -129,7 +129,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 	// The seam settles owner/admin and the ownerless link; a roster player keeps
 	// the #658 team edit only while the Event is unlocked. A password-locked
 	// Event denies that player unless the password (or an invite) was produced.
-	if (!authz.allowed && !passwordHeld && !(isPlayer && !event.accessPassword)) {
+	if (!authz.isOwner && !authz.isAdmin && !passwordHeld && !(isPlayer && !event.accessPassword)) {
 		return eventMutationDenied(
 			event.accessPassword ? { ...authz, reason: "password_required" } : authz,
 			"You must be the event owner, an admin, or a player in this game to update teams.",

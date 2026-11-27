@@ -575,6 +575,35 @@ describe("password-locked Event mutations (#1727)", () => {
     expect((await patchHistory(ctx({ id: event.id, historyId: history.id }, { scoreOne: 3, scoreTwo: 0 }, cookieToken, "PATCH", cookie))).status).toBe(200);
   });
 
+  it("still lets a participant log a goal on an UNLOCKED Event and a cookie holder on a locked one", async () => {
+    const unlocked = await seedEvent({ ownerId: null, isPublic: false });
+    const unlockedHistory = await seedHistoryEntry(
+      unlocked.id,
+      JSON.stringify([
+        { team: "Ninjas", players: [{ name: "other", order: 0 }] },
+        { team: "Gunas", players: [] },
+      ]),
+    );
+    expect((await createMatchEvent(ctx(
+      { id: unlocked.id, historyId: unlockedHistory.id },
+      { type: "goal", team: "one", scorerName: "other", minute: 1 },
+      otherToken,
+      "POST",
+    ))).status).toBe(201);
+
+    const locked = await seedEvent({ ownerId: null, isPublic: false, accessPassword: hashPassword("secret") });
+    const lockedHistory = await seedHistoryEntry(locked.id);
+    const { token: cookieToken } = await seedUserWithToken("cookie");
+    const cookie = buildAccessCookie(null, locked.id, locked.accessPassword!);
+    expect((await createMatchEvent(ctx(
+      { id: locked.id, historyId: lockedHistory.id },
+      { type: "goal", team: "one", scorerName: "Alice", minute: 1 },
+      cookieToken,
+      "POST",
+      cookie,
+    ))).status).toBe(201);
+  });
+
   it("still lets a settled participant edit history on an UNLOCKED Event", async () => {
     const event = await seedEvent({ ownerId });
     const history = await seedHistoryEntry(
