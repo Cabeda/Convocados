@@ -557,3 +557,30 @@ describe("every App token is minted under the input v3 keeps", () => {
     }
   });
 });
+
+describe("a round's bundle carries the branch the push job fetches", () => {
+  // The round job packages its work as a bundle and the push job fetches
+  // `refs/heads/$branch` out of it. A range bundle (`origin/$branch..HEAD`)
+  // stores its tip as `HEAD` with no ref, so that fetch fails with "couldn't
+  // find remote ref" — after the Attempt had already been recorded. Reproduced
+  // 2026-11-27 with PR #1815's round (run 46033882168, push job).
+  it("names the ref instead of relying on a range", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    // The command wraps across a continuation line, so match the command as a
+    // block rather than per line.
+    expect(raw).toMatch(/git bundle create[\s\S]{0,200}?refs\/heads\/\$branch/);
+    expect(raw).not.toMatch(/git bundle create[\s\S]{0,120}?\.\.HEAD/);
+  });
+});
+
+describe("a lost Attempt stops the round instead of hiding in a budget of zero", () => {
+  // `attempt.ts` exits 2 when the Attempt comment cannot be written, and 1 when
+  // the round spent the budget. The ledger tolerated both with `|| true`, so a
+  // failed write still ran the round, the count stayed at zero, and the same
+  // Change was picked again — the three-round handoff could never fire.
+  it("tolerates the budget exit and nothing else", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    expect(raw).not.toMatch(/attempt\.ts "\$PR" review --set \|\| true/);
+    expect(raw).toContain('if [ "$spent" -ne 0 ] && [ "$spent" -ne 1 ]; then');
+  });
+});
