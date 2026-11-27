@@ -100,7 +100,12 @@ if (flags.includes("--set")) {
     // Exit 2, not 1: 1 already means "this round spent the budget", and the
     // ledger tolerates that one. A lost write must look different or the round
     // runs unrecorded and the budget reads zero forever.
-    console.error(`${scope}: the Attempt could not be recorded — ${String(error)}`);
+    // Surface gh's own message: `String(error)` prints the command and nothing
+    // about why, which turned a 403 into an hour of guessing on 2026-11-27.
+    const stderr = (error as { stderr?: Buffer | string }).stderr ?? "";
+    console.error(
+      `${scope}: the Attempt could not be recorded — ${String(error)}\n${String(stderr).trim()}`,
+    );
     process.exit(2);
   }
   console.log(`${scope}: Attempt ${spent + 1} recorded (budget ${budget})`);
