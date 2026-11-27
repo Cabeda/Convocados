@@ -97,7 +97,7 @@ export function eventMutationDenied(authz: EventMutationAuthz, error: string): R
  * Whether the share link alone authorizes this caller. Granted unless the Event
  * set a password, in which case the password (or an invitation) must also be held.
  */
-async function checkLinkAccess(
+export async function checkLinkAccess(
   request: Request,
   event: AuthorizableEvent,
   session: SessionResult | null,
