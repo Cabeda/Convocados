@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
-import { settledGamePlayer } from "../../../../../../lib/participants.server";
+import { settledGameEligibleVoters, settledGamePlayer } from "../../../../../../lib/participants.server";
 import { occurrenceRoster } from "../../../../../../lib/gameRoster.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
@@ -145,12 +145,8 @@ export const GET: APIRoute = async ({ params, request }) => {
         return acc;
       }, []);
 
-      // Count eligible voters: participants with user accounts
-      const matchingUsers = await prisma.user.findMany({
-        where: { name: { in: names } },
-        select: { name: true },
-      });
-      eligibleVoters = matchingUsers.length;
+      // Eligible voters are the linked EventPlayers on the settled roster.
+      eligibleVoters = await settledGameEligibleVoters({ event, latestHistory: history });
     } catch { /* ignore */ }
   }
 

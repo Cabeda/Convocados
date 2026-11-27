@@ -18,7 +18,7 @@
 import { prisma } from "./db.server";
 import { isGameEnded } from "./gameStatus";
 import { getRosterCapacity } from "./roster.server";
-import { isHistoryParticipant } from "./snapshotParticipants";
+import { settledGamePlayer } from "./participants.server";
 
 export type HomeActionType = "fill_spots" | "settle_score" | "pay_share" | "vote_mvp";
 
@@ -48,9 +48,8 @@ export async function computeHomeActions(
   userId: string,
   now: Date = new Date(),
 ): Promise<HomeAction[]> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!user) return [];
-  const userName = user.name;
 
   const postGameSince = new Date(now.getTime() - POST_GAME_WINDOW_DAYS * DAY);
   const paySince = new Date(now.getTime() - PAY_WINDOW_DAYS * DAY);
@@ -121,7 +120,12 @@ export async function computeHomeActions(
       },
       select: {
         id: true, dateTime: true, teamsSnapshot: true,
-        event: { select: { id: true, title: true, timezone: true, durationMinutes: true } },
+        event: {
+          select: {
+            id: true, title: true, timezone: true, durationMinutes: true,
+            dateTime: true, currentGameId: true,
+          },
+        },
       },
       orderBy: { dateTime: "desc" },
       take: 50,
@@ -204,24 +208,25 @@ export async function computeHomeActions(
     const histories = [...latestByEvent.values()];
     const playerRows = await prisma.player.findMany({
       where: { userId, eventId: { in: [...latestByEvent.keys()] } },
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
-    const playerIds = playerRows.map((p) => p.id);
     const votes = await prisma.mvpVote.findMany({
-      where: {
-        gameHistoryId: { in: histories.map((h) => h.id) },
-        OR: [
-          ...(playerIds.length > 0 ? [{ voterPlayerId: { in: playerIds } }] : []),
-          { voterPlayerId: `name:${userName}` },
-        ],
-      },
-      select: { gameHistoryId: true },
+      where: { gameHistoryId: { in: histories.map((h) => h.id) } },
+      select: { gameHistoryId: true, voterPlayerId: true },
     });
-    const votedSet = new Set(votes.map((v) => v.gameHistoryId));
     for (const h of histories) {
       if (!isGameEnded(h.dateTime, h.event.durationMinutes, now)) continue;
-      if (!isHistoryParticipant(h, userName)) continue;
-      if (votedSet.has(h.id)) continue;
+      // Same identity seam as the vote endpoint: the linked EventPlayer, never
+      // the self-editable User.name.
+      const eventPlayer = await settledGamePlayer({
+        sessionUser: { id: userId },
+        event: h.event,
+        latestHistory: h,
+      });
+      if (!eventPlayer) continue;
+      const playerIds = playerRows.filter((p) => p.eventId === h.event.id).map((p) => p.id);
+      const voterKeys = playerIds.length > 0 ? playerIds : [`name:${eventPlayer.name}`];
+      if (votes.some((v) => v.gameHistoryId === h.id && voterKeys.includes(v.voterPlayerId))) continue;
       actions.push({
         type: "vote_mvp",
         eventId: h.event.id,

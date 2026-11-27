@@ -57,6 +57,7 @@ beforeEach(async () => {
   await prisma.gameHistory.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
 });
@@ -95,6 +96,7 @@ describe("GET history list — batched MVP summaries", () => {
     });
     const alice = await prisma.player.create({ data: { name: "Alice", eventId: event.id, userId: user.id } });
     const bob = await prisma.player.create({ data: { name: "Bob", eventId: event.id } });
+    await prisma.eventPlayer.create({ data: { name: "Alice", eventId: event.id, userId: user.id } });
     const history = await seedHistory(event.id);
     await prisma.mvpVote.create({
       data: {
@@ -110,5 +112,57 @@ describe("GET history list — batched MVP summaries", () => {
     const res = await GET(getCtx({ id: event.id }));
     const body = await res.json();
     expect(body.data[0].mvp.hasVoted).toBe(true);
+  });
+
+  it("marks hasVoted for a linked EventPlayer with no Player row", async () => {
+    const event = await seedEvent();
+    const user = await prisma.user.create({
+      data: { id: "u-zoey", name: "Zoey", email: "zoey@test.com", emailVerified: false },
+    });
+    await prisma.eventPlayer.create({ data: { name: "Alice", eventId: event.id, userId: user.id } });
+    const history = await seedHistory(event.id);
+    await prisma.mvpVote.create({
+      data: {
+        gameHistoryId: history.id,
+        voterPlayerId: "name:Alice",
+        voterName: "Alice",
+        votedForPlayerId: "name:Bob",
+        votedForName: "Bob",
+      },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: "Zoey", email: user.email } } as any);
+
+    const res = await GET(getCtx({ id: event.id }));
+    const body = await res.json();
+    expect(body.data[0].mvp.hasVoted).toBe(true);
+  });
+
+  it("counts eligible voters by linked EventPlayer, not a self-editable User.name", async () => {
+    const event = await seedEvent();
+    const history = await seedHistory(event.id);
+    await prisma.user.create({
+      data: { id: "u-alina", name: "Alina", email: "alina@test.com", emailVerified: false },
+    });
+    await prisma.user.create({
+      data: { id: "u-bobby", name: "Bobby", email: "bobby@test.com", emailVerified: false },
+    });
+    await prisma.user.create({
+      data: { id: "u-outsider", name: "Alice", email: "outsider@test.com", emailVerified: false },
+    });
+    await prisma.eventPlayer.create({ data: { name: "Alice", eventId: event.id, userId: "u-alina" } });
+    await prisma.eventPlayer.create({ data: { name: "Bob", eventId: event.id, userId: "u-bobby" } });
+    await prisma.eventPlayer.create({ data: { name: "Zoe", eventId: event.id, userId: "u-outsider" } });
+
+    mockGetSession.mockResolvedValue({
+      user: { id: "u-outsider", name: "Alice", email: "outsider@test.com" },
+    } as any);
+
+    const res = await GET(getCtx({ id: event.id }));
+    const body = await res.json();
+    expect(body.data[0].id).toBe(history.id);
+    expect(body.data[0].mvp.eligibleVoters).toBe(2);
+    // The outsider's User.name is "Alice" but its linked EventPlayer is not on
+    // this roster, so it has no vote to recognize.
+    expect(body.data[0].mvp.hasVoted).toBeNull();
   });
 });

@@ -521,6 +521,7 @@ describe("GET /api/events/:id/post-game-status", () => {
     await prisma.user.create({ data: { id: "u-bob4", name: "Bob", email: "bob4@test.com", emailVerified: false } });
     await prisma.player.create({ data: { id: "p-alice4", name: "Alice", eventId: event.id, userId: "u-alice4", order: 0 } });
     await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alice4" } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob", userId: "u-bob4" } });
 
     const history = await prisma.gameHistory.create({
       data: {
@@ -550,6 +551,60 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.mvpComplete).toBe(false); // Bob still owes his vote
     expect(json.myMvpComplete).toBe(true); // Alice's task is done
     expect(json.allComplete).toBe(true); // → banner dismissed for Alice
+
+    mockGetSession.mockReset();
+    mockGetSession.mockResolvedValue(null);
+    mockCheckOwnership.mockReset();
+  });
+
+  it("finds a vote stored under the linked EventPlayer name and counts only linked players", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "MVP Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+        mvpEnabled: true,
+      },
+    });
+    await prisma.user.create({ data: { id: "u-alina", name: "Alina", email: "alina@test.com", emailVerified: false } });
+    await prisma.user.create({ data: { id: "u-bob5", name: "Bob", email: "bob5@test.com", emailVerified: false } });
+    await prisma.user.create({ data: { id: "u-out5", name: "Alice", email: "out5@test.com", emailVerified: false } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alina" } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob", userId: "u-bob5" } });
+    // This account's User.name is "Alice", but its linked EventPlayer is not on
+    // the roster — it must not be counted as an eligible voter.
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Zoe", userId: "u-out5" } });
+
+    const history = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        status: "played",
+        teamsSnapshot: JSON.stringify([
+          { team: "A", players: [{ name: "Alice", order: 0 }] },
+          { team: "B", players: [{ name: "Bob", order: 0 }] },
+        ]),
+      },
+    });
+    await prisma.mvpVote.create({
+      data: { gameHistoryId: history.id, voterPlayerId: "name:Alice", voterName: "Alice", votedForPlayerId: "name:Bob", votedForName: "Bob" },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: "u-alina", name: "Alina" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false } as any);
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isPlayer).toBe(true);
+    expect(json.mvpComplete).toBe(false); // Alice and Bob are eligible; only Alice voted
+    expect(json.myMvpComplete).toBe(true); // Alice's vote is stored under the EventPlayer name
+    expect(json.allComplete).toBe(true);
 
     mockGetSession.mockReset();
     mockGetSession.mockResolvedValue(null);
@@ -1005,6 +1060,8 @@ describe("GET /api/events/:id/post-game-status", () => {
     // Create users matching the teamsSnapshot names
     await prisma.user.create({ data: { id: "u-alice", name: "Alice", email: "alice@test.com", emailVerified: false } });
     await prisma.user.create({ data: { id: "u-bob", name: "Bob", email: "bob@test.com", emailVerified: false } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alice" } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob", userId: "u-bob" } });
 
     await prisma.gameHistory.create({
       data: {

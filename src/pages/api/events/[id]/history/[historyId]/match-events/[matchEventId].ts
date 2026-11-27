@@ -4,7 +4,7 @@ import { getSession } from "../../../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../../../lib/eventLog.server";
 import { deriveScoreFromGoals, type MatchEventTeam } from "../../../../../../../lib/matchEvents";
-import { isHistoryParticipant } from "../../../../../../../lib/snapshotParticipants";
+import { isSettledGameParticipant } from "../../../../../../../lib/participants.server";
 
 /**
  * DELETE — remove a Match Event and re-derive the game's score from what is
@@ -35,7 +35,9 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     : await prisma.eventAdmin.findUnique({
         where: { eventId_userId: { eventId: params.id ?? "", userId } },
       });
-  const isParticipant = isHistoryParticipant(history, session?.user?.name);
+  const isParticipant = session?.user
+    ? await isSettledGameParticipant({ sessionUser: session.user, event, latestHistory: history })
+    : false;
   if (!isOwner && !admin && !isParticipant) {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }

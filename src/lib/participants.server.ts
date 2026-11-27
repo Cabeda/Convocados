@@ -1,7 +1,6 @@
 import { prisma } from "./db.server";
 import { namesFromTeamsSnapshot, normalizeName } from "./snapshotParticipants";
 import { activeParticipantsWhere } from "./activeParticipants.server";
-import { occurrencePaymentNames } from "./paymentRoll.server";
 
 export interface SettledGameParticipantContext {
   sessionUser: { id?: string; name?: string | null } | null;
@@ -38,6 +37,30 @@ async function settledGame(
     orderBy: { createdAt: "desc" },
     select: { id: true },
   });
+}
+
+/**
+ * Whether the occurrence already has durable roster/payment rows. Only when it
+ * has none may the frozen names bridge a legacy row to the linked account.
+ */
+async function hasDurableRows(gameId: string): Promise<boolean> {
+  const onTeams = await prisma.gameParticipant.findFirst({
+    where: activeParticipantsWhere(gameId),
+    select: { id: true },
+  });
+  if (onTeams) return true;
+
+  const onRoll = await prisma.gamePayment.findFirst({
+    where: { gameId, archivedAt: null },
+    select: { id: true },
+  });
+  if (onRoll) return true;
+
+  const payer = await prisma.game.findFirst({
+    where: { id: gameId, payerEventPlayerId: { not: null } },
+    select: { id: true },
+  });
+  return !!payer;
 }
 
 /**
@@ -83,8 +106,13 @@ async function settledGameEventPlayer(
     }
   }
 
-  // Legacy rows with no durable link: match the frozen roster and payment-roll
-  // names to the account's own EventPlayer, then trust only that row's userId.
+  // Only a legacy occurrence with no durable rows at all may bridge through
+  // the frozen names. When durable rows exist, a name in a stale snapshot must
+  // not override the roster: an absent player is absent, not re-authorized.
+  if (game && (await hasDurableRows(game.id))) return null;
+
+  // Legacy rows with no durable link: match the frozen roster names to the
+  // account's own EventPlayer, then trust only that row's userId.
   const linked = await prisma.eventPlayer.findMany({
     where: { eventId: event.id, userId },
     select: { id: true, name: true },
@@ -96,19 +124,6 @@ async function settledGameEventPlayer(
     const needle = new Set(rosterNames.map(normalizeName));
     const match = linked.find((p) => needle.has(normalizeName(p.name)));
     if (match) return match;
-  }
-
-  if (includePayments) {
-    const paymentNames = await occurrencePaymentNames(
-      event.id,
-      occurrenceDt,
-      hasReset ? undefined : event.currentGameId,
-    );
-    if (paymentNames.length > 0) {
-      const needle = new Set(paymentNames.map(normalizeName));
-      const match = linked.find((p) => needle.has(normalizeName(p.name)));
-      if (match) return match;
-    }
   }
 
   return null;
@@ -127,17 +142,46 @@ export async function isSettledGameParticipant(context: SettledGameParticipantCo
   return (await settledGameEventPlayer(context, true)) !== null;
 }
 
-/**
- * Players-only variant for edit rights that must not extend to a payer who did
- * not play (MVP voting). Same identity seam, teams only.
- */
-export async function isSettledGamePlayer(context: SettledGameParticipantContext): Promise<boolean> {
-  return (await settledGameEventPlayer(context, false)) !== null;
-}
-
 /** The linked EventPlayer who played the settled game, or null. */
 export async function settledGamePlayer(
   context: SettledGameParticipantContext,
 ): Promise<SettledGameEventPlayer | null> {
   return settledGameEventPlayer(context, false);
+}
+
+/**
+ * How many accounts can vote on the settled game: distinct linked EventPlayers
+ * on its teams. Anonymous roster rows cannot vote, so they are not counted;
+ * User.name never decides who is eligible.
+ */
+export async function settledGameEligibleVoters(
+  context: Pick<SettledGameParticipantContext, "event" | "latestHistory">,
+): Promise<number> {
+  const { event, latestHistory } = context;
+  const occurrenceDt = latestHistory?.dateTime ?? event.dateTime;
+  const hasReset = !!latestHistory && event.dateTime.getTime() > latestHistory.dateTime.getTime();
+  const game = await settledGame(event, occurrenceDt, hasReset);
+
+  if (game) {
+    const rows = await prisma.gameParticipant.findMany({
+      where: activeParticipantsWhere(game.id),
+      select: { eventPlayer: { select: { userId: true } } },
+    });
+    const voters = new Set<string>();
+    for (const row of rows) {
+      if (row.eventPlayer.userId) voters.add(row.eventPlayer.userId);
+    }
+    return voters.size;
+  }
+
+  const rosterNames = namesFromTeamsSnapshot(latestHistory?.teamsSnapshot);
+  if (rosterNames.length === 0) return 0;
+  const needle = new Set(rosterNames.map(normalizeName));
+  const linked = await prisma.eventPlayer.findMany({
+    where: { eventId: event.id, userId: { not: null } },
+    select: { name: true },
+  });
+  return new Set(
+    linked.filter((p) => needle.has(normalizeName(p.name))).map((p) => normalizeName(p.name)),
+  ).size;
 }
