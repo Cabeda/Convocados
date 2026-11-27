@@ -167,11 +167,10 @@ const REMINDER_KEYS = {
  *
  * The dedup is sequential, not a lease: two triggers that both read before
  * either marks can both deliver. At-least-once is deliberate — a claim would
- * trade the occasional duplicate for a silent miss, and the cron marks only
- * after the push queue drains.
+ * trade the occasional duplicate for a silent miss.
  *
- * The caller records the send with `markReminderSent` — the cron does it after
- * the push queue is drained, the scheduler inline.
+ * The caller records the send with `markReminderSent` per event as soon as
+ * that delivery completes — the cron and the scheduler both do it inline.
  */
 export async function deliverReminder(eventId: string, type: ReminderType): Promise<ReminderOutcome> {
   const event = await prisma.event.findUnique({

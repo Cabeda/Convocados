@@ -47,11 +47,14 @@ export const POST: APIRoute = async ({ request }) => {
   const emailFailures: string[] = [];
 
   // ── Game reminders ────────────────────────────────────────────────────────
-  // Collect events to mark as sent after the queue is drained
-  const remindersToMark: Array<{ eventId: string; type: "24h" | "2h" | "1h" }> = [];
-
   for (const type of ["24h", "2h", "1h"] as const) {
-    const reminders = await getUpcomingReminders(type);
+    let reminders: Awaited<ReturnType<typeof getUpcomingReminders>>;
+    try {
+      reminders = await getUpcomingReminders(type);
+    } catch (err) {
+      log.error({ type, err }, "Failed to load upcoming reminders");
+      continue;
+    }
     for (const r of reminders) {
       try {
         // One delivery pipeline for every trigger. A disabled timing is
@@ -60,7 +63,11 @@ export const POST: APIRoute = async ({ request }) => {
         if (outcome === "already-sent" || outcome === "archived") continue;
         if (outcome === "delivered") sent.push(`${r.eventId}:${type}`);
         if (outcome === "delivered-with-failures") emailFailures.push(`${r.eventId}:${type}`);
-        remindersToMark.push({ eventId: r.eventId, type });
+        // Mark per (event, type) as soon as delivery completes: a later phase
+        // that throws must not lose the marker and re-send on the next tick.
+        await markReminderSent(r.eventId, type).catch((err) =>
+          log.error({ eventId: r.eventId, type, err }, "Failed to mark reminder sent"),
+        );
       } catch (err) {
         log.error({ eventId: r.eventId, type, err }, "Failed to process reminder");
       }
@@ -125,7 +132,6 @@ export const POST: APIRoute = async ({ request }) => {
   // ── Post-game reminders ───────────────────────────────────────────────────
   // Notify players after the game ends to add the score and settle payments
   const postGameRemindersSent: string[] = [];
-  const postGameRemindersToMark: string[] = [];
   try {
     const postGameReminders = await getPostGameReminders();
     for (const r of postGameReminders) {
@@ -134,7 +140,9 @@ export const POST: APIRoute = async ({ request }) => {
         if (outcome === "already-sent" || outcome === "archived") continue;
         postGameRemindersSent.push(r.eventId);
         if (outcome === "delivered-with-failures") emailFailures.push(`${r.eventId}:post-game`);
-        postGameRemindersToMark.push(r.eventId);
+        await markReminderSent(r.eventId, "post-game").catch((err) =>
+          log.error({ eventId: r.eventId, type: "post-game", err }, "Failed to mark post-game reminder sent"),
+        );
       } catch (err) {
         log.error({ eventId: r.eventId, err }, "Failed to process post-game reminder");
       }
@@ -171,9 +179,9 @@ export const POST: APIRoute = async ({ request }) => {
   // ── #457 RSVP 48h fanout + 24h organizer summary ──────────────────────────
   const rsvpPingsSent: string[] = [];
   const rsvpSummariesSent: string[] = [];
-  // ADR 0017: Capture T-48h events BEFORE marking rsvpCutoffSent (shared with recruitment)
-  const t48hEvents = await getEventsNeedingRsvpPing();
   try {
+    // ADR 0017: Capture T-48h events BEFORE marking rsvpCutoffSent (shared with recruitment)
+    const t48hEvents = await getEventsNeedingRsvpPing();
     for (const e of t48hEvents) {
       const recipientIds = await getRsvpRecipients(e.id);
       if (recipientIds.length === 0) {
@@ -355,8 +363,7 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to process T-24h recruitment pings");
   }
 
-  // Drain the notification job queue — must happen before marking reminders sent
-  // so that if the cron is killed mid-run, reminders are not marked sent without push delivery
+  // Drain the notification job queue.
   let notificationJobsDrained = 0;
   try {
     notificationJobsDrained = await drainNotificationQueue();
@@ -381,20 +388,6 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (err) {
     log.error({ err }, "Failed to process organizer digests");
   }
-
-  // Mark reminders as sent only after push delivery is complete
-  await Promise.allSettled([
-    ...remindersToMark.map(({ eventId, type }) =>
-      markReminderSent(eventId, type).catch((err) =>
-        log.error({ eventId, type, err }, "Failed to mark reminder sent"),
-      ),
-    ),
-    ...postGameRemindersToMark.map((eventId) =>
-      markReminderSent(eventId, "post-game").catch((err) =>
-        log.error({ eventId, type: "post-game", err }, "Failed to mark post-game reminder sent"),
-      ),
-    ),
-  ]);
 
   return new Response(
     JSON.stringify({ ok: true, sent, emailFailures, paymentRemindersSent, paymentEscalation, payerCheckIns, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
