@@ -9,10 +9,11 @@
  * open after the fix ships, and the next agent reads solved work as live
  * (#1114 closed by hand 20h late, #1199 11 days late).
  *
- * The `no-issue` label exempts a PR that genuinely closes nothing. Dependabot
- * cannot apply a label, so its exact login is exempt too — a dependency bump
- * closes no issue by design. Every other author (human or bot) still needs a
- * keyword, and an unknown author fails closed.
+ * The `no-issue` label exempts a PR that genuinely closes nothing. A Dependabot
+ * bump closes no issue by design, and a configured label would have to be
+ * repeated for every ecosystem, so its exact login is exempt instead. Every
+ * other author (human or bot) still needs a keyword, and an unknown author
+ * fails closed.
  *
  * CLI: reads PR_BODY, PR_LABELS (comma-separated) and optionally PR_AUTHOR from
  * the environment, as the CI job does. It also accepts the body as a file
@@ -29,7 +30,7 @@ export const CLOSING_KEYWORD = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?
 /** The escape hatch: a PR that legitimately closes no issue. */
 export const EXEMPT_LABEL = "no-issue";
 
-/** The dependency bot cannot apply a label, so its bumps are exempt by author. */
+/** A dependency bump closes no issue by design; exempt Dependabot's exact login. */
 export const EXEMPT_BOT_AUTHOR = "dependabot[bot]";
 
 export function hasClosingKeyword(body) {

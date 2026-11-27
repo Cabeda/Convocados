@@ -74,8 +74,11 @@ describe("PR closing-keyword check — dependency bots", () => {
     });
   });
 
-  it("does not exempt a machine-authored Change that is not the dependency bot", () => {
-    expect(evaluate({ body: "", labels: [], author: "convocados-factory-bot" })).toEqual({
+  it.each([
+    ["convocarados-factory[bot]"],
+    ["app/convocarados-factory"],
+  ])("does not exempt the factory's own bot (%s)", (author) => {
+    expect(evaluate({ body: "", labels: [], author })).toEqual({
       ok: false,
       reason: "missing",
     });
