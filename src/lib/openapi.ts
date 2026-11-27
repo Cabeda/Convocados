@@ -1262,7 +1262,7 @@ export const openApiSpec = {
         parameters: [eventIdParam],
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", properties: { playerId: { type: "string" } }, required: ["playerId"] } } },
+          content: { "application/json": { schema: { type: "object", properties: { playerId: { type: "string" }, inviteToken: { type: "string" } }, required: ["playerId"] } } },
         },
         responses: { "200": { description: "Player claimed" }, ...errorResponses },
       },

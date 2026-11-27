@@ -87,7 +87,7 @@ export function InvitePage({ token }: { token: string }) {
     try {
       await apiRequest("POST /api/events/{id}/claim-player", {
         params: { id: data.game.id },
-        body: { playerId: data.claimPlayerId },
+        body: { playerId: data.claimPlayerId, inviteToken: token },
         init: { credentials: "include" },
       });
       setData({ ...data, claimPlayerId: null });

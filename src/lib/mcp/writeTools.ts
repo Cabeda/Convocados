@@ -28,7 +28,7 @@ import { sendPushToUser } from "../push.server";
 import { logEvent } from "../eventLog.server";
 import { assignTeams, getActivePlayers } from "../teamAssignment.server";
 import { setEventCost } from "../eventCost.server";
-import { claimPlayer as claimPlayerFn } from "../claimPlayer.server";
+import { claimPlayer as claimPlayerFn, ClaimPlayerForbiddenError } from "../claimPlayer.server";
 
 /**
  * MCP write tools (V1.5). All mutations reuse the same server-side libs as
@@ -809,8 +809,14 @@ async function claimPlayer(args: Record<string, unknown>, ctx: AuthContext) {
     return result;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    if (err instanceof ClaimPlayerForbiddenError) {
+      throw new McpError(message, -32001, 403);
+    }
     if (message === "Player not found.") {
       throw new McpError(message, -32001, 404);
+    }
+    if (message.includes("archived")) {
+      throw new McpError(message, -32001, 409);
     }
     if (message.includes("already linked") || message.includes("already have") || message.includes("already claimed")) {
       throw new McpError(message, -32001, 409);

@@ -1,16 +1,88 @@
 import type { Player } from "@prisma/client";
+import type { SessionResult } from "./auth.helpers.server";
 import { prisma } from "./db.server";
+import { checkAccess } from "./eventAccess";
+import { authorizeEventMutation, type AuthorizableEvent } from "./eventAuthz.server";
 import { enqueuePushSetupHintSafe } from "./pushSetupHint";
 
 export interface ClaimPlayerInput {
   playerId: string;
   userId: string;
   userName: string;
+  /** The caller's request, so an ev_access cookie can authorize the claim. */
+  request?: Request;
+  /** A PlayerInvite token: the per-player capability for a locked Event. */
+  inviteToken?: string | null;
 }
 
 export interface ClaimPlayerResult {
   ok: true;
   claimedPlayerId: string;
+}
+
+/** A claim denied by the Event's access rules — not a missing or linked player. */
+export class ClaimPlayerForbiddenError extends Error {
+  readonly reason?: "password_required";
+  constructor(reason?: "password_required") {
+    super("You do not have access to claim a player in this event.");
+    this.name = "ClaimPlayerForbiddenError";
+    this.reason = reason;
+  }
+}
+
+/**
+ * Self-service claims are authorized by the Event's own access rules, not by a
+ * session alone: the owner/admin (the mutation seam), the link capability when
+ * the Event is unlocked or the caller holds its password/EventInvite, or the
+ * per-player PlayerInvite token. A password-locked Event must never let a bare
+ * link holder rewrite a guest's identity.
+ */
+async function authorizeClaim(
+  event: AuthorizableEvent,
+  input: ClaimPlayerInput,
+  targetEventPlayerId: string | null,
+): Promise<void> {
+  const request = input.request ?? new Request("http://localhost/");
+  const session = {
+    user: { id: input.userId, name: input.userName },
+  } as unknown as SessionResult;
+  const authz = await authorizeEventMutation(request, event, session);
+  if (authz.allowed) return;
+
+  const isInvited =
+    (await prisma.eventInvite.count({ where: { eventId: event.id, userId: input.userId } })) > 0;
+  const linkAccess = checkAccess({
+    eventOwnerId: event.ownerId,
+    accessPassword: event.accessPassword,
+    requestUserId: input.userId,
+    cookieHeader: input.request?.headers.get("cookie") ?? null,
+    eventId: event.id,
+    isInvited,
+  });
+  if (linkAccess.granted) return;
+
+  if (await hasMatchingPlayerInvite(event.id, targetEventPlayerId, input.inviteToken)) return;
+
+  throw new ClaimPlayerForbiddenError(event.accessPassword ? "password_required" : undefined);
+}
+
+/** Whether the token is an unanswered or accepted invite for this exact slot. */
+async function hasMatchingPlayerInvite(
+  eventId: string,
+  targetEventPlayerId: string | null,
+  token?: string | null,
+): Promise<boolean> {
+  if (!token || !targetEventPlayerId) return false;
+  const invite = await prisma.playerInvite.findUnique({
+    where: { token },
+    select: { eventPlayerId: true, status: true, eventPlayer: { select: { eventId: true } } },
+  });
+  return (
+    !!invite &&
+    invite.eventPlayer.eventId === eventId &&
+    invite.eventPlayerId === targetEventPlayerId &&
+    (invite.status === "pending" || invite.status === "accepted")
+  );
 }
 
 export async function claimPlayer(
@@ -43,6 +115,22 @@ export async function claimPlayer(
   }
   if (!target && !guestEp) throw new Error("Player not found.");
 
+  const oldName: string = target?.name ?? guestEp?.name ?? "";
+  const targetEventPlayerId =
+    guestEp?.id ??
+    (oldName
+      ? (await prisma.eventPlayer.findFirst({
+          where: { eventId, name: oldName },
+          select: { id: true },
+        }))?.id ?? null
+      : null);
+
+  await authorizeClaim(event, input, targetEventPlayerId);
+
+  if (target?.archivedAt) {
+    throw new Error("This player is archived and cannot be claimed.");
+  }
+
   if (target?.userId) {
     throw new Error("This player is already linked to an account.");
   }
@@ -58,8 +146,6 @@ export async function claimPlayer(
   if (existingEp) {
     throw new Error("You already have a linked player in this event.");
   }
-
-  const oldName: string = target?.name ?? guestEp?.name ?? "";
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -92,7 +178,9 @@ export async function claimPlayer(
       const anonRating = await tx.playerRating.findUnique({
         where: { eventId_name: { eventId, name: oldName } },
       });
-      if (anonRating) {
+      // A rating row with gamesPlayed carries settled results; moving it would
+      // rewrite an ELO history that already happened.
+      if (anonRating && anonRating.gamesPlayed === 0) {
         await tx.playerRating.update({
           where: { id: anonRating.id },
           data: { name: userName, userId },
@@ -101,10 +189,13 @@ export async function claimPlayer(
 
       const histories = await tx.gameHistory.findMany({
         where: { eventId },
-        select: { id: true, teamsSnapshot: true },
+        select: { id: true, teamsSnapshot: true, status: true, scoreOne: true, scoreTwo: true },
       });
       for (const h of histories) {
         if (!h.teamsSnapshot || !h.teamsSnapshot.includes(oldName)) continue;
+        // A scored or cancelled game is settled history: a claim must never
+        // rename a participant in a game that already happened.
+        if (h.status !== "played" || (h.scoreOne !== null && h.scoreTwo !== null)) continue;
         try {
           const teams: { team: string; players: { name: string; order: number }[] }[] = JSON.parse(h.teamsSnapshot);
           let changed = false;

@@ -118,7 +118,7 @@ describe("InvitePage — frictionless guest acceptance", () => {
     await waitFor(() => {
       const post = fetchMock.mock.calls.find(([, init]) => (init?.method ?? "") === "POST" && String(init?.body).includes("playerId"));
       expect(post).toBeTruthy();
-      expect(JSON.parse(post[1].body)).toEqual({ playerId: "ep-manecas", token: "tok-1" });
+      expect(JSON.parse(post[1].body)).toEqual({ playerId: "ep-manecas", inviteToken: "tok-1" });
     });
   });
 

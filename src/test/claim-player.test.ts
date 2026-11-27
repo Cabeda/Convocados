@@ -1,15 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { POST } from "~/pages/api/events/[id]/claim-player";
-import { getSession } from "~/lib/auth.helpers.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
-vi.mock("~/lib/auth.helpers.server", () => ({
-  getSession: vi.fn(),
-}));
+const { mockGetSession } = vi.hoisted(() => ({ mockGetSession: vi.fn() }));
 
-const mockGetSession = vi.mocked(getSession);
+vi.mock("~/lib/auth.helpers.server", () => ({
+  getSession: mockGetSession,
+  checkOwnership: async (_request: Request, ownerId: string | null, existingSession?: any) => {
+    const session = existingSession ?? (await mockGetSession());
+    return {
+      isOwner: !!(session?.user && ownerId && session.user.id === ownerId),
+      isAdmin: false,
+      session,
+    };
+  },
+  checkEventAdmin: async () => false,
+}));
 
 beforeEach(async () => {
   await prisma.player.deleteMany();

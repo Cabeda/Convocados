@@ -863,6 +863,7 @@ export interface ApiOperations {
     };
     body: {
       playerId: string;
+      inviteToken?: string;
     };
   };
   "POST /api/events/{id}/merge-player": {

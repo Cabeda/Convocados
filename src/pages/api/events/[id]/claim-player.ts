@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { claimPlayer } from "../../../../lib/claimPlayer.server";
+import { claimPlayer, ClaimPlayerForbiddenError } from "../../../../lib/claimPlayer.server";
 
 /** POST — claim an anonymous player: replace it with the authenticated user's identity */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -14,7 +14,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { playerId } = await request.json();
+  const { playerId, inviteToken } = await request.json();
   if (!playerId) {
     return Response.json({ error: "playerId is required." }, { status: 400 });
   }
@@ -24,15 +24,26 @@ export const POST: APIRoute = async ({ params, request }) => {
       playerId,
       userId: session.user.id,
       userName: session.user.name,
+      request,
+      inviteToken: typeof inviteToken === "string" ? inviteToken : undefined,
     });
     return Response.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    if (err instanceof ClaimPlayerForbiddenError) {
+      return Response.json(
+        err.reason ? { error: message, locked: true } : { error: message },
+        { status: 403 },
+      );
+    }
     if (message === "Event not found") {
       return Response.json({ error: message }, { status: 404 });
     }
     if (message === "Player not found.") {
       return Response.json({ error: message }, { status: 404 });
+    }
+    if (message.includes("archived")) {
+      return Response.json({ error: message }, { status: 409 });
     }
     if (message.includes("already linked") || message.includes("already have")) {
       return Response.json({ error: message }, { status: 409 });
