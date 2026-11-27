@@ -171,12 +171,15 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Review the Change
-        # 12, not 25. Every review that finished took 3-5 minutes; the only runs
-        # that used the full 25 wrote no verdict at all. The shorter cap turns a
-        # stuck run into a cheap miss instead of half an hour of billed minutes.
+        # 20. The 12-minute cap was fitted to docs-only diffs (3-5 min) and killed
+        # real code reviews mid-exploration: run 46071914557 was still reading
+        # `cancelEvent.server.ts` at 11 minutes and wrote no verdict, which the
+        # gate reads as "no review has named its head". 20 leaves room for a code
+        # diff while still halving the old 25, and the prompt below keeps the
+        # exploration bounded.
         # A step that times out exits non-zero, and `continue-on-error` absorbs
         # it, so the job stays green and the verdict step reports the miss.
-        timeout-minutes: 12
+        timeout-minutes: 20
         # Advisory, not a gate: see factory-issue.yml for why.
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
@@ -206,6 +209,10 @@ jobs:
             the Gates, which already passed. Report findings with `path:line` and the concrete
             failure each one causes. Treat migrations, auth and tokens, the scheduler, workflows
             and deploy config, and coverage-threshold edits as Hard Block: report, do not judge.
+
+            Start from `gh pr diff <number>` and open only the files the diff names, one read
+            each. Do not survey the repository: the Change is the subject, and exploring past it
+            spends the review's minutes without changing the verdict.
 
             Do not install, build, or run anything: no `pnpm install`, `pnpm test`, `pnpm typecheck`,
             Gradle, Playwright or Lighthouse. Those results already exist as checks on the Change and
