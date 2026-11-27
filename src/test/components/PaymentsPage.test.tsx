@@ -3,6 +3,7 @@ import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import PaymentsPage from "~/components/PaymentsPage";
+import { formatShortDate } from "~/lib/money";
 
 function mockFetch(routes: Record<string, unknown>) {
   vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
@@ -132,5 +133,75 @@ describe("PaymentsPage settle-all affordance (#1236)", () => {
         expect.objectContaining({ method: "PUT" }),
       ),
     );
+  });
+});
+
+describe("PaymentsPage self-report rows (#1757)", () => {
+  const dates = ["2026-08-01T20:00:00Z", "2026-08-08T20:00:00Z"];
+
+  function twoGameSummary() {
+    return summary({
+      games: [
+        unsettledGame({
+          gameId: "g1",
+          dateTime: dates[0],
+          rows: [{ eventPlayerId: "ep-ana", name: "Ana", amount: 6, status: "pending", isPayer: false }],
+        }),
+        unsettledGame({
+          gameId: "g2",
+          dateTime: dates[1],
+          rows: [{ eventPlayerId: "ep-ana", name: "Ana", amount: 5, status: "pending", isPayer: false }],
+        }),
+      ],
+    });
+  }
+
+  it("names each row's game and its own amount so two debts are distinguishable", async () => {
+    mockFetch({ [SETTLEMENT_URL]: twoGameSummary() });
+    renderWithTheme(<PaymentsPage eventId="e1" />);
+
+    await screen.findAllByRole("button", { name: /report sent/i });
+    const rowLabel = (date: string, amount: string) => (_content: string, element: Element | null) =>
+      element?.textContent === `${formatShortDate(date)} · ${amount}`;
+    expect(screen.getByText(rowLabel(dates[0], "6.00€"))).toBeInTheDocument();
+    expect(screen.getByText(rowLabel(dates[1], "5.00€"))).toBeInTheDocument();
+  });
+
+  it("posts the tapped row's own gameId, not the first game's", async () => {
+    const selfReports: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(url);
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (u === "/api/events/e1/payments/settlement/self-report" && init?.method === "POST") {
+        selfReports.push(JSON.parse(String(init.body)));
+        return Promise.resolve({ ok: true, status: 200, headers, json: async () => ({ ok: true }) });
+      }
+      if (u === SETTLEMENT_URL) {
+        return Promise.resolve({ ok: true, status: 200, headers, json: async () => twoGameSummary() });
+      }
+      return Promise.resolve({ ok: false, status: 404, headers, json: async () => ({ error: "not found" }) });
+    }));
+
+    renderWithTheme(<PaymentsPage eventId="e1" />);
+    fireEvent.click((await screen.findAllByRole("button", { name: /report sent/i }))[0]);
+    await waitFor(() => expect(selfReports).toHaveLength(1));
+    fireEvent.click((await screen.findAllByRole("button", { name: /report sent/i }))[1]);
+    await waitFor(() => expect(selfReports).toHaveLength(2));
+
+    expect(selfReports.map((r) => r.gameId)).toEqual(["g1", "g2"]);
+  });
+
+  it("renders self-report rows without duplicate React keys", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      mockFetch({ [SETTLEMENT_URL]: twoGameSummary() });
+      renderWithTheme(<PaymentsPage eventId="e1" />);
+      await screen.findAllByRole("button", { name: /report sent/i });
+
+      const duplicateKey = spy.mock.calls.find(([message]) => /same key|unique "key"/i.test(String(message)));
+      expect(duplicateKey).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
