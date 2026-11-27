@@ -86,6 +86,12 @@ jobs:
     #     attention at all (docs/factory/README.md → Reach).
     #   * Drafts — `opened` fires on a draft too, so an unfinished Change paid
     #     for a full review and then paid again on `ready_for_review`.
+    #   * Factory-authored Changes — the agent action asserts the *actor's* repo
+    #     permission, and a push by the App makes the App the actor, whose
+    #     permission is `none`. The `pull_request` run therefore dies in two
+    #     seconds without reading the diff, and leaves a permanently red
+    #     `reviewer` check on a head that a scheduled run then reviews fine.
+    #     Skip the event here; the schedule and the tick cover these Changes.
     # Name Dependabot exactly, not "any bot": `factory/*` Changes are authored by
     # the factory App and must still be reviewed — they are this role's customer.
     if: >-
@@ -95,6 +101,7 @@ jobs:
       vars.FACTORY_MODEL != '' &&
       (github.event_name != 'pull_request' ||
        (github.event.pull_request.user.login != 'dependabot[bot]' &&
+        github.event.pull_request.user.login != 'convocarados-factory[bot]' &&
         github.event.pull_request.head.repo.full_name == github.repository &&
         !github.event.pull_request.draft))
     runs-on: ubuntu-latest

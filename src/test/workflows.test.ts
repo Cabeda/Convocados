@@ -257,16 +257,18 @@ describe("the reviewer is exempt only where it cannot review", () => {
     expect(condition).toContain("!github.event.pull_request.draft");
   });
 
-  it("compares the author login exactly once, and only against Dependabot", () => {
-    const comparisons = [
-      ...reviewerJobIf().matchAll(
-        /github\.event\.pull_request\.user\.login\s*(?:[!=]==?)\s*['"]([^'"]+)['"]/g,
-      ),
-    ].map((m) => m[1]);
-    // An allowlist (`== 'Cabeda'`), a second exemption, or a bot-wide filter all
-    // exempt `convocados-factory[bot]` — this role's main customer. Banning two
-    // spellings was not enough; an extra comparison passes with one of them.
-    expect(comparisons).toEqual(["dependabot[bot]"]);
+  it("skips the event that can never read an App-authored Change", () => {
+    // The action asserts the *actor's* repo permission. When the App pushed the
+    // branch, the App is the actor and its permission is `none`, so this run
+    // exits in two seconds without reading anything — and leaves a red
+    // `reviewer` check on a head a scheduled run reviews fine. The exemption is
+    // about the event, not the author: `next-review.ts` still picks App-authored
+    // Changes on a schedule, which is the only path that works for them.
+    expect(reviewerJobIf()).toContain(
+      "github.event.pull_request.user.login != 'convocarados-factory[bot]'",
+    );
+    // A second, broader exemption (a bot-wide filter or an allowlist) would hide
+    // the role's main customer from the schedule too. This one names one login.
     expect(reviewerJobIf(), "no bot-wide author filter").not.toMatch(
       /contains\s*\([^)]*user\.login/,
     );
@@ -281,6 +283,20 @@ describe("the reviewer is exempt only where it cannot review", () => {
     // and never reviewed at all — silently, since nothing else would fail.
     expect(trigger?.pull_request?.types ?? []).toContain("ready_for_review");
   });
+});
+
+describe("a run never leaves the checkout", () => {
+  // A read outside the checkout resolves to a permission request, and an
+  // unattended run has nobody to answer it: the step waits for its timeout and
+  // dies with no verdict. That is what a `/tmp` scratch file did to every review
+  // on 2026-11-27 — 25 minutes per run, no output.
+  for (const agent of ["reviewer", "fixer"]) {
+    it(`tells the ${agent} not to write outside the repository`, () => {
+      const prompt = readFileSync(join(repoRoot, ".opencode", "agents", `${agent}.md`), "utf8");
+      expect(prompt).toContain("Never touch a path outside this checkout");
+      expect(prompt).toContain("/tmp");
+    });
+  }
 });
 
 describe("the CLA allowlist names the factory App exactly", () => {
