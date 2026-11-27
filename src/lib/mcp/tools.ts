@@ -1,6 +1,7 @@
 import { prisma } from "../db.server";
 import type { AuthContext } from "../authenticate.server";
 import { fetchMyGames } from "../myGames.server";
+import { getRosterCapacity } from "../roster.server";
 import { getEventBalanceSummary } from "../balance.server";
 import { canReadEventFinances } from "../eventReadAccess.server";
 import { checkEventAdmin } from "../auth.helpers.server";
@@ -80,9 +81,7 @@ async function getGame(args: Record<string, unknown>, ctx: AuthContext) {
     }
   }
 
-  const playerCount = event.currentGameId
-    ? await prisma.gameParticipant.count({ where: { gameId: event.currentGameId, archivedAt: null } })
-    : await prisma.player.count({ where: { eventId, archivedAt: null } });
+  const capacity = await getRosterCapacity(event.id, event.maxPlayers, event.currentGameId);
 
   return {
     id: event.id,
@@ -91,8 +90,8 @@ async function getGame(args: Record<string, unknown>, ctx: AuthContext) {
     dateTime: event.dateTime.toISOString(),
     sport: event.sport,
     maxPlayers: event.maxPlayers,
-    playerCount,
-    spotsLeft: Math.max(0, event.maxPlayers - playerCount),
+    playerCount: capacity.totalCount,
+    spotsLeft: capacity.spotsLeft,
     ownerId: event.ownerId,
     isPublic: event.isPublic,
   };

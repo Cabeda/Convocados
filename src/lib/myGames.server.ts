@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db.server";
+import { getRosterCapacity } from "./roster.server";
 import { createLogger } from "./logger.server";
 
 const log = createLogger("my-games");
@@ -14,8 +15,10 @@ const gameSelect = {
   maxPlayers: true,
   archivedAt: true,
   isRecurring: true,
+  recurrenceRule: true,
   currentGameId: true,
-  _count: { select: { players: true } },
+  teamOneName: true,
+  teamTwoName: true,
   history: {
     select: { scoreOne: true, scoreTwo: true },
     orderBy: { dateTime: "desc" as const },
@@ -25,23 +28,20 @@ const gameSelect = {
 
 type GameRow = Prisma.EventGetPayload<{ select: typeof gameSelect }>;
 
-async function resolvePlayerCount(e: GameRow): Promise<number> {
-  if (e.currentGameId) {
-    return prisma.gameParticipant.count({
-      where: { gameId: e.currentGameId, archivedAt: null },
-    });
-  }
-  return e._count.players;
-}
-
-const mapGame = async (e: GameRow) => ({
-  ...e,
-  dateTime: e.dateTime.toISOString(),
-  archivedAt: e.archivedAt?.toISOString() ?? null,
-  playerCount: await resolvePlayerCount(e),
-  lastScoreOne: e.history[0]?.scoreOne ?? null,
-  lastScoreTwo: e.history[0]?.scoreTwo ?? null,
-});
+const mapGame = async (e: GameRow) => {
+  const capacity = await getRosterCapacity(e.id, e.maxPlayers, e.currentGameId);
+  return {
+    ...e,
+    teamOneName: e.teamOneName || "Team 1",
+    teamTwoName: e.teamTwoName || "Team 2",
+    dateTime: e.dateTime.toISOString(),
+    archivedAt: e.archivedAt?.toISOString() ?? null,
+    playerCount: capacity.totalCount,
+    spotsLeft: capacity.spotsLeft,
+    lastScoreOne: e.history[0]?.scoreOne ?? null,
+    lastScoreTwo: e.history[0]?.scoreTwo ?? null,
+  };
+};
 
 /**
  * Fetch owned/admin/followed games for a user with cursor pagination.
