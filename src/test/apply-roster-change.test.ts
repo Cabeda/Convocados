@@ -2,6 +2,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { applyRosterChange } from "~/lib/applyRosterChange.server";
+import { sendGameInvite } from "~/lib/email.server";
+
+vi.mock("~/lib/email.server", () => ({
+  sendGameInvite: vi.fn(),
+  sendPlayerJoinedOwnerNotification: vi.fn(),
+  sendPlayerInviteToRegister: vi.fn(),
+}));
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -38,6 +45,7 @@ function input(event: Awaited<ReturnType<typeof loadEvent>>, body: Record<string
 }
 
 beforeEach(async () => {
+  vi.clearAllMocks();
   await resetApiRateLimitStore();
   await prisma.notificationJob.deleteMany();
   await prisma.teamMember.deleteMany();
@@ -69,6 +77,86 @@ describe("applyRosterChange seam (c5)", () => {
     const result = await applyRosterChange(input(await loadEvent(seeded.id), { name: "   " }));
     expect(result.status).toBe(400);
     expect(result.body.error).toContain("Player name is required");
+  });
+
+  it("links a guest already on the roster to their account instead of rejecting the add", async () => {
+    // Reviewer finding on #1805: the duplicate guard fired on any active
+    // GameParticipant, so an organizer could no longer attach an account to a
+    // guest already on the roster — the guest silently stayed unlinked and
+    // missed their notifications.
+    const seeded = await seedEvent(6);
+    const game = await prisma.game.create({ data: { eventId: seeded.id, dateTime: seeded.dateTime } });
+    await prisma.event.update({ where: { id: seeded.id }, data: { currentGameId: game.id } });
+    await prisma.user.create({
+      data: { id: "u-alex", name: "Alex", email: "alex@t.com", emailVerified: true },
+    });
+    const guest = await prisma.eventPlayer.create({ data: { eventId: seeded.id, name: "Alex" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: guest.id, status: "active", order: 0 },
+    });
+
+    const result = await applyRosterChange(
+      input(await loadEvent(seeded.id), { name: "Alex", email: "alex@t.com" }),
+    );
+
+    expect(result.status).toBe(200);
+    const player = await prisma.player.findFirst({ where: { eventId: seeded.id, name: "Alex" } });
+    expect(player?.userId).toBe("u-alex");
+  });
+
+  it("links an active guest identity when the guest quick-joins", async () => {
+    const seeded = await seedEvent(6);
+    const game = await prisma.game.create({ data: { eventId: seeded.id, dateTime: seeded.dateTime } });
+    await prisma.event.update({ where: { id: seeded.id }, data: { currentGameId: game.id } });
+    const joiner = await prisma.user.create({
+      data: { id: "u-joiner", name: "Joiner", email: "joiner@test.com", emailVerified: true },
+    });
+    const guest = await prisma.eventPlayer.create({ data: { eventId: seeded.id, name: "Joiner" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: guest.id, status: "active", order: 0 },
+    });
+    // No legacy Player row: the invite-accepted shape.
+
+    const result = await applyRosterChange({
+      ...input(await loadEvent(seeded.id), { name: "Joiner", linkToAccount: true }),
+      session: { user: { id: joiner.id, name: "Joiner" } },
+    });
+
+    expect(result.status).toBe(200);
+    const ep = await prisma.eventPlayer.findFirstOrThrow({
+      where: { eventId: seeded.id, name: "Joiner" },
+    });
+    expect(ep.userId).toBe(joiner.id);
+  });
+
+  it("falls back to the email when the explicit userId is stale", async () => {
+    const seeded = await seedEvent(6);
+    const user = await prisma.user.create({
+      data: { id: "u-email", name: "Emailed", email: "emailed@t.com", emailVerified: true },
+    });
+
+    const result = await applyRosterChange(
+      input(await loadEvent(seeded.id), { userId: "missing-user", email: "emailed@t.com" }),
+    );
+
+    expect(result.status).toBe(200);
+    const player = await prisma.player.findFirst({ where: { eventId: seeded.id, name: "Emailed" } });
+    expect(player?.userId).toBe(user.id);
+  });
+
+  it("does not email an invite when the actor adds themselves", async () => {
+    const seeded = await seedEvent(6);
+    const user = await prisma.user.create({
+      data: { id: "u-self", name: "Self", email: "self@t.com", emailVerified: true },
+    });
+
+    const result = await applyRosterChange({
+      ...input(await loadEvent(seeded.id), { name: "Self", linkToAccount: true }),
+      session: { user: { id: user.id, name: "Self" } },
+    });
+
+    expect(result.status).toBe(200);
+    expect(vi.mocked(sendGameInvite)).not.toHaveBeenCalled();
   });
 
   it("applies a fresh join and returns the ok payload", async () => {
