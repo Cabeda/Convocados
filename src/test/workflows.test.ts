@@ -257,15 +257,23 @@ describe("the reviewer is exempt only where it cannot review", () => {
     expect(condition).toContain("!github.event.pull_request.draft");
   });
 
-  it("compares the author login exactly once, and only against Dependabot", () => {
+  it("skips the event that can never read an App-authored Change", () => {
+    // The action asserts the *actor's* repo permission. When the App pushed the
+    // branch, the App is the actor and its permission is `none`, so this run
+    // exits in two seconds without reading anything — and leaves a red
+    // `reviewer` check on a head a scheduled run reviews fine. The predicate is
+    // on the actor, which is what the failure is about: a human who pushes to a
+    // factory branch is a human actor, and that run can review.
+    expect(reviewerJobIf()).toContain("github.actor != 'convocarados-factory[bot]'");
+    // Assert the complete set of author exemptions, not one member: an extra
+    // `!= 'somebody'` exempts a human login from the `pull_request` run, and the
+    // schedule only picks `factory/*` branches, so that login is then reviewed
+    // by neither path.
     const comparisons = [
       ...reviewerJobIf().matchAll(
         /github\.event\.pull_request\.user\.login\s*(?:[!=]==?)\s*['"]([^'"]+)['"]/g,
       ),
     ].map((m) => m[1]);
-    // An allowlist (`== 'Cabeda'`), a second exemption, or a bot-wide filter all
-    // exempt `convocados-factory[bot]` — this role's main customer. Banning two
-    // spellings was not enough; an extra comparison passes with one of them.
     expect(comparisons).toEqual(["dependabot[bot]"]);
     expect(reviewerJobIf(), "no bot-wide author filter").not.toMatch(
       /contains\s*\([^)]*user\.login/,
@@ -281,6 +289,41 @@ describe("the reviewer is exempt only where it cannot review", () => {
     // and never reviewed at all — silently, since nothing else would fail.
     expect(trigger?.pull_request?.types ?? []).toContain("ready_for_review");
   });
+});
+
+describe("a review that did not finish does not redden the Change", () => {
+  // The merge decision is the signature: the gate accepts only a verdict signed
+  // over the current head, so a review that wrote nothing is refused there. A
+  // red `reviewer` check added no decision and made every open Change look
+  // broken — 28 of them, on 2026-11-27.
+  const stepRuns = () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      jobs?: Record<string, { steps?: Array<{ name?: string; run?: string }> }>;
+    };
+    return (doc.jobs?.reviewer?.steps ?? [])
+      .filter((s) => s.name === "Record the verdict" || s.name === "Sign and post the review")
+      .map((s) => s.run ?? "");
+  };
+
+  it("reports a missing verdict instead of failing the job", () => {
+    for (const run of stepRuns()) {
+      expect(run).not.toMatch(/^\s*exit 1\s*$/m);
+    }
+  });
+});
+
+describe("a run never leaves the checkout", () => {
+  // A read outside the checkout resolves to a permission request, and an
+  // unattended run has nobody to answer it: the step waits for its timeout and
+  // dies with no verdict. That is what a `/tmp` scratch file did to every review
+  // on 2026-11-27 — 25 minutes per run, no output.
+  for (const agent of ["reviewer", "fixer"]) {
+    it(`tells the ${agent} not to write outside the repository`, () => {
+      const prompt = readFileSync(join(repoRoot, ".opencode", "agents", `${agent}.md`), "utf8");
+      expect(prompt).toContain("Never touch a path outside this checkout");
+      expect(prompt).toContain("/tmp");
+    });
+  }
 });
 
 describe("the CLA allowlist names the factory App exactly", () => {
@@ -413,9 +456,12 @@ describe("the merge gate and the Reviewer's verdict", () => {
     expect(run).toContain("--match-head-commit");
   });
 
-  it("fails the review when no verdict was written", () => {
+  it("names a missing verdict instead of letting silence read as approval", () => {
     // Silence used to read as approval: the reviewer's step had
     // continue-on-error, so a 25-minute timeout posted nothing and passed.
+    // The gate now refuses on the absent signature, so the check reports the
+    // miss by name; it no longer reddens the Change for a decision the gate
+    // already makes.
     const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
     expect(raw).toContain("Record the verdict");
     expect(raw).toContain("no verdict was written");
