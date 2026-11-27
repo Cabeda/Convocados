@@ -19,6 +19,7 @@ import { sendPushToUser } from "./push.server";
 import { getNotificationPrefs, wantsGameInviteEmail } from "./notificationPrefs.server";
 import { fireWebhooks } from "./webhook.server";
 import { syncPaymentsForEvent } from "./payments.server";
+import { syncGamePayments } from "./settlement.server";
 import { getOutstandingBalance, getGateBalance } from "./balance.server";
 import { decidePaymentGate } from "./paymentGate";
 import { logEvent } from "./eventLog.server";
