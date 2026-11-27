@@ -572,3 +572,15 @@ describe("a round's bundle carries the branch the push job fetches", () => {
     expect(raw).not.toMatch(/git bundle create[\s\S]{0,120}?\.\.HEAD/);
   });
 });
+
+describe("a lost Attempt stops the round instead of hiding in a budget of zero", () => {
+  // `attempt.ts` exits 2 when the Attempt comment cannot be written, and 1 when
+  // the round spent the budget. The ledger tolerated both with `|| true`, so a
+  // failed write still ran the round, the count stayed at zero, and the same
+  // Change was picked again — the three-round handoff could never fire.
+  it("tolerates the budget exit and nothing else", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    expect(raw).not.toMatch(/attempt\.ts "\$PR" review --set \|\| true/);
+    expect(raw).toContain('if [ "$spent" -ne 0 ] && [ "$spent" -ne 1 ]; then');
+  });
+});

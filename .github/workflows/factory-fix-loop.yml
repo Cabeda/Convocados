@@ -144,9 +144,19 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # The third round's own record exits 1 (budget reached); that is the
-          # ledger being honest, not a failure to repair.
-          node scripts/factory/attempt.ts "$PR" review --set || true
+          # Exit 1 means this round spent the budget — honest, and the round still
+          # runs. Exit 2 means the Attempt could not be written, and the round
+          # must not: an unrecorded round leaves the count at zero, so the same
+          # Change is picked forever and the three-round handoff never fires.
+          # `|| true` here masked both, which is what made the budget a fiction.
+          set +e
+          node scripts/factory/attempt.ts "$PR" review --set
+          spent=$?
+          set -e
+          if [ "$spent" -ne 0 ] && [ "$spent" -ne 1 ]; then
+            echo "::error title=Attempt ledger::the Attempt could not be recorded; refusing to run an unrecorded round"
+            exit "$spent"
+          fi
           echo "run=true" >> "$GITHUB_OUTPUT"
 
   # The round itself. Read-only on purpose: this is the only job that runs code
