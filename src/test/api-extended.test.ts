@@ -21,6 +21,7 @@ import { GET as getHistory } from "~/pages/api/events/[id]/history/index";
 import { GET as getRatings } from "~/pages/api/events/[id]/ratings/index";
 import { POST as recalculateRatings } from "~/pages/api/events/[id]/ratings/recalculate";
 import { GET as getCalendar } from "~/pages/api/events/[id]/calendar";
+import { hashPassword, buildAccessCookie } from "~/lib/eventAccess";
 import { GET as getVapidKey } from "~/pages/api/push/vapid-public-key";
 import { GET as getUserProfile, PATCH as patchUserProfile } from "~/pages/api/users/[id]";
 import { GET as getMyGames } from "~/pages/api/me/games";
@@ -29,11 +30,13 @@ import { PUT as updateSport } from "~/pages/api/events/[id]/sport";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function ctx(params: Record<string, string>, body?: unknown, method = "GET", queryString?: string) {
+function ctx(params: Record<string, string>, body?: unknown, method = "GET", queryString?: string, cookie?: string) {
   const urlStr = `http://localhost/api/test${queryString ? `?${queryString}` : ""}`;
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (cookie) headers.cookie = cookie;
   const request = new Request(urlStr, {
     method: body !== undefined ? (method === "GET" ? "POST" : method) : method,
-    headers: { "content-type": "application/json" },
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return { request, params, url: new URL(urlStr) } as any;
@@ -467,6 +470,56 @@ describe("GET /api/events/[id]/calendar", () => {
     const res = await getCalendar(ctx({ id: event.id }));
     const body = await res.text();
     expect(body).toContain("RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=TU");
+  });
+
+  it("denies a password-locked event to an anonymous caller", async () => {
+    const id = await seedEvent({ accessPassword: hashPassword("secret") });
+    const res = await getCalendar(ctx({ id }));
+    expect(res.status).toBe(403);
+    const body = await res.text();
+    expect(body).not.toContain("LOCATION");
+    expect(body).not.toContain("SUMMARY");
+  });
+
+  it("returns a locked event's calendar to the owner, an invitee and an Event admin", async () => {
+    const owner = await seedUser();
+    const invitee = await seedUser();
+    const admin = await seedUser();
+    const id = await seedEvent({ ownerId: owner.id, accessPassword: hashPassword("secret") });
+
+    vi.spyOn(auth.api, "getSession").mockResolvedValue({ user: { id: owner.id } } as any);
+    expect((await getCalendar(ctx({ id }))).status).toBe(200);
+
+    await prisma.eventInvite.create({ data: { eventId: id, userId: invitee.id } });
+    vi.spyOn(auth.api, "getSession").mockResolvedValue({ user: { id: invitee.id } } as any);
+    expect((await getCalendar(ctx({ id }))).status).toBe(200);
+
+    await prisma.eventAdmin.create({ data: { eventId: id, userId: admin.id } });
+    vi.spyOn(auth.api, "getSession").mockResolvedValue({ user: { id: admin.id } } as any);
+    expect((await getCalendar(ctx({ id }))).status).toBe(200);
+  });
+
+  it("returns a locked event's calendar to an ev_access cookie holder", async () => {
+    const accessPassword = hashPassword("secret");
+    const id = await seedEvent({ accessPassword });
+    const cookie = buildAccessCookie(null, id, accessPassword);
+    const res = await getCalendar(ctx({ id }, undefined, "GET", undefined, cookie));
+    expect(res.status).toBe(200);
+  });
+
+  it("stops a locked event's calendar once the feed token is revoked", async () => {
+    const user = await seedUser();
+    const id = await seedEvent({ accessPassword: hashPassword("secret") });
+    await prisma.calendarToken.create({
+      data: { token: "locked-event-feed-token", userId: user.id, scope: "event", scopeId: id },
+    });
+
+    const before = await getCalendar(ctx({ id }, undefined, "GET", "token=locked-event-feed-token"));
+    expect(before.status).toBe(200);
+
+    await prisma.calendarToken.delete({ where: { token: "locked-event-feed-token" } });
+    const after = await getCalendar(ctx({ id }, undefined, "GET", "token=locked-event-feed-token"));
+    expect(after.status).toBe(403);
   });
 });
 
