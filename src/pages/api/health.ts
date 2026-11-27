@@ -117,17 +117,19 @@ async function probeHealth(): Promise<Response> {
     ) as { oldestMigrationAt: string | null }[];
     const rawOldestMigrationAt = oldestResult[0]?.oldestMigrationAt ?? null;
     const oldestMigrationAt = parseMigrationTimestamp(rawOldestMigrationAt);
-    // A raw value the parser cannot read is not proof of a fresh database, but
-    // it is not a healthy reading either. Name the provenance unknown and log
-    // the raw value once so production's shape is identified, not guessed.
-    // Degrading here would fire after every routine migration deploy.
-    const provenanceUnknown =
-      oldestMigrationAt === null && rawOldestMigrationAt !== null;
-    if (provenanceUnknown && !loggedUnreadableMigration) {
+    // No readable timestamp is not proof of a fresh database, but it is not a
+    // healthy reading either. A missing value (an empty/lost migration history)
+    // or a shape the parser cannot read both leave provenance unknown; log the
+    // raw value once so production's shape is identified, not guessed.
+    const provenanceUnknown = oldestMigrationAt === null;
+    if (!provenanceUnknown) {
+      // A second unreadable episode (restore, another lost volume) must log.
+      loggedUnreadableMigration = false;
+    } else if (!loggedUnreadableMigration) {
       loggedUnreadableMigration = true;
       log.warn(
         { rawOldestMigrationAt },
-        "unreadable _prisma_migrations.started_at; database provenance unknown",
+        "unreadable or missing _prisma_migrations.started_at; database provenance unknown",
       );
     }
     const eventCount = await prisma.event.count();
@@ -135,9 +137,16 @@ async function probeHealth(): Promise<Response> {
       oldestMigrationAt !== null && oldestMigrationAt.getTime() >= resolveBootAt();
     const migrationAgeMs =
       oldestMigrationAt === null ? null : Date.now() - oldestMigrationAt.getTime();
+    // A null history on an empty database is the recreated-volume shape: with no
+    // timestamp nothing proves the database predates this boot, so surface it.
+    // A non-null unparseable value stays undegraded so a routine migration
+    // deploy cannot raise a false alarm.
+    const missingMigrationHistory = rawOldestMigrationAt === null;
     const freshDatabase =
       createdThisBoot ||
-      (eventCount === 0 && migrationAgeMs !== null && migrationAgeMs < FRESH_DB_WINDOW_MS);
+      (eventCount === 0 &&
+        (missingMigrationHistory ||
+          (migrationAgeMs !== null && migrationAgeMs < FRESH_DB_WINDOW_MS)));
 
     const response: Record<string, unknown> = {
       status: "ok",
