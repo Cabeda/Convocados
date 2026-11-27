@@ -609,3 +609,15 @@ describe("a review is bounded by minutes that buy a verdict", () => {
     expect(raw).toContain("no `pnpm install`, `pnpm test`, `pnpm typecheck`");
   });
 });
+
+describe("the push job can post its reply", () => {
+  // The round's reply is a PR comment. `gh pr comment` goes through the
+  // pull-requests API, so the App token needs that scope even though the push
+  // itself only needs contents:write. Without it the push lands and the job
+  // dies on "Resource not accessible by integration (addComment)".
+  it("grants the push job pull-requests: write", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    const push = raw.slice(raw.indexOf("\n  push:"));
+    expect(push).toContain("permission-pull-requests: write");
+  });
+});
