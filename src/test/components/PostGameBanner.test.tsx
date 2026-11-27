@@ -454,7 +454,7 @@ describe("PostGameBanner collapsed card (rank outlives the checklist)", () => {
 });
 
 describe("PostGameBanner payment task honesty", () => {
-  it("never claims payments settled when no cost is configured, and drops the task from progress", async () => {
+  it("never claims payments settled when no cost is configured, and counts the Set cost row it renders", async () => {
     mockFetchStatus({
       ...baseStatus,
       hasCost: false,
@@ -472,7 +472,9 @@ describe("PostGameBanner payment task honesty", () => {
 
     expect(screen.getByText(/Cost not set yet/)).toBeInTheDocument();
     expect(screen.queryByText("All payments settled")).not.toBeInTheDocument();
-    expect(screen.getByText("1 of 1 tasks complete")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Set cost/i })).toBeInTheDocument();
+    // The payment row renders, so the counter counts it (issue #1754).
+    expect(screen.getByText("1 of 2 tasks complete")).toBeInTheDocument();
   });
 
   it("keeps counting the payment task once a cost exists", async () => {
@@ -480,6 +482,31 @@ describe("PostGameBanner payment task honesty", () => {
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
     expect(screen.getByText("All payments settled")).toBeInTheDocument();
+    expect(screen.getByText("2 of 2 tasks complete")).toBeInTheDocument();
+  });
+
+  it("says the cost is set without offering Set cost when the game has no roll (#1754)", async () => {
+    mockFetchStatus({
+      ...baseStatus,
+      hasCost: true,
+      costWithoutRoll: true,
+      allPaid: true,
+      hasScore: true,
+      allComplete: false,
+      scoreOne: 3,
+      scoreTwo: 1,
+      paymentsSnapshot: null,
+      gamePayments: null,
+      gameConfig: null,
+      costAmount: 60,
+      costCurrency: "EUR",
+    });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+
+    expect(screen.getByText(/no payments were split for this game/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Cost not set yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Set cost/i })).not.toBeInTheDocument();
     expect(screen.getByText("2 of 2 tasks complete")).toBeInTheDocument();
   });
 });

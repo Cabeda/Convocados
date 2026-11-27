@@ -22,6 +22,8 @@ export interface PostGameStatusPayload {
   gameEnded: boolean;
   hasScore: boolean;
   hasCost: boolean;
+  /** EventCost is set but the settled game has no payment roll to settle. */
+  costWithoutRoll: boolean;
   allPaid: boolean;
   allComplete: boolean;
   isParticipant: boolean;
@@ -86,7 +88,7 @@ export async function computePostGameStatus(
     return {
       gameEnded: false, hasScore: false, hasCost: false, allPaid: true,
       allComplete: true, isParticipant: false, isPlayer: false, latestHistoryId: null,
-      paymentsSnapshot: null, costCurrency: null, costAmount: null,
+      paymentsSnapshot: null, costCurrency: null, costAmount: null, costWithoutRoll: false,
       hasPendingPastPayments: false, mvpEnabled: false, mvpComplete: true,
       bannerMvpComplete: true, myMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
       scoreOne: null, scoreTwo: null,
@@ -119,6 +121,7 @@ export async function computePostGameStatus(
 
   let hasCost: boolean;
   let allPaid = true;
+  let costWithoutRoll = false;
   let pastGameSource: "game" | "snapshot" | "none" = "none";
 
   if (pastRoll && pastRoll.length > 0) {
@@ -135,9 +138,12 @@ export async function computePostGameStatus(
       allPaid = summarizePayments(snapshot).allPaid;
     } catch { /* ignore parse errors */ }
   } else {
-    // No Game and no snapshot: a one-off that hasn't reset still surfaces the
-    // EventCost template (cost configured, nothing charged yet).
-    hasCost = !latestHistory && (eventCost?.totalAmount ?? 0) > 0;
+    // No Game and no snapshot: EventCost is still the one answer the price line
+    // and the wrap-up share — but only for the occurrence it belongs to. After
+    // a reset the EventCost is the next game's, so it must not fabricate a cost
+    // for the past one.
+    hasCost = !hasResetOccurred && (eventCost?.totalAmount ?? 0) > 0;
+    costWithoutRoll = hasCost;
   }
 
   // ─── Session-dependent flags (needed before the MVP block below) ──────
@@ -326,6 +332,11 @@ export async function computePostGameStatus(
 
   if (wrapUpSettlement) {
     hasCost = true;
+    // An untracked game, or a tracked one with rows, does have a roll — the
+    // "cost is set, nothing split" copy only applies to the empty case.
+    if (wrapUpSettlement.mode === "untracked" || wrapUpSettlement.rows.length > 0) {
+      costWithoutRoll = false;
+    }
     const wrapUpAggregate = summarizePayments(wrapUpSettlement.rows);
     allPaid = wrapUpAggregate.allPaid;
     paidAggregate = { paidCount: wrapUpAggregate.paidCount, totalCount: wrapUpAggregate.totalCount };
@@ -381,7 +392,7 @@ export async function computePostGameStatus(
 
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
-    latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
+    latestHistoryId, paymentsSnapshot, costCurrency, costAmount, costWithoutRoll,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
     myMvpComplete,
     paidAggregate,

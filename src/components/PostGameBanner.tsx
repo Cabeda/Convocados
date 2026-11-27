@@ -32,6 +32,8 @@ export interface PostGameStatus {
   gameEnded: boolean;
   hasScore: boolean;
   hasCost: boolean;
+  /** Cost is set but the settled game has no payment roll to settle. */
+  costWithoutRoll?: boolean;
   allPaid: boolean;
   allComplete: boolean;
   isParticipant: boolean;
@@ -219,11 +221,13 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
   if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (mvpTaskDone || !status.mvpEnabled || !status.isPlayer)) || (status.allComplete && gone && !rankVisible)) return null;
 
   // Payments are only a task when a cost exists. With no cost there is
-  // nothing to settle, so ticking it green (and counting it toward progress)
-  // would claim work that was never configured.
+  // nothing to settle, so ticking it green would claim work that was never
+  // configured. The row still renders the "Set cost" affordance, so the
+  // counter must count exactly the rows it renders (issue #1754).
+  const showPaymentTask = !status.viewerPaymentSettled;
   const paymentTaskDone = status.hasCost && status.allPaid;
-  const taskTotal = 1 + (status.hasCost ? 1 : 0);
-  const completedCount = (status.hasScore ? 1 : 0) + (paymentTaskDone ? 1 : 0);
+  const taskTotal = 1 + (showPaymentTask ? 1 : 0);
+  const completedCount = (status.hasScore ? 1 : 0) + (showPaymentTask && paymentTaskDone ? 1 : 0);
   const progressPct = (completedCount / taskTotal) * 100;
 
   const cyclePaymentStatus = (idx: number) => {
@@ -503,11 +507,13 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
                   <Typography variant="caption" color="text.secondary">
                     {!status.hasCost
                       ? t("postGameNoCostSet")
-                      : paymentTaskDone
-                        ? t("postGamePaymentsDone")
-                        : t("postGamePaymentsSummary")
-                            .replace("{paid}", String(paidCount))
-                            .replace("{total}", String(paymentTotal))}
+                      : status.costWithoutRoll
+                        ? t("postGameCostNoSplit")
+                        : paymentTaskDone
+                          ? t("postGamePaymentsDone")
+                          : t("postGamePaymentsSummary")
+                              .replace("{paid}", String(paidCount))
+                              .replace("{total}", String(paymentTotal))}
                   </Typography>
                 </Box>
                 {!status.hasCost && (
