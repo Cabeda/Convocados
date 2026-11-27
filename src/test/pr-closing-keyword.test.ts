@@ -61,10 +61,10 @@ describe("PR closing-keyword check", () => {
 });
 
 /**
- * Dependabot cannot apply the `no-issue` label, so every dependency bump would
- * otherwise need a human before the required `PR Links Issue` check can pass.
- * The exemption is scoped to the dependency bot's exact login; the factory's
- * own bot and human PRs still fail closed.
+ * A Dependabot bump closes no issue by design, so every dependency bump would
+ * otherwise need a human to add `no-issue` before the required `PR Links Issue`
+ * check can pass. The exemption is scoped to the dependency bot's exact login;
+ * the factory's own bot and human PRs still fail closed.
  */
 describe("PR closing-keyword check — dependency bots", () => {
   it("exempts a Dependabot Change with an empty body and no label", () => {
