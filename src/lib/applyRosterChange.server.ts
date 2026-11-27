@@ -33,6 +33,8 @@ import { readPosition } from "./positions";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
 import { movePlayerToEndOfList, rejoinPlayerToCurrentGame } from "./rosterChange.server";
 import { finishRosterAdd } from "./teamFormation.server";
+import { isCurrentGameCancelled } from "./currentGame.server";
+import { isGameEnded } from "./gameStatus";
 
 const log = createLogger("players-api");
 
@@ -51,7 +53,14 @@ export type ApplyRosterChangeInput = {
   session: ApplyRosterChangeSession;
   /** Webhook/notification actor: session user id, x-client-id, or undefined. */
   senderClientId?: string;
-  body: { name?: unknown; linkToAccount?: unknown; email?: unknown; position?: unknown };
+  body: {
+    name?: unknown;
+    linkToAccount?: unknown;
+    email?: unknown;
+    position?: unknown;
+    /** Explicit account id (organizer/MCP paths); mirrors resolveRosterTarget. */
+    userId?: unknown;
+  };
   /** Event pre-fetched by the route (post 404/pickup/ended guards). */
   event: PrismaEvent;
 };
@@ -228,7 +237,20 @@ async function notifyPlayerJoined(input: {
  */
 export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<ApplyRosterChangeResult> {
   const { eventId, origin, session, senderClientId, event } = input;
-  const { name, linkToAccount, email } = input.body;
+  const { name, linkToAccount, email, userId } = input.body;
+
+  // The occurrence guards belong to the seam, not to each caller: a cancelled
+  // current Game freezes the roster and a played Game accepts no adds. POST
+  // /players, POST /roster and MCP add_player all land here (#1793).
+  if (await isCurrentGameCancelled(event.currentGameId)) {
+    return { status: 409, body: { error: "This game has been cancelled." } };
+  }
+  if (isGameEnded(event.dateTime, event.durationMinutes)) {
+    return {
+      status: 403,
+      body: { error: "The game has already ended — players can no longer be added." },
+    };
+  }
   // #1448: a position is optional and free-form input is refused — free text
   // here would make the rotation suggestion's input meaningless.
   const parsedPosition = readPosition(input.body.position);
@@ -254,16 +276,30 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
     ? email.trim().toLowerCase()
     : null;
 
-  // ── Resolve user by email (needed before name validation) ──────────────────
+  // ── Resolve user by userId, then email (needed before name validation) ─────
   let resolvedUser: { id: string; name: string } | null = null;
-  if (normalizedEmail) {
+  let resolvedFromUserId = false;
+  const explicitUserId = typeof userId === "string" ? userId.trim() : "";
+  if (explicitUserId) {
     const found = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { id: explicitUserId },
       select: { id: true, name: true },
     });
     // A synthetic ledger placeholder is named (and emailed) after the player it
     // charges, never a person — resolving to one links the roster row to an id
     // the human can never match and strands them on the list.
+    if (found && !isSystemUserId(found.id)) {
+      resolvedUser = found;
+      resolvedFromUserId = true;
+    }
+  }
+  // A stale explicit userId falls through to the email, the same way
+  // resolveRosterTarget does; otherwise a valid email link is lost.
+  if (!resolvedUser && normalizedEmail) {
+    const found = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, name: true },
+    });
     if (found && !isSystemUserId(found.id)) resolvedUser = found;
   }
 
@@ -349,10 +385,56 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
     }
   }
 
+  // Duplicate-add guard: an active GameParticipant can exist without a legacy
+  // Player row (invite acceptance creates exactly that), and the Player-table
+  // P2002 below cannot see it. Without this check a repeat add creates a
+  // duplicate row, moves the queue order and re-announces the join (#1793).
+  //
+  if (event.currentGameId && !pendingSelfInviteEventPlayerId) {
+    const existingIdentity = await prisma.eventPlayer.findFirst({
+      where: {
+        eventId,
+        ...(linkedUserId
+          ? { OR: [{ userId: linkedUserId }, { name: trimmed }] }
+          : { name: trimmed }),
+      },
+      select: { id: true, userId: true },
+    });
+    if (existingIdentity) {
+      const participant = await prisma.gameParticipant.findUnique({
+        where: {
+          gameId_eventPlayerId: {
+            gameId: event.currentGameId,
+            eventPlayerId: existingIdentity.id,
+          },
+        },
+        select: { archivedAt: true, status: true },
+      });
+      // A guest row with no account and an account resolved for this add is a
+      // *link*, not a duplicate: the P2002 merge below sets Player.userId.
+      // Only an explicit email/userId counts as that intent — a unique-name
+      // auto-link must not turn a duplicate add into a re-announcement.
+      const explicitLink =
+        Boolean(explicitUserId) || Boolean(normalizedEmail) || linkToAccount === true;
+      const linksThisIdentity = explicitLink && linkedUserId !== null && !existingIdentity.userId;
+      if (
+        participant &&
+        !participant.archivedAt &&
+        participant.status !== "pending" &&
+        !linksThisIdentity
+      ) {
+        return {
+          status: 409,
+          body: { error: `"${trimmed}" is already in the list.`, code: "ALREADY_IN_ROSTER" },
+        };
+      }
+    }
+  }
+
   // Email-based invite resolution
   let notifyRegisteredUserId: string | null = null;
   let inviteUnregisteredEmail: string | null = null;
-  if (normalizedEmail) {
+  if (normalizedEmail && !resolvedFromUserId) {
     if (resolvedUser) {
       notifyRegisteredUserId = resolvedUser.id;
     } else {
@@ -416,6 +498,83 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
         where: { eventId_name: { eventId, name: trimmed } },
         select: { id: true, userId: true, order: true, archivedAt: true },
       });
+
+      // A pending invite that is now added directly must be activated, not
+      // rejected as a duplicate: the GameParticipant exists but has not
+      // accepted yet (#1793 review). A pending *self*-invite is excluded: the
+      // linkToAccount branch below accepts the PlayerInvite itself, and
+      // activating here would return before that promotion.
+      if (
+        existing &&
+        !existing.archivedAt &&
+        event.currentGameId &&
+        !pendingSelfInviteEventPlayerId
+      ) {
+        const pendingIdentity = await prisma.eventPlayer.findFirst({
+          where: {
+            eventId,
+            ...(linkedUserId
+              ? { OR: [{ userId: linkedUserId }, { name: trimmed }] }
+              : { name: trimmed }),
+          },
+          select: { id: true, name: true, userId: true },
+        });
+        if (pendingIdentity) {
+          const participant = await prisma.gameParticipant.findUnique({
+            where: {
+              gameId_eventPlayerId: {
+                gameId: event.currentGameId,
+                eventPlayerId: pendingIdentity.id,
+              },
+            },
+            select: { archivedAt: true, status: true },
+          });
+          if (participant && !participant.archivedAt && participant.status === "pending") {
+            await upsertGameParticipantForRoster({
+              gameId: event.currentGameId,
+              eventPlayerId: pendingIdentity.id,
+              status: "active",
+            });
+            const linkUserId = resolvedUser?.id ?? linkedUserId;
+            if (linkUserId && !existing.userId) {
+              await prisma.player.update({
+                where: { id: existing.id },
+                data: { userId: linkUserId },
+              });
+            }
+            // Promote both identities: canInviteOnEvent and inviteBlockReason
+            // look the account up on EventPlayer, not Player.
+            if (linkUserId && !pendingIdentity.userId) {
+              await prisma.eventPlayer.update({
+                where: { id: pendingIdentity.id },
+                data: { userId: linkUserId },
+              });
+            }
+            // A promoted player is on the roster and must be billed like any
+            // other add (the migrated callers synced here).
+            await syncGamePayments(event.currentGameId, eventId);
+            await syncPaymentsForEvent(eventId);
+            // Same side effects as the fresh path below: a linked player
+            // follows the event, and every roster entry gets an ELO seat.
+            if (linkUserId) {
+              await prisma.eventFollow.upsert({
+                where: { eventId_userId: { eventId, userId: linkUserId } },
+                create: { eventId, userId: linkUserId },
+                update: {},
+              });
+            }
+            await prisma.playerRating.upsert({
+              where: { eventId_name: { eventId, name: trimmed } },
+              create: { eventId, name: trimmed, rating: 1000 },
+              update: {},
+            });
+            await finishRosterAdd(eventId, pendingIdentity.name, event.maxPlayers, event.currentGameId);
+            await notifyPlayerJoined({ event, playerName: trimmed, spotsLeftBefore, rosterCount, actor: joinActor, origin, senderClientId });
+            return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
+          }
+        }
+      }
+
       if (existing?.archivedAt) {
         // ── Re-add: un-archive + place at end of list + reset Rsvp=yes ─
         // New joiners go to the end of the list (the "Queue" mental model).
@@ -530,13 +689,13 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
             });
             return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
           } else if (existing.userId === resolvedUser.id) {
-            return { status: 409, body: { error: `"${trimmed}" is already in the list.` } };
+            return { status: 409, body: { error: `"${trimmed}" is already in the list.`, code: "ALREADY_IN_ROSTER" } };
           } else {
             return { status: 409, body: { error: `"${trimmed}" is already linked to a different account.` } };
           }
         }
       }
-      return { status: 409, body: { error: `"${trimmed}" is already in the list.` } };
+      return { status: 409, body: { error: `"${trimmed}" is already in the list.`, code: "ALREADY_IN_ROSTER" } };
     }
     throw e;
   }
@@ -584,8 +743,6 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
         userId: linkedUserId,
       });
     }
-    // Payment overhaul: keep per-game payment rows in sync with the roster.
-    await syncGamePayments(event.currentGameId, eventId);
   }
 
   // spotsLeft after adding (spotsLeftBefore snapshot from the top of the handler)
@@ -611,7 +768,9 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
       where: { id: linkedUserId },
       select: { email: true, id: true },
     });
-    if (linkedUser?.email) {
+    // The actor adding themselves is a self-join, not an invitation: do not
+    // email them "You're invited" (the push below is already gated).
+    if (linkedUser?.email && linkedUserId !== session?.user?.id) {
       try {
         const prefs = await getNotificationPrefs(linkedUser.id);
         if (wantsGameInviteEmail(prefs)) {

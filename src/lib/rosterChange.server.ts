@@ -88,4 +88,5 @@ export async function rejoinPlayerToCurrentGame(
     create: { eventPlayerId, gameId, status: "yes", respondedAt: new Date() },
     update: { status: "yes", respondedAt: new Date() },
   });
+
 }
