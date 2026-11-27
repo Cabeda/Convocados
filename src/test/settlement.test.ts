@@ -311,6 +311,48 @@ describe("syncGamePayments", () => {
     expect(active.map((r) => r.playerName)).toEqual(["Cara", "Dan"]);
   });
 
+  it("banner names the same players as the charged roll when a bench player moved onto a team", async () => {
+    // The roll gained the team-membership branch but the banner still stopped at
+    // the order-only fallback, so in the state #1714 was written for the durable
+    // roll charged Cara/Dan while the banner listed Alice/Bob.
+    const { event, game } = await seedEvent({ players: ["Alice", "Bob", "Cara", "Dan"], cost: 20 });
+    await prisma.event.update({ where: { id: event.id }, data: { maxPlayers: 2 } });
+    const eps = await prisma.eventPlayer.findMany({
+      where: { eventId: event.id, name: { in: ["Cara", "Dan"] } },
+    });
+    await prisma.gameParticipant.updateMany({
+      where: { gameId: game.id, eventPlayerId: { in: eps.map((e) => e.id) } },
+      data: { team: "Gunas", slot: 0 },
+    });
+
+    await syncGamePayments(game.id, event.id);
+
+    const charged = await prisma.gamePayment.findMany({
+      where: { gameId: game.id, archivedAt: null },
+      orderBy: { playerName: "asc" },
+    });
+    const banner = await getGameSettlement(event.id, game.id);
+
+    expect(charged.map((r) => r.playerName)).toEqual(["Cara", "Dan"]);
+    expect(banner!.rows.map((r) => r.name).sort()).toEqual(charged.map((r) => r.playerName));
+  });
+
+  it("keeps the queue-order fallback before teams are drawn (no lineup, no team)", async () => {
+    const { event, game } = await seedEvent({ players: ["Alice", "Bob", "Cara", "Dan"], cost: 20 });
+    await prisma.event.update({ where: { id: event.id }, data: { maxPlayers: 2 } });
+
+    await syncGamePayments(game.id, event.id);
+
+    const charged = await prisma.gamePayment.findMany({
+      where: { gameId: game.id, archivedAt: null },
+      orderBy: { playerName: "asc" },
+    });
+    const banner = await getGameSettlement(event.id, game.id);
+
+    expect(charged.map((r) => r.playerName)).toEqual(["Alice", "Bob"]);
+    expect(banner!.rows.map((r) => r.name)).toEqual(["Alice", "Bob"]);
+  });
+
   it("archives rows for participants who leave", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     await syncGamePayments(game.id, event.id);
