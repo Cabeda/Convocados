@@ -12,7 +12,7 @@ const mockGetSession = vi.mocked(getSession);
 const mockCheckOwnership = vi.mocked(checkOwnership);
 
 import { PATCH } from "~/pages/api/events/[id]/history/[historyId]";
-import { syncGamePayments } from "~/lib/settlement.server";
+import { settleShare, syncGamePayments } from "~/lib/settlement.server";
 import { getOutstandingBalance, getGateBalance } from "~/lib/balance.server";
 import { POST as POST_HISTORY } from "~/pages/api/events/[id]/history/index";
 import { PUT as PUT_TEAMS } from "~/pages/api/events/[id]/teams";
@@ -320,6 +320,14 @@ describe("history PATCH dual-write to Game", () => {
     });
     expect(aliceDebitsBefore).toHaveLength(1);
 
+    // Bob already settled his share on this played game.
+    await settleShare(event.id, game.id, bobId, "owner-1");
+    const bobUserId = (await prisma.eventPlayer.findUniqueOrThrow({ where: { id: bobId } })).userId!;
+    const bobDebitsBefore = await prisma.walletTransaction.findMany({
+      where: { eventId: event.id, reason: "per_game_share", direction: "debit", eventInstanceId: game.id, userId: bobUserId },
+    });
+    expect(bobDebitsBefore).toHaveLength(1);
+
     const restored = [
       { team: "Reds", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
       { team: "Blues", players: [{ name: "Cara", order: 0 }, { name: "Dan", order: 1 }] },
@@ -343,6 +351,24 @@ describe("history PATCH dual-write to Game", () => {
     expect(aliceDebitsAfter).toHaveLength(1);
     expect(aliceDebitsAfter[0].amountCents).toBe(aliceDebitsBefore[0].amountCents);
 
+    // Dan is newly added, not revived, and owes the same frozen share.
+    const danUserId = (await prisma.eventPlayer.findUniqueOrThrow({ where: { id: danId } })).userId!;
+    expect(await prisma.gamePayment.count({ where: { gameId: game.id, eventPlayerId: danId, archivedAt: null } })).toBe(1);
+    const danDebits = await prisma.walletTransaction.findMany({
+      where: { eventId: event.id, reason: "per_game_share", direction: "debit", eventInstanceId: game.id, userId: danUserId },
+    });
+    expect(danDebits).toHaveLength(1);
+    expect(danDebits[0].amountCents).toBe(500);
+
+    // A paid player's debit is not posted again: same count and amount, and the
+    // payment still clears the balance.
+    const bobDebitsAfter = await prisma.walletTransaction.findMany({
+      where: { eventId: event.id, reason: "per_game_share", direction: "debit", eventInstanceId: game.id, userId: bobUserId },
+    });
+    expect(bobDebitsAfter).toHaveLength(1);
+    expect(bobDebitsAfter[0].amountCents).toBe(bobDebitsBefore[0].amountCents);
+    expect((await getOutstandingBalance(event.id, "Bob")).amount).toBe(0);
+
     // The ledger-backed reads now agree with the revived roll row.
     expect((await getOutstandingBalance(event.id, "Cara")).amount).toBe(5);
     expect(await getGateBalance(event.id, "Cara")).toBe(5);
@@ -353,6 +379,121 @@ describe("history PATCH dual-write to Game", () => {
     expect(await prisma.walletTransaction.count({
       where: { eventId: event.id, reason: "per_game_share", direction: "debit", eventInstanceId: game.id, userId: caraUserId },
     })).toBe(1);
+  });
+
+  it("does not invent ledger debt for a legacy played game with only GamePayment rows", async () => {
+    // ADR 0019 §6: a game whose shares predate the ledger is corrected on its
+    // GamePayment roll only. A teams edit must not post per_game_share debits
+    // that turn an already-paid legacy player into a debtor.
+    const event = await seedEvent({ maxPlayers: 4 });
+    const game = await seedGame(event.id, { status: "played" });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const [aliceId, bobId] = await seedRoster(event.id, game.id, ["Alice", "Bob"]);
+    for (const [name, epId] of [
+      ["Alice", aliceId],
+      ["Bob", bobId],
+    ] as const) {
+      const user = await seedUser(name);
+      await prisma.eventPlayer.update({ where: { id: epId }, data: { userId: user.id } });
+    }
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 20, currency: "EUR" } });
+
+    const snapshot = [
+      { team: "Reds", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
+    ];
+    const history = await seedHistory(event.id, {
+      id: game.id,
+      dateTime: game.dateTime,
+      teamsSnapshot: JSON.stringify(snapshot),
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: aliceId, playerName: "Alice", amount: 5, status: "paid" },
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: bobId, playerName: "Bob", amount: 5, status: "pending" },
+    });
+
+    const res = await PATCH(ctx({ id: event.id, historyId: history.id }, { teamsSnapshot: snapshot }));
+    expect(res.status).toBe(200);
+
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, eventInstanceId: game.id, reason: "per_game_share" },
+    })).toBe(0);
+    expect((await getOutstandingBalance(event.id, "Alice")).amount).toBe(0);
+    expect(await getGateBalance(event.id, "Alice")).toBe(0);
+    expect((await getOutstandingBalance(event.id, "Bob")).amount).toBe(5);
+  });
+
+  it("posts an idempotent correction credit when a played-game edit removes a charged player", async () => {
+    // Removing a player must cancel their settled share with a cost_adjustment
+    // credit, never by deleting the original debit. Re-adding them must post
+    // the opposite correction so the restored share is owed again.
+    const event = await seedEvent({ maxPlayers: 4 });
+    const game = await seedGame(event.id, { status: "upcoming" });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const [aliceId, bobId, caraId] = await seedRoster(event.id, game.id, ["Alice", "Bob", "Cara"]);
+    for (const [name, epId] of [
+      ["Alice", aliceId],
+      ["Bob", bobId],
+      ["Cara", caraId],
+    ] as const) {
+      const user = await seedUser(name);
+      await prisma.eventPlayer.update({ where: { id: epId }, data: { userId: user.id } });
+    }
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 20, currency: "EUR" } });
+
+    const opening = [
+      { team: "Reds", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
+      { team: "Blues", players: [{ name: "Cara", order: 0 }] },
+    ];
+    const history = await seedHistory(event.id, {
+      id: game.id,
+      dateTime: game.dateTime,
+      teamsSnapshot: JSON.stringify(opening),
+    });
+    await syncGamePayments(game.id, event.id);
+    await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
+
+    const caraUserId = (await prisma.eventPlayer.findUniqueOrThrow({ where: { id: caraId } })).userId!;
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, reason: "per_game_share", direction: "debit", eventInstanceId: game.id, userId: caraUserId },
+    })).toBe(1);
+
+    const withoutCara = [
+      { team: "Reds", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
+      { team: "Blues", players: [] as { name: string; order: number }[] },
+    ];
+    const res = await PATCH(ctx({ id: event.id, historyId: history.id }, { teamsSnapshot: withoutCara }));
+    expect(res.status).toBe(200);
+
+    expect(await prisma.gamePayment.count({ where: { gameId: game.id, eventPlayerId: caraId, archivedAt: null } })).toBe(0);
+    // The original debit stays; a correction credit cancels the charge.
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, reason: "per_game_share", direction: "debit", eventInstanceId: game.id, userId: caraUserId },
+    })).toBe(1);
+    const corrections = await prisma.walletTransaction.findMany({
+      where: { eventId: event.id, eventInstanceId: game.id, reason: "cost_adjustment", userId: caraUserId },
+    });
+    expect(corrections).toHaveLength(1);
+    expect(corrections[0]).toMatchObject({ direction: "credit", amountCents: 500 });
+    expect((await getOutstandingBalance(event.id, "Cara")).amount).toBe(0);
+    expect(await getGateBalance(event.id, "Cara")).toBe(0);
+
+    // A repeated edit changes nothing: the reconciliation sees a zero net charge.
+    const again = await PATCH(ctx({ id: event.id, historyId: history.id }, { teamsSnapshot: withoutCara }));
+    expect(again.status).toBe(200);
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, eventInstanceId: game.id, reason: "cost_adjustment", userId: caraUserId },
+    })).toBe(1);
+
+    // Re-adding the player reverses the credit, so the share is owed again.
+    const restored = await PATCH(ctx({ id: event.id, historyId: history.id }, { teamsSnapshot: opening }));
+    expect(restored.status).toBe(200);
+    expect(await prisma.walletTransaction.count({
+      where: { eventId: event.id, eventInstanceId: game.id, reason: "cost_adjustment", userId: caraUserId },
+    })).toBe(2);
+    expect((await getOutstandingBalance(event.id, "Cara")).amount).toBe(5);
+    expect(await getGateBalance(event.id, "Cara")).toBe(5);
   });
 });
 
