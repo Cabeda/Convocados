@@ -478,7 +478,7 @@ async function syncChargeDebits(
 }
 
 export async function syncGamePayments(gameId: string, eventId: string): Promise<void> {
-  await syncGamePaymentsCore(prisma, gameId, eventId);
+  await prisma.$transaction((tx) => syncGamePaymentsCore(tx, gameId, eventId));
 }
 
 export async function syncGamePaymentsTx(tx: Prisma.TransactionClient, gameId: string, eventId: string): Promise<void> {
