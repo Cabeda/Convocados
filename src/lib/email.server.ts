@@ -1,5 +1,6 @@
 import type { Resend as ResendClass } from "resend";
 import { createLogger } from "./logger.server";
+import { formatDateInTz } from "./timezones";
 import { getOrCreateUnsubscribeTokenByEmail, type UnsubscribeType } from "./unsubscribe.server";
 
 const log = createLogger("email");
@@ -197,11 +198,21 @@ export async function sendVerificationEmail(to: string, url: string) {
 
 // ── Notification emails ───────────────────────────────────────────────────────
 
+/**
+ * The one game-time rendering for email bodies: the Event's timezone, never the
+ * process's (UTC on Fly). Every payload below carries a required `timezone`, so
+ * a seventh copy of the format cannot compile.
+ */
+function whenText(iso: string, timezone: string): string {
+  return formatDateInTz(new Date(iso), "en", timezone, { dateStyle: "medium", timeStyle: "short" });
+}
+
 export interface GameInviteData {
   eventTitle: string;
   dateTime: string;
   location: string;
   eventUrl: string;
+  timezone: string;
 }
 
 export interface PlayerJoinedOwnerData {
@@ -230,7 +241,7 @@ export async function sendGameInvite(to: string, data: GameInviteData) {
   await sendTemplatedEmail(to, {
     subject: `You're invited: ${data.eventTitle} — Convocados`,
     heading: `You're invited to ${data.eventTitle}`,
-    body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`,
+    body: `📍 ${data.location}<br/>🕐 ${whenText(data.dateTime, data.timezone)}`,
     buttonText: "View game",
     buttonUrl: data.eventUrl,
     footnote: "",
@@ -245,6 +256,7 @@ export interface PlayerInviteData {
   dateTime: string;
   location: string;
   eventUrl: string;
+  timezone: string;
   /** Who added them, for context (optional). */
   inviterName?: string | null;
 }
@@ -254,7 +266,7 @@ export interface PlayerInviteData {
  * registered Convocados account — invites them to register and claim their spot.
  */
 export async function sendPlayerInviteToRegister(to: string, data: PlayerInviteData) {
-  const when = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const when = whenText(data.dateTime, data.timezone);
   const inviter = data.inviterName ? `${data.inviterName} added you to` : "You've been added to";
   const signupUrl = `${getAppUrl()}/auth/signup?email=${encodeURIComponent(to)}`;
   const inviterLabel = data.inviterName ?? "Someone";
@@ -276,6 +288,7 @@ export interface ReminderData {
   spotsLeft: number;
   eventUrl: string;
   reminderType: "24h" | "2h" | "1h";
+  timezone: string;
 }
 
 export async function sendReminder(to: string, data: ReminderData) {
@@ -283,7 +296,7 @@ export async function sendReminder(to: string, data: ReminderData) {
   await sendTemplatedEmail(to, {
     subject: `Reminder: ${data.eventTitle} — Convocados`,
     heading: `${data.eventTitle} is coming up`,
-    body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}<br/>👥 ${spotsText}`,
+    body: `📍 ${data.location}<br/>🕐 ${whenText(data.dateTime, data.timezone)}<br/>👥 ${spotsText}`,
     buttonText: "View game",
     buttonUrl: data.eventUrl,
     footnote: "",
@@ -295,14 +308,14 @@ export async function sendReminder(to: string, data: ReminderData) {
 
 export interface WeeklySummaryData {
   userName: string;
-  upcoming: { title: string; dateTime: string; location: string }[];
+  upcoming: { title: string; dateTime: string; location: string; timezone: string }[];
   results: { title: string; scoreOne: number; scoreTwo: number }[];
   dashboardUrl: string;
 }
 
 export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
   const upcomingHtml = data.upcoming.length
-    ? data.upcoming.map((g) => `• <strong>${g.title}</strong> — ${new Date(g.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`).join("<br/>")
+    ? data.upcoming.map((g) => `• <strong>${g.title}</strong> — ${whenText(g.dateTime, g.timezone)}`).join("<br/>")
     : "No upcoming games this week.";
   const resultsHtml = data.results.length
     ? data.results.map((g) => `• ${g.title}: ${g.scoreOne} – ${g.scoreTwo}`).join("<br/>")
@@ -376,11 +389,12 @@ export interface PriorityEnrollmentData {
   deadline: string;
   confirmUrl: string;
   declineUrl: string;
+  timezone: string;
 }
 
 export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmentData) {
-  const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
-  const dateStr = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const deadlineStr = whenText(data.deadline, data.timezone);
+  const dateStr = whenText(data.dateTime, data.timezone);
   await sendTemplatedEmail(to, {
     subject: `You're in for ${data.eventTitle}! — Convocados`,
     heading: `You're in for ${data.eventTitle}!`,
@@ -393,7 +407,7 @@ export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmen
 }
 
 export async function sendPriorityDeadlineReminder(to: string, data: PriorityEnrollmentData) {
-  const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const deadlineStr = whenText(data.deadline, data.timezone);
   await sendTemplatedEmail(to, {
     subject: `Confirm your spot for ${data.eventTitle} — deadline soon`,
     heading: `Confirm your spot — deadline soon`,
