@@ -221,6 +221,28 @@ export async function resolveGameLineups(
   return lineups;
 }
 
+/**
+ * The players who owe for a game — the single "who played" rule shared by the
+ * durable roll and every money surface (banner, history config).
+ *
+ * Precedence, strongest first:
+ *   1. a resolved lineup (live teamResults / frozen teamsSnapshot) is authoritative;
+ *   2. team membership, when any participant has a team — a bench player moved
+ *      onto a team keeps their join order, so an order-only slice drops them;
+ *   3. queue order (order < maxPlayers) — the pre-draw fallback team generation uses.
+ */
+export function chargedParticipants<T extends {
+  team: string | null;
+  order: number;
+  eventPlayer: { name: string };
+}>(participants: T[], lineup: Set<string> | undefined, maxPlayers: number): T[] {
+  if (lineup) return participants.filter((p) => lineup.has(p.eventPlayer.name));
+  const hasTeamAssignments = participants.some((p) => p.team !== null);
+  return hasTeamAssignments
+    ? participants.filter((p) => p.team !== null)
+    : participants.filter((p) => p.order < maxPlayers);
+}
+
 /** Whether a user is an event player (has an EventPlayer linked to the event). */
 export async function isEventParticipant(eventId: string, userId: string): Promise<boolean> {
   const ep = await prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true } });
@@ -360,23 +382,11 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     return;
   }
 
-  // Charge only the players who actually formed the lineup; a bench player never
-  // owes. Before teams are drawn there is no lineup yet, so fall back to the
-  // ordered starters (order < maxPlayers) — exactly the slice team generation uses.
+  // Charge only the players who actually played; a bench player never owes.
   const lineups = event && game
     ? await resolveGameLineups(db, event, [{ id: gameId, dateTime: game.dateTime }])
     : new Map<string, Set<string>>();
-  const lineup = lineups.get(gameId);
-  // Without a frozen lineup, fall back to the best in-row signal for "who
-  // played". Team membership wins over queue order: a bench player moved onto a
-  // team keeps their join order (past maxPlayers), so an order-only slice
-  // silently drops them from the roll even though they played.
-  const hasTeamAssignments = participants.some((p) => p.team !== null);
-  const charged = lineup
-    ? participants.filter((p) => lineup.has(p.eventPlayer.name))
-    : hasTeamAssignments
-      ? participants.filter((p) => p.team !== null)
-      : participants.filter((p) => p.order < maxPlayers);
+  const charged = chargedParticipants(participants, lineups.get(gameId), maxPlayers);
 
   const activeIds = charged.map((p) => p.eventPlayer.id);
   await db.gamePayment.updateMany({
@@ -1175,7 +1185,7 @@ export async function getGameSettlement(eventId: string, gameId: string): Promis
     orderBy: { order: "asc" },
   });
 
-  // Only lineup players owe; fall back to the ordered starters before teams exist.
+  // Only players who played owe; same rule as the roll.
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { id: true, currentGameId: true },
@@ -1183,9 +1193,7 @@ export async function getGameSettlement(eventId: string, gameId: string): Promis
   const lineup = event
     ? (await resolveGameLineups(prisma, event, [{ id: game.id, dateTime: game.dateTime }])).get(game.id)
     : undefined;
-  const charged = lineup
-    ? participants.filter((p) => lineup.has(p.eventPlayer.name))
-    : participants.filter((p) => p.order < maxPlayers);
+  const charged = chargedParticipants(participants, lineup, maxPlayers);
 
   const payerName = effectivePayerName(game);
   return {
