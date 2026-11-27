@@ -1018,9 +1018,37 @@ describe("MCP write tools — additional validation and auth gaps", () => {
     const body: any = await res.json();
     const data = JSON.parse(body.result.content[0].text);
     expect(data.id).toBeTruthy();
+    const event = await prisma.event.findUnique({ where: { id: data.id } });
+    expect(event?.dateTime.toISOString()).toBe("2099-06-15T17:00:00.000Z");
   });
 });
 describe("MCP write tools — update_event", () => {
+  it("parses a wall-clock dateTime in the timezone, matching create_event", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_update_event", {
+      eventId: event.id, dateTime: "2099-06-15T18:00", timezone: "Europe/Lisbon",
+    })));
+    expect(res.status).toBe(200);
+    const updated = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(updated?.dateTime.toISOString()).toBe("2099-06-15T17:00:00.000Z");
+  });
+
+  it("keeps an absolute dateTime as the instant it names", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_update_event", {
+      eventId: event.id, dateTime: "2099-06-15T18:00:00Z", timezone: "Europe/Lisbon",
+    })));
+    expect(res.status).toBe(200);
+    const updated = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(updated?.dateTime.toISOString()).toBe("2099-06-15T18:00:00.000Z");
+  });
+
   it("updates provided fields for the owner", async () => {
     const owner = await createOwner();
     const event = await createEvent(owner.id);
