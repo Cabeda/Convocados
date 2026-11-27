@@ -681,6 +681,29 @@ describe("PlayerList — roster locked after game end (issue #716)", () => {
     expect(baseProps.onRequestAdd).not.toHaveBeenCalled();
     expect(baseProps.onAddPlayer).not.toHaveBeenCalled();
   });
+
+  const fullRosterPlusBench: Player[] = [
+    ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, name: `Player ${i}`, userId: null })),
+    { id: "bench-1", name: "Bench One", userId: null },
+  ];
+
+  it.each([true, false])(
+    "hides randomize, reset-order and remove controls when rosterLocked (isOwner=%s)",
+    (isOwner) => {
+      renderWithTheme(
+        <PlayerList {...baseProps} players={fullRosterPlusBench} isOwner={isOwner} rosterLocked />,
+      );
+      expect(screen.queryByRole("button", { name: /randomize teams/i })).not.toBeInTheDocument();
+      expect(screen.queryByTestId("RestartAltIcon")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("remove-player-p0")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("remove-bench-player-bench-1")).not.toBeInTheDocument();
+    },
+  );
+
+  it("suppresses the join-the-bench nudge when rosterLocked", () => {
+    renderWithTheme(<PlayerList {...baseProps} players={fullRosterPlusBench} rosterLocked />);
+    expect(screen.queryByText(/join the bench/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("PlayerList — randomize motion state", () => {
