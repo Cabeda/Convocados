@@ -7,6 +7,8 @@ import { buildAccessCookie, hashPassword } from "~/lib/eventAccess";
 import { syncGamePayments } from "~/lib/settlement.server";
 
 import { PATCH as patchHistory } from "~/pages/api/events/[id]/history/[historyId]";
+import { POST as createMatchEvent } from "~/pages/api/events/[id]/history/[historyId]/match-events";
+import { DELETE as deleteMatchEvent } from "~/pages/api/events/[id]/history/[historyId]/match-events/[matchEventId]";
 import { PUT as updateTeams } from "~/pages/api/events/[id]/teams";
 
 import { POST as randomize } from "~/pages/api/events/[id]/randomize";
@@ -505,6 +507,60 @@ describe("password-locked Event mutations (#1727)", () => {
     expect(await prisma.teamResult.count({ where: { eventId: event.id } })).toBe(0);
   });
 
+  it("POST match-events refuses a participant who never unlocked the Event", async () => {
+    const event = await seedEvent({ ownerId: null, isPublic: false, accessPassword: hashPassword("secret") });
+    const history = await seedHistoryEntry(
+      event.id,
+      JSON.stringify([
+        { team: "Ninjas", players: [{ name: "other", order: 0 }] },
+        { team: "Gunas", players: [] },
+      ]),
+    );
+
+    const res = await createMatchEvent(ctx(
+      { id: event.id, historyId: history.id },
+      { type: "goal", team: "one", scorerName: "other", minute: 1 },
+      otherToken,
+      "POST",
+    ));
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ locked: true });
+    expect(await prisma.matchEvent.count({ where: { gameHistoryId: history.id } })).toBe(0);
+    const row = await prisma.gameHistory.findUniqueOrThrow({ where: { id: history.id } });
+    expect(row.scoreOne).toBeNull();
+    expect(row.scoreTwo).toBeNull();
+  });
+
+  it("DELETE match-events refuses a participant who never unlocked the Event", async () => {
+    const event = await seedEvent({ ownerId: null, isPublic: false, accessPassword: hashPassword("secret") });
+    const history = await seedHistoryEntry(
+      event.id,
+      JSON.stringify([
+        { team: "Ninjas", players: [{ name: "other", order: 0 }] },
+        { team: "Gunas", players: [] },
+      ]),
+    );
+    const goal = await prisma.matchEvent.create({
+      data: { gameHistoryId: history.id, type: "goal", team: "one", scorerName: "other", minute: 1 },
+    });
+    await prisma.gameHistory.update({ where: { id: history.id }, data: { scoreOne: 1, scoreTwo: 0 } });
+
+    const res = await deleteMatchEvent(ctx(
+      { id: event.id, historyId: history.id, matchEventId: goal.id },
+      undefined,
+      otherToken,
+      "DELETE",
+    ));
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ locked: true });
+    expect(await prisma.matchEvent.count({ where: { gameHistoryId: history.id } })).toBe(1);
+    const row = await prisma.gameHistory.findUniqueOrThrow({ where: { id: history.id } });
+    expect(row.scoreOne).toBe(1);
+    expect(row.scoreTwo).toBe(0);
+  });
+
   it("admits the owner, an admin and an access-cookie holder on a locked Event", async () => {
     const event = await seedEvent({ ownerId, accessPassword: hashPassword("secret") });
     const history = await seedHistoryEntry(event.id);
@@ -532,6 +588,13 @@ describe("password-locked Event mutations (#1727)", () => {
     const event = await seedEvent({ ownerId });
     await prisma.player.create({ data: { eventId: event.id, name: "Other", order: 0, userId: otherUserId } });
     expect((await updateTeams(ctx({ id: event.id }, { matches: [] }, otherToken, "PUT"))).status).toBe(200);
+  });
+
+  it("still refuses a signed-in non-player updating teams on an ownerless UNLOCKED Event", async () => {
+    const event = await seedEvent({ ownerId: null, isPublic: false });
+    const res = await updateTeams(ctx({ id: event.id }, { matches: [] }, otherToken, "PUT"));
+    expect(res.status).toBe(403);
+    expect(await prisma.teamResult.count({ where: { eventId: event.id } })).toBe(0);
   });
 });
 
