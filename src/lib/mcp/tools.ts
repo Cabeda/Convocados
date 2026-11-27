@@ -141,16 +141,32 @@ async function assertEventReadable(eventId: string, ctx: AuthContext): Promise<v
   }
 }
 
+/**
+ * The one rule for reading raw ELO: only the Event's owner or an admin may see
+ * it. Every tool that can surface a rating calls this, so `list_players` and
+ * `get_ratings` cannot answer the same visibility question differently.
+ */
+async function canReadRatings(eventId: string, ctx: AuthContext): Promise<boolean> {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
+  if (!event) throw new McpError("Game not found", -32001, 404);
+  const isOwner = !!ctx.userId && ctx.userId === event.ownerId;
+  const isAdmin = ctx.userId ? await checkEventAdmin(eventId, ctx.userId) : false;
+  return isOwner || isAdmin;
+}
+
 async function listPlayers(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string;
   await assertEventReadable(eventId, ctx);
+  const canSeeRating = await canReadRatings(eventId, ctx);
   const eventPlayers = await prisma.eventPlayer.findMany({ where: { eventId }, select: { id: true, name: true, userId: true, rating: true } });
   // fallback to legacy Player for older events
   const legacy = await prisma.player.findMany({ where: { eventId }, select: { id: true, name: true, userId: true } });
   const map = new Map<string, PlayerLike>();
   for (const p of eventPlayers) map.set(p.name, p);
   for (const p of legacy) if (!map.has(p.name)) map.set(p.name, { ...p, rating: undefined });
-  return { players: Array.from(map.values()) };
+  const players = Array.from(map.values());
+  if (!canSeeRating) for (const p of players) delete p.rating;
+  return { players };
 }
 
 async function getBalance(args: Record<string, unknown>, ctx: AuthContext) {
@@ -198,11 +214,7 @@ async function getHistory(args: Record<string, unknown>, ctx: AuthContext) {
 async function getRatings(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string;
   await assertEventReadable(eventId, ctx);
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
-  if (!event) throw new McpError("Game not found", -32001, 404);
-  const isOwner = !!ctx.userId && ctx.userId === event.ownerId;
-  const isAdmin = ctx.userId ? await checkEventAdmin(eventId, ctx.userId) : false;
-  if (!isOwner && !isAdmin) throw new McpError("Ratings are hidden for this event.", -32003, 403);
+  if (!(await canReadRatings(eventId, ctx))) throw new McpError("Ratings are hidden for this event.", -32003, 403);
   const ratings = await prisma.playerRating.findMany({ where: { eventId } });
   const fallback = ratings.length ? ratings : await prisma.eventPlayer.findMany({ where: { eventId }, select: { name: true, rating: true, gamesPlayed: true, wins: true, losses: true } });
   return { ratings: fallback };
