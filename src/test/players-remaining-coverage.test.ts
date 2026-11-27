@@ -149,8 +149,10 @@ describe("players.ts remaining coverage — POST paths", () => {
     });
     const event = await seedEvent({ ownerId: owner.id });
 
-    // QuickJoin: linkToAccount true with the session user → linkedUserId set.
-    const res = await POST(ctx(event.id, { name: "Pat", linkToAccount: true }, { user: { id: player.id, name: "Pat" } }));
+    // The organizer adds a registered player: the actor differs from the linked
+    // player, so the invite email is sent. A self-join is deliberately muted
+    // (covered in apply-roster-change.test.ts).
+    const res = await POST(ctx(event.id, { name: "Pat", email: "pat@t.com" }, { user: { id: owner.id, name: "Owner4" } }));
     expect(res.status).toBe(200);
     expect(mockGameInvite).toHaveBeenCalledWith(
       "pat@t.com",
