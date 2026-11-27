@@ -53,6 +53,16 @@ export async function validateFeedToken(token: string) {
   return { userId: record.userId, scope: record.scope, scopeId: record.scopeId };
 }
 
+/** True when the token is a valid feed token scoped to this Event. */
+export async function isValidEventFeedToken(
+  token: string | null | undefined,
+  eventId: string,
+): Promise<boolean> {
+  if (!token) return false;
+  const tokenData = await validateFeedToken(token);
+  return tokenData?.scope === "event" && tokenData.scopeId === eventId;
+}
+
 /**
  * Revoke all calendar tokens for a user (e.g. for regeneration).
  */

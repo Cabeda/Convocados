@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { validateFeedToken } from "../../../../lib/calendarToken.server";
+import { isValidEventFeedToken } from "../../../../lib/calendarToken.server";
 import { generateIcsFeed } from "../../../../lib/calendar";
 import { parseRecurrenceRule } from "../../../../lib/recurrence";
 
@@ -18,8 +18,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     return new Response("Missing token", { status: 401 });
   }
 
-  const tokenData = await validateFeedToken(token);
-  if (!tokenData || tokenData.scope !== "event" || tokenData.scopeId !== eventId) {
+  if (!(await isValidEventFeedToken(token, eventId))) {
     return new Response("Invalid or expired token", { status: 403 });
   }
 
