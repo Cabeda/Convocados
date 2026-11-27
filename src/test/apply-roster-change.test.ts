@@ -96,6 +96,31 @@ describe("applyRosterChange seam (c5)", () => {
     expect(player?.userId).toBe("u-alex");
   });
 
+  it("links an active guest identity when the guest quick-joins", async () => {
+    const seeded = await seedEvent(6);
+    const game = await prisma.game.create({ data: { eventId: seeded.id, dateTime: seeded.dateTime } });
+    await prisma.event.update({ where: { id: seeded.id }, data: { currentGameId: game.id } });
+    const joiner = await prisma.user.create({
+      data: { id: "u-joiner", name: "Joiner", email: "joiner@test.com", emailVerified: true },
+    });
+    const guest = await prisma.eventPlayer.create({ data: { eventId: seeded.id, name: "Joiner" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: guest.id, status: "active", order: 0 },
+    });
+    // No legacy Player row: the invite-accepted shape.
+
+    const result = await applyRosterChange({
+      ...input(await loadEvent(seeded.id), { name: "Joiner", linkToAccount: true }),
+      session: { user: { id: joiner.id, name: "Joiner" } },
+    });
+
+    expect(result.status).toBe(200);
+    const ep = await prisma.eventPlayer.findFirstOrThrow({
+      where: { eventId: seeded.id, name: "Joiner" },
+    });
+    expect(ep.userId).toBe(joiner.id);
+  });
+
   it("applies a fresh join and returns the ok payload", async () => {
     const seeded = await seedEvent(5);
     const result = await applyRosterChange(input(await loadEvent(seeded.id), { name: "New Player" }));

@@ -343,6 +343,36 @@ describe("MCP write tools — add_player", () => {
     expect(joins).toHaveLength(0);
   });
 
+  it("creates the follow and rating when promoting a pending invite", async () => {
+    const owner = await createOwner();
+    const member = await prisma.user.create({
+      data: {
+        id: `mcpw-promoted-${crypto.randomUUID().slice(0, 8)}`,
+        name: "Promoted",
+        email: `mcpw-promoted-${crypto.randomUUID().slice(0, 8)}@test.com`,
+        emailVerified: true,
+      },
+    });
+    const event = await createEvent(owner.id);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Promoted" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: ep.id, status: "pending", order: 0 },
+    });
+    await prisma.player.create({ data: { eventId: event.id, name: "Promoted", order: 0 } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, userId: member.id })));
+    expect(res.status).toBe(200);
+    const follow = await prisma.eventFollow.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: member.id } },
+    });
+    expect(follow).toBeTruthy();
+    const rating = await prisma.playerRating.findUnique({
+      where: { eventId_name: { eventId: event.id, name: "Promoted" } },
+    });
+    expect(rating).toBeTruthy();
+  });
+
   it("does not notify the actor about their own add", async () => {
     const owner = await createOwner();
     const event = await createEvent(owner.id);

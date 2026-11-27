@@ -407,7 +407,8 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
       // *link*, not a duplicate: the P2002 merge below sets Player.userId.
       // Only an explicit email/userId counts as that intent — a unique-name
       // auto-link must not turn a duplicate add into a re-announcement.
-      const explicitLink = Boolean(explicitUserId) || Boolean(normalizedEmail);
+      const explicitLink =
+        Boolean(explicitUserId) || Boolean(normalizedEmail) || linkToAccount === true;
       const linksThisIdentity = explicitLink && linkedUserId !== null && !existingIdentity.userId;
       if (
         participant &&
@@ -546,6 +547,20 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
             // other add (the migrated callers synced here).
             await syncGamePayments(event.currentGameId, eventId);
             await syncPaymentsForEvent(eventId);
+            // Same side effects as the fresh path below: a linked player
+            // follows the event, and every roster entry gets an ELO seat.
+            if (linkUserId) {
+              await prisma.eventFollow.upsert({
+                where: { eventId_userId: { eventId, userId: linkUserId } },
+                create: { eventId, userId: linkUserId },
+                update: {},
+              });
+            }
+            await prisma.playerRating.upsert({
+              where: { eventId_name: { eventId, name: trimmed } },
+              create: { eventId, name: trimmed, rating: 1000 },
+              update: {},
+            });
             await finishRosterAdd(eventId, pendingIdentity.name, event.maxPlayers, event.currentGameId);
             await notifyPlayerJoined({ event, playerName: trimmed, spotsLeftBefore, rosterCount, actor: joinActor, origin, senderClientId });
             return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
