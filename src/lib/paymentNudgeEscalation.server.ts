@@ -105,7 +105,9 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     // in this run names the same account the announcement did.
     const { methods: paymentMethods } = await resolvePaymentDetails(event.id, event.currentGameId);
     const totalPayments = gamePayments.length;
-    const paidCount = gamePayments.filter((p) => p.status === "paid").length;
+    // Sent is the payer's self-report that money is on its way; the roll shows
+    // it as paid for the group-facing rate and only pending is still owed.
+    const paidCount = gamePayments.filter((p) => p.status === "paid" || p.status === "sent").length;
 
     // Users with a still-unsettled payment on this event. Trackers for anyone
     // else (paid since the last tick) are stale and removed below so a future
@@ -119,6 +121,10 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       const userId = payment.eventPlayer?.userId;
       if (!userId) continue;
       activeUserIds.add(userId);
+
+      // The payer already did their part; the outstanding step is the
+      // organizer's confirmation, so no stage may nudge them as delinquent.
+      const selfReported = payment.status === "sent";
 
       // Get or create nudge stage tracker
       const tracker = await prisma.paymentNudgeStage.upsert({
@@ -154,7 +160,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       // Stage progression based on time since game end
       if (tracker.stage === 0 && hoursSinceEnd >= STAGE_1_DELAY_H) {
         // Stage 1: soft nudge
-        if (wantsPush) await sendPushToUser(userId, event.title, `💸 You owe ${formatMoney(toCents(payment.amount), currency)} — tap to pay`, url);
+        if (wantsPush && !selfReported) await sendPushToUser(userId, event.title, `💸 You owe ${formatMoney(toCents(payment.amount), currency)} — tap to pay`, url);
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 1, lastSentAt: now },
@@ -163,7 +169,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         fireNudgeWebhook(1);
       } else if (tracker.stage === 1 && hoursSinceEnd >= STAGE_2_DELAY_H) {
         // Stage 2: follow-up
-        if (wantsPush) await sendPushToUser(userId, event.title, `⏰ Still pending — ${formatMoney(toCents(payment.amount), currency)} for ${event.title}`, url);
+        if (wantsPush && !selfReported) await sendPushToUser(userId, event.title, `⏰ Still pending — ${formatMoney(toCents(payment.amount), currency)} for ${event.title}`, url);
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 2, lastSentAt: now },
@@ -174,7 +180,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         // Stage 3: social proof
         const unpaidCount = totalPayments - paidCount;
         const body = `${paidCount}/${totalPayments} players have paid. You're one of ${unpaidCount} who haven't.`;
-        if (wantsPush) await sendPushToUser(userId, event.title, body, url);
+        if (wantsPush && !selfReported) await sendPushToUser(userId, event.title, body, url);
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
           data: { stage: 3, lastSentAt: now },
