@@ -609,3 +609,15 @@ describe("a review is bounded by minutes that buy a verdict", () => {
     expect(raw).toContain("no `pnpm install`, `pnpm test`, `pnpm typecheck`");
   });
 });
+
+describe("the Attempt ledger can post its comment", () => {
+  // `gh pr comment` goes through the pull-requests API. With only `issues: write`
+  // the call failed with an empty stderr, and every round was refused as
+  // unrecorded — six Changes sat unreviewed behind it on 2026-11-27.
+  it("grants the ledger pull-requests: write", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      jobs?: Record<string, { permissions?: Record<string, string> }>;
+    };
+    expect(doc.jobs?.ledger?.permissions?.["pull-requests"]).toBe("write");
+  });
+});
