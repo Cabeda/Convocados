@@ -503,3 +503,14 @@ describe("a refused Change gets its round from the tick", () => {
     expect(raw).toContain("workflow_dispatch) pr=\"${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}\"");
   });
 });
+
+describe("the review is readable where a human reads it", () => {
+  // A formal review lands in a separate tab the conversation never shows, and
+  // GitHub refuses one on an App-authored PR anyway. The adversarial review is
+  // the product: it goes in the thread.
+  it("posts the review as a PR comment", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+    expect(raw).toContain('gh pr comment "$PR"');
+    expect(raw).not.toContain("gh pr review");
+  });
+});

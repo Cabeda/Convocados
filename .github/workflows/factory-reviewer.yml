@@ -240,10 +240,13 @@ jobs:
             if [ -n "$verdict" ]; then echo "<!-- factory:verdict:$verdict -->"; fi
             echo "<!-- factory:reviewed:$head:$sig -->"
           } > .factory-review/post.md
-          # GitHub refuses a review on a PR the App authored; a comment carries
-          # the same markers and the merge reads both surfaces.
-          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --comment --body-file .factory-review/post.md \
-            || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
+          # Post as a comment, always. GitHub refuses a review on a PR the App
+          # authored, so the comment fallback was already the only path that
+          # worked for every machine Change — and a formal review lands in a
+          # separate tab that the conversation never shows. The adversarial
+          # review is the point: it belongs in the thread a human reads.
+          # The daemon reads both surfaces, so nothing downstream changes.
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
 
       - name: Record the verdict
         # Informational, not a gate. The merge decision is the signature: the
