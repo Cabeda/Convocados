@@ -259,7 +259,7 @@ export async function isGamePayer(eventId: string, gameId: string, userId: strin
   const ep = await prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true } });
   if (!ep) return false;
   const payer = await prisma.game.findFirst({
-    where: { id: gameId, eventId, payerEventPlayerId: ep.id },
+    where: { id: gameId, eventId, payerEventPlayerId: ep.id, payerStoodDownAt: null },
     select: { id: true },
   });
   return !!payer;
