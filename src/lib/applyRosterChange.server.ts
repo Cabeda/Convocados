@@ -214,7 +214,7 @@ async function notifyPlayerJoined(input: {
   await enqueueJoinNotifications({ event, playerName, isOnBench, spotsLeft, rosterCount, url, senderClientId });
 
   if (!process.env.VITEST) {
-    await drainNotificationQueue().catch((err) => {
+    void drainNotificationQueue().catch((err) => {
       log.error({ eventId: event.id, err }, "Failed to drain notification queue");
     });
   }
@@ -600,7 +600,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   await enqueueJoinNotifications({ event, playerName: trimmed, isOnBench, spotsLeft, rosterCount, url, senderClientId });
 
   if (!process.env.VITEST) {
-    await drainNotificationQueue().catch((err) => {
+    void drainNotificationQueue().catch((err) => {
       log.error({ eventId, err }, "Failed to drain notification queue");
     });
   }

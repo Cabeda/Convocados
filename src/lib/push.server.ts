@@ -12,6 +12,26 @@ const log = createLogger("push");
 /** Max concurrent web-push sends per event to avoid overwhelming the connection pool */
 const PUSH_CONCURRENCY = 20;
 
+/** Bound every push request below the Android client's 15s timeout. */
+const PUSH_TIMEOUT_MS = 5_000;
+
+let _pushTimeouts = 0;
+
+export function getPushTimeoutCount(): number {
+  return _pushTimeouts;
+}
+
+function isTimeoutError(err: unknown): boolean {
+  const e = err as { name?: string; message?: string } | null;
+  return e?.name === "TimeoutError" || e?.name === "AbortError" ||
+    /timeout|timed out|aborted/i.test(e?.message ?? "");
+}
+
+function countPushTimeout(channel: string, err: unknown): void {
+  _pushTimeouts++;
+  log.warn({ channel, timeouts: _pushTimeouts, err }, "Push send timed out");
+}
+
 /** FCM HTTP v1 API endpoint */
 const FCM_API_URL = "https://fcm.googleapis.com/v1/projects/{projectId}/messages:send";
 /**
@@ -155,6 +175,7 @@ async function getFcmAccessToken(): Promise<string | null> {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+      signal: AbortSignal.timeout(PUSH_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -166,6 +187,7 @@ async function getFcmAccessToken(): Promise<string | null> {
     _fcmAccessToken = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
     return _fcmAccessToken.token;
   } catch (err) {
+    if (isTimeoutError(err)) countPushTimeout("fcm_oauth", err);
     log.error({ err }, "Failed to get FCM access token");
     return null;
   }
@@ -200,6 +222,7 @@ async function sendFcmMessage(token: string, title: string, body: string, data?:
           },
         },
       }),
+      signal: AbortSignal.timeout(PUSH_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -222,6 +245,7 @@ async function sendFcmMessage(token: string, title: string, body: string, data?:
 
     return true;
   } catch (err) {
+    if (isTimeoutError(err)) countPushTimeout("fcm", err);
     log.error({ err }, "FCM send error");
     return false;
   }
@@ -391,9 +415,11 @@ export async function sendPushToEvent(
               await webpush.sendNotification(
                 { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
                 pushPayload,
+                { timeout: PUSH_TIMEOUT_MS },
               );
               log.info({ endpoint: sub.endpoint.slice(0, 50) }, "Push notification sent");
             } catch (err: unknown) {
+              if (isTimeoutError(err)) countPushTimeout("webpush", err);
               const pushErr = err as { statusCode?: number; message?: string };
               log.error(
                 { endpoint: sub.endpoint.slice(0, 60), statusCode: pushErr?.statusCode, err: pushErr?.message },
@@ -461,9 +487,11 @@ export async function sendPushToUser(
               await webpush.sendNotification(
                 { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
                 pushPayload,
+                { timeout: PUSH_TIMEOUT_MS },
               );
               log.info({ endpoint: sub.endpoint.slice(0, 50), userId }, "User push sent");
             } catch (err: unknown) {
+              if (isTimeoutError(err)) countPushTimeout("webpush", err);
               const pushErr = err as { statusCode?: number; message?: string };
               log.error(
                 { endpoint: sub.endpoint.slice(0, 60), statusCode: pushErr?.statusCode, err: pushErr?.message, userId },
@@ -522,9 +550,11 @@ export async function sendTestPushToUserWebSubs({
           await webpush.sendNotification(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             pushPayload,
+            { timeout: PUSH_TIMEOUT_MS },
           );
           return { id: sub.id, ok: true as const };
         } catch (err: unknown) {
+          if (isTimeoutError(err)) countPushTimeout("webpush", err);
           const pushErr = err as { statusCode?: number; message?: string };
           if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404 || pushErr?.statusCode === 401 || pushErr?.statusCode === 403) {
             await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});

@@ -295,9 +295,9 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     await prisma.event.update({ where: { id: eventId }, data: { fewSpotsLeftNotified: false } }).catch(() => {});
   }
 
-  // Drain notification queue before responding
+  // Drain after the response so a stalled push cannot fail the leave.
   if (!process.env.VITEST) {
-    await drainNotificationQueue().catch((err) => {
+    void drainNotificationQueue().catch((err) => {
       log.error({ eventId, err }, "Failed to drain notification queue");
     });
   }

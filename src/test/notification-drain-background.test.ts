@@ -23,9 +23,6 @@ vi.mock("~/lib/logger.server", () => ({
 vi.mock("~/lib/notificationQueue.server", () => ({
   enqueueNotification: vi.fn().mockResolvedValue(undefined),
   drainNotificationQueue: drainState.drain,
-  scheduleNotificationDrain: vi.fn(() => {
-    void drainState.drain();
-  }),
   deliverInviteNotification: vi.fn().mockResolvedValue({ email: false, webPush: false, appPush: false }),
 }));
 
@@ -77,10 +74,10 @@ describe("join route vs notification drain (#1736)", () => {
     delete process.env.VITEST;
     try {
       const response = await withDeadline(
-        rosterPost({
+        Promise.resolve(rosterPost({
           params: { id: event.id },
           request: request({ name: "Fast Join" }),
-        } as never),
+        } as never)),
         3_000,
       );
 

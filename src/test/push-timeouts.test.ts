@@ -47,6 +47,7 @@ beforeEach(async () => {
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
   vi.clearAllMocks();
+  mockSendNotification.mockResolvedValue({});
   process.env.VAPID_PUBLIC_KEY = "test-public";
   process.env.VAPID_PRIVATE_KEY = "test-private";
 });
@@ -113,6 +114,23 @@ describe("push sends are bounded in time", () => {
       expect(options?.timeout).toBeGreaterThan(0);
       expect(options?.timeout).toBeLessThanOrEqual(FIVE_SECONDS_MS);
     }
+  });
+
+  it("counts web-push sends that time out", async () => {
+    const user = await seedUser("u-web-count");
+    const event = await seedEvent("evt-web-count", user.id);
+    await prisma.eventFollow.create({ data: { eventId: event.id, userId: user.id } });
+    await prisma.pushSubscription.create({
+      data: { userId: user.id, endpoint: "https://count.endpoint", p256dh: "a", auth: "b", locale: "en" },
+    });
+    mockSendNotification.mockRejectedValue(new Error("Socket timeout"));
+
+    const before = getPushTimeoutCount();
+    await sendPushToUser(user.id, "Title", "Body", "/url");
+    await sendPushToEvent(event.id, "Title", "notifyGameReminder2h", { title: "Push Timeout" }, "/events/evt", 3);
+    await sendTestPushToUserWebSubs({ userId: user.id, title: "Title", body: "Body", url: "/url" });
+
+    expect(getPushTimeoutCount()).toBeGreaterThanOrEqual(before + 3);
   });
 
   it("counts a send that times out", async () => {
