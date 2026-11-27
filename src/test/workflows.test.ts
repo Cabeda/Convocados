@@ -514,3 +514,19 @@ describe("the review is readable where a human reads it", () => {
     expect(raw).not.toContain("gh pr review");
   });
 });
+
+describe("a tick can start the round the Reviewer just refused", () => {
+  // `ledger` already falls back to `next-fix.ts` when a dispatch carries no PR,
+  // and nothing could reach that path: `pr` was a required input, so every
+  // dispatch had to name one. A refusal therefore waited on a run that a newer
+  // refusal cancelled — 31 Changes with findings and no round on 2026-11-27.
+  it("does not require a PR number on dispatch", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      on?: unknown;
+    } & Record<string, unknown>;
+    const trigger = (doc.on ?? doc["true"]) as {
+      workflow_dispatch?: { inputs?: Record<string, { required?: boolean }> };
+    };
+    expect(trigger.workflow_dispatch?.inputs?.pr?.required).toBe(false);
+  });
+});
