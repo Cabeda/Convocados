@@ -37,13 +37,6 @@ on:
         description: "Pull request to repair. Empty picks the oldest refused Change."
         required: false
         type: string
-  # Fed by the janitor's `*/15` tick — the cron on this repo that actually keeps
-  # its slot. This loop's own `*/30` schedule is starved: on 2026-11-27 the last
-  # scheduled tick ran at 09:50 while refusals landed at 13:16 and 14:14, and 31
-  # refused Changes had no round recorded at all. A dispatch may also carry a PR
-  # (`client_payload.pr`), for a caller that already knows which one it means.
-  repository_dispatch:
-    types: [factory-fix]
 
 # One round at a time, across every Change. The Fixer is a single writer: two
 # runs on the same branch race the push, and the second one loses silently.
@@ -68,9 +61,6 @@ jobs:
       (
         github.event_name == 'schedule' ||
         github.event_name == 'workflow_dispatch' ||
-        # The janitor's tick carries no PR: it is the cron that starts the
-        # round, and the ledger's picker decides which Change gets it.
-        github.event_name == 'repository_dispatch' ||
         (github.event_name == 'pull_request_review' &&
          contains(github.event.review.body, '<!-- factory:findings -->')) ||
         (github.event_name == 'issue_comment' &&
@@ -108,9 +98,7 @@ jobs:
           REVIEW_PR: ${{ github.event.pull_request.number }}
           COMMENT_PR: ${{ github.event.issue.number }}
           SUITE_PR: ${{ github.event.check_suite.pull_requests[0].number }}
-          # `inputs.pr` for a manual dispatch, `client_payload.pr` when the
-          # Reviewer hands the Change over; either may be empty.
-          DISPATCH_PR: ${{ inputs.pr || github.event.client_payload.pr }}
+          DISPATCH_PR: ${{ inputs.pr }}
         run: |
           set -euo pipefail
           pr=""
@@ -123,7 +111,7 @@ jobs:
             # A dispatch with no PR is the tick: pick the Change the Reviewer
             # just refused, the same way the schedule does. Without this, a
             # refusal waits on a cron GitHub has never fired on time here.
-            workflow_dispatch|repository_dispatch) pr="${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}" ;;
+            workflow_dispatch) pr="${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}" ;;
           esac
           if [ -z "$pr" ]; then
             echo "No Change is waiting for a round; nothing to repair."
@@ -287,10 +275,10 @@ jobs:
             exit 0
           fi
           # Name the ref. A range bundle (`origin/$branch..HEAD`) stores the tip
-          # as `HEAD` and nothing else, so the push job's fetch of
+          # as `HEAD` and no other ref, so the push job's fetch of
           # `refs/heads/$branch` fails with "couldn't find remote ref" — the
-          # round's work is discarded after its Attempt is spent. Reproduced on
-          # 2026-11-27: PR #1815's round died exactly there.
+          # round is lost after its Attempt was already spent. Reproduced
+          # 2026-11-27 on PR #1815's round (run 46033882168, push job).
           git bundle create .factory-handoff/round.bundle \
             "refs/heads/$branch" --not "refs/remotes/origin/$branch"
 
