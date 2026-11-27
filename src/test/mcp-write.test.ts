@@ -13,8 +13,10 @@ vi.mock("~/lib/apiRateLimit.server", async (importOriginal) => {
   const orig = (await importOriginal()) as any;
   return { ...orig, checkApiRateLimit: vi.fn(async () => ({ allowed: true, retryAfterMs: 0 })), extractIp: () => "127.0.0.1" };
 });
+vi.mock("~/lib/webhook.server", () => ({ fireWebhooks: vi.fn().mockResolvedValue(undefined) }));
 
 import { authenticateRequest } from "~/lib/authenticate.server";
+import { fireWebhooks } from "~/lib/webhook.server";
 const { POST } = await import("~/pages/api/mcp");
 const mockAuth = vi.mocked(authenticateRequest);
 const PROTOCOL = "2026-07-28";
@@ -1062,6 +1064,23 @@ describe("MCP write tools — update_event", () => {
       eventId: event.id, dateTime: new Date(Date.now() - 3600_000).toISOString(),
     })));
     expect(res.status).toBe(400);
+  });
+
+  it("announces a reschedule through the webhook and one event_details job", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_update_event", {
+      eventId: event.id, dateTime: new Date(Date.now() + 2 * 86400_000).toISOString(),
+    })));
+    expect(res.status).toBe(200);
+
+    expect(fireWebhooks).toHaveBeenCalledWith(event.id, "game_rescheduled", {});
+    const jobs = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "event_details" },
+    });
+    expect(jobs).toHaveLength(1);
   });
 
   it("re-anchors a monthly event only when the day changes", async () => {

@@ -277,6 +277,25 @@ describe("PUT /api/events/:id/duration", () => {
     expect(updated!.durationMinutes).toBe(120);
   });
 
+  it("announces a duration change as one event_details notification", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Test",
+        location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    const res = await updateDuration(putCtx({ id: event.id }, { durationMinutes: 90 }));
+    expect(res.status).toBe(200);
+    const jobs = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "event_details" },
+    });
+    expect(jobs).toHaveLength(1);
+  });
+
   it("rejects invalid duration (< 0)", async () => {
     const event = await prisma.event.create({
       data: {
