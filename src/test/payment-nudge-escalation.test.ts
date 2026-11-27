@@ -141,7 +141,7 @@ describe("processPaymentEscalation", () => {
     expect(mockSendPush.mock.calls[0][2]).toContain("2/3 players have paid");
   });
 
-  it("stage 3 counts sent as paid and does not accuse a self-reported payer", async () => {
+  it("stage 3 does not accuse a self-reported payer", async () => {
     const owner = await seedUser({ name: "Owner" });
     const sentDebtor = await seedUser({ name: "SentDebtor" });
     const pendingDebtor = await seedUser({ name: "PendingDebtor" });
@@ -158,8 +158,9 @@ describe("processPaymentEscalation", () => {
 
     const result = await processPaymentEscalation();
 
-    // The roll shows one paid + one self-reported; only the pending payment is
-    // outstanding, so the group-facing rate is 2/3 and one payer is behind.
+    // Only `paid` settles a row (paymentSummary's definition); `sent` is the
+    // payer's courtesy signal, so the group-facing rate stays 1/3. The sent
+    // payer must not be pushed as delinquent even though the tracker advances.
     expect(result.stage3Sent).toEqual(
       expect.arrayContaining([`${sentDebtor.id}:${event.id}`, `${pendingDebtor.id}:${event.id}`]),
     );
@@ -172,7 +173,7 @@ describe("processPaymentEscalation", () => {
     expect(mockSendPush).toHaveBeenCalledWith(
       pendingDebtor.id,
       "Past Game",
-      expect.stringContaining("2/3 players have paid. You're one of 1 who haven't."),
+      expect.stringContaining("1/3 players have paid. You're one of 2 who haven't."),
       expect.stringContaining("action=pay"),
     );
   });
