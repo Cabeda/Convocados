@@ -601,11 +601,28 @@ describe("a review is bounded by minutes that buy a verdict", () => {
     // and cancel-in-progress let a tick kill the review it had just picked.
     expect(doc.concurrency).toEqual({ group: "factory-review", "cancel-in-progress": false });
     const step = doc.jobs?.reviewer?.steps?.find((s) => s.name === "Review the Change");
-    expect(step?.["timeout-minutes"]).toBeLessThanOrEqual(12);
+    // 12 was fitted to docs-only diffs and killed real code reviews mid-read;
+    // 20 still halves the old 25.
+    const cap = step?.["timeout-minutes"] ?? 0;
+    expect(cap).toBeGreaterThanOrEqual(15);
+    expect(cap).toBeLessThanOrEqual(20);
   });
 
   it("forbids rebuilding what the checks already produced", () => {
     const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
     expect(raw).toContain("no `pnpm install`, `pnpm test`, `pnpm typecheck`");
+    expect(raw).toContain("Start from `gh pr diff <number>`");
+  });
+});
+
+describe("the janitor dispatches one review per tick", () => {
+  // Two were dispatched on the theory that reviews were the bottleneck. A
+  // concurrency group holds one running and one pending run, so the second
+  // replaced the first: six Changes ended up with "no review has named its
+  // head" while the janitor logged two dispatches per tick.
+  it("sends exactly one factory-review", () => {
+    const janitor = readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
+    const ticks = janitor.match(/tick factory-review\b/g) ?? [];
+    expect(ticks).toHaveLength(1);
   });
 });

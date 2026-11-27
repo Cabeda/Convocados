@@ -2,9 +2,12 @@
 description: Reviews every open Change against the Mission and Core Principles, argues in a comment, and marks its findings for the Fixer. Never approves, never pushes.
 mode: primary
 temperature: 0.2
-# 45 iterations, chosen to fit the 25-minute step budget: at ~80 the agent
-# outran the clock on a repo this size and the run was abandoned unread.
-steps: 45
+# 28 turns. 45 was fitted to diff-reading, but measurement on 2026-11-27 showed
+# a third of them spent locating files: a docs review finished in 3-5 minutes, a
+# code review was still reading at 11 and was killed at the cap. The prompt now
+# starts from the diff and caps the reads, so fewer turns are needed — and fewer
+# turns is the only lever that makes a review faster without making it worse.
+steps: 28
 permission:
   # The run holds a live App token in its environment. Nothing here needs
   # the network: the API is reachable through gh, so outbound HTTP is only

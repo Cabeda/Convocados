@@ -101,9 +101,11 @@ jobs:
           else
             echo "The queue is empty."
           fi
-          # Two reviews and one merge per tick: with three lanes producing, one
-          # review per 15 minutes is the bottleneck, not the Fixer.
-          tick factory-review
+          # One review per tick. Two were dispatched "because reviews are the
+          # bottleneck", but a concurrency group holds one running and one
+          # pending run: the second dispatch replaced the first instead of
+          # doubling throughput, so six Changes sat with "no review has named
+          # its head". One review, serialised, is what actually advances.
           tick factory-review
           tick factory-merge
 
