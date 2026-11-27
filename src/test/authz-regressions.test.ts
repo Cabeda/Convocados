@@ -23,6 +23,8 @@ import { PUT as setReminderTimings } from "~/pages/api/events/[id]/reminder-timi
 import { PUT as setNotificationDefaults } from "~/pages/api/events/[id]/notification-defaults";
 import { PATCH as patchHistory } from "~/pages/api/events/[id]/history/[historyId]";
 import { POST as castMvpVote } from "~/pages/api/events/[id]/history/[historyId]/mvp-vote";
+import { POST as createMatchEvent } from "~/pages/api/events/[id]/history/[historyId]/match-events";
+import { DELETE as deleteMatchEvent } from "~/pages/api/events/[id]/history/[historyId]/match-events/[matchEventId]";
 
 /**
  * Authorization regressions.
@@ -548,8 +550,21 @@ describe("settled-game participation by userId, not User.name", () => {
     const vote = await castMvpVote(ctx(params, { votedForPlayerId: "name:Carla" }, bruno.token, "POST"));
     expect(vote.status).toBe(403);
 
+    const goal = await createMatchEvent(ctx(params, { type: "goal", team: "one", scorerName: "Ana" }, bruno.token, "POST"));
+    expect(goal.status).toBe(403);
+
+    const existing = await prisma.matchEvent.create({
+      data: { gameHistoryId: history.id, type: "goal", team: "one", scorerName: "Ana" },
+    });
+    const removed = await deleteMatchEvent(
+      ctx({ ...params, matchEventId: existing.id }, undefined, bruno.token, "DELETE"),
+    );
+    expect(removed.status).toBe(403);
+
     // Control: the EventPlayer actually linked to Ana still settles the game.
     const allowed = await patchHistory(ctx(params, { scoreOne: 0, scoreTwo: 9 }, ana.token, "PATCH"));
     expect(allowed.status).toBe(200);
+    const allowedGoal = await createMatchEvent(ctx(params, { type: "goal", team: "one", scorerName: "Ana" }, ana.token, "POST"));
+    expect(allowedGoal.status).toBe(201);
   });
 });
