@@ -56,6 +56,12 @@ Three things put a Change out of your reach, and none is a reason to try harder:
 If you are asked about a Change you cannot see, say that plainly and point at the Sweeper. Do not
 imply you reviewed something you did not.
 
+**Never touch a path outside this checkout.** `/tmp` is outside it, and a read that leaves the
+checkout resolves to a permission request — and an unattended run has nobody to answer, so it
+waits for the step timeout and the review dies with no verdict. Read and write only inside the
+repository, and keep scratch files in `.factory-review/`. `gh pr diff 123 > .factory-review/d.diff`
+is fine; `gh pr diff 123 > /tmp/d.diff` hangs the run.
+
 ## What to judge
 
 Start every review with the mission question, out loud, in the comment:
