@@ -2,10 +2,33 @@ import { createHmac, randomUUID } from "crypto";
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
 import type { WebhookEventType } from "./webhookEvents";
+import { isOccurrenceScoped } from "./webhookEvents";
 
 export type { WebhookEventType };
 
 const log = createLogger("webhook");
+
+export type WebhookOccurrence = {
+  gameId: string | null;
+  dateTime: string | null;
+};
+
+/**
+ * The one occurrence resolver (ADR 0051): eventId -> the game currently on
+ * the roster (ADR 0016) and its start. Emitters that know a specific
+ * occurrence — game_cancelled after a recurring advance — pass it explicitly
+ * and win over this default.
+ */
+export async function resolveWebhookOccurrence(eventId: string): Promise<WebhookOccurrence> {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { currentGameId: true, dateTime: true },
+  });
+  return {
+    gameId: event?.currentGameId ?? null,
+    dateTime: event?.dateTime.toISOString() ?? null,
+  };
+}
 
 const MAX_ATTEMPTS = 5;
 const TIMEOUT_MS = 5000;
@@ -50,13 +73,19 @@ export async function fireWebhooks(
 
   if (matching.length === 0) return;
 
+  // Occurrence-scoped facts carry the occurrence resolver's default unless the
+  // emitter named a specific one (game_cancelled keeps the cancelled game).
+  const webhookData = isOccurrenceScoped(eventType)
+    ? { ...(await resolveWebhookOccurrence(eventId)), ...data }
+    : data;
+
   const deliveryId = randomUUID();
   const payload = JSON.stringify({
     event: eventType,
     eventId,
     deliveryId,
     timestamp: new Date().toISOString(),
-    data,
+    data: webhookData,
   });
 
   await Promise.allSettled(

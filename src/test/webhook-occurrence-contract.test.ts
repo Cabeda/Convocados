@@ -4,26 +4,15 @@
  * recurring event collapses every occurrence into one.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { prisma } from "~/lib/db.server";
 import { fireWebhooks } from "~/lib/webhook.server";
-
-// The occurrence-scoped half of WEBHOOK_EVENT_TYPES. Kept local until the
-// contract lives in webhookEvents.ts beside the list it classifies.
-const OCCURRENCE_SCOPED_EVENT_TYPES = [
-  "player_joined",
-  "player_left",
-  "game_full",
-  "game_reset",
-  "game_cancelled",
-  "game_payer_set",
-  "reminder",
-  "rsvp_request",
-  "rsvp_summary",
-  "recruitment",
-  "payment_nudge",
-  "payment_organizer_alert",
-  "payer_check_in",
-] as const;
+import {
+  EVENT_SCOPED_EVENT_TYPES,
+  OCCURRENCE_SCOPED_EVENT_TYPES,
+  WEBHOOK_EVENT_TYPES,
+} from "~/lib/webhookEvents";
 
 async function seedEventWithGame() {
   const event = await prisma.event.create({
@@ -43,6 +32,16 @@ async function seedEventWithGame() {
   return { event, game };
 }
 
+async function subscribe(eventId: string) {
+  await prisma.webhookSubscription.create({
+    data: {
+      eventId,
+      url: "https://example.com/hook",
+      events: JSON.stringify([]),
+    },
+  });
+}
+
 beforeEach(async () => {
   await prisma.webhookDelivery.deleteMany();
   await prisma.webhookSubscription.deleteMany();
@@ -57,16 +56,20 @@ afterEach(() => {
 });
 
 describe("occurrence-scoped webhook payload contract", () => {
+  it("classifies every declared event type as occurrence- or event-scoped", () => {
+    const classified = [...OCCURRENCE_SCOPED_EVENT_TYPES, ...EVENT_SCOPED_EVENT_TYPES];
+    expect([...classified].sort()).toEqual([...WEBHOOK_EVENT_TYPES].sort());
+
+    const overlap = OCCURRENCE_SCOPED_EVENT_TYPES.filter((type) =>
+      (EVENT_SCOPED_EVENT_TYPES as readonly string[]).includes(type),
+    );
+    expect(overlap).toEqual([]);
+  });
+
   it("emits gameId and dateTime for every occurrence-scoped event type", async () => {
     vi.stubEnv("WEBHOOK_BACKOFF_BASE_MS", "1");
     const { event, game } = await seedEventWithGame();
-    await prisma.webhookSubscription.create({
-      data: {
-        eventId: event.id,
-        url: "https://example.com/hook",
-        events: JSON.stringify([]),
-      },
-    });
+    await subscribe(event.id);
     const mockFetch = vi.fn().mockResolvedValue(new Response("OK", { status: 200 }));
     vi.stubGlobal("fetch", mockFetch);
 
@@ -86,4 +89,45 @@ describe("occurrence-scoped webhook payload contract", () => {
 
     expect(missing).toEqual([]);
   }, 60_000);
+
+  it("keeps an occurrence the emitter names explicitly", async () => {
+    vi.stubEnv("WEBHOOK_BACKOFF_BASE_MS", "1");
+    const { event } = await seedEventWithGame();
+    await subscribe(event.id);
+    const mockFetch = vi.fn().mockResolvedValue(new Response("OK", { status: 200 }));
+    vi.stubGlobal("fetch", mockFetch);
+
+    await fireWebhooks(event.id, "game_cancelled", {
+      gameId: "cancelled-game",
+      dateTime: "2026-01-01T18:00:00.000Z",
+    });
+
+    const [, opts] = mockFetch.mock.calls[0];
+    const payload = JSON.parse(opts.body);
+    expect(payload.data.gameId).toBe("cancelled-game");
+    expect(payload.data.dateTime).toBe("2026-01-01T18:00:00.000Z");
+  }, 60_000);
+
+  it("documents gameId and dateTime for every occurrence-scoped type", () => {
+    const docs = fs.readFileSync(
+      path.join(process.cwd(), "src/pages/docs/api/webhooks.astro"),
+      "utf8",
+    );
+    const payloadTable = docs.slice(
+      docs.indexOf("<h3>Payload fields by event type</h3>"),
+      docs.indexOf("<h2>Signature verification</h2>"),
+    );
+    const rows = new Map<string, string>();
+    for (const match of payloadTable.matchAll(
+      /<tr><td><code>([a-z_]+)<\/code><\/td><td>([\s\S]*?)<\/td><\/tr>/g,
+    )) {
+      rows.set(match[1], match[2]);
+    }
+
+    const undocumented = OCCURRENCE_SCOPED_EVENT_TYPES.filter((type) => {
+      const fields = rows.get(type) ?? "";
+      return !fields.includes("<code>gameId</code>") || !fields.includes("<code>dateTime</code>");
+    });
+    expect(undocumented).toEqual([]);
+  });
 });
