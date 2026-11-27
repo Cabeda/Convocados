@@ -22,7 +22,7 @@ interface FetchCall {
  */
 function installRedirectFollowingFetch(): FetchCall[] {
   const calls: FetchCall[] = [];
-  const mockFetch = vi.fn(async (input: string | URL | Request, init: RequestInit = {}) => {
+  const mockFetch = vi.fn(async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     calls.push({ url, init });
     if (url === PUBLIC_URL) {

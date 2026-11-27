@@ -62,6 +62,8 @@ export const POST: APIRoute = async ({ params, request }) => {
       headers,
       body: payload,
       signal: controller.signal,
+      // A 3xx could point at a private host validateWebhookUrl never saw.
+      redirect: "manual",
     });
     clearTimeout(timeout);
 
