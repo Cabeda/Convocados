@@ -180,6 +180,44 @@ describe("computeHomeActions", () => {
     expect(await computeHomeActions(user.id)).toEqual([]);
   });
 
+  it("keys vote_mvp to the linked EventPlayer, not a renamed User.name", async () => {
+    const linked = await seedUser("u-linked", "Bruno");
+    const outsider = await seedUser("u-out", "Alice");
+    const event = await seedEvent({ dateTime: new Date(Date.now() - 2 * HOUR) });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: linked.id } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Zoe", userId: outsider.id } });
+    const history = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(Date.now() - 1 * HOUR),
+        status: "played",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
+        scoreOne: 2,
+        scoreTwo: 2,
+        teamsSnapshot: JSON.stringify([
+          { team: "Reds", players: [{ name: "Alice", order: 0 }] },
+          { team: "Blues", players: [{ name: "Bob", order: 0 }] },
+        ]),
+      },
+    });
+    await prisma.mvpVote.create({
+      data: {
+        gameHistoryId: history.id,
+        voterPlayerId: "name:Alice",
+        voterName: "Alice",
+        votedForPlayerId: "name:Bob",
+        votedForName: "Bob",
+      },
+    });
+
+    // The linked player already voted under the EventPlayer name.
+    expect(await computeHomeActions(linked.id)).toEqual([]);
+    // The outsider renamed itself to "Alice"; its EventPlayer is not on the
+    // roster, so it is not offered the vote the endpoint would reject.
+    expect(await computeHomeActions(outsider.id)).toEqual([]);
+  });
+
   it("caps at 3 and orders by deadline ascending", async () => {
     const user = await seedUser();
     for (const [i, hours] of [4, 1, 3, 2].entries()) {

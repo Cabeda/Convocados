@@ -21,6 +21,10 @@ import { PUT as reorderPlayers } from "~/pages/api/events/[id]/reorder-players";
 import { POST as resetPlayerOrder } from "~/pages/api/events/[id]/reset-player-order";
 import { PUT as setReminderTimings } from "~/pages/api/events/[id]/reminder-timings";
 import { PUT as setNotificationDefaults } from "~/pages/api/events/[id]/notification-defaults";
+import { PATCH as patchHistory } from "~/pages/api/events/[id]/history/[historyId]";
+import { POST as castMvpVote } from "~/pages/api/events/[id]/history/[historyId]/mvp-vote";
+import { POST as createMatchEvent } from "~/pages/api/events/[id]/history/[historyId]/match-events";
+import { DELETE as deleteMatchEvent } from "~/pages/api/events/[id]/history/[historyId]/match-events/[matchEventId]";
 
 /**
  * Authorization regressions.
@@ -469,5 +473,98 @@ describe("authorizeEventMutation — an ownerless unlisted Event is opened by th
       accessPassword: null,
     });
     expect(authz.allowed).toBe(false);
+  });
+});
+
+/**
+ * A settled game's edit rights are keyed to the linked EventPlayer (userId),
+ * never to User.name — which its owner can freely rename (#1723). Bruno renames
+ * himself to Ana and must not inherit her seat on the game.
+ */
+describe("settled-game participation by userId, not User.name", () => {
+  it("denies a renamed outsider on score, teams, payments and MVP, and still admits the linked player", async () => {
+    const ana = await seedUserWithToken("ana");
+    const bruno = await seedUserWithToken("bruno");
+    await prisma.user.update({ where: { id: bruno.userId }, data: { name: "Ana" } });
+
+    const event = await prisma.event.create({
+      data: {
+        title: "Settled game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 3_600_000),
+        durationMinutes: 60,
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
+        ownerId,
+        isPublic: true,
+        mvpEnabled: true,
+      },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "played", paymentMode: "tracked" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const anaPlayer = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Ana", userId: ana.userId },
+    });
+    const carlaPlayer = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Carla" },
+    });
+    await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Bruno", userId: bruno.userId },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: anaPlayer.id, order: 0, status: "active" },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: carlaPlayer.id, order: 1, status: "active" },
+    });
+    const history = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        status: "played",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
+        teamsSnapshot: JSON.stringify([
+          { team: "Reds", players: [{ name: "Ana", order: 0 }] },
+          { team: "Blues", players: [{ name: "Carla", order: 0 }] },
+        ]),
+      },
+    });
+    const params = { id: event.id, historyId: history.id };
+
+    const score = await patchHistory(ctx(params, { scoreOne: 0, scoreTwo: 9 }, bruno.token, "PATCH"));
+    expect(score.status).toBe(403);
+
+    const teams = await patchHistory(ctx(params, {
+      teamsSnapshot: [{ team: "Reds", players: [{ name: "Ana", order: 0 }] }],
+    }, bruno.token, "PATCH"));
+    expect(teams.status).toBe(403);
+
+    const payments = await patchHistory(ctx(params, {
+      paymentsSnapshot: [{ playerName: "Ana", amount: 0, status: "paid" }],
+    }, bruno.token, "PATCH"));
+    expect(payments.status).toBe(403);
+
+    const vote = await castMvpVote(ctx(params, { votedForPlayerId: "name:Carla" }, bruno.token, "POST"));
+    expect(vote.status).toBe(403);
+
+    const goal = await createMatchEvent(ctx(params, { type: "goal", team: "one", scorerName: "Ana" }, bruno.token, "POST"));
+    expect(goal.status).toBe(403);
+
+    const existing = await prisma.matchEvent.create({
+      data: { gameHistoryId: history.id, type: "goal", team: "one", scorerName: "Ana" },
+    });
+    const removed = await deleteMatchEvent(
+      ctx({ ...params, matchEventId: existing.id }, undefined, bruno.token, "DELETE"),
+    );
+    expect(removed.status).toBe(403);
+
+    // Control: the EventPlayer actually linked to Ana still settles the game.
+    const allowed = await patchHistory(ctx(params, { scoreOne: 0, scoreTwo: 9 }, ana.token, "PATCH"));
+    expect(allowed.status).toBe(200);
+    const allowedGoal = await createMatchEvent(ctx(params, { type: "goal", team: "one", scorerName: "Ana" }, ana.token, "POST"));
+    expect(allowedGoal.status).toBe(201);
   });
 });

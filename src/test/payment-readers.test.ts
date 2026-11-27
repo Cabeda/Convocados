@@ -202,7 +202,7 @@ describe("balance readers retargeted to GamePayment", () => {
 // ── participants.server: payment names from GamePayment ─────────────────────
 
 describe("isSettledGameParticipant payment names from GamePayment", () => {
-  it("counts a payer whose name only exists on GamePayment (snapshot has no payments)", async () => {
+  it("counts a payer whose linked EventPlayer only exists on GamePayment (snapshot has no payments)", async () => {
     const event = await seedEvent();
     const game = await seedGame(event.id);
     const history = await seedHistory(event.id, {
@@ -211,7 +211,12 @@ describe("isSettledGameParticipant payment names from GamePayment", () => {
       teamsSnapshot: null,
       paymentsSnapshot: null,
     });
-    await seedGP(game.id, event.id, "Payer Pat", 10, "paid");
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Payer Pat", userId: "pat-1" },
+    });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Payer Pat", amount: 10, status: "paid" },
+    });
 
     const isParticipant = await isSettledGameParticipant({
       sessionUser: { id: "pat-1", name: "Payer Pat" },

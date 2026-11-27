@@ -71,7 +71,7 @@ export async function buildMvpSummaries(
   }
   const nameList = [...allNames];
 
-  const [players, users] = await Promise.all([
+  const [players, linkedPlayers] = await Promise.all([
     nameList.length
       ? prisma.player.findMany({
           where: { eventId: event.id, name: { in: nameList } },
@@ -79,20 +79,32 @@ export async function buildMvpSummaries(
         })
       : Promise.resolve([] as { id: string; name: string }[]),
     nameList.length
-      ? prisma.user.findMany({ where: { name: { in: nameList } }, select: { name: true } })
-      : Promise.resolve([] as { name: string | null }[]),
+      ? prisma.eventPlayer.findMany({
+          where: { eventId: event.id, userId: { not: null }, name: { in: nameList } },
+          select: { name: true, userId: true },
+        })
+      : Promise.resolve([] as { name: string; userId: string | null }[]),
   ]);
   const playerByName = new Map(players.map((p) => [p.name.toLowerCase(), p]));
-  const userNames = new Set(users.map((u) => u.name ?? "").filter(Boolean));
+  const linkedByName = linkedPlayers.filter(
+    (p): p is { name: string; userId: string } => typeof p.userId === "string",
+  );
 
   let sessionPlayerIds: string[] = [];
-  const sessionName = session?.user?.name ?? null;
+  let sessionEventPlayers: { name: string }[] = [];
   if (session?.user?.id) {
-    const userPlayers = await prisma.player.findMany({
-      where: { eventId: event.id, userId: session.user.id },
-      select: { id: true },
-    });
+    const [userPlayers, userEventPlayers] = await Promise.all([
+      prisma.player.findMany({
+        where: { eventId: event.id, userId: session.user.id },
+        select: { id: true },
+      }),
+      prisma.eventPlayer.findMany({
+        where: { eventId: event.id, userId: session.user.id },
+        select: { name: true },
+      }),
+    ]);
     sessionPlayerIds = userPlayers.map((p) => p.id);
+    sessionEventPlayers = userEventPlayers;
   }
 
   const now = Date.now();
@@ -136,20 +148,27 @@ export async function buildMvpSummaries(
       const id = match ? match.id : `name:${n}`;
       participants.push({ id, name: match?.name ?? n, voteCount: tallyByName.get(id) ?? 0 });
     }
-    const eligibleVoters = names.filter((n) => userNames.has(n)).length;
+    // Eligible voters are the linked EventPlayers on this game's roster; the
+    // self-editable User.name neither adds an outsider nor hides a player.
+    const nameSet = new Set(names.map((n) => n.toLowerCase()));
+    const eligibleVoters = new Set(
+      linkedByName.filter((p) => nameSet.has(p.name.toLowerCase())).map((p) => p.userId),
+    ).size;
 
     let hasVoted: boolean | null = null;
-    if (session?.user?.id && sessionName && names.some((n) => n.toLowerCase() === sessionName.toLowerCase())) {
+    const sessionEventPlayer = session?.user?.id
+      ? sessionEventPlayers.find((p) => nameSet.has(p.name.toLowerCase()))
+      : undefined;
+    if (session?.user?.id && sessionEventPlayer) {
       let voterIds = sessionPlayerIds;
       if (voterIds.length === 0) {
-        const matchName = names.find((n) => n.toLowerCase() === sessionName.toLowerCase());
-        const player = matchName ? playerByName.get(matchName.toLowerCase()) : undefined;
+        const player = playerByName.get(sessionEventPlayer.name.toLowerCase());
         if (player) voterIds = [player.id];
       }
       if (voterIds.length > 0) {
         hasVoted = votes.some((v) => voterIds.includes(v.voterPlayerId));
       } else {
-        hasVoted = votes.some((v) => v.voterPlayerId === `name:${sessionName}`);
+        hasVoted = votes.some((v) => v.voterPlayerId === `name:${sessionEventPlayer.name}`);
       }
     }
 

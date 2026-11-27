@@ -3,7 +3,7 @@ import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../../lib/apiRateLimit.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
-import { isNameInList } from "../../../../../../lib/snapshotParticipants";
+import { settledGamePlayer } from "../../../../../../lib/participants.server";
 import { occurrenceRoster } from "../../../../../../lib/gameRoster.server";
 
 export const POST: APIRoute = async ({ params, request }) => {
@@ -66,25 +66,24 @@ export const POST: APIRoute = async ({ params, request }) => {
     teamsSnapshot: history.teamsSnapshot,
   });
   const rosterNames = roster.names;
-  let voterName: string | undefined;
-  let voterPlayerId: string | undefined;
 
-  const voterNameFromSession = session.user?.name;
-  if (isNameInList(rosterNames, voterNameFromSession)) {
-    const matchName = rosterNames.find(
-      (n) => n.toLowerCase() === voterNameFromSession!.toLowerCase(),
-    );
-    voterName = matchName;
-    // Try to find the Player record for this user (may exist if they signed up)
-    const voterPlayer = await prisma.player.findFirst({
-      where: { eventId: params.id, userId },
-    });
-    voterPlayerId = voterPlayer?.id ?? `name:${matchName}`;
-  }
-
-  if (!voterPlayerId || !voterName) {
+  // Only players who actually played in this game can vote. Identity is the
+  // linked EventPlayer (userId) — a renamed User.name must not buy a seat.
+  const voterEventPlayer = await settledGamePlayer({
+    sessionUser: session.user,
+    event,
+    latestHistory: history,
+  });
+  if (!voterEventPlayer) {
     return Response.json({ error: "You must be a participant in this game to vote." }, { status: 403 });
   }
+
+  const voterName = voterEventPlayer.name;
+  // Try to find the Player record for this user (may exist if they signed up)
+  const voterPlayer = await prisma.player.findFirst({
+    where: { eventId: params.id, userId },
+  });
+  const voterPlayerId = voterPlayer?.id ?? `name:${voterName}`;
 
   // Parse body
   const body = await request.json();

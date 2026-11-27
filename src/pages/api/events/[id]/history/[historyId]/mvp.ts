@@ -2,10 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
-import {
-  isHistoryParticipant,
-  namesFromTeamsSnapshot,
-} from "../../../../../../lib/snapshotParticipants";
+import { settledGameEligibleVoters, settledGamePlayer } from "../../../../../../lib/participants.server";
 import { occurrenceRoster } from "../../../../../../lib/gameRoster.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
@@ -65,14 +62,17 @@ export const GET: APIRoute = async ({ params, request }) => {
   let hasVoted: boolean | null = null;
   const session = await getSession(request);
   if (session?.user?.id) {
-    // Only participants (players in teamsSnapshot) can have hasVoted !== null.
+    // Only players (linked EventPlayer on the settled game) can vote. The
+    // self-editable User.name never grants the seat.
     // Players-only: owners/admins who didn't play cannot vote.
-    let isParticipant = false;
     let playerIds: string[] = [];
+    const voterEventPlayer = await settledGamePlayer({
+      sessionUser: session.user,
+      event,
+      latestHistory: history,
+    });
 
-    const participantName = session.user?.name;
-    if (isHistoryParticipant(history, participantName)) {
-      isParticipant = true;
+    if (voterEventPlayer) {
       const userPlayers = await prisma.player.findMany({
         where: { eventId: params.id, userId: session.user.id },
         select: { id: true },
@@ -80,20 +80,15 @@ export const GET: APIRoute = async ({ params, request }) => {
       playerIds = userPlayers.map((p) => p.id);
 
       if (playerIds.length === 0) {
-        const matchName = namesFromTeamsSnapshot(history.teamsSnapshot).find(
-          (n) => n.toLowerCase() === participantName!.toLowerCase(),
-        );
-        if (matchName) {
-          const playerByName = await prisma.player.findFirst({
-            where: { eventId: params.id, name: matchName },
-            select: { id: true },
-          });
-          if (playerByName) playerIds = [playerByName.id];
-        }
+        const playerByName = await prisma.player.findFirst({
+          where: { eventId: params.id, name: voterEventPlayer.name },
+          select: { id: true },
+        });
+        if (playerByName) playerIds = [playerByName.id];
       }
     }
 
-    if (isParticipant) {
+    if (voterEventPlayer) {
       if (playerIds.length > 0) {
         const existingVote = await prisma.mvpVote.findFirst({
           where: {
@@ -107,7 +102,7 @@ export const GET: APIRoute = async ({ params, request }) => {
         const existingVote = await prisma.mvpVote.findFirst({
           where: {
             gameHistoryId: history.id,
-            voterPlayerId: `name:${session.user.name}`,
+            voterPlayerId: `name:${voterEventPlayer.name}`,
           },
         });
         hasVoted = !!existingVote;
@@ -150,12 +145,8 @@ export const GET: APIRoute = async ({ params, request }) => {
         return acc;
       }, []);
 
-      // Count eligible voters: participants with user accounts
-      const matchingUsers = await prisma.user.findMany({
-        where: { name: { in: names } },
-        select: { name: true },
-      });
-      eligibleVoters = matchingUsers.length;
+      // Eligible voters are the linked EventPlayers on the settled roster.
+      eligibleVoters = await settledGameEligibleVoters({ event, latestHistory: history });
     } catch { /* ignore */ }
   }
 

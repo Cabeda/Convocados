@@ -9,7 +9,7 @@ import {
   type MatchEventTeam,
   type MatchEventType,
 } from "../../../../../../lib/matchEvents";
-import { isHistoryParticipant } from "../../../../../../lib/snapshotParticipants";
+import { isSettledGameParticipant } from "../../../../../../lib/participants.server";
 
 const EVENT_TYPES: MatchEventType[] = ["goal", "assist"];
 const TEAMS: MatchEventTeam[] = ["one", "two", "unknown"];
@@ -134,7 +134,9 @@ export const POST: APIRoute = async ({ params, request }) => {
     : await prisma.eventAdmin.findUnique({
         where: { eventId_userId: { eventId: params.id ?? "", userId } },
       });
-  const isParticipant = isHistoryParticipant(history, session?.user?.name);
+  const isParticipant = session?.user
+    ? await isSettledGameParticipant({ sessionUser: session.user, event, latestHistory: history })
+    : false;
   if (!isOwner && !admin && !isParticipant) {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }

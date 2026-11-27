@@ -2,8 +2,7 @@ import { prisma } from "./db.server";
 import { isGameEnded } from "./gameStatus";
 import { getSession, checkOwnership } from "./auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
-import { isSettledGameParticipant } from "./participants.server";
-import { isHistoryParticipant } from "./snapshotParticipants";
+import { isSettledGameParticipant, settledGameEligibleVoters, settledGamePlayer } from "./participants.server";
 import { getWrapUpGameSettlement } from "./settlement.server";
 import { occurrencePaymentRoll } from "./paymentRoll.server";
 import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
@@ -147,7 +146,10 @@ export async function computePostGameStatus(
   // Unlike isParticipant, the Owner/Admin settlement override does NOT apply —
   // MVP voting is restricted to players, so an admin who didn't play must not
   // be offered the Vote MVP task nor have the banner held open by MVP state.
-  const isPlayer = session?.user ? isHistoryParticipant(latestHistory, session.user.name) : false;
+  const viewerPlayer = session?.user
+    ? await settledGamePlayer({ sessionUser: session.user, event, latestHistory })
+    : null;
+  const isPlayer = !!viewerPlayer;
 
   // ─── MVP voting completion ──────────────────────────────────────────
   let mvpComplete = true;
@@ -176,20 +178,9 @@ export async function computePostGameStatus(
     const isVotingOpen = gameHasEnded && !newerGame && withinWindow;
 
     if (isVotingOpen) {
-      // Count eligible voters: participants in teamsSnapshot that have user accounts
-      let eligibleCount = 0;
-      if (latestHistory.teamsSnapshot) {
-        try {
-          const teams = JSON.parse(latestHistory.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
-          const allNames = teams.flatMap((t) => t.players.map((p) => p.name));
-          // Find users whose names match participants (case-insensitive)
-          const matchingUsers = await prisma.user.findMany({
-            where: { name: { in: allNames } },
-            select: { name: true },
-          });
-          eligibleCount = matchingUsers.length;
-        } catch { /* ignore */ }
-      }
+      // Eligible voters are the linked EventPlayers on the settled roster, so
+      // User.name neither adds an outsider nor hides a linked player.
+      const eligibleCount = await settledGameEligibleVoters({ event, latestHistory });
 
       if (eligibleCount > 0) {
         // Count votes already cast for this game
@@ -204,7 +195,7 @@ export async function computePostGameStatus(
       bannerMvpComplete = mvpComplete || hoursSinceGameEnd >= 24;
 
       // Personal task: has THIS user voted?
-      if (isPlayer && session?.user) {
+      if (isPlayer && session?.user && viewerPlayer) {
         let viewerVoted: boolean;
         const userPlayers = await prisma.player.findMany({
           where: { eventId: event.id, userId: session.user.id },
@@ -217,9 +208,10 @@ export async function computePostGameStatus(
           });
           viewerVoted = !!existing;
         } else {
-          // Participant with no Player record — votes are stored name-based.
+          // No Player record — mvp-vote stores the key under the linked
+          // EventPlayer's name, not the account's self-editable User.name.
           const existing = await prisma.mvpVote.findFirst({
-            where: { gameHistoryId: latestHistory.id, voterPlayerId: `name:${session.user.name}` },
+            where: { gameHistoryId: latestHistory.id, voterPlayerId: `name:${viewerPlayer.name}` },
             select: { id: true },
           });
           viewerVoted = !!existing;

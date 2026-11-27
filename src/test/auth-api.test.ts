@@ -1013,6 +1013,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const participant = await seedUser({ name: "Alice" });
     mockAuth(participant.id, "Alice");
     const id = await seedEvent({ ownerId: owner.id });
+    await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Alice", userId: participant.id } });
     const teams = [
       { team: "A", players: [{ name: "Alice", order: 0 }] },
       { team: "B", players: [{ name: "Bob", order: 0 }] },
@@ -1064,6 +1065,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const participant = await seedUser({ name: "Alice" });
     mockAuth(participant.id, "Alice");
     const id = await seedEvent({ ownerId: owner.id });
+    await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Alice", userId: participant.id } });
     const teams = [
       { team: "A", players: [{ name: "Alice", order: 0 }] },
       { team: "B", players: [{ name: "Bob", order: 0 }] },
@@ -1098,6 +1100,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const participant = await seedUser({ name: "Alice" });
     mockAuth(participant.id, "Alice");
     const id = await seedEvent({ ownerId: owner.id });
+    await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Alice", userId: participant.id } });
     const teams = [
       { team: "A", players: [{ name: "Alice", order: 0 }] },
       { team: "B", players: [{ name: "Bob", order: 0 }] },
@@ -1118,6 +1121,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const participant = await seedUser({ name: "Alice" });
     mockAuth(participant.id, "Alice");
     const id = await seedEvent({ ownerId: owner.id });
+    await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Alice", userId: participant.id } });
     const teams = [
       { team: "A", players: [{ name: "Alice", order: 0 }] },
       { team: "B", players: [{ name: "Bob", order: 0 }] },
@@ -1148,7 +1152,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const game = await testPrisma.game.create({
       data: { eventId: id, dateTime: history.dateTime, status: "played" },
     });
-    const ep = await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Luis Lopes" } });
+    const ep = await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Luis Lopes", userId: participant.id } });
     await testPrisma.gamePayment.create({
       data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Luis Lopes", amount: 10, status: "pending" },
     });
