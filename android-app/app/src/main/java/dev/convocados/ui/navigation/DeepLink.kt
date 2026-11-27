@@ -66,8 +66,21 @@ object DeepLink {
         return eventId(url) != null && uri.getQueryParameter("action") == "pay"
     }
 
+    /** Return whether an event deep link requests the share sheet. */
+    fun shouldAutoOpenShare(url: String): Boolean {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        return eventId(url) != null && uri.getQueryParameter("action") == "share"
+    }
+
     /** Return whether a pending payment action belongs to the selected event. */
     fun shouldAutoOpenPaymentForEvent(
+        pending: Boolean,
+        targetEventId: String,
+        deepLink: String,
+    ): Boolean = pending && eventId(deepLink) == targetEventId
+
+    /** Return whether a pending share action belongs to the selected event. */
+    fun shouldAutoOpenShareForEvent(
         pending: Boolean,
         targetEventId: String,
         deepLink: String,
@@ -113,6 +126,7 @@ object DeepLink {
      * Supported inputs:
      * - `convocados://events/<id>` → `event/<id>`
      * - `convocados://events/<id>?action=pay` → `event/<id>?action=pay`
+     * - `convocados://events/<id>?action=share` → `event/<id>?action=share`
      * - `https://convocados.cabeda.dev/events/<id>` → `event/<id>`
      * - `http://localhost:4321/events/<id>` → `event/<id>`
      * - `convocados://games` → `games`
@@ -129,13 +143,14 @@ object DeepLink {
         // Event detail: /events/<id> or /event/<id>
         val id = eventId(url)
         if (id != null) {
-            val actionPay = uri.getQueryParameter("action") == "pay"
+            val action = uri.getQueryParameter("action")
             // Sub-routes of an event: /events/<id>/payments (and friends) must
             // not collapse onto the event detail screen.
             if (path.trimEnd('/').endsWith("/payments")) {
                 return Route.EventPayments.create(id)
             }
-            return Route.EventDetail.create(id) + if (actionPay) "?action=pay" else ""
+            val supportedAction = action?.takeIf { it == "pay" || it == "share" }
+            return Route.EventDetail.create(id) + if (supportedAction != null) "?action=$supportedAction" else ""
         }
 
         // Invite link: /invite/<token> (https or convocados://)
