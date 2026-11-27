@@ -597,7 +597,9 @@ describe("a review is bounded by minutes that buy a verdict", () => {
 
   it("caps the step and cancels a superseded run", () => {
     const doc = reviewer();
-    expect(doc.concurrency).toEqual({ group: "factory-review", "cancel-in-progress": true });
+    // Serialised, not cancelled: the janitor dispatches review twice per tick,
+    // and cancel-in-progress let a tick kill the review it had just picked.
+    expect(doc.concurrency).toEqual({ group: "factory-review", "cancel-in-progress": false });
     const step = doc.jobs?.reviewer?.steps?.find((s) => s.name === "Review the Change");
     expect(step?.["timeout-minutes"]).toBeLessThanOrEqual(12);
   });

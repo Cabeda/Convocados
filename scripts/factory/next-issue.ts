@@ -32,7 +32,7 @@ export const CLAIM_TTL_MS = 2 * 60 * 60 * 1000;
  * budget — nothing is lost, the Issue stays `factory:explored`, and the cap
  * lifts by itself as Changes land.
  */
-export const MAX_OPEN_CHANGES = Number(process.env.FACTORY_MAX_OPEN ?? 20);
+export const MAX_OPEN_CHANGES = Number(process.env.FACTORY_MAX_OPEN ?? 8);
 
 export interface IssueSummary {
   number: number;
