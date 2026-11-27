@@ -22,6 +22,18 @@ export const CLAIM = "factory: claiming";
 /** A Claim is a lease: a run that died must not strand its Issue forever. */
 export const CLAIM_TTL_MS = 2 * 60 * 60 * 1000;
 
+/**
+ * How many of the machine's own Changes may be open at once.
+ *
+ * Three lanes every fifteen minutes opened Changes far faster than the Reviewer
+ * could read them: 42 open on 2026-11-27, queued behind a pipeline that lands a
+ * few an hour, so the newest work sat unread and the oldest rotted to sixteen
+ * commits behind. The cap is the queue admitting it is full. It is not a
+ * budget — nothing is lost, the Issue stays `factory:explored`, and the cap
+ * lifts by itself as Changes land.
+ */
+export const MAX_OPEN_CHANGES = Number(process.env.FACTORY_MAX_OPEN ?? 20);
+
 export interface IssueSummary {
   number: number;
   createdAt: string;
@@ -70,12 +82,19 @@ export function inLane(issue: IssueSummary, { lane, lanes }: Lane): boolean {
   return lanes <= 1 || issue.number % lanes === lane;
 }
 
+/** Every Change this machine owns, which is what the cap counts. */
+export function openChangeCount(headRefs: string[]): number {
+  return headRefs.filter((ref) => ref.startsWith("factory/")).length;
+}
+
 export function pickNext(
   issues: IssueSummary[],
   headRefs: string[],
   now: number,
   partition: Lane = { lane: 0, lanes: 1 },
+  maxOpen: number = MAX_OPEN_CHANGES,
 ): IssueSummary | null {
+  if (openChangeCount(headRefs) >= maxOpen) return null;
   const next = issues
     .filter((issue) => inLane(issue, partition))
     .filter((issue) => isQueued(issue, headRefs, now))
@@ -102,7 +121,13 @@ function main(): number {
   const lane = Number(process.env.FACTORY_LANE ?? "0");
   const lanes = Number(process.env.FACTORY_LANES ?? "1");
   const partition = { lane: Number.isInteger(lane) ? lane : 0, lanes: lanes > 0 ? lanes : 1 };
-  const next = pickNext(issues, changes.map((p) => p.headRefName), Date.now(), partition);
+  const headRefs = changes.map((p) => p.headRefName);
+  const next = pickNext(issues, headRefs, Date.now(), partition);
+  if (!next && openChangeCount(headRefs) >= MAX_OPEN_CHANGES) {
+    console.error(
+      `queue is full: ${openChangeCount(headRefs)} open factory Changes (cap ${MAX_OPEN_CHANGES}) — landing them first`,
+    );
+  }
   const file = process.env.GITHUB_OUTPUT;
   if (file) {
     appendFileSync(file, `issue=${next?.number ?? ""}\n`);
