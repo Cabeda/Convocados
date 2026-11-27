@@ -276,8 +276,9 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
     ? email.trim().toLowerCase()
     : null;
 
-  // ── Resolve user by email (needed before name validation) ──────────────────
+  // ── Resolve user by userId, then email (needed before name validation) ─────
   let resolvedUser: { id: string; name: string } | null = null;
+  let resolvedFromUserId = false;
   const explicitUserId = typeof userId === "string" ? userId.trim() : "";
   if (explicitUserId) {
     const found = await prisma.user.findUnique({
@@ -287,8 +288,14 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
     // A synthetic ledger placeholder is named (and emailed) after the player it
     // charges, never a person — resolving to one links the roster row to an id
     // the human can never match and strands them on the list.
-    if (found && !isSystemUserId(found.id)) resolvedUser = found;
-  } else if (normalizedEmail) {
+    if (found && !isSystemUserId(found.id)) {
+      resolvedUser = found;
+      resolvedFromUserId = true;
+    }
+  }
+  // A stale explicit userId falls through to the email, the same way
+  // resolveRosterTarget does; otherwise a valid email link is lost.
+  if (!resolvedUser && normalizedEmail) {
     const found = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: { id: true, name: true },
@@ -427,7 +434,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
   // Email-based invite resolution
   let notifyRegisteredUserId: string | null = null;
   let inviteUnregisteredEmail: string | null = null;
-  if (normalizedEmail && !explicitUserId) {
+  if (normalizedEmail && !resolvedFromUserId) {
     if (resolvedUser) {
       notifyRegisteredUserId = resolvedUser.id;
     } else {
@@ -763,7 +770,9 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
       where: { id: linkedUserId },
       select: { email: true, id: true },
     });
-    if (linkedUser?.email) {
+    // The actor adding themselves is a self-join, not an invitation: do not
+    // email them "You're invited" (the push below is already gated).
+    if (linkedUser?.email && linkedUserId !== session?.user?.id) {
       try {
         const prefs = await getNotificationPrefs(linkedUser.id);
         if (wantsGameInviteEmail(prefs)) {

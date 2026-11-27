@@ -2,6 +2,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { applyRosterChange } from "~/lib/applyRosterChange.server";
+import { sendGameInvite } from "~/lib/email.server";
+
+vi.mock("~/lib/email.server", () => ({
+  sendGameInvite: vi.fn(),
+  sendPlayerJoinedOwnerNotification: vi.fn(),
+  sendPlayerInviteToRegister: vi.fn(),
+}));
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -38,6 +45,7 @@ function input(event: Awaited<ReturnType<typeof loadEvent>>, body: Record<string
 }
 
 beforeEach(async () => {
+  vi.clearAllMocks();
   await resetApiRateLimitStore();
   await prisma.notificationJob.deleteMany();
   await prisma.teamMember.deleteMany();
@@ -119,6 +127,36 @@ describe("applyRosterChange seam (c5)", () => {
       where: { eventId: seeded.id, name: "Joiner" },
     });
     expect(ep.userId).toBe(joiner.id);
+  });
+
+  it("falls back to the email when the explicit userId is stale", async () => {
+    const seeded = await seedEvent(6);
+    const user = await prisma.user.create({
+      data: { id: "u-email", name: "Emailed", email: "emailed@t.com", emailVerified: true },
+    });
+
+    const result = await applyRosterChange(
+      input(await loadEvent(seeded.id), { userId: "missing-user", email: "emailed@t.com" }),
+    );
+
+    expect(result.status).toBe(200);
+    const player = await prisma.player.findFirst({ where: { eventId: seeded.id, name: "Emailed" } });
+    expect(player?.userId).toBe(user.id);
+  });
+
+  it("does not email an invite when the actor adds themselves", async () => {
+    const seeded = await seedEvent(6);
+    const user = await prisma.user.create({
+      data: { id: "u-self", name: "Self", email: "self@t.com", emailVerified: true },
+    });
+
+    const result = await applyRosterChange({
+      ...input(await loadEvent(seeded.id), { name: "Self", linkToAccount: true }),
+      session: { user: { id: user.id, name: "Self" } },
+    });
+
+    expect(result.status).toBe(200);
+    expect(vi.mocked(sendGameInvite)).not.toHaveBeenCalled();
   });
 
   it("applies a fresh join and returns the ok payload", async () => {
