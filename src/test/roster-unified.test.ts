@@ -185,6 +185,9 @@ describe("POST /api/events/[id]/roster (#814 unified endpoint)", () => {
       data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "pending", order: 0 },
     });
     await prisma.player.create({ data: { eventId: ev.id, name: "Pending", order: 0 } });
+    await prisma.eventCost.create({
+      data: { eventId: ev.id, totalAmount: 50, currency: "EUR" },
+    });
 
     const res = await postRoster(ctx({ id: ev.id }, { name: "Pending" }));
     expect(res.status).toBe(200);
@@ -192,5 +195,25 @@ describe("POST /api/events/[id]/roster (#814 unified endpoint)", () => {
       where: { gameId_eventPlayerId: { gameId: ev.currentGameId, eventPlayerId: ep.id } },
     });
     expect(gp.status).toBe("active");
+    // A promoted player is on the roster and must be billed like any other add.
+    const payments = await prisma.playerPayment.count({
+      where: { eventCost: { eventId: ev.id } },
+    });
+    expect(payments).toBeGreaterThan(0);
+  });
+
+  it("links both identities when promoting a pending invite by email", async () => {
+    const user = await seedUser("Invitee", "pending-link@example.com");
+    const ev = await seedEventWithGame(null);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Invitee" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "pending", order: 0 },
+    });
+    const player = await prisma.player.create({ data: { eventId: ev.id, name: "Invitee", order: 0 } });
+
+    const res = await postRoster(ctx({ id: ev.id }, { email: "pending-link@example.com" }));
+    expect(res.status).toBe(200);
+    expect((await prisma.player.findUniqueOrThrow({ where: { id: player.id } })).userId).toBe(user.id);
+    expect((await prisma.eventPlayer.findUniqueOrThrow({ where: { id: ep.id } })).userId).toBe(user.id);
   });
 });

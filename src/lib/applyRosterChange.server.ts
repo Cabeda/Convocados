@@ -509,7 +509,7 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
               ? { OR: [{ userId: linkedUserId }, { name: trimmed }] }
               : { name: trimmed }),
           },
-          select: { id: true, name: true },
+          select: { id: true, name: true, userId: true },
         });
         if (pendingIdentity) {
           const participant = await prisma.gameParticipant.findUnique({
@@ -527,12 +527,25 @@ export async function applyRosterChange(input: ApplyRosterChangeInput): Promise<
               eventPlayerId: pendingIdentity.id,
               status: "active",
             });
-            if (resolvedUser && !existing.userId) {
+            const linkUserId = resolvedUser?.id ?? linkedUserId;
+            if (linkUserId && !existing.userId) {
               await prisma.player.update({
                 where: { id: existing.id },
-                data: { userId: resolvedUser.id },
+                data: { userId: linkUserId },
               });
             }
+            // Promote both identities: canInviteOnEvent and inviteBlockReason
+            // look the account up on EventPlayer, not Player.
+            if (linkUserId && !pendingIdentity.userId) {
+              await prisma.eventPlayer.update({
+                where: { id: pendingIdentity.id },
+                data: { userId: linkUserId },
+              });
+            }
+            // A promoted player is on the roster and must be billed like any
+            // other add (the migrated callers synced here).
+            await syncGamePayments(event.currentGameId, eventId);
+            await syncPaymentsForEvent(eventId);
             await finishRosterAdd(eventId, pendingIdentity.name, event.maxPlayers, event.currentGameId);
             await notifyPlayerJoined({ event, playerName: trimmed, spotsLeftBefore, rosterCount, actor: joinActor, origin, senderClientId });
             return { status: 200, body: { ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null } };
