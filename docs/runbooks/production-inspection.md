@@ -133,6 +133,11 @@ leaves after `prisma migrate deploy` recreates an empty schema. The status stays
 `ok` on purpose: a 503 would remove the instance from Fly's load balancer and the
 scheduler polls through that URL.
 
+External monitors should probe `/api/health/strict` instead: it returns the same
+body, but 503 when `degraded` is true, so a stale scheduler heartbeat fails the
+check within the 3-minute window while `/api/health` keeps returning 200 for Fly
+and the scheduler.
+
 ## Related
 
 - [Disaster recovery](../disaster-recovery.md) — restoring the database.

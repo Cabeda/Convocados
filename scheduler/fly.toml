@@ -9,6 +9,11 @@ primary_region = "cdg"
   CONCURRENCY = "3"
   POLL_INTERVAL_MS = "10000"
 
+[restart]
+  # A stopped poller must come back without a human: reminders, the recurring
+  # advance, invite expiry and db-maintenance all stop with it.
+  policy = "always"
+
 [[vm]]
   memory = "256mb"
   cpu_kind = "shared"
