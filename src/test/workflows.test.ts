@@ -584,3 +584,26 @@ describe("a lost Attempt stops the round instead of hiding in a budget of zero",
     expect(raw).toContain('if [ "$spent" -ne 0 ] && [ "$spent" -ne 1 ]; then');
   });
 });
+
+describe("a review is bounded by minutes that buy a verdict", () => {
+  // On 2026-11-27 reviews used 66 of ~107 workflow minutes, and the only runs
+  // that used their full budget wrote no verdict. Every review that finished
+  // took 3-5 minutes.
+  const reviewer = () =>
+    parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      concurrency?: unknown;
+      jobs?: Record<string, { steps?: Array<{ name?: string; "timeout-minutes"?: number }> }>;
+    };
+
+  it("caps the step and cancels a superseded run", () => {
+    const doc = reviewer();
+    expect(doc.concurrency).toEqual({ group: "factory-review", "cancel-in-progress": true });
+    const step = doc.jobs?.reviewer?.steps?.find((s) => s.name === "Review the Change");
+    expect(step?.["timeout-minutes"]).toBeLessThanOrEqual(12);
+  });
+
+  it("forbids rebuilding what the checks already produced", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+    expect(raw).toContain("no `pnpm install`, `pnpm test`, `pnpm typecheck`");
+  });
+});

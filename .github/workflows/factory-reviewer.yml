@@ -22,6 +22,14 @@ on:
         required: false
         type: string
 
+# One review at a time. A run is a 12-minute agent budget, and a queued review
+# of a head that has already moved is worthless: 2026-11-27 spent 66 of ~107
+# workflow minutes on reviews alone, two of them 25-minute timeouts that wrote
+# no verdict. Cancelling the superseded run is free; letting it finish is not.
+concurrency:
+  group: factory-review
+  cancel-in-progress: true
+
 # Everything flows through the App token minted in the job below. The
 # default GITHUB_TOKEN needs no scope and must not carry one: it sits in
 # the runner environment for the whole run, so its scopes are blast radius
@@ -162,9 +170,12 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Review the Change
-        # The real budget. A step that times out exits non-zero, and this absorbs
-        # it, so the job — and therefore the Change's check list — stays green.
-        timeout-minutes: 25
+        # 12, not 25. Every review that finished took 3-5 minutes; the only runs
+        # that used the full 25 wrote no verdict at all. The shorter cap turns a
+        # stuck run into a cheap miss instead of half an hour of billed minutes.
+        # A step that times out exits non-zero, and `continue-on-error` absorbs
+        # it, so the job stays green and the verdict step reports the miss.
+        timeout-minutes: 12
         # Advisory, not a gate: see factory-issue.yml for why.
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
@@ -194,6 +205,11 @@ jobs:
             the Gates, which already passed. Report findings with `path:line` and the concrete
             failure each one causes. Treat migrations, auth and tokens, the scheduler, workflows
             and deploy config, and coverage-threshold edits as Hard Block: report, do not judge.
+
+            Do not install, build, or run anything: no `pnpm install`, `pnpm test`, `pnpm typecheck`,
+            Gradle, Playwright or Lighthouse. Those results already exist as checks on the Change and
+            reading them is free; producing them again spends the review's minute budget and is not
+            review. Read the diff and the files it names, then argue.
 
             You may not approve, merge, push, or touch a human branch: the Fixer writes, you judge.
             Put `<!-- factory:findings -->` on its own line in the body when it carries at least one
