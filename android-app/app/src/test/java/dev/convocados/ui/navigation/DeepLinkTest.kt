@@ -139,6 +139,12 @@ class DeepLinkTest {
     }
 
     @Test
+    fun `deepLinkToRoute preserves action=share query param`() {
+        val route = DeepLink.deepLinkToRoute("convocados://events/evt-abc?action=share")
+        assertEquals("event/evt-abc?action=share", route)
+    }
+
+    @Test
     fun `deepLinkToRoute returns null for OAuth callback (auth is not a navigation target)`() {
         val route = DeepLink.deepLinkToRoute("convocados://auth?code=mcode_xxx")
         assertNull(route)
