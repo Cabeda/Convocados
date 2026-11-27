@@ -5,6 +5,7 @@ import { getSession } from "~/lib/auth.helpers.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { archiveAndLeave } from "~/lib/leave.server";
+import { syncGamePayments } from "~/lib/settlement.server";
 
 vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: vi.fn(),
@@ -156,6 +157,93 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
       where: { eventPlayerId: ep.id, gameId: event.currentGameId! },
     });
     expect(rsvp!.status).toBe("yes");
+  });
+
+  it("restores the GamePayment and share debit on a leave → rejoin", async () => {
+    const user = await seedUser("Ana", "u-ana");
+    const bia = await seedUser("Bia", "u-bia");
+    const event = await seedRecurringEvent();
+    await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 100, currency: "EUR" },
+    });
+
+    const anaEp = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Ana", userId: user.id },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: anaEp.id, order: 0 },
+    });
+    const anaPlayer = await prisma.player.create({
+      data: { eventId: event.id, name: "Ana", userId: user.id, order: 0 },
+    });
+
+    const biaEp = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Bia", userId: bia.id },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: event.currentGameId!, eventPlayerId: biaEp.id, order: 1 },
+    });
+    await prisma.player.create({
+      data: { eventId: event.id, name: "Bia", userId: bia.id, order: 1 },
+    });
+
+    // Teams are drawn: settlement charges the lineup, so the rejoin must place
+    // the player before it re-syncs (the bug this test pins).
+    const team = await prisma.teamResult.create({
+      data: { name: "Ninjas", eventId: event.id, formation: "1-1" },
+    });
+    await prisma.teamMember.createMany({
+      data: [
+        { name: "Ana", order: 0, slot: 0, teamResultId: team.id },
+        { name: "Bia", order: 1, slot: 1, teamResultId: team.id },
+      ],
+    });
+
+    await syncGamePayments(event.currentGameId!, event.id);
+    const debits = (userId: string) =>
+      prisma.walletTransaction.findMany({
+        where: {
+          eventId: event.id,
+          eventInstanceId: event.currentGameId!,
+          reason: "per_game_share",
+          direction: "debit",
+          userId,
+        },
+      });
+
+    expect(await debits(user.id)).toHaveLength(1);
+    const biaBefore = await debits(bia.id);
+    expect(biaBefore).toHaveLength(1);
+
+    await archiveAndLeave({
+      eventId: event.id,
+      playerId: anaPlayer.id,
+      actor: { kind: "self", userId: user.id },
+    });
+    expect(await debits(user.id)).toHaveLength(0);
+    const archived = await prisma.gamePayment.findUnique({
+      where: { gameId_eventPlayerId: { gameId: event.currentGameId!, eventPlayerId: anaEp.id } },
+    });
+    expect(archived?.archivedAt).toBeTruthy();
+
+    const res = await POST(
+      ctx(event.id, { name: "Ana", linkToAccount: true }, { user: { id: user.id, name: "Ana" } }),
+    );
+    expect(res.status).toBe(200);
+
+    const live = await prisma.gamePayment.findUnique({
+      where: { gameId_eventPlayerId: { gameId: event.currentGameId!, eventPlayerId: anaEp.id } },
+    });
+    expect(live?.archivedAt).toBeNull();
+    expect(live?.amount).toBe(10);
+    expect(await debits(user.id)).toHaveLength(1);
+
+    // An already-charged player's roll is untouched by the re-sync.
+    const biaAfter = await debits(bia.id);
+    expect(biaAfter).toHaveLength(biaBefore.length);
+    expect(biaAfter.map((row) => row.amountCents).sort()).toEqual(
+      biaBefore.map((row) => row.amountCents).sort(),
+    );
   });
 
   it("restores an archived GameParticipant when only the EventPlayer lingers (merge ghost)", async () => {
