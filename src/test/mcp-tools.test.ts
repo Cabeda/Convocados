@@ -98,6 +98,30 @@ describe("MCP tools — scope and handlers", () => {
     expect(data.players.map((p: any) => p.name).sort()).toEqual(["Alice", "Bob"]);
   });
 
+  it("convocados_list_players hides rating from a follower but keeps it for the owner", async () => {
+    const owner = await prisma.user.create({ data: { id: "mcp2-owner", name: "Owner", email: "mcp2owner@test.com", emailVerified: true } });
+    const follower = await prisma.user.create({ data: { id: "mcp2-follower", name: "Follower", email: "mcp2follower@test.com", emailVerified: true } });
+    const event = await prisma.event.create({ data: { title: "Rating Event", location: "Lisbon", dateTime: new Date(), maxPlayers: 10, ownerId: owner.id, hideEloInTeams: true } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", rating: 1500 } });
+
+    const call = async (userId: string) => {
+      mockAuth.mockResolvedValue({ userId, scopes: ["*"], authMethod: "oauth", clientId: "c1" });
+      const req = makeRequest(
+        { jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "convocados_list_players", arguments: { eventId: event.id } } },
+        { "MCP-Protocol-Version": PROTOCOL_VERSION, "Mcp-Method": "tools/call", "Mcp-Name": "convocados_list_players" }
+      );
+      const res = await POST(ctx(req));
+      expect(res.status).toBe(200);
+      return JSON.parse((await res.json() as any).result.content[0].text);
+    };
+
+    const asFollower = await call(follower.id);
+    expect(asFollower.players[0]).not.toHaveProperty("rating");
+
+    const asOwner = await call(owner.id);
+    expect(asOwner.players[0].rating).toBe(1500);
+  });
+
   it("convocados_get_history returns history entries", async () => {
     const user = await prisma.user.create({ data: { id: "mcp2-u4", name: "U4", email: "mcp2u4@test.com", emailVerified: true } });
     const event = await prisma.event.create({ data: { title: "History Event", location: "Lisbon", dateTime: new Date(), maxPlayers: 10, ownerId: user.id } });
