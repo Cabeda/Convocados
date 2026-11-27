@@ -6,6 +6,8 @@ import { authenticateRequest } from "../../../lib/authenticate.server";
 import { getRosterCapacity } from "../../../lib/roster.server";
 import { findDiscoverableUpcomingEvents } from "../../../lib/discoverableEvents.server";
 import { computeHomeActions } from "../../../lib/homeActions.server";
+import { gamePhase } from "../../../lib/gameStatus";
+import { syncGamePhase } from "../../../lib/gameStatus.server";
 
 /** Signed-in Home: the soonest few games the user plays/organizes, plus a
  *  glimpse of Discoverable Events they could join. See ADR 0041. */
@@ -24,6 +26,7 @@ const upNextSelect = {
   timezone: true,
   sport: true,
   maxPlayers: true,
+  durationMinutes: true,
   isRecurring: true,
   recurrenceRule: true,
   currentGameId: true,
@@ -65,37 +68,64 @@ export const GET: APIRoute = async ({ request }) => {
     ],
   };
 
-  const [involved, followed, liveEvents, upcomingEvents] = await Promise.all([
+  const [involved, followed] = await Promise.all([
     prisma.event.findMany({
       where: involvedWhere,
-      select: { id: true, latitude: true, longitude: true, sport: true },
+      select: { ...upNextSelect, latitude: true, longitude: true },
     }),
     // Followed-only Events are not Up next, but Discover must skip them too:
     // the user is already engaged, so they are not "games to join" (ADR 0041).
     prisma.eventFollow.findMany({ where: { userId }, select: { eventId: true } }),
-    // In-progress games have a kickoff in the past, so they need their own query
-    // (the upcoming query filters dateTime >= now).
-    prisma.event.findMany({
-      where: { ...involvedWhere, games: { some: { status: "in_progress" } } },
-      select: upNextSelect,
-      orderBy: { dateTime: "asc" },
-      take: UP_NEXT_LIMIT,
-    }),
-    prisma.event.findMany({
-      where: { ...involvedWhere, dateTime: { gte: now } },
-      select: upNextSelect,
-      orderBy: { dateTime: "asc" },
-      take: UP_NEXT_LIMIT + 1,
-    }),
   ]);
 
-  const liveIds = new Set(liveEvents.map((e) => e.id));
+  // One phase per involved Event, derived from its current Game's kickoff and
+  // the Event's duration. The stored status is read (so cancelled stays
+  // cancelled), never trusted as the answer: nothing writes in_progress, and
+  // the old `dateTime >= now` half excluded a game already under way.
+  const currentGameIds = involved
+    .map((e) => e.currentGameId)
+    .filter((id): id is string => !!id);
+  const currentGames = currentGameIds.length
+    ? await prisma.game.findMany({
+        where: { id: { in: currentGameIds } },
+        select: { id: true, dateTime: true, status: true },
+      })
+    : [];
+  const gameById = new Map(currentGames.map((g) => [g.id, g]));
+
+  const phased = involved.map((row) => {
+    const game = row.currentGameId ? gameById.get(row.currentGameId) : undefined;
+    const phase = gamePhase(
+      { dateTime: game?.dateTime ?? row.dateTime, status: game?.status },
+      row.durationMinutes,
+      now,
+    );
+    return { row, game, phase };
+  });
+
+  // Persist the transition through the same CAS the advance path uses.
+  await Promise.all(
+    phased
+      .filter((p) => p.game)
+      .map((p) =>
+        syncGamePhase(
+          { id: p.game!.id, dateTime: p.game!.dateTime, status: p.game!.status },
+          p.row.durationMinutes,
+          now,
+        ),
+      ),
+  );
+
   const merged: Array<{ row: UpNextRow; status: string }> = [
-    ...liveEvents.map((row) => ({ row, status: "in_progress" })),
-    ...upcomingEvents
-      .filter((e) => !liveIds.has(e.id))
-      .map((row) => ({ row, status: "upcoming" })),
-  ].slice(0, UP_NEXT_LIMIT);
+    ...phased
+      .filter((p) => p.phase === "in_progress")
+      .sort((a, b) => a.row.dateTime.getTime() - b.row.dateTime.getTime()),
+    ...phased
+      .filter((p) => p.phase === "upcoming")
+      .sort((a, b) => a.row.dateTime.getTime() - b.row.dateTime.getTime()),
+  ]
+    .slice(0, UP_NEXT_LIMIT)
+    .map(({ row, phase }) => ({ row, status: phase }));
 
   const upNext: UpNextEvent[] = await Promise.all(
     merged.map(async ({ row, status }) => ({

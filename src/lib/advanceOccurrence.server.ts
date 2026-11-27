@@ -5,6 +5,7 @@ import { autoPriorityEnroll } from "./priority.server";
 import { cancelEventJobs, scheduleEventReminders } from "./scheduler.server";
 import { seedGamePayer, syncGamePayments } from "./settlement.server";
 import { applyAutoConfirm } from "./autoConfirm.server";
+import { syncGamePhase } from "./gameStatus.server";
 import { createLogger } from "./logger.server";
 
 const log = createLogger("advanceOccurrence");
@@ -35,6 +36,18 @@ export type EventForAdvance = Prisma.EventGetPayload<{
 export async function advanceDueRecurringEvent(
   event: EventForAdvance,
 ): Promise<AdvanceResult> {
+  // The occurrence phase is derived from the clock, so advance its status on
+  // every read path that already calls this (event GET and the cron sweep).
+  // Non-recurring Events never reach the reset below, but still get the
+  // upcoming → in_progress → played transition here.
+  if (event.currentGameId) {
+    const currentGame = await prisma.game.findUnique({
+      where: { id: event.currentGameId },
+      select: { id: true, dateTime: true, status: true },
+    });
+    if (currentGame) await syncGamePhase(currentGame, event.durationMinutes);
+  }
+
   if (event.archivedAt || !event.isRecurring || !event.nextResetAt) {
     return "not-due";
   }

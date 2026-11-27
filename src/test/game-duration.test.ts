@@ -7,7 +7,7 @@ import {
   getSportPreset,
   getDefaultDurationMinutes,
 } from "~/lib/sports";
-import { isGameEnded } from "~/lib/gameStatus";
+import { isGameEnded, gamePhase, type GamePhase } from "~/lib/gameStatus";
 import { POST as createEvent } from "~/pages/api/events/index";
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
 import { PUT as updateDuration } from "~/pages/api/events/[id]/duration";
@@ -141,6 +141,66 @@ describe("isGameEnded", () => {
   it("handles zero duration (ended as soon as it started)", () => {
     const dateTime = new Date(Date.now() - 1000); // 1 second ago
     expect(isGameEnded(dateTime, 0)).toBe(true);
+  });
+});
+
+// ── gamePhase helper ────────────────────────────────────────────────────────
+
+describe("gamePhase", () => {
+  const now = new Date("2026-11-27T12:00:00Z");
+  const at = (minutes: number) => new Date(now.getTime() + minutes * 60 * 1000);
+
+  it("returns upcoming before kickoff", () => {
+    expect(gamePhase({ dateTime: at(30), status: "upcoming" }, 60, now)).toBe("upcoming");
+  });
+
+  it("returns in_progress from kickoff until kickoff + duration", () => {
+    expect(gamePhase({ dateTime: at(-10), status: "upcoming" }, 60, now)).toBe("in_progress");
+    expect(gamePhase({ dateTime: at(0), status: "upcoming" }, 60, now)).toBe("in_progress");
+  });
+
+  it("returns played at and after kickoff + duration, without needing a score", () => {
+    expect(gamePhase({ dateTime: at(-60), status: "upcoming" }, 60, now)).toBe("played");
+    expect(gamePhase({ dateTime: at(-90), status: "upcoming" }, 60, now)).toBe("played");
+  });
+
+  it("never derives over cancelled or an already-snapshotted played game", () => {
+    expect(gamePhase({ dateTime: at(-10), status: "cancelled" }, 60, now)).toBe("cancelled");
+    expect(gamePhase({ dateTime: at(30), status: "played" }, 60, now)).toBe("played");
+  });
+
+  // Parity fixture: android-app/wear/.../DateTimeUtil.kt gameListTimeState
+  // classifies LIVE by kickoff + the sport's duration. Mirror its sport table
+  // and assert the web phase agrees at the same instants.
+  it("agrees with the Wear games-list phase for every shared sport duration", () => {
+    const wearSportDurationMinutes: Record<string, number> = {
+      "football-5v5": 60,
+      "football-7v7": 70,
+      "football-11v11": 90,
+      futsal: 60,
+      basketball: 48,
+      volleyball: 60,
+      "tennis-singles": 90,
+      "tennis-doubles": 90,
+      padel: 90,
+      other: 60,
+    };
+    const wearPhase = (kickoff: Date, durationMinutes: number): GamePhase => {
+      const end = new Date(kickoff.getTime() + durationMinutes * 60 * 1000);
+      if (now < kickoff) return "upcoming";
+      return now < end ? "in_progress" : "played";
+    };
+
+    for (const [sport, duration] of Object.entries(wearSportDurationMinutes)) {
+      expect(getDefaultDurationMinutes(sport), sport).toBe(duration);
+      for (const offset of [-1, 0, duration / 2, duration, duration + 1]) {
+        const kickoff = at(offset);
+        expect(
+          gamePhase({ dateTime: kickoff, status: "upcoming" }, duration, now),
+          `${sport} at ${offset} min`,
+        ).toBe(wearPhase(kickoff, duration));
+      }
+    }
   });
 });
 
