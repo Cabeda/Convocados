@@ -418,6 +418,46 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.hasCost).toBe(true);
   });
 
+  it("keeps hasCost when the price is set but the settled game has no payment roll (#1754)", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Just Ended",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 60, currency: "EUR" },
+    });
+    // Played game with a score, but zero GamePayment rows: the roll is empty.
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "played", scoreOne: 6, scoreTwo: 0 },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        status: "played",
+        scoreOne: 6,
+        scoreTwo: 0,
+        teamOneName: "A",
+        teamTwoName: "B",
+      },
+    });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    // The price line reads EventCost; the wrap-up must read the same answer.
+    expect(json.hasCost).toBe(true);
+    expect(json.costWithoutRoll).toBe(true);
+    // No roll means nothing outstanding — /payments agrees — so not a pending task.
+    expect(json.allPaid).toBe(true);
+  });
+
   it("returns isParticipant=false for anonymous users", async () => {
     const event = await prisma.event.create({
       data: {
