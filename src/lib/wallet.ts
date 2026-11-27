@@ -156,7 +156,7 @@ export function sumTransactionAmountCents(txs: readonly WalletTx[]): number {
  * ADR 0019 — shared core for getGateBalance and getOutstandingBalance.
  *
  * - Sums debits where reason ∈ MONEY_CHARGING_REASONS
- * - Subtracts credits where reason ∈ the provided clearingReasons set
+ * - Subtracts charging credits (a charge correction) and clearing credits
  * - Returns cents owed (positive = debt, negative = overpay/credit)
  */
 export function computeMoneyBalance(
@@ -165,10 +165,9 @@ export function computeMoneyBalance(
 ): number {
   let balance = 0;
   for (const tx of txs) {
-    if (MONEY_CHARGING_REASONS.has(tx.reason) && tx.direction === "debit") {
-      balance += tx.amountCents;
-    }
-    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+    if (tx.direction === "debit") {
+      if (MONEY_CHARGING_REASONS.has(tx.reason)) balance += tx.amountCents;
+    } else if (MONEY_CHARGING_REASONS.has(tx.reason) || clearingReasons.has(tx.reason)) {
       balance -= tx.amountCents;
     }
   }
@@ -188,10 +187,9 @@ export function computeMoneyBalanceForGame(
   let balance = 0;
   for (const tx of txs) {
     if (tx.eventInstanceId !== gameId) continue;
-    if (MONEY_CHARGING_REASONS.has(tx.reason) && tx.direction === "debit") {
-      balance += tx.amountCents;
-    }
-    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+    if (tx.direction === "debit") {
+      if (MONEY_CHARGING_REASONS.has(tx.reason)) balance += tx.amountCents;
+    } else if (MONEY_CHARGING_REASONS.has(tx.reason) || clearingReasons.has(tx.reason)) {
       balance -= tx.amountCents;
     }
   }
@@ -219,7 +217,7 @@ function buildPerGameAggregates(
     if (MONEY_CHARGING_REASONS.has(tx.reason) && tx.direction === "debit") {
       g.debit += tx.amountCents;
     }
-    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+    if ((MONEY_CHARGING_REASONS.has(tx.reason) || clearingReasons.has(tx.reason)) && tx.direction === "credit") {
       g.credit += tx.amountCents;
     }
     if (tx.createdAt > g.latest) g.latest = tx.createdAt;

@@ -475,60 +475,60 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     : undefined;
 
   const updated = await prisma.$transaction(async (tx) => {
-    const entryAfter = await tx.gameHistory.update({
-      where: { id: historyId },
-      data: {
-        ...(status !== undefined && { status }),
-        ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
-        ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
-        ...(scoreSetsProvided && { scoreSets }),
-        ...(clearStructuredScore && { scoreSets: null }),
-        ...(teamsSnapshot !== undefined && { teamsSnapshot }),
-        ...(paymentsSnapshot !== undefined && { paymentsSnapshot }),
-      },
-    });
+  const entryAfter = await tx.gameHistory.update({
+    where: { id: historyId },
+    data: {
+      ...(status !== undefined && { status }),
+      ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
+      ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
+      ...(scoreSetsProvided && { scoreSets }),
+      ...(clearStructuredScore && { scoreSets: null }),
+      ...(teamsSnapshot !== undefined && { teamsSnapshot }),
+      ...(paymentsSnapshot !== undefined && { paymentsSnapshot }),
+    },
+  });
 
-    // Dual-write the occurrence data to the Game model (ADR 0016) so readers
-    // that migrated off GameHistory never see a stale score/status/roster. The
-    // teams mirror and its settlement re-sync share this transaction, so a torn
-    // write can never leave the roll and the ledger disagreeing.
-    if (mirrorGame) {
-      const scoreChanged =
-        status !== undefined ||
-        scoreOne !== undefined ||
-        scoreTwo !== undefined ||
-        scoreSetsProvided ||
-        clearStructuredScore;
-      if (scoreChanged) {
-        await tx.game.update({
-          where: { id: mirrorGame.id },
-          data: {
-            ...(status !== undefined && { status }),
-            ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
-            ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
-            ...(scoreSetsProvided && { scoreSets }),
-            ...(clearStructuredScore && { scoreSets: null }),
-          },
-        });
-      }
-      if (teamsSnapshot !== undefined) {
-        await applyTeamsSnapshotToGame(
-          { id: mirrorGame.id, eventId: params.id ?? "", dateTime: entryAfter.dateTime },
-          entryAfter.teamsSnapshot,
-          tx,
-        );
-        // Keep the durable payment roll aligned with the lineup this edit just
-        // wrote. A team move can leave a player's GameParticipant order past the
-        // bench; without a re-sync their GamePayment row stays stale or archived
-        // even though they played.
-        await syncGamePaymentsTx(tx, mirrorGame.id, params.id ?? "");
-      }
-      if (paymentsSnapshot !== undefined) {
-        await mirrorPaymentsSnapshotToGame(mirrorGame, entryAfter.paymentsSnapshot, params.id ?? "", tx);
-      }
+  // Dual-write the occurrence data to the Game model (ADR 0016) so readers
+  // that migrated off GameHistory never see a stale score/status/roster. The
+  // teams mirror and its settlement re-sync share this transaction, so a torn
+  // write can never leave the roll and the ledger disagreeing.
+  if (mirrorGame) {
+    const scoreChanged =
+      status !== undefined ||
+      scoreOne !== undefined ||
+      scoreTwo !== undefined ||
+      scoreSetsProvided ||
+      clearStructuredScore;
+    if (scoreChanged) {
+      await tx.game.update({
+        where: { id: mirrorGame.id },
+        data: {
+          ...(status !== undefined && { status }),
+          ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
+          ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
+          ...(scoreSetsProvided && { scoreSets }),
+          ...(clearStructuredScore && { scoreSets: null }),
+        },
+      });
     }
+    if (teamsSnapshot !== undefined) {
+      await applyTeamsSnapshotToGame(
+        { id: mirrorGame.id, eventId: params.id ?? "", dateTime: entryAfter.dateTime },
+        entryAfter.teamsSnapshot,
+        tx,
+      );
+      // Keep the durable payment roll aligned with the lineup this edit just
+      // wrote. A team move can leave a player's GameParticipant order past the
+      // bench; without a re-sync their GamePayment row stays stale or archived
+      // even though they played.
+      await syncGamePaymentsTx(tx, mirrorGame.id, params.id ?? "");
+    }
+    if (paymentsSnapshot !== undefined) {
+      await mirrorPaymentsSnapshotToGame(mirrorGame, entryAfter.paymentsSnapshot, params.id ?? "", tx);
+    }
+  }
 
-    return entryAfter;
+  return entryAfter;
   });
 
   // Log activity for each type of change

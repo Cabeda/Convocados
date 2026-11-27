@@ -278,7 +278,8 @@ export async function isGameParticipant(eventId: string, gameId: string, userId:
  * - Archives rows for players no longer charged (soft, keeps history).
  * - Untracked games get no rows.
  * - Re-applies payer auto-settlement when the payer is an active participant.
- * - Played games: amounts/rows are frozen — only payer auto-settle/revert applies.
+ * - Played games: amounts/rows are frozen, so charge changes are reconciled with
+ *   idempotent corrections (payer auto-settle/revert still applies).
  */
 async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: string): Promise<void> {
   const [effective, game, participants, event] = await Promise.all([
@@ -429,15 +430,18 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     ...p,
     amount: amountByPlayer.get(p.eventPlayer.id) ?? share,
   }));
-  await syncChargeDebits(db, gameId, eventId, chargedWithAmount, effective.currency, !frozen);
+  await syncChargeDebits(db, gameId, eventId, chargedWithAmount, effective.currency, frozen);
 
   await applyPayer();
 }
 
 /**
  * Keep the ledger's `per_game_share` charge side in step with the game's
- * charged players: a debit per charged player, removed for anyone no longer
- * charged (soft-archived GamePayment rows) unless the game's money is frozen.
+ * charged players. Pre-game, a debit is posted for each charged player and a
+ * removed player's debit is deleted. A played game's money is frozen, so it is
+ * reconciled with idempotent `cost_adjustment` corrections instead — a revived
+ * or added player gets the debit the roll shows, and a removed player gets a
+ * credit that cancels it without rewriting the original row.
  */
 async function syncChargeDebits(
   db: DbClient,
@@ -445,9 +449,14 @@ async function syncChargeDebits(
   eventId: string,
   charged: Array<{ eventPlayer: { id: string; name: string; userId: string | null }; amount: number }>,
   currency: string,
-  reverseRemoved: boolean,
+  frozen: boolean,
 ): Promise<void> {
   const activeIds = new Set(charged.map((p) => p.eventPlayer.id));
+
+  if (frozen) {
+    await syncPlayedChargeDebits(db, gameId, eventId, charged, activeIds, currency);
+    return;
+  }
 
   for (const p of charged) {
     const userId = p.eventPlayer.userId ?? (await ensureSystemUserId(eventId, p.eventPlayer.name, db));
@@ -465,8 +474,6 @@ async function syncChargeDebits(
       db,
     );
   }
-
-  if (!reverseRemoved) return;
 
   // Reverse charges for players who are no longer charged (archived rows).
   const archived = await db.gamePayment.findMany({
@@ -486,6 +493,98 @@ async function syncChargeDebits(
         idempotencyKey: ledgerKey("share", eventId, userId, gameId),
       },
     });
+  }
+}
+
+/**
+ * Played-game charge reconciliation. The game's amounts are frozen, so the
+ * ledger must converge on the roll without deleting or rewriting a settled
+ * debit. ADR 0019 §6: a legacy game — one with no `per_game_share` row at all —
+ * is corrected on `GamePayment` only, never by inventing ledger debt here.
+ */
+async function syncPlayedChargeDebits(
+  db: DbClient,
+  gameId: string,
+  eventId: string,
+  charged: Array<{ eventPlayer: { id: string; name: string; userId: string | null }; amount: number }>,
+  activeIds: Set<string>,
+  currency: string,
+): Promise<void> {
+  const alreadyCharged = await db.walletTransaction.findFirst({
+    where: { eventId, eventInstanceId: gameId, reason: "per_game_share", direction: "debit" },
+    select: { id: true },
+  });
+  if (!alreadyCharged) return;
+
+  const rows = await db.walletTransaction.findMany({
+    where: {
+      eventId,
+      eventInstanceId: gameId,
+      OR: [{ reason: "per_game_share" }, { reason: "cost_adjustment" }],
+    },
+    select: { userId: true, reason: true, direction: true, amountCents: true },
+  });
+  const netByUser = new Map<string, number>();
+  const hasShareDebit = new Set<string>();
+  for (const row of rows) {
+    if (row.reason === "per_game_share" && row.direction === "debit") hasShareDebit.add(row.userId);
+    const delta = row.direction === "debit" ? row.amountCents : -row.amountCents;
+    netByUser.set(row.userId, (netByUser.get(row.userId) ?? 0) + delta);
+  }
+
+  const postAdjustment = async (userId: string, amountCents: number, direction: "debit" | "credit") => {
+    await postLedgerEntry(
+      {
+        eventId,
+        userId,
+        amountCents,
+        currency,
+        direction,
+        reason: "cost_adjustment",
+        eventInstanceId: gameId,
+      },
+      db,
+    );
+  };
+
+  for (const p of charged) {
+    const userId = p.eventPlayer.userId ?? (await ensureSystemUserId(eventId, p.eventPlayer.name, db));
+    const desiredCents = Math.round(p.amount * 100);
+    const currentCents = netByUser.get(userId) ?? 0;
+    const delta = desiredCents - currentCents;
+    if (delta === 0) continue;
+    if (delta > 0 && currentCents === 0 && !hasShareDebit.has(userId)) {
+      // First charge for a revived/added player keeps the stable share key.
+      await postLedgerEntry(
+        {
+          eventId,
+          userId,
+          amountCents: delta,
+          currency,
+          direction: "debit",
+          reason: "per_game_share",
+          eventInstanceId: gameId,
+          idempotencyKey: ledgerKey("share", eventId, userId, gameId),
+        },
+        db,
+      );
+    } else {
+      await postAdjustment(userId, Math.abs(delta), delta > 0 ? "debit" : "credit");
+    }
+  }
+
+  // Removing a player cancels the share they still owe with a correction
+  // credit; the original debit stays in the ledger.
+  const archived = await db.gamePayment.findMany({
+    where: { gameId, archivedAt: { not: null } },
+    include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
+  });
+  for (const row of archived) {
+    if (activeIds.has(row.eventPlayerId)) continue;
+    const userId = row.eventPlayer.userId ?? systemUserId(eventId, row.eventPlayer.name);
+    const currentCents = netByUser.get(userId) ?? 0;
+    if (currentCents <= 0) continue;
+    await postAdjustment(userId, currentCents, "credit");
   }
 }
 
