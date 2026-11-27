@@ -626,3 +626,15 @@ describe("the janitor dispatches one review per tick", () => {
     expect(ticks).toHaveLength(1);
   });
 });
+
+describe("the Attempt ledger can post its comment", () => {
+  // `gh pr comment` goes through the pull-requests API. With only `issues: write`
+  // the call failed with an empty stderr, and every round was refused as
+  // unrecorded — six Changes sat unreviewed behind it on 2026-11-27.
+  it("grants the ledger pull-requests: write", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      jobs?: Record<string, { permissions?: Record<string, string> }>;
+    };
+    expect(doc.jobs?.ledger?.permissions?.["pull-requests"]).toBe("write");
+  });
+});

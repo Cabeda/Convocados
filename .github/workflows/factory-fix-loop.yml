@@ -74,7 +74,11 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      # `gh pr comment` posts through the pull-requests API, not the issues one,
+      # so `issues: write` alone leaves it with no scope at all: the Attempt
+      # comment failed with an empty stderr and this job recorded no round for
+      # two hours on 2026-11-27 (runs 46077295707, 46077554300).
+      pull-requests: write
     outputs:
       pr: ${{ steps.resolve.outputs.pr }}
       branch: ${{ steps.resolve.outputs.branch }}
