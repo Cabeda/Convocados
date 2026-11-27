@@ -170,6 +170,7 @@ export async function advanceDueRecurringEvent(
         rsvpSummarySent: false,
         recruitment48hSent: false,
         recruitment24hSent: false,
+        fewSpotsLeftNotified: false,
       },
     }),
   ]);
