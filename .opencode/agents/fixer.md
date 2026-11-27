@@ -142,6 +142,9 @@ not a hint to wrap up.
 - **Never weaken a test** to get green: no deleted tests, no `.skip`, no new `exclude`, no
   `c8 ignore`, no loosened assertion.
 - **Never edit `.github/workflows/**`, `AGENTS.md`, or `.github/CODEOWNERS`.**
+- **Never touch a path outside this checkout.** `/tmp` is outside it, and a command that reaches
+  outside resolves to a permission request nobody is there to answer: the step waits for its
+  timeout and the round is lost. Keep scratch files in the repo, next to the work they describe.
 - **Migrations, auth and token handling, the scheduler, and deploy configuration are Hard Block.**
   Implement them if the Issue asks, and say plainly in the handoff comment that they need a
   human's eyes.
