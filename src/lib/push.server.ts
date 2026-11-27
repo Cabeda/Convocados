@@ -22,43 +22,51 @@ const FCM_API_URL = "https://fcm.googleapis.com/v1/projects/{projectId}/messages
 const FCM_PLATFORMS = ["android"];
 
 /**
- * Job types whose `spotsLeft` payload is a real roster-capacity fact. Only
- * these get the "· Game is full / N spots left" suffix — every other type
- * passes `spotsLeft: 0` as "not applicable" and must not lie about the roster
- * (#1725). Undefined jobType (direct callers, legacy) keeps the suffix to
- * preserve prior behaviour.
+ * How a job type's body relates to roster capacity (#1725, #1730):
+ * - "suffix": the body carries no count, so append "· Game is full / N spots left"
+ * - "whole":  the translation already states the count, so appending repeats it
+ * - "none":   `spotsLeft` is "not applicable" (passed as 0); must not lie about
+ *             the roster.
+ * Undefined jobType (direct callers, legacy) keeps the suffix to preserve prior
+ * behaviour.
  */
-const CAPACITY_JOB_TYPES: Record<NotificationJobType, boolean> = {
-  player_joined: true,
-  player_left: true,
-  player_joined_bench: true,
-  player_left_bench: true,
-  player_left_promoted: true,
-  game_full: true,
-  spot_available: true,
-  few_spots_left: true,
-  recruitment: true,
-  reminder: true,
-  event_details: true,
-  game_invite: true,
-  post_game: true,
+type CapacitySuffixMode = "suffix" | "whole" | "none";
+
+const CAPACITY_JOB_TYPES: Record<NotificationJobType, CapacitySuffixMode> = {
+  player_joined: "suffix",
+  player_left: "whole",
+  player_joined_bench: "suffix",
+  player_left_bench: "suffix",
+  player_left_promoted: "suffix",
+  game_full: "whole",
+  spot_available: "suffix",
+  few_spots_left: "whole",
+  recruitment: "suffix",
+  reminder: "suffix",
+  event_details: "suffix",
+  game_invite: "suffix",
+  post_game: "suffix",
   // Non-capacity: spotsLeft is "not applicable" (passed as 0)
-  rsvp_request: false,
-  game_cancelled: false,
-  bench_promoted_capacity: false,
-  payment_confirmed: false,
-  payment_self_reported: false,
-  payer_assigned: false,
-  payer_changed: false,
-  payer_vacant: false,
-  player_invited: false,
-  crew_captain_nominated: false,
-  crew_captain_accepted: false,
+  rsvp_request: "none",
+  game_cancelled: "none",
+  bench_promoted_capacity: "none",
+  payment_confirmed: "none",
+  payment_self_reported: "none",
+  payer_assigned: "none",
+  payer_changed: "none",
+  payer_vacant: "none",
+  player_invited: "none",
+  crew_captain_nominated: "none",
+  crew_captain_accepted: "none",
 };
 
-function isCapacityJobType(type?: NotificationJobType): boolean {
-  if (!type) return true;
+function capacitySuffixMode(type?: NotificationJobType): CapacitySuffixMode {
+  if (!type) return "suffix";
   return CAPACITY_JOB_TYPES[type];
+}
+
+function isCapacityJobType(type?: NotificationJobType): boolean {
+  return capacitySuffixMode(type) !== "none";
 }
 
 export function isCapacityNotificationType(type?: NotificationJobType): boolean {
@@ -67,8 +75,8 @@ export function isCapacityNotificationType(type?: NotificationJobType): boolean 
 
 /**
  * Shared suffix decision for both delivery channels. Returns the capacity
- * suffix string when applicable, or null when the job type is non-capacity
- * (or the caller should render the body verbatim).
+ * suffix string when the body does not already state it, or null when the job
+ * type is non-capacity or self-sufficient (the caller renders the body verbatim).
  */
 export function capacitySuffix(
   jobType: NotificationJobType | undefined,
@@ -76,6 +84,7 @@ export function capacitySuffix(
   t: TFunction,
 ): string | null {
   if (!isCapacityNotificationType(jobType)) return null;
+  if (capacitySuffixMode(jobType) !== "suffix") return null;
   return spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
 }
 
