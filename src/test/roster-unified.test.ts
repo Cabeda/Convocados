@@ -32,8 +32,12 @@ function eid() { return `e-${Math.random().toString(36).slice(2, 8)}`; }
 async function seedUser(name: string, email?: string) {
   return prisma.user.create({ data: { id: `u-${name}-${Math.random().toString(36).slice(2, 4)}`, name, email: email ?? `${name}${Math.random().toString(36).slice(2, 4)}@t.com`, emailVerified: true } });
 }
-async function seedEventWithGame(ownerId: string | null, dateTime = new Date(Date.now() + 48 * 3600_000)) {
-  const event = await prisma.event.create({ data: { id: eid(), title: "Game", location: "Pitch", dateTime, ownerId, maxPlayers: 10 } });
+async function seedEventWithGame(
+  ownerId: string | null,
+  dateTime = new Date(Date.now() + 48 * 3600_000),
+  maxPlayers = 10,
+) {
+  const event = await prisma.event.create({ data: { id: eid(), title: "Game", location: "Pitch", dateTime, ownerId, maxPlayers } });
   const game = await prisma.game.create({ data: { eventId: event.id, dateTime } });
   await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
   return { ...event, currentGameId: game.id };
@@ -107,5 +111,109 @@ describe("POST /api/events/[id]/roster (#814 unified endpoint)", () => {
     mockGetSession.mockResolvedValue(null);
     const res = await postRoster(ctx({ id: ev.id }, { userId: "u-x", asInvite: true }));
     expect(res.status).toBe(401);
+  });
+
+  it("enqueues game_full when the direct add fills the last spot", async () => {
+    const ev = await seedEventWithGame(null, undefined, 1);
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Alice" }));
+    expect(res.status).toBe(200);
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: ev.id, type: "game_full" },
+    });
+    expect(job).toBeTruthy();
+  });
+
+  it("answers 409 when the current game is cancelled", async () => {
+    const ev = await seedEventWithGame(null);
+    await prisma.game.update({
+      where: { id: ev.currentGameId },
+      data: { status: "cancelled" },
+    });
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Alice" }));
+    expect(res.status).toBe(409);
+    const player = await prisma.eventPlayer.findFirst({ where: { eventId: ev.id, name: "Alice" } });
+    expect(player).toBeNull();
+  });
+
+  it("rejects a duplicate add for an invited participant with no Player row", async () => {
+    const ev = await seedEventWithGame(null);
+    // acceptPlayerInvite creates this shape: an active GameParticipant with no
+    // legacy Player row, so the seam's Player-table P2002 check cannot see it.
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Invited" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Invited" }));
+    expect(res.status).toBe(409);
+    expect(await prisma.player.count({ where: { eventId: ev.id, name: "Invited" } })).toBe(0);
+  });
+
+  it("rejects a name-only duplicate even when a same-named account exists", async () => {
+    await seedUser("Twin", "twin@example.com");
+    const ev = await seedEventWithGame(null);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Twin" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Twin" }));
+    expect(res.status).toBe(409);
+    // The unique-name auto-link must not be read as "link this guest".
+    expect(await prisma.player.count({ where: { eventId: ev.id, name: "Twin" } })).toBe(0);
+  });
+
+  it("links an existing guest to an account instead of rejecting the re-add", async () => {
+    const guest = await seedUser("Guest", "guest-link@example.com");
+    const ev = await seedEventWithGame(null);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Guest" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "active", order: 0 },
+    });
+    const player = await prisma.player.create({ data: { eventId: ev.id, name: "Guest", order: 0 } });
+
+    const res = await postRoster(ctx({ id: ev.id }, { email: "guest-link@example.com" }));
+    expect(res.status).toBe(200);
+    const linked = await prisma.player.findUniqueOrThrow({ where: { id: player.id } });
+    expect(linked.userId).toBe(guest.id);
+  });
+
+  it("activates a pending participant on a direct add", async () => {
+    const ev = await seedEventWithGame(null);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Pending" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "pending", order: 0 },
+    });
+    await prisma.player.create({ data: { eventId: ev.id, name: "Pending", order: 0 } });
+    await prisma.eventCost.create({
+      data: { eventId: ev.id, totalAmount: 50, currency: "EUR" },
+    });
+
+    const res = await postRoster(ctx({ id: ev.id }, { name: "Pending" }));
+    expect(res.status).toBe(200);
+    const gp = await prisma.gameParticipant.findUniqueOrThrow({
+      where: { gameId_eventPlayerId: { gameId: ev.currentGameId, eventPlayerId: ep.id } },
+    });
+    expect(gp.status).toBe("active");
+    // A promoted player is on the roster and must be billed like any other add.
+    const payments = await prisma.playerPayment.count({
+      where: { eventCost: { eventId: ev.id } },
+    });
+    expect(payments).toBeGreaterThan(0);
+  });
+
+  it("links both identities when promoting a pending invite by email", async () => {
+    const user = await seedUser("Invitee", "pending-link@example.com");
+    const ev = await seedEventWithGame(null);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: "Invitee" } });
+    await prisma.gameParticipant.create({
+      data: { gameId: ev.currentGameId, eventPlayerId: ep.id, status: "pending", order: 0 },
+    });
+    const player = await prisma.player.create({ data: { eventId: ev.id, name: "Invitee", order: 0 } });
+
+    const res = await postRoster(ctx({ id: ev.id }, { email: "pending-link@example.com" }));
+    expect(res.status).toBe(200);
+    expect((await prisma.player.findUniqueOrThrow({ where: { id: player.id } })).userId).toBe(user.id);
+    expect((await prisma.eventPlayer.findUniqueOrThrow({ where: { id: ep.id } })).userId).toBe(user.id);
   });
 });
