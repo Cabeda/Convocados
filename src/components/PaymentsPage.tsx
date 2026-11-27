@@ -296,37 +296,40 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
               </ListItem>
             ))}
           </List>
-          {data.games.flatMap((g) => g.rows.filter((r) => r.eventPlayerId === data.viewerEventPlayerId && (r.status === "pending" || r.status === "sent"))).map((r) => (
-            <Stack key={`${r.eventPlayerId}-${r.name}`} direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-              <Chip
-                label={t(STATUS_LABEL[r.status] ?? "paymentsStatusPending")}
-                color={r.status === "sent" ? "warning" : "default"}
-              />
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={busy || r.status === "sent"}
-                onClick={async () => {
-                  const game = data.games.find((g2) => g2.rows.some((x) => x.eventPlayerId === r.eventPlayerId));
-                  if (!game) return;
-                  setBusy(true);
-                  try {
-                    await apiRequest("POST /api/events/{id}/payments/settlement/self-report", {
-                      params: { id: eventId },
-                      body: { gameId: game.gameId, eventPlayerId: r.eventPlayerId },
-                    });
-                    await load();
-                  } catch {
-                    setError("failed");
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {t("paymentsReportSent")}
-              </Button>
-            </Stack>
-          ))}
+          {data.games.flatMap((g) => g.rows
+            .filter((r) => r.eventPlayerId === data.viewerEventPlayerId && (r.status === "pending" || r.status === "sent"))
+            .map((r) => (
+              <Stack key={`${g.gameId}-${r.eventPlayerId}`} direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ mt: 1 }}>
+                <Chip
+                  label={`${formatShortDate(g.dateTime)} · ${formatMoney(toCents(r.amount), data.currency)}`}
+                  color={r.status === "sent" ? "warning" : "default"}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  {t(STATUS_LABEL[r.status] ?? "paymentsStatusPending")}
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={busy || r.status === "sent"}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await apiRequest("POST /api/events/{id}/payments/settlement/self-report", {
+                        params: { id: eventId },
+                        body: { gameId: g.gameId, eventPlayerId: r.eventPlayerId },
+                      });
+                      await load();
+                    } catch {
+                      setError("failed");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {t("paymentsReportSent")}
+                </Button>
+              </Stack>
+            )))}
         </Paper>
       )}
 

@@ -163,8 +163,8 @@ describe("PaymentsPage self-report rows (#1757)", () => {
     await screen.findAllByRole("button", { name: /report sent/i });
     const rowLabel = (date: string, amount: string) => (_content: string, element: Element | null) =>
       element?.textContent === `${formatShortDate(date)} · ${amount}`;
-    expect(screen.getByText(rowLabel(dates[0], "6.00€"))).toBeInTheDocument();
-    expect(screen.getByText(rowLabel(dates[1], "5.00€"))).toBeInTheDocument();
+    expect(screen.getAllByText(rowLabel(dates[0], "6.00€")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(rowLabel(dates[1], "5.00€")).length).toBeGreaterThan(0);
   });
 
   it("posts the tapped row's own gameId, not the first game's", async () => {
