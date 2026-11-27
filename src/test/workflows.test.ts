@@ -595,7 +595,7 @@ describe("a review is bounded by minutes that buy a verdict", () => {
       jobs?: Record<string, { steps?: Array<{ name?: string; "timeout-minutes"?: number }> }>;
     };
 
-  it("caps the step and cancels a superseded run", () => {
+  it("caps the step and serialises rather than cancelling", () => {
     const doc = reviewer();
     // Serialised, not cancelled: the janitor dispatches review twice per tick,
     // and cancel-in-progress let a tick kill the review it had just picked.
