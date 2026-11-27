@@ -211,7 +211,8 @@ jobs:
             and deploy config, and coverage-threshold edits as Hard Block: report, do not judge.
 
             Start from `gh pr diff <number>` and open only the files the diff names, one read
-            each. Do not survey the repository: the Change is the subject, and exploring past it
+            each. At most six reads in total, and every read must answer a question the diff
+            raised. Do not survey the repository: the Change is the subject, and exploring past it
             spends the review's minutes without changing the verdict.
 
             Do not install, build, or run anything: no `pnpm install`, `pnpm test`, `pnpm typecheck`,
