@@ -57,7 +57,9 @@ so "refused once" and "refused after three rounds" stop looking the same:
   today; most green),
 - **argue or close** — refused, with the unresolved finding quoted and how many rounds it has had,
 - **waiting on the machine** — behind base, or a red check,
-- **conflicting** — needs a human rebase or a close.
+- **conflicting** — needs a human rebase or a close,
+- **explorations** — the weekly notes (`factory/exploration-…`) waiting on review. They are two-way
+  docs Changes, so the gate lands them; they are listed apart only so they never read as stuck work.
 
 No new agent, no new label, no new App scope. The App token in `factory-merge.yml` carries
 `issues: read` on purpose (ADR 0046: the token is blast radius), so the write happens in a
@@ -115,10 +117,14 @@ in `docs/factory/README.md:166-172` gains its row in the same Change. No remedia
 agent — the ceiling ADR 0045 sets for the Sentinel.
 
 `/api/health` carries no version today, so this adds one field, baked from `package.json` at build;
-that is the only product-code edit in the proposal.
+that is the only product-code edit in the proposal, and it is test-first like any other: the
+failing assertion goes into the endpoint's own suite (`src/test/health.test.ts:42-49` already pins
+the body shape) before the field is added, and `src/test/deploy-verify.test.ts` covers the check
+that reads it.
 
 **Files.** `.github/workflows/main-ci-watch.yml`, `scripts/factory/deploy-verify.ts`,
-`src/pages/api/health.ts`, `docs/factory/README.md`, `src/test/deploy-verify.test.ts`.
+`src/pages/api/health.ts`, `src/test/health.test.ts`, `docs/factory/README.md`,
+`src/test/deploy-verify.test.ts`.
 **Door:** one-way (a new workflow).
 
 ## 4. Explorer triggers — the README already promises them
@@ -140,12 +146,28 @@ carries `issues: write` — opens `factory/exploration-<focus>-<date>` containin
 Exploration closes no Issue and `PR Links Issue` is a required check
 (`check-pr-closing-keyword.mjs:27` is the exemption).
 
+**It must not eat the cap it is meant to protect.** `openChangeCount` counts *every* `factory/`
+head (`scripts/factory/next-issue.ts:86-88`) and `pickNext` returns `null` at `MAX_OPEN_CHANGES`
+(`:97`), so an Exploration parked on `factory/exploration-…` would consume one of the 20 slots real
+work waits behind — while the arm gauge, which watches open `factory:review`, still reads
+"draining". Two consequences, both fixed here:
+
+- `openChangeCount` narrows to the Fixer's own branches, `/^factory\/\d+-/`, with a case in
+  `src/test/factory-next-issue.test.ts` proving an exploration head is not counted;
+- item 1's digest gives `factory/exploration-` heads their own line, because an Exploration waiting
+  for review is not a stuck work Change.
+
+The branch keeps the `factory/` prefix on purpose: the merge gate reads `factory/` heads
+(`factory-merge-run.ts:122`), and a docs-only Exploration is a two-way door, so the machine can land
+it without a human click.
+
 Turned on only when the published digest shows the queue draining: a repo variable arms it when open
 `factory:review` holds under `MAX_OPEN_CHANGES` for two consecutive days. Supply cannot outrun a
 queue that is already full.
 
-**Files.** `.github/workflows/factory-explore.yml`, a `FACTORY_EXPLORERS` repo variable; the Explorer
-agents stay untouched. **Door:** one-way (a new workflow).
+**Files.** `.github/workflows/factory-explore.yml`, `scripts/factory/next-issue.ts`,
+`src/test/factory-next-issue.test.ts`, a `FACTORY_EXPLORERS` repo variable. **Door:** one-way (a new
+workflow).
 
 ## Sequencing
 
