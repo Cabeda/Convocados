@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
+import type * as AuthHelpersServer from "~/lib/auth.helpers.server";
 
 const testPrisma = new PrismaClient();
 
@@ -10,17 +11,31 @@ vi.mock("~/lib/db.server", async () => {
   return { prisma: p };
 });
 
+vi.mock("~/lib/auth.helpers.server", async () => {
+  const actual = await vi.importActual<typeof AuthHelpersServer>("~/lib/auth.helpers.server");
+  return {
+    ...actual,
+    getSession: vi.fn(),
+    checkEventAdmin: vi.fn(),
+  };
+});
+
 import { GET } from "~/pages/api/events/[id]/log";
 import { logEvent } from "~/lib/eventLog.server";
+import { buildAccessCookie, hashPassword } from "~/lib/eventAccess";
+import { getSession, checkEventAdmin } from "~/lib/auth.helpers.server";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function getCtx(eventId: string, params?: Record<string, string>) {
+function getCtx(eventId: string, params?: Record<string, string>, cookie?: string) {
   const url = new URL(`http://localhost/api/events/${eventId}/log`);
   if (params) {
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   }
-  const request = new Request(url.toString(), { method: "GET" });
+  const request = new Request(url.toString(), {
+    method: "GET",
+    headers: cookie ? { cookie } : {},
+  });
   return { request, params: { id: eventId } } as any;
 }
 
@@ -38,6 +53,8 @@ async function seedEvent(overrides: Record<string, unknown> = {}) {
 beforeEach(async () => {
   await testPrisma.eventLog.deleteMany();
   await testPrisma.event.deleteMany();
+  vi.mocked(getSession).mockResolvedValue(null);
+  vi.mocked(checkEventAdmin).mockResolvedValue(false);
 });
 
 // ─── logEvent helper ────────────────────────────────────────────────────────
@@ -163,5 +180,44 @@ describe("GET /api/events/:id/log", () => {
 
     expect(body.entries).toHaveLength(1);
     expect(body.entries[0].action).toBe("player_added");
+  });
+
+  it("returns 403 for a password-locked event to an anonymous caller", async () => {
+    const event = await seedEvent({ accessPassword: hashPassword("secret") });
+    await testPrisma.eventLog.create({
+      data: {
+        eventId: event.id,
+        action: "history_cost_updated",
+        actor: "owner@example.com",
+        details: '{"newTotal":50,"newShare":5}',
+      },
+    });
+
+    const res = await GET(getCtx(event.id));
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.entries).toBeUndefined();
+  });
+
+  it("serves the log to a caller holding the event's access cookie", async () => {
+    const password = hashPassword("secret");
+    const event = await seedEvent({ accessPassword: password });
+    await testPrisma.eventLog.create({
+      data: {
+        eventId: event.id,
+        action: "history_cost_updated",
+        actor: "owner@example.com",
+        details: '{"newTotal":50,"newShare":5}',
+      },
+    });
+    const cookie = buildAccessCookie(null, event.id, password);
+
+    const res = await GET(getCtx(event.id, undefined, cookie));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.entries).toHaveLength(1);
+    expect(body.entries[0].details).toEqual({ newTotal: 50, newShare: 5 });
   });
 });
