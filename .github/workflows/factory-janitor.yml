@@ -106,6 +106,12 @@ jobs:
           tick factory-review
           tick factory-review
           tick factory-merge
+          # The answer loop was never fed from here, and its own `*/30` cron is
+          # starved on this repo: on 2026-11-27 the last scheduled tick ran at
+          # 09:50 while refusals landed at 13:16 and 14:14, so 31 refused Changes
+          # had zero rounds recorded. A refusal is only useful if something picks
+          # it up, and this is the cron that actually fires.
+          tick factory-fix
 
       - name: Housekeeping
         # The real budget. A step that times out exits non-zero, and this absorbs

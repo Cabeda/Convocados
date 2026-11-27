@@ -499,7 +499,52 @@ describe("a refused Change gets its round from the tick", () => {
     // The reviewer signs a refuse and nothing happens until the loop runs; its
     // own cron is unreliable, so the tick must be able to start it.
     const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
-    expect(raw).toContain("workflow_dispatch) pr=\"${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}\"");
+    // Both dispatch events reach the same fallback: a manual tick with no input,
+    // and the janitor's tick, which never carries a PR.
+    expect(raw).toContain(
+      'workflow_dispatch|repository_dispatch) pr="${DISPATCH_PR:-$(GITHUB_OUTPUT= node scripts/factory/next-fix.ts)}"',
+    );
+  });
+});
+
+describe("the answer loop is fed by the cron that actually fires", () => {
+  // On 2026-11-27 the loop's own `*/30` schedule last fired at 09:50. Refusals
+  // at 13:16 and 14:14 then sat with zero `factory:attempt` comments: the Fixer
+  // never took a round, so 31 refused Changes waited on a tick that never came.
+  // The janitor already stars `review` and `merge` from its `*/15`; the loop was
+  // the one role left off the list.
+  const fixLoop = () =>
+    parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      on?: unknown;
+      jobs?: Record<string, { steps?: Array<{ env?: Record<string, string>; run?: string }> }>;
+    } & Record<string, unknown>;
+
+  it("accepts a factory-fix dispatch and reads the PR it carries", () => {
+    const doc = fixLoop();
+    const trigger = (doc.on ?? doc["true"]) as {
+      repository_dispatch?: { types?: string[] };
+    };
+    expect(trigger.repository_dispatch?.types).toEqual(["factory-fix"]);
+
+    const steps = doc.jobs?.ledger?.steps ?? [];
+    const resolve = steps.find((step) => step.run?.includes("next-fix.ts"));
+    expect(resolve?.env?.DISPATCH_PR).toContain("github.event.client_payload.pr");
+    expect(resolve?.run).toContain("repository_dispatch)");
+  });
+
+  it("is ticked by the janitor, the cron that keeps its slot", () => {
+    const janitor = readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
+    expect(janitor).toContain("tick factory-fix");
+    // The tick is unconditional: an empty queue must not stop a refused Change
+    // from getting its round.
+    expect(janitor.indexOf("tick factory-fix")).toBeGreaterThan(
+      janitor.indexOf("tick factory-merge"),
+    );
+  });
+
+  it("does not gate the dispatch on a PR the tick never sends", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    expect(raw).not.toContain("github.event.client_payload.pr != null");
   });
 });
 
