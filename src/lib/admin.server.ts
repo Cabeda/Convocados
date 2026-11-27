@@ -1,5 +1,5 @@
 import { prisma } from "./db.server";
-import { getRecentJobFailures } from "./scheduler.server";
+import { getRecentJobFailures, getRecentNotificationDeadLetters } from "./scheduler.server";
 
 /**
  * Returns the configured admin emails from env as a Set.
@@ -81,9 +81,17 @@ export async function getAdminStats() {
   }
 
   // Scheduler jobs that have recorded a failure reason — retrying and
-  // dead-lettered. Admin-only (the public /api/health shows the count only, and
-  // never echoes internal error text).
-  const jobFailures = await getRecentJobFailures();
+  // dead-lettered — plus notification dead-letters, which carry no reason but
+  // are the same kind of "the app stopped telling people" signal. Admin-only
+  // (the public /api/health shows the counts only, and never echoes internal
+  // error text).
+  const [scheduledFailures, notificationDeadLetters] = await Promise.all([
+    getRecentJobFailures(),
+    getRecentNotificationDeadLetters(),
+  ]);
+  const jobFailures = [...scheduledFailures, ...notificationDeadLetters].sort(
+    (a, b) => (b.failedAt?.getTime() ?? 0) - (a.failedAt?.getTime() ?? 0),
+  );
 
   return {
     totalUsers,

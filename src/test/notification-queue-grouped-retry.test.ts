@@ -47,7 +47,7 @@ describe("grouped notification retry", () => {
   it("resets the whole collapsed batch and retries until dead-letter", async () => {
     await seedJoinedJobs();
 
-    await expect(drainNotificationQueue()).resolves.toBe(2);
+    await expect(drainNotificationQueue()).resolves.toEqual({ delivered: 0, deadLettered: 0 });
 
     const afterFirst = await prisma.notificationJob.findMany({ where: { eventId: EVENT_ID } });
     expect(afterFirst).toHaveLength(2);

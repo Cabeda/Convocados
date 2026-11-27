@@ -55,9 +55,11 @@ dead-letter row is never pruned, so the count includes fixes from long ago. Chec
 scripts/prod-query.sh "SELECT type, lastError, datetime(failedAt/1000,'unixepoch') AS dead_at FROM ScheduledJob WHERE lastError IS NOT NULL ORDER BY failedAt DESC"
 ```
 
-Admin users also see this list rendered on `/admin` (a "Scheduler job failures" table) and
-via `GET /api/admin/stats` (`jobFailures`, each flagged `deadLettered`); the public
-`/api/health` shows only the count and never echoes internal error text.
+Admin users also see this list rendered on `/admin` (a "Job failures" table) and
+via `GET /api/admin/stats` (`jobFailures`, each flagged `deadLettered`); notification
+dead-letters appear in the same list with `source: "notification"`, exposing their
+`type`, `eventId` and `failedAt` (they carry no reason — the push error is only in the
+log). The public `/api/health` shows only the counts and never echoes internal error text.
 
 ## Logs
 
@@ -119,7 +121,11 @@ health endpoint below reports the running scheduler.
 curl -s https://convocados.cabeda.dev/api/health | jq
 ```
 
-Reports DB mode/size, Litestream status, and `scheduler: { running, failedJobs }`.
+Reports DB mode/size, Litestream status, and
+`scheduler: { running, failedJobs, notificationDeadLetters }`. The two counters are
+separate on purpose: `failedJobs` reads `ScheduledJob`, `notificationDeadLetters` reads
+`NotificationJob` (a push that exhausted its retries), so a dead push cannot hide behind
+a zero scheduler count.
 `litestream.enabled` is false when `BACKUPS_ENABLED=false`; that is an explicit
 no-off-host-backup posture, not a replication failure, and health does not mark it
 degraded for it. The app reads the normalized `BACKUPS_ENABLED_NORMALIZED` /

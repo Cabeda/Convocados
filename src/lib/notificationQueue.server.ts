@@ -157,10 +157,19 @@ function groupPlayerActivityJobs(jobs: Array<{ id: string; eventId: string; type
  * After the running drain finishes, we do one more pass to pick up any jobs
  * that were enqueued while the drain was in progress.
  */
-let _drainInFlight: Promise<number> | null = null;
+let _drainInFlight: Promise<DrainResult> | null = null;
 let _drainAgain = false;
 
-export function drainNotificationQueue(): Promise<number> {
+/** What one drain actually did, split so a fully dead-lettered batch cannot
+ * report the same "drained" number as a clean one (#1775). */
+export interface DrainResult {
+  /** Jobs whose notification was delivered this drain. */
+  delivered: number;
+  /** Jobs that exhausted their retries and were dead-lettered this drain. */
+  deadLettered: number;
+}
+
+export function drainNotificationQueue(): Promise<DrainResult> {
   if (_drainInFlight) {
     // A drain is already running — flag that we need another pass when it finishes
     _drainAgain = true;
@@ -173,7 +182,10 @@ export function drainNotificationQueue(): Promise<number> {
       if (_drainAgain) {
         _drainAgain = false;
         const extra = await _doDrain();
-        return count + extra;
+        return {
+          delivered: count.delivered + extra.delivered,
+          deadLettered: count.deadLettered + extra.deadLettered,
+        };
       }
       return count;
     })
@@ -238,7 +250,7 @@ async function claimBatchOrNull() {
   }
 }
 
-async function _doDrain(): Promise<number> {
+async function _doDrain(): Promise<DrainResult> {
   // Lazy import to avoid circular dependency
   const { sendPushToEvent } = await import("./push.server");
 
@@ -249,7 +261,8 @@ async function _doDrain(): Promise<number> {
     .catch((err: unknown) => log.error({ err }, "Failed to prune dead-letter jobs"));
 
   const limit = pLimit(JOB_CONCURRENCY);
-  let totalProcessed = 0;
+  let delivered = 0;
+  let deadLettered = 0;
 
   while (true) {
     // Atomically claim a batch inside a transaction.
@@ -261,7 +274,7 @@ async function _doDrain(): Promise<number> {
     // pending, and the next drain takes them. Throwing here instead failed the
     // *caller's* job — a reminder dead-lettered because a concurrent drain was
     // writing (#1346). Ending the pass is the whole recovery.
-    if (jobs === null) return totalProcessed;
+    if (jobs === null) return { delivered, deadLettered };
     if (jobs.length === 0) break;
 
     const { grouped, individual } = groupPlayerActivityJobs(jobs);
@@ -287,6 +300,7 @@ async function _doDrain(): Promise<number> {
               audience,
             );
             await createInAppNotifications(audience, group.type, group.payload);
+            delivered += group.jobs.length;
           } catch (err: unknown) {
             log.error({ eventId: group.eventId, err }, "Failed to process grouped notification");
             // Spend the same retry budget as the individual branch: a failed
@@ -298,6 +312,7 @@ async function _doDrain(): Promise<number> {
                 await prisma.notificationJob
                   .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null } })
                   .catch(() => {});
+                deadLettered += 1;
               } else {
                 await prisma.notificationJob
                   .update({ where: { id: job.id }, data: { processedAt: null, retryCount: nextRetry } })
@@ -335,6 +350,7 @@ async function _doDrain(): Promise<number> {
               audience,
             );
             await createInAppNotifications(audience, type, payload);
+            delivered += 1;
           } catch (err: unknown) {
             log.error({ jobId: job.id, eventId: job.eventId, type: job.type, err }, "Failed to process notification job");
             const nextRetry = job.retryCount + 1;
@@ -342,6 +358,7 @@ async function _doDrain(): Promise<number> {
               await prisma.notificationJob
                 .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null } })
                 .catch(() => {});
+              deadLettered += 1;
               log.error({ jobId: job.id }, "Notification job moved to dead-letter after max retries");
             } else {
               await prisma.notificationJob
@@ -353,11 +370,10 @@ async function _doDrain(): Promise<number> {
       ),
     );
 
-    totalProcessed += jobs.length;
     if (jobs.length < BATCH_SIZE) break;
   }
 
-  return totalProcessed;
+  return { delivered, deadLettered };
 }
 
 /**

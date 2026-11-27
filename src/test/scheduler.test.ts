@@ -347,7 +347,7 @@ describe("processJob", () => {
 
     // Make enqueue succeed but email send fail
     vi.mocked(notificationQueue.enqueueNotification).mockResolvedValueOnce(undefined);
-    vi.mocked(notificationQueue.drainNotificationQueue).mockResolvedValueOnce(0);
+    vi.mocked(notificationQueue.drainNotificationQueue).mockResolvedValueOnce({ delivered: 0, deadLettered: 0 });
 
     const { sendReminder } = await vi.importMock("~/lib/email.server");
     vi.mocked(sendReminder as any).mockRejectedValueOnce(new Error("SMTP error"));

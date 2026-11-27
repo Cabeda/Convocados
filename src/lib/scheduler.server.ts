@@ -159,7 +159,38 @@ export async function getRecentJobFailures(limit = 50) {
       lastError: true,
     },
   });
-  return rows.map((r) => ({ ...r, deadLettered: r.failedAt !== null }));
+  return rows.map((r) => ({ ...r, deadLettered: r.failedAt !== null, source: "scheduled" as const }));
+}
+
+/** NotificationJob dead-letters inside the same window — surfaced via /api/health
+ * beside scheduler.failedJobs. A push that exhausted its retries is the queue
+ * `delivered` cannot see, so it needs its own readout (#1775). */
+export async function countNotificationDeadLetters(now: Date = new Date()): Promise<number> {
+  const since = new Date(now.getTime() - FAILED_JOB_WINDOW_HOURS * 3_600_000);
+  return prisma.notificationJob.count({ where: { failedAt: { gte: since } } });
+}
+
+/** Notification dead-letters, newest first — the admin failure table's rows.
+ * Only dead-letters are listed: unlike ScheduledJob, a retrying NotificationJob
+ * carries no reason to show (the push error goes to the log, not the row). */
+export async function getRecentNotificationDeadLetters(limit = 50) {
+  const rows = await prisma.notificationJob.findMany({
+    where: { failedAt: { not: null } },
+    orderBy: { failedAt: "desc" },
+    take: limit,
+    select: { id: true, type: true, eventId: true, retryCount: true, failedAt: true },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    eventId: r.eventId,
+    runAt: r.failedAt as Date,
+    retryCount: r.retryCount,
+    failedAt: r.failedAt,
+    lastError: null,
+    deadLettered: true,
+    source: "notification" as const,
+  }));
 }
 
 /**

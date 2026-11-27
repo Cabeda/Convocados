@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { promises as fs } from "node:fs";
 import { prisma, prismaReady } from "../../lib/db.server";
-import { SCHEDULER_HEARTBEAT_ID, countFailedJobs } from "../../lib/scheduler.server";
+import { SCHEDULER_HEARTBEAT_ID, countFailedJobs, countNotificationDeadLetters } from "../../lib/scheduler.server";
 import { createLogger } from "../../lib/logger.server";
 
 const log = createLogger("health");
@@ -209,8 +209,13 @@ export const GET: APIRoute = async () => {
         !!heartbeat && Date.now() - heartbeat.lastSeenAt.getTime() < SCHEDULER_STALE_MS;
       // Dead-lettered jobs (retry exhausted) are reported for visibility but
       // don't degrade health: they need human attention, not an instance kill.
-      const failedJobs = await countFailedJobs();
-      response.scheduler = { running: schedulerRunning, failedJobs };
+      // NotificationJob has its own outbox and its own dead-letter counter, so
+      // a push that exhausted retries cannot hide behind failedJobs = 0.
+      const [failedJobs, notificationDeadLetters] = await Promise.all([
+        countFailedJobs(),
+        countNotificationDeadLetters(),
+      ]);
+      response.scheduler = { running: schedulerRunning, failedJobs, notificationDeadLetters };
       if (!schedulerRunning) {
         response.degraded = true;
       }

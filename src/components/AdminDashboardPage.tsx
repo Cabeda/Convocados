@@ -51,6 +51,7 @@ interface JobFailure {
   failedAt: string | null;
   lastError: string | null;
   deadLettered: boolean;
+  source: "scheduled" | "notification";
 }
 
 interface UserRow {
@@ -415,8 +416,9 @@ export default function AdminDashboardPage() {
                 <GrowthChart growthData={growthData} growthRange={growthRange} setGrowthRange={setGrowthRange} loadingGrowth={loadingGrowth} />
 
                 {/* Scheduler job failures — retrying (recoverable) and dead-lettered,
-                    with the recorded reason. Persisted on the row precisely so this
-                    is visible without production DB access. */}
+                    with the recorded reason — and notification dead-letters, which
+                    record no reason but still mean the app stopped telling people.
+                    Both are visible here without production DB access. */}
                 {stats.jobFailures.length > 0 && (
                   <Paper elevation={1} sx={{ p: 3 }}>
                     <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminJobFailures")}</Typography>
@@ -425,14 +427,20 @@ export default function AdminDashboardPage() {
                         <TableHead>
                           <TableRow>
                             <TableCell>{t("adminJobType")}</TableCell>
+                            <TableCell>{t("adminJobEvent")}</TableCell>
+                            <TableCell>{t("adminJobFailedAt")}</TableCell>
                             <TableCell>{t("adminJobStatus")}</TableCell>
                             <TableCell>{t("adminJobLastError")}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {stats.jobFailures.map((f) => (
-                            <TableRow key={f.id}>
+                            <TableRow key={`${f.source}-${f.id}`}>
                               <TableCell>{f.type}</TableCell>
+                              <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{f.eventId ?? "—"}</TableCell>
+                              <TableCell sx={{ whiteSpace: "nowrap", fontSize: 12 }}>
+                                {f.failedAt ? new Date(f.failedAt).toISOString().replace("T", " ").slice(0, 16) : "—"}
+                              </TableCell>
                               <TableCell>
                                 <Chip
                                   size="small"
@@ -445,7 +453,7 @@ export default function AdminDashboardPage() {
                                 />
                               </TableCell>
                               <TableCell sx={{ fontFamily: "monospace", fontSize: 12, maxWidth: 480, overflowWrap: "anywhere" }}>
-                                {f.lastError}
+                                {f.lastError ?? "—"}
                               </TableCell>
                             </TableRow>
                           ))}

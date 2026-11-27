@@ -358,8 +358,11 @@ export const POST: APIRoute = async ({ request }) => {
   // Drain the notification job queue — must happen before marking reminders sent
   // so that if the cron is killed mid-run, reminders are not marked sent without push delivery
   let notificationJobsDrained = 0;
+  let notificationJobsDeadLettered = 0;
   try {
-    notificationJobsDrained = await drainNotificationQueue();
+    const drained = await drainNotificationQueue();
+    notificationJobsDrained = drained.delivered;
+    notificationJobsDeadLettered = drained.deadLettered;
   } catch (err) {
     log.error({ err }, "Failed to drain notification queue");
   }
@@ -397,7 +400,7 @@ export const POST: APIRoute = async ({ request }) => {
   ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, emailFailures, paymentRemindersSent, paymentEscalation, payerCheckIns, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
+    JSON.stringify({ ok: true, sent, emailFailures, paymentRemindersSent, paymentEscalation, payerCheckIns, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, notificationJobsDeadLettered, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
     { headers: { "Content-Type": "application/json" } },
   );
 };

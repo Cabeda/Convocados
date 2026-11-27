@@ -417,7 +417,7 @@ describe("GET /api/health", () => {
       const res = await GET(ctx());
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.scheduler).toEqual({ running: true, failedJobs: 0 });
+      expect(body.scheduler).toEqual({ running: true, failedJobs: 0, notificationDeadLetters: 0 });
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
     }
@@ -444,7 +444,7 @@ describe("GET /api/health", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       // Dead letters don't fail the health check, but they must be visible.
-      expect(body.scheduler).toEqual({ running: true, failedJobs: 1 });
+      expect(body.scheduler).toEqual({ running: true, failedJobs: 1, notificationDeadLetters: 0 });
       expect(body.status).toBe("ok");
       // This test runs without a Litestream daemon, so `degraded` is set for
       // that separate reason; dead letters themselves never degrade health.
@@ -469,7 +469,7 @@ describe("GET /api/health", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.status).toBe("ok");
-      expect(body.scheduler).toEqual({ running: false, failedJobs: 0 });
+      expect(body.scheduler).toEqual({ running: false, failedJobs: 0, notificationDeadLetters: 0 });
       expect(body.degraded).toBe(true);
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
@@ -484,7 +484,7 @@ describe("GET /api/health", () => {
       const res = await GET(ctx());
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.scheduler).toEqual({ running: false, failedJobs: 0 });
+      expect(body.scheduler).toEqual({ running: false, failedJobs: 0, notificationDeadLetters: 0 });
       expect(body.degraded).toBe(true);
     } finally {
       process.env.NODE_ENV = oldNodeEnv;

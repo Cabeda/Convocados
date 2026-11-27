@@ -44,7 +44,7 @@ describe("drainNotificationQueue under a busy database (#1346)", () => {
     const busy = new Error("SQLITE_BUSY: database is locked");
     const txSpy = vi.spyOn(prisma, "$transaction").mockRejectedValueOnce(busy);
 
-    await expect(drainNotificationQueue()).resolves.toBe(0);
+    await expect(drainNotificationQueue()).resolves.toEqual({ delivered: 0, deadLettered: 0 });
     expect(txSpy).toHaveBeenCalled();
 
     // Nothing was claimed, so nothing was lost.
@@ -55,7 +55,7 @@ describe("drainNotificationQueue under a busy database (#1346)", () => {
 
     // The next drain takes it — the retry is the next call, not a dead letter.
     txSpy.mockRestore();
-    await expect(drainNotificationQueue()).resolves.toBe(1);
+    await expect(drainNotificationQueue()).resolves.toEqual({ delivered: 1, deadLettered: 0 });
     const after = await prisma.notificationJob.findMany({ where: { eventId: EVENT_ID } });
     expect(after[0].processedAt).not.toBeNull();
   });
