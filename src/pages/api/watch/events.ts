@@ -1,6 +1,9 @@
 import type { APIRoute } from "astro";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/db.server";
-import { getSession, checkOwnership } from "../../../lib/auth.helpers.server";
+import { getSession, checkOwnership, checkEventAdmin } from "../../../lib/auth.helpers.server";
+import { checkAccess } from "../../../lib/eventAccess";
+import { discoverableUpcomingWhere } from "../../../lib/discoverableEvents.server";
 import { getScoringType, parseScoreSets } from "../../../lib/scoring";
 
 /** How many minutes before/after the event dateTime we consider it "happening now" */
@@ -119,7 +122,8 @@ export const POST: APIRoute = async ({ request }) => {
  * Returns today's events that have teams assigned, with current scores.
  *
  * For logged-in users: filters to events where the user is a player.
- * For anonymous users: returns all today's events with teams.
+ * For anonymous users: returns only discoverable (public, unlocked) Events, and
+ * omits scores — never a password-locked Event or its roster.
  *
  * Response includes `autoSelectId` — the event to auto-navigate to when:
  *   - There is exactly one event, OR
@@ -131,7 +135,7 @@ export const GET: APIRoute = async ({ request }) => {
 
   // If eventId is provided, return just that event's data
   if (eventId) {
-    return getSingleEvent(eventId);
+    return getSingleEvent(request, eventId);
   }
 
   const session = await getSession(request);
@@ -142,15 +146,22 @@ export const GET: APIRoute = async ({ request }) => {
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
 
-  const where: Record<string, unknown> = {
-    dateTime: { gte: startOfDay, lte: endOfDay },
-    archivedAt: null,
-  };
-
-  // For logged-in users, only show events they participate in
-  if (userId) {
-    where.players = { some: { userId } };
-  }
+  // Anonymous callers only see Discoverable Events — the same filter the public
+  // listing uses — and never a password-locked one. Signed-in callers keep the
+  // events they participate in, including locked ones they already joined.
+  const where: Prisma.EventWhereInput = userId
+    ? {
+        dateTime: { gte: startOfDay, lte: endOfDay },
+        archivedAt: null,
+        players: { some: { userId } },
+      }
+    : {
+        AND: [
+          discoverableUpcomingWhere(),
+          { accessPassword: null },
+          { dateTime: { gte: startOfDay, lte: endOfDay } },
+        ],
+      };
 
   const events = await prisma.event.findMany({
     where,
@@ -162,7 +173,7 @@ export const GET: APIRoute = async ({ request }) => {
       teamOneName: true,
       teamTwoName: true,
       teamResults: {
-        select: { id: true, name: true, members: { select: { name: true } } },
+        select: { id: true, name: true },
       },
       history: {
         where: {
@@ -199,7 +210,9 @@ export const GET: APIRoute = async ({ request }) => {
       hasTeams,
       isHappeningNow: diff <= HAPPENING_WINDOW_MS,
       hasHistory: e.history.length > 0,
-      latestGame: e.history[0]
+      // Anonymous callers get no score: the payload is only for a signed-in
+      // watch that already has access to the Event.
+      latestGame: userId && e.history[0]
         ? {
             id: e.history[0].id,
             scoreOne: e.history[0].scoreOne,
@@ -228,7 +241,7 @@ export const GET: APIRoute = async ({ request }) => {
   return Response.json({ events: mapped, autoSelectId });
 };
 
-async function getSingleEvent(eventId: string) {
+async function getSingleEvent(request: Request, eventId: string) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: {
@@ -238,8 +251,10 @@ async function getSingleEvent(eventId: string) {
       dateTime: true,
       teamOneName: true,
       teamTwoName: true,
+      ownerId: true,
+      accessPassword: true,
       teamResults: {
-        select: { id: true, name: true, members: { select: { name: true } } },
+        select: { id: true, name: true },
       },
       history: {
         where: { status: "played" },
@@ -259,6 +274,32 @@ async function getSingleEvent(eventId: string) {
 
   if (!event) {
     return Response.json({ error: "Event not found" }, { status: 404 });
+  }
+
+  // Match GET /api/events/{id}: a password-locked Event answers locked instead
+  // of serving its roster and score to a caller without access.
+  if (event.accessPassword) {
+    const session = await getSession(request);
+    const isInvited = session?.user
+      ? (await prisma.eventInvite.count({ where: { eventId: event.id, userId: session.user.id } })) > 0
+      : false;
+    const isEventAdmin = session?.user
+      ? await checkEventAdmin(event.id, session.user.id)
+      : false;
+    const access = checkAccess({
+      eventOwnerId: event.ownerId,
+      accessPassword: event.accessPassword,
+      requestUserId: session?.user?.id ?? null,
+      cookieHeader: request.headers.get("cookie"),
+      eventId: event.id,
+      isInvited: isInvited || isEventAdmin,
+    });
+    if (!access.granted) {
+      return Response.json(
+        { locked: true, id: event.id, title: event.title, hasPassword: true },
+        { status: 403 },
+      );
+    }
   }
 
   const now = Date.now();

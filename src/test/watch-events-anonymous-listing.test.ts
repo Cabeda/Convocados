@@ -109,6 +109,26 @@ describe("GET /api/watch/events anonymous access (#1777)", () => {
     expect(openRow.latestGame).toBeNull();
   });
 
+  it("keeps the roster score for a signed-in player's own Event", async () => {
+    const owner = await seedUser("watch-anon-owner-3");
+    const player = await seedUser("watch-signed-in-player");
+    const kickoff = new Date(Date.now() + HOUR);
+    const mine = await seedEvent({ title: "My Game", dateTime: kickoff, ownerId: owner.id });
+    await seedEvent({ title: "Someone Else", dateTime: kickoff, ownerId: owner.id });
+    await prisma.player.create({
+      data: { name: "Me", eventId: mine.id, userId: player.id },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: player.id } });
+
+    const res = await GET(ctx("http://localhost/api/watch/events"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const ids = body.events.map((e: { id: string }) => e.id);
+
+    expect(ids).toEqual([mine.id]);
+    expect(body.events[0].latestGame).toMatchObject({ scoreOne: 3, scoreTwo: 1 });
+  });
+
   it("answers 403 locked for ?eventId= on a password-locked Event", async () => {
     const owner = await seedUser("watch-anon-owner-2");
     const locked = await seedEvent({
