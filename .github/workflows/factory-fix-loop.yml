@@ -196,7 +196,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # The action refuses a token without write scope, so this one can
           # write; the push itself still happens in a different job, after this
@@ -314,7 +314,7 @@ jobs:
         id: push-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # contents to push the factory/* branch, issues to post the round's
           # reply. No pull-requests write: a round reads findings, it does not

@@ -529,3 +529,31 @@ describe("a tick can start the round the Reviewer just refused", () => {
     expect(trigger.workflow_dispatch?.inputs?.pr?.required).toBe(false);
   });
 });
+
+describe("every App token is minted under the input v3 keeps", () => {
+  // #1875 renamed one workflow; the other eight sat on `app-id:` until a human
+  // noticed. v3 accepts both and deprecates the old name, so nothing goes red —
+  // and when v4 drops it every factory role silently stops minting a token.
+  const files = () => readdirSync(workflowsDir).filter((f) => f.endsWith(".yml"));
+
+  it("never uses the deprecated app-id input", () => {
+    for (const file of files()) {
+      const raw = readFileSync(join(workflowsDir, file), "utf8");
+      expect(/\n\s+app-id:/.test(raw), `${file} uses app-id:`).toBe(false);
+    }
+  });
+
+  it("gives every create-github-app-token@v3 step a client-id", () => {
+    for (const file of files()) {
+      const doc = parse(readFileSync(join(workflowsDir, file), "utf8")) as {
+        jobs?: Record<string, { steps?: Array<{ uses?: string; with?: Record<string, unknown> }> }>;
+      };
+      for (const [name, job] of Object.entries(doc.jobs ?? {})) {
+        for (const step of job.steps ?? []) {
+          if (!/actions\/create-github-app-token@v3/.test(step.uses ?? "")) continue;
+          expect(step.with?.["client-id"], `${file} ${name}: token step without client-id`).toBeDefined();
+        }
+      }
+    }
+  });
+});

@@ -62,7 +62,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # Read the code, comment on Changes, file Issues. Nothing else: the
           # Sweeper's whole authority is observation plus one Issue per stuck
