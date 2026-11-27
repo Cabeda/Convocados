@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
-import { GET } from "~/pages/api/health";
+import { GET, resetHealthProvenanceLog } from "~/pages/api/health";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
@@ -34,6 +34,7 @@ beforeEach(async () => {
   await prisma.user.deleteMany();
   resetRateLimitStore();
   resetApiRateLimitStore();
+  resetHealthProvenanceLog();
 });
 
 function ctx() {
@@ -122,6 +123,41 @@ describe("GET /api/health", () => {
     // Health is polled every few seconds; the unknown shape is logged once.
     await GET(ctx());
     expect(logWarn).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a null migration timestamp as unknown provenance, not healthy", async () => {
+    // Production reports MIN(started_at) = NULL: an empty _prisma_migrations
+    // history is the shape a lost volume leaves, and the column itself is NOT
+    // NULL so there is no row to seed. The Events-free database must be
+    // distinguishable from a healthy one, or the recreated-database alarm stays
+    // unreachable in the only case it exists for.
+    const realQuery = prisma.$queryRawUnsafe.bind(prisma);
+    const querySpy = vi.spyOn(prisma, "$queryRawUnsafe").mockImplementation(((
+      query: string,
+      ...args: unknown[]
+    ) =>
+      typeof query === "string" && query.includes("MIN(started_at)")
+        ? Promise.resolve([{ oldestMigrationAt: null }])
+        : realQuery(query, ...args)) as typeof prisma.$queryRawUnsafe);
+
+    try {
+      const res = await GET(ctx());
+      const body = await res.json();
+      expect(body.db.oldestMigrationAt).toBeNull();
+      expect(body.db.createdThisBoot).toBe(false);
+      expect(body.db.provenance).toBe("unknown");
+      expect(body.degraded).toBe(true);
+      expect(logWarn).toHaveBeenCalledWith(
+        expect.objectContaining({ rawOldestMigrationAt: null }),
+        expect.stringContaining("_prisma_migrations"),
+      );
+
+      // Health is polled every few seconds; the null shape is logged once.
+      await GET(ctx());
+      expect(logWarn).toHaveBeenCalledTimes(1);
+    } finally {
+      querySpy.mockRestore();
+    }
   });
 
   it("degrades an empty database whose migration is under an hour old", async () => {

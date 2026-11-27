@@ -10,6 +10,11 @@ const log = createLogger("health");
  * reporting once per boot, not on every poll. */
 let loggedUnreadableMigration = false;
 
+/** Test-only hook: the once-per-boot flag survives between cases in a file. */
+export function resetHealthProvenanceLog(): void {
+  loggedUnreadableMigration = false;
+}
+
 /** Scheduler polls every 5–30s; anything older than 3min means it's down.
  * (3min tolerates maintenance timeouts + rotating deploys without false alarms.) */
 const SCHEDULER_STALE_MS = 3 * 60 * 1000;
