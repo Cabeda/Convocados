@@ -10,6 +10,9 @@ vi.mock("~/lib/eventLog.server", () => ({
 
 beforeEach(async () => {
   await prisma.paymentReminderLog.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -18,6 +21,23 @@ beforeEach(async () => {
   await prisma.user.deleteMany();
   resetApiRateLimitStore();
 });
+
+/** Durable debt source for the email reader: the occurrence Game's roll. */
+async function seedGameDebt(
+  eventId: string,
+  name: string,
+  userId: string | null,
+  amount: number,
+  status: string,
+  dateTime: Date,
+) {
+  const game = await prisma.game.create({ data: { eventId, dateTime, status: "played" } });
+  await prisma.event.update({ where: { id: eventId }, data: { currentGameId: game.id } });
+  const eventPlayer = await prisma.eventPlayer.create({ data: { eventId, name, userId } });
+  await prisma.gamePayment.create({
+    data: { gameId: game.id, eventPlayerId: eventPlayer.id, playerName: name, amount, status },
+  });
+}
 
 describe("syncPaymentsForEvent — owner auto-paid", () => {
   it("marks owner's payment as paid on creation", async () => {
@@ -86,6 +106,7 @@ describe("getPlayersWithPendingPayments — timing", () => {
     await prisma.playerPayment.create({
       data: { eventCostId: cost.id, playerName: "José", amount: 5, status: "pending" },
     });
+    await seedGameDebt(event.id, "José", user.id, 5, "pending", futureDate);
 
     const results = await getPlayersWithPendingPayments();
     expect(results).toHaveLength(0);
@@ -104,6 +125,7 @@ describe("getPlayersWithPendingPayments — timing", () => {
     await prisma.playerPayment.create({
       data: { eventCostId: cost.id, playerName: "José", amount: 5, status: "pending" },
     });
+    await seedGameDebt(event.id, "José", user.id, 5, "pending", pastDate);
 
     const results = await getPlayersWithPendingPayments();
     expect(results).toHaveLength(1);

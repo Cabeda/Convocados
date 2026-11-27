@@ -1,4 +1,5 @@
 import { prisma } from "./db.server";
+import { findEndedEventsWithDebt } from "./paymentDebt.server";
 
 export interface PendingPaymentPlayer {
   eventId: string;
@@ -12,68 +13,40 @@ export interface PendingPaymentPlayer {
 
 /**
  * Find all authenticated players with pending payments for games that have been played.
- * Only fires after the game's dateTime + duration has passed (not before the game).
+ * Only fires after the game's own dateTime + duration has passed (not before the game),
+ * so a recurring reset cannot hide the occurrence the group just played.
  * Only returns players linked to a user account (userId != null) with a verified email.
  */
 export async function getPlayersWithPendingPayments(): Promise<PendingPaymentPlayer[]> {
-  const now = new Date();
+  const events = await findEndedEventsWithDebt();
+  if (events.length === 0) return [];
 
-  // Find events that have pending payments AND whose game time has already passed
-  const eventCosts = await prisma.eventCost.findMany({
-    where: {
-      payments: { some: { status: "pending" } },
-      event: {
-        dateTime: { lt: now }, // game started before now (duration handled below)
-        archivedAt: null,
-      },
-    },
-    include: {
-      event: { select: { id: true, title: true, dateTime: true, durationMinutes: true, history: { select: { status: true }, orderBy: { dateTime: "desc" }, take: 1 } } },
-      payments: {
-        where: { status: "pending" },
-      },
-    },
-  });
-
-  const results: PendingPaymentPlayer[] = [];
-
-  for (const ec of eventCosts) {
-    // Only remind after the game has ended (dateTime + duration)
-    const gameEnd = new Date(ec.event.dateTime.getTime() + ec.event.durationMinutes * 60_000);
-    if (now < gameEnd) continue;
-
-    // Skip if the latest history entry is cancelled (game didn't happen)
-    const latestHistory = ec.event.history[0];
-    if (latestHistory?.status === "cancelled") continue;
-
-    for (const payment of ec.payments) {
-      // Find the player record to get the userId
-      const player = await prisma.player.findFirst({
-        where: {
-          eventId: ec.eventId,
-          name: payment.playerName,
-          userId: { not: null },
-        },
-        include: {
-          user: { select: { email: true, emailVerified: true } },
-        },
-      });
-
-      if (!player?.userId || !player.user?.email || !player.user.emailVerified) continue;
-
-      results.push({
-        eventId: ec.eventId,
-        eventTitle: ec.event.title,
-        userId: player.userId,
-        email: player.user.email,
+  const debts = events.flatMap((event) =>
+    event.payments
+      .filter((payment) => payment.status !== "paid" && payment.eventPlayer?.userId)
+      .map((payment) => ({
+        eventId: event.id,
+        eventTitle: event.title,
+        userId: payment.eventPlayer!.userId!,
+        email: "",
         playerName: payment.playerName,
         amount: payment.amount,
-        currency: ec.currency,
-      });
-    }
-  }
+        currency: event.currency,
+      })),
+  );
 
-  return results;
+  const userIds = [...new Set(debts.map((d) => d.userId))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, email: true, emailVerified: true },
+  });
+  const usersById = new Map(users.map((u) => [u.id, u]));
+
+  return debts.flatMap((debt) => {
+    const user = usersById.get(debt.userId);
+    if (!user?.email || !user.emailVerified) return [];
+    return [{ ...debt, email: user.email }];
+  });
 }
 
 /**

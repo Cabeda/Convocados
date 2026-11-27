@@ -10,13 +10,14 @@
  * ponytail: simple time-based progression, no state machine. Upgrade path: per-event
  * escalation timing config if groups want faster/slower cadence.
  *
- * Debt discovery reads the occurrence Game's GamePayment roll (ADR 0016) —
- * the legacy EventCost/PlayerPayment join is gone (retarget: 5rhgs71k).
+ * Debt discovery reads the occurrence Game's GamePayment roll (ADR 0016) via
+ * findEndedEventsWithDebt — the legacy EventCost/PlayerPayment join is gone
+ * (retarget: 5rhgs71k).
  */
 import { prisma } from "./db.server";
 import { sendPushToUser } from "./push.server";
 import { getNotificationPrefs, wantsPaymentReminderPush } from "./notificationPrefs.server";
-import { effectiveGameCost } from "./settlement.server";
+import { findEndedEventsWithDebt } from "./paymentDebt.server";
 import { fireWebhooks } from "./webhook.server";
 import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 import { createLogger } from "./logger.server";
@@ -45,62 +46,20 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
   const now = new Date();
   const result: EscalationResult = { stage1Sent: [], stage2Sent: [], stage3Sent: [], organizerAlerts: [] };
 
-  // Events whose occurrence has ended and still has an occurrence Game —
-  // unsettled rows are loaded from GamePayment in a second pass (Event has no
-  // currentGame relation, only currentGameId).
-  const candidateEvents = await prisma.event.findMany({
-    where: {
-      dateTime: { lt: now },
-      currentGameId: { not: null },
-      archivedAt: null,
-    },
-    select: {
-      id: true,
-      title: true,
-      dateTime: true,
-      durationMinutes: true,
-      ownerId: true,
-      currentGameId: true,
-      showDebtorNames: true,
-    },
-  });
-  const candidateGameIds = candidateEvents
-    .map((e) => e.currentGameId)
-    .filter((id): id is string => id !== null);
-  const gamesById = new Map(
-    (await prisma.game.findMany({
-      where: {
-        id: { in: candidateGameIds },
-        status: { not: "cancelled" },
-        payments: { some: { status: { in: ["pending", "sent"] }, archivedAt: null } },
-      },
-      select: {
-        id: true,
-        payments: {
-          where: { archivedAt: null },
-          select: {
-            status: true,
-            amount: true,
-            playerName: true,
-            eventPlayer: { select: { userId: true } },
-          },
-        },
-      },
-    })).map((g) => [g.id, g] as const),
-  );
-
-  const openEvents = candidateEvents.filter(
-    (e) => e.currentGameId !== null && gamesById.has(e.currentGameId),
-  );
+  // Ended occurrence Games that still owe, grouped per Event. `dateTime` and
+  // `currentGameId` point at the oldest ended occurrence, so a recurring reset
+  // cannot hide the Game the group just played behind the next one.
+  const openEvents = await findEndedEventsWithDebt(now);
+  const owingEventIds = new Set(openEvents.map((e) => e.id));
 
   for (const event of openEvents) {
     if (!event.currentGameId) continue;
     const gameEnd = new Date(event.dateTime.getTime() + event.durationMinutes * 60_000);
     if (now < gameEnd) continue;
     const hoursSinceEnd = (now.getTime() - gameEnd.getTime()) / (60 * 60 * 1000);
-    const gamePayments = gamesById.get(event.currentGameId)?.payments ?? [];
+    const gamePayments = event.payments;
     // Per-Game override → EventCost template → EUR (settlement's rule).
-    const currency = (await effectiveGameCost(event.currentGameId, event.id)).currency;
+    const currency = event.currency;
     // Where the money goes, resolved once per event (ADR 0055) so every nudge
     // in this run names the same account the announcement did.
     const { methods: paymentMethods } = await resolvePaymentDetails(event.id, event.currentGameId);
@@ -224,28 +183,13 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     }
   }
 
-  // Sweep trackers for events with no remaining unsettled payment at all.
+  // Sweep trackers for events with no remaining unsettled occurrence debt.
   // Such events never enter the loop above, so without this their trackers
-  // would linger after the debt is fully settled.
-  const trackedEventIds = await prisma.paymentNudgeStage
-    .findMany({ select: { eventId: true } })
-    .then((rows) => [...new Set(rows.map((r) => r.eventId))])
-    .catch(() => [] as string[]);
-  for (const eventId of trackedEventIds) {
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { currentGameId: true },
-    }).catch(() => null);
-    let stillOwing = false;
-    if (event?.currentGameId) {
-      stillOwing = (await prisma.gamePayment.count({
-        where: { gameId: event.currentGameId, status: { in: ["pending", "sent"] }, archivedAt: null },
-      }).catch(() => 0)) > 0;
-    }
-    if (!stillOwing) {
-      await prisma.paymentNudgeStage.deleteMany({ where: { eventId } }).catch(() => {});
-    }
-  }
+  // would linger after the debt is fully settled. With no owing events at all,
+  // every tracker is stale.
+  await prisma.paymentNudgeStage.deleteMany({
+    where: owingEventIds.size > 0 ? { eventId: { notIn: [...owingEventIds] } } : {},
+  }).catch(() => {});
 
   return result;
 }

@@ -72,7 +72,28 @@ async function seedGameHistory(eventId: string, id = "gh-pay-1") {
   return id;
 }
 
-async function seedCostAndPayment(eventId: string, playerName: string, status = "pending") {
+async function seedCostAndPayment(
+  eventId: string,
+  playerName: string,
+  status = "pending",
+  gameStatus = "played",
+) {
+  const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
+  const player = await prisma.player.findFirst({ where: { eventId, name: playerName } });
+  const game = await prisma.game.create({
+    data: { eventId, dateTime: event.dateTime, status: gameStatus },
+  });
+  await prisma.event.update({ where: { id: eventId }, data: { currentGameId: game.id } });
+  const eventPlayer = await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId, name: playerName } },
+    create: { eventId, name: playerName, userId: player?.userId ?? null },
+    update: { userId: player?.userId ?? null },
+  });
+  await prisma.gamePayment.upsert({
+    where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: eventPlayer.id } },
+    update: { amount: 5, status },
+    create: { gameId: game.id, eventPlayerId: eventPlayer.id, playerName, amount: 5, status },
+  });
   const eventCost = await prisma.eventCost.upsert({
     where: { eventId },
     update: {},
@@ -97,6 +118,9 @@ async function seedPlayer(eventId: string, name: string, userId: string | null =
 beforeEach(async () => {
   vi.clearAllMocks();
   await prisma.paymentReminderLog.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -218,7 +242,7 @@ describe("getPlayersWithPendingPayments", () => {
       },
     });
     await seedPlayer(eventId, "Pay User", userId);
-    await seedCostAndPayment(eventId, "Pay User", "pending");
+    await seedCostAndPayment(eventId, "Pay User", "pending", "cancelled");
 
     const results = await getPlayersWithPendingPayments();
     expect(results.every((r) => !(r.eventId === eventId && r.userId === userId))).toBe(true);

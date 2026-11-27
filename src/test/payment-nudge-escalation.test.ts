@@ -16,6 +16,7 @@ vi.mock("~/lib/notificationPrefs.server", () => ({
 }));
 
 import { processPaymentEscalation } from "~/lib/paymentNudgeEscalation.server";
+import { getPlayersWithPendingPayments } from "~/lib/paymentReminders.server";
 
 function uid() { return `u-${Math.random().toString(36).slice(2, 8)}`; }
 function eid() { return `e-${Math.random().toString(36).slice(2, 8)}`; }
@@ -65,6 +66,30 @@ async function seedOwedPayment(
     where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: eventPlayer.id } },
     create: { gameId: game.id, eventPlayerId: eventPlayer.id, playerName: name, amount, status },
     update: { amount, status },
+  });
+}
+
+/** Recurring Event after reset: Event.dateTime/currentGameId moved to next week. */
+async function seedAdvancedEvent(ownerId: string, endedHoursAgo: number) {
+  const durationMinutes = 90;
+  const gameEnd = new Date(Date.now() - endedHoursAgo * 3600_000);
+  const event = await prisma.event.create({ data: {
+    id: eid(), title: "Weekly Game", location: "Pitch", dateTime: new Date(Date.now() + 7 * 86400_000),
+    durationMinutes, maxPlayers: 10, ownerId, isRecurring: true,
+  } });
+  const played = await prisma.game.create({
+    data: { eventId: event.id, dateTime: new Date(gameEnd.getTime() - durationMinutes * 60_000), status: "played" },
+  });
+  const upcoming = await prisma.game.create({
+    data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" },
+  });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: upcoming.id } });
+  return { event, played };
+}
+async function addDebt(eventId: string, gameId: string, name: string, amount: number, status: string, userId: string | null) {
+  const eventPlayer = await prisma.eventPlayer.create({ data: { eventId, name, userId } });
+  return prisma.gamePayment.create({
+    data: { gameId, eventPlayerId: eventPlayer.id, playerName: name, amount, status },
   });
 }
 
@@ -244,5 +269,70 @@ describe("processPaymentEscalation", () => {
     expect(mockSendPush).not.toHaveBeenCalled();
     const trackers = await prisma.paymentNudgeStage.findMany({ where: { eventId: event.id } });
     expect(trackers).toHaveLength(0);
+  });
+});
+
+// #1767 — a recurring reset moves Event.dateTime/currentGameId forward, so the
+// chase must date the played occurrence Game instead.
+describe("processPaymentEscalation after a recurring reset", () => {
+  it("sends stage 1 for the played occurrence", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const { event, played } = await seedAdvancedEvent(owner.id, 1);
+    await addDebt(event.id, played.id, "Debtor", 5, "pending", debtor.id);
+    const result = await processPaymentEscalation();
+    expect(result.stage1Sent).toEqual([`${debtor.id}:${event.id}`]);
+    expect(mockSendPush).toHaveBeenCalledWith(
+      debtor.id, "Weekly Game", expect.stringContaining("5.00€"), expect.stringContaining("action=pay"),
+    );
+  });
+
+  it("advances stage 2 on the played occurrence's schedule", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const { event, played } = await seedAdvancedEvent(owner.id, 50);
+    await addDebt(event.id, played.id, "Debtor", 5, "pending", debtor.id);
+    await prisma.paymentNudgeStage.create({
+      data: { eventId: event.id, userId: debtor.id, stage: 1, lastSentAt: new Date(Date.now() - 49 * 3600_000) },
+    });
+    const result = await processPaymentEscalation();
+    expect(result.stage2Sent).toEqual([`${debtor.id}:${event.id}`]);
+    expect(mockSendPush.mock.calls[0][2]).toContain("Still pending");
+  });
+
+  it("advances stage 3 on the played occurrence's schedule", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const { event, played } = await seedAdvancedEvent(owner.id, 130);
+    await addDebt(event.id, played.id, "Debtor", 5, "pending", debtor.id);
+    await addDebt(event.id, played.id, "Paid1", 5, "paid", null);
+    await addDebt(event.id, played.id, "Paid2", 5, "paid", null);
+    await prisma.paymentNudgeStage.create({ data: { eventId: event.id, userId: debtor.id, stage: 2 } });
+    const result = await processPaymentEscalation();
+    expect(result.stage3Sent).toEqual([`${debtor.id}:${event.id}`]);
+    expect(mockSendPush.mock.calls[0][2]).toContain("2/3 players have paid");
+  });
+
+  it("sends the organizer alert on the played occurrence's schedule", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const { event, played } = await seedAdvancedEvent(owner.id, 170);
+    await addDebt(event.id, played.id, "Debtor", 5, "pending", debtor.id);
+    await prisma.paymentNudgeStage.create({ data: { eventId: event.id, userId: debtor.id, stage: 3 } });
+    const result = await processPaymentEscalation();
+    expect(result.organizerAlerts).toEqual([`${debtor.id}:${event.id}`]);
+    expect(mockSendPush).toHaveBeenCalledWith(
+      owner.id, "Weekly Game", expect.stringContaining("still haven't paid"), expect.stringContaining("action=confirm-payment"),
+    );
+  });
+
+  it("payment email reads the played occurrence's GamePayment, not the next Game", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const { event, played } = await seedAdvancedEvent(owner.id, 24);
+    await addDebt(event.id, played.id, "Debtor", 5, "pending", debtor.id);
+    const pending = await getPlayersWithPendingPayments();
+    const match = pending.find((p) => p.eventId === event.id && p.userId === debtor.id);
+    expect(match?.amount).toBe(5);
   });
 });
