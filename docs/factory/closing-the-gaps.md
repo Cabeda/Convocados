@@ -1,174 +1,186 @@
-# Closing the four Factory gaps
+# Closing the Factory's gaps
 
-A proposal, not a decision. Measured on 2026-11-27; re-measure before building, because every
-number below is a snapshot and the repo moves.
+A proposal, not a decision. Measured on 2026-11-27 from `origin/main` at `177e136`, against the
+loop as it actually runs — the Fixer, the Reviewer's schedule, and the merge gate — not against
+the build-order notes. Re-measure before building: every number here is a snapshot.
 
-The loop itself is recorded in [`README.md`](./README.md). This document starts from what the
-loop *does*, checked against the repository rather than against the design notes, and proposes
-the smallest set of Changes that closes what does not work.
+The loop is described in [`README.md`](./README.md); the roles in `.opencode/agents/`.
 
 ## What was measured
 
 ```
-gh issue list --state open --json labels     # 98 open issues
-gh pr list --state open --json labels        # open Changes
-rg -l "explorer-|sentinel" .github/workflows # no file
+gh pr list --state open --label factory:review     # 35
+gh run view <factory: merge> --log                 # the verdicts below
+gh issue list --state open --label factory:explored
 ```
 
 | Fact | Value |
 |---|---|
-| Issues labelled `factory:explored` | 48 |
-| Issues labelled `factory:blocked` | 12 |
-| Issues labelled `ready-for-agent` | 0 |
-| Open Changes labelled `factory:review` | ~23 |
-| Workflows referencing `explorer-*` or `sentinel` | 0 |
+| Open `factory:review` Changes | 35 (29 mergeable, 3 conflicting, 3 blocked) |
+| Refused by the Reviewer on the current head | 34 of 35 |
+| Commits behind `main` | 35 of 35, every one at **56** |
+| Required checks green on their own head | 34 of 35 (`CI` red on #1846) |
+| Changes the gate flags as a one-way door | 17 (payments, auth, scheduler, migrations) |
+| `factory:explored` open | 48, of which 12 also carry `factory:blocked` → **36 eligible** |
+| Cap on open machine Changes (`MAX_OPEN_CHANGES`) | 20 |
 
-## The order is not the obvious one
+So supply is not the problem: 36 eligible Issues wait behind a cap of 20 open Changes, and the
+queue is full of Changes that will not land. The queue is the problem.
 
-Two facts decide it, and they point the same way:
+## The deadlock, precisely
 
-1. **Work is found faster than it is offered.** 48 Issues are explored and unqueued while the
-   queue is empty. An Explorer run added tomorrow makes that pile 52, not 4 merges.
-2. **Merging is the ceiling, not implementing.** ~23 Changes wait in `factory:review`. The
-   Sweeper deliberately does not treat a green, up-to-date Change as stuck — "waiting is not
-   stuck" — so nothing at all moves that ground.
+Four facts compose into a cycle no single part is wrong about:
 
-So: fix the demand side (what gets offered, and how cheaply it is decided), then recover silent
-failures, then add supply. Discovery is last, and on a leash.
+1. `factory-merge-run.ts:140` refreshes a stale branch **only when being behind is the only
+   blocker** — `actionable.every((r) => r.includes(BEHIND_BASE))`.
+2. Every one of the 35 Changes is behind, so `update-branch` is the only thing that could clear
+   it — and 34 also carry a refuse verdict, so the condition never holds.
+3. The Fixer is denied `git push` (`.opencode/agents/fixer.md`) — its Changes are pushed by the
+   delivery job — so it cannot rebase itself either.
+4. A refuse is answered by restarting the Fixer, three rounds at most, after which AGENTS.md says
+   the disagreement "hands over to Cabeda". There is no surface where that handover lands: the
+   Change keeps the `factory:review` label and its reasons are printed into a run log that nobody
+   opens.
 
-## 1. Admission control, and a Proposer that ranks the pile
+Result: **a Change can be green, mergeable, nobody's work in progress, and permanently ineligible
+— while `main` moves 56 commits away from it, which by itself invalidates the CI evidence the gate
+would need to merge it.**
 
-**Gap.** Promotion from `factory:explored` to `ready-for-agent` is 100% human and currently
-unscheduled, so 48 evidenced Issues are invisible until someone re-reads them all.
+Everything the reviewers of this proposal asked for exists already and is therefore *not*
+proposed: `factory:explored` is the Fixer's queue (`next-issue.ts`), the Reviewer has a `*/30`
+schedule with an empty-list early exit (`factory-reviewer.yml:14-18`), admission control exists
+(`MAX_OPEN_CHANGES = 20`), and a merge gate with a tested eligibility predicate exists
+(`automerge-eligibility.ts`).
 
-**Proposal.** A new *primary* agent, `proposer`, whose only authority is **one label and one
-comment**. It reads open `factory:explored` Issues, dedupes them against open Changes, and marks
-at most **three per day** as `factory:proposed`, each with the paragraph Cabeda needs to decide:
+## 1. Publish the gate's verdicts — the reasons already exist, only the surface is missing
 
-- the one-sentence answer to *does this let people play more, with less administration?*
-- the acceptance criterion, and the files it expects to touch,
-- the size band (S / M / >cap), and what it blocks or is blocked by.
+**Gap.** Every 30 minutes the merge gate computes, per Change, a full list of reasons it cannot
+merge: behind base by N, a check concluded FAILURE, *this file is a one-way door*, the Reviewer's
+verdict is refuse. It prints them and discards them. The 35 Changes are therefore a decision list
+that exists only inside run logs.
 
-`ready-for-agent` stays Cabeda's alone — the proposer cannot queue anything, exactly as an
-Explorer cannot.
+**Proposal.** Have `factory-merge-run.ts` write the same verdicts to one place a human reads: a
+single pinned Issue, updated in place, never one per run. Grouped, not dumped —
 
-**Admission control is the point.** If open `factory:review` Changes are at or above 12, the
-proposer proposes **nothing**, and says so in its run log. That is a one-line rule and it
-enforces the third pillar: the administration cannot grow behind the human's back.
+- **yours to merge** — the one-way doors the gate will never take, with their check status (17
+  today; most green),
+- **stuck in review** — refused after the third round, with the unresolved finding quoted,
+- **waiting on the machine** — behind base, or a red check,
+- **conflicting** — needs a human rebase or a close.
 
-**Files.** `.opencode/agents/proposer.md`, `.github/workflows/factory-propose.yml`,
-`scripts/factory/propose.ts` (ranking and dedupe as pure functions, the shape `attempt.ts` and
-`automerge-run.ts` already set), `src/test/factory-propose.test.ts`.
+No new agent, no new label, no new authority: it is `console.log` pointed at an Issue. The gate
+already has the App token and the `issues: read`; writing one Issue needs `issues: write` on the
+same installation.
 
-**Cost.** One run a day, ~60 steps, no edits, no pushes. `FACTORY_PAUSED` respected.
+**Files.** `scripts/factory/factory-merge-run.ts`, `src/test/factory-merge-run.test.ts`.
 
-## 2. A daily merge pack — the ceiling, made cheap to clear
+## 2. Refresh an answered Change — break the deadlock instead of waiting for it
 
-**Gap.** ~23 green Changes compete for one human's attention, and nothing orders them.
+**Gap.** The refresh path exists but its guard is too strict (finding 1 above). A stale base is
+the one blocker the machine may clear itself, and today it clears none of the 35.
 
-**Proposal.** A **script, not an agent** — the same reasoning as `automerge-run.ts`: a queue
-order must be reproducible, and a list is not a judgement. `factory-merge-pack.yml` runs once a
-day and writes one comment (an Issue updated in place, never a new one each day):
+**Proposal.** Widen the guard from *"behind is the only reason"* to *"behind is the only reason
+the machine has not already answered"*: treat a refuse verdict that no longer names the current
+head as informational, alongside `UNKNOWN`, so `update-branch` fires.
 
-| Change | Issue | Age | CI | Mergeable | Size | Hard-block? | Coverage Δ |
-|---|---|---|---|---|---|---|---|
+```
+refreshable(pr) =
+  reasons include BEHIND_BASE
+  and every other reason is UNKNOWN or a verdict whose head ≠ pr.headRefOid
+  and pr has no merge conflict
+```
 
-- **Hard-block** is derived from changed paths, not opinion: migrations, auth/token handling,
-  the scheduler, workflows, and any coverage-threshold edit get a flag, because those are the
-  Changes the Reviewer may only report on.
-- Sorted by *unblocks most first* (Changes that close a `factory:blocked` Issue or unstick
-  another Change), then age. The pack is read top-down, and the pass takes minutes.
+After the update the head is new, so the Reviewer reads it fresh (the schedule picks the oldest
+unread head) and CI runs against the real base — which is the only way a green check means
+anything. Rate-limit it to once per Change per 24 hours; `MAX_OPEN_CHANGES` already bounds the
+blast radius to 20 Changes.
 
-It **does not** merge, approve, label, or comment on the Changes themselves.
+The rule stays a pure predicate next to `decideAutomerge`, with the counter-example from #1256
+(a green run on a stale base reverted a lockfile pin) holding it honest.
 
-**Deferred, deliberately:** a *wave builder* that batches Changes Cabeda marks `factory:wave-ok`
-into one integration PR. That is real merge mechanics and it is only worth building if the pack
-shows the queue still growing a week after it lands. The AGENTS.md wave rule already describes
-the shape; nothing here needs it yet.
+**Files.** `scripts/factory/automerge-eligibility.ts`, `scripts/factory/factory-merge-run.ts`,
+`src/test/automerge-eligibility.test.ts`.
 
-**Files.** `scripts/factory/merge-pack.ts`, `.github/workflows/factory-merge-pack.yml`,
-`src/test/factory-merge-pack.test.ts`.
+## 3. Reviewer reach: one filter, not a new workflow
 
-## 3. A review backstop for the Changes the Reviewer cannot reach
+**Gap.** The Reviewer's schedule is real, and its unread-list already skips the agent when empty.
+The reason it still never reads a Dependabot or fork Change is one line:
+`scripts/factory/next-review.ts:48` keeps only `factory/` heads. The `pull_request` trigger cannot
+cover them — a Dependabot or fork run gets no secrets, so no App token — which is exactly why the
+scheduled path exists.
 
-**Gap.** The Reviewer runs on `pull_request`, so it never sees a Dependabot Change, a fork, a
-draft, or any Change opened before its workflow existed. A green fork PR gets nobody's attention
-at all — `README.md` says so.
+**Proposal.** Let the scheduled pick include non-draft Changes from any head, with the fork case
+comment-only: the Reviewer may push only to `factory/*`, and never to a branch it does not own.
+Human `factory:review` Changes are unaffected; they come through the `pull_request` trigger.
 
-**Proposal.** `factory-review-pending.yml` on a schedule, where secrets *are* available. First
-step is a `gh pr list` filter for open, non-draft Changes with no Reviewer comment; if that list
-is empty the job **exits before an agent starts**, so the steady-state cost is one API call.
-Otherwise it runs the existing `reviewer` agent over that list. For a fork, the prompt gains one
-line: comment, never push — the branch is not ours.
+**Files.** `scripts/factory/next-review.ts`, `.opencode/agents/reviewer.md` (the fork line),
+`src/test/next-review.test.ts`.
 
-**Files.** `.github/workflows/factory-reviewer.yml` (new schedule trigger + early exit), one
-line in `.opencode/agents/reviewer.md` for the fork case.
+## 4. Post-merge watcher, so "merged" stops meaning "assumed live"
 
-**Cost.** Twice daily; near-zero while the list is empty, which it should be most days.
+**Gap.** `release.yml` gates on `conclusion == 'success'` for main's CI run and then never probes
+what it deployed. A red post-merge run is skipped **silently**, and nothing asserts the served
+version. The Sentinel exists to report that and has no trigger, so the signal is missing rather
+than late.
 
-## 4. A post-merge watcher, so "merged" stops meaning "assumed live"
+**Proposal.** `main-ci-watch.yml` on `workflow_run` for `CI` on `main`, no agent: if the run is
+red, or `release.yml` did not run to success, file one incident Issue (`factory:sentinel`) with
+the failed jobs, the head SHA, the last tag and the version actually served; if the release
+succeeded, assert the served version equals the tag and stay silent. Silence is the healthy state.
 
-**Gap.** `release.yml` gates on `conclusion == 'success'` for main's CI run. A red run is skipped
-**silently**: the Change is merged, nothing deployed, nobody told. `release.yml` also never
-asserts the deployed artifact answers or reports the new version. The Sentinel exists to say so
-and has no trigger — so the signal is missing, not the opinion.
-
-**Proposal.** `main-ci-watch.yml`, triggered by `workflow_run` on `CI` for `main`, no agent:
-
-- if the run is red, or `release.yml` did not run to success, file **one** incident Issue
-  (`factory:sentinel`) with the failed job names, the head SHA, the last tag, and the version
-  actually served in production;
-- if the release succeeded, assert the served version equals the tag's version, and say nothing
-  when it does. Silence is the healthy state. `/api/health` carries no version today, so this
-  item adds one field, baked at build from `package.json` — that is the only product-code edit in
-  this proposal.
-
-No remediation, no retry, no agent — the same authority ceiling ADR 0045 sets for the Sentinel.
+`/api/health` carries no version today, so this adds one field, baked from `package.json` at
+build — the only product-code edit in the proposal.
 
 **Files.** `.github/workflows/main-ci-watch.yml`, `scripts/factory/deploy-verify.ts`,
-`src/pages/api/health.ts` (+`version`), `src/test/deploy-verify.test.ts`.
+`src/pages/api/health.ts`, `src/test/deploy-verify.test.ts`.
 
-## 5. Discovery, on a leash
+## 5. Explorer and Sentinel triggers — the README already promises them
 
-**Gap.** `explorer-{design,bugs,security,performance}.md` and `sentinel.md` exist with no
-trigger, so "Explorers file Issues" is documentation, not behaviour. The one Explorer that
-matters most (Performance) also cannot act until a Baseline is committed (ADR 0047).
+**Gap.** `docs/factory/README.md:76` and `:231` list the Explorer trigger as "schedule / dependency
+event" and give every Explorer a cadence. `rg -l "explorer-|sentinel" .github/workflows` returns
+nothing: the five agent files have no trigger at all, so "Explorers file Issues" is documentation,
+not behaviour. There is no existing dependency event to ride.
 
-**Proposal.** `factory-explore.yml`, one job per focus, staggered weekly: bugs Monday, security
-Tuesday (plus the existing dependency event), design monthly. Performance stays **off** until
-the ADR 0047 Baseline is committed — an Explorer measuring against nothing produces opinions.
+**Proposal.** One `factory-explore.yml`, staggered weekly per focus: bugs (Mon), security (Tue,
+including a `pull_request`-triggered dependency pass it owns itself), design (monthly). Performance
+stays dark until the ADR 0047 Baseline is committed — an Explorer measuring against nothing
+produces opinions. Explorers are read-only, so the workflow publishes the Exploration itself:
+a step after the agent run commits `docs/explorations/<focus>/<date>.md`.
 
-Explorers are read-only, so the workflow publishes the Exploration itself: a step after the
-agent run commits `docs/explorations/<focus>/<date>.md`. That keeps the memory honest without
-widening the agent's authority.
+Turned on only when item 1 has shown the queue draining: a repo variable arms it when open
+`factory:review` holds under `MAX_OPEN_CHANGES` for two consecutive days. Supply cannot outrun a
+queue that is already full.
 
-**Turned on only when item 1 has proven it can drain:** the switch is a repo variable, armed when
-`factory:proposed` has held under 5 for two consecutive days. Until then the workflow exists and
-does not fire, so supply cannot outrun promotion.
-
-**Files.** `.github/workflows/factory-explore.yml`, `FACTORY_EXPLORERS` repo variable,
-`.opencode/agents/explorer-*.md` untouched.
+**Files.** `.github/workflows/factory-explore.yml`, a `FACTORY_EXPLORERS` repo variable; the
+Explorer agents stay untouched.
 
 ## Sequencing
 
 | # | Item | Closes | Lands as | Enable when |
 |---|---|---|---|---|
-| 1 | Proposer + admission control | queue empty, 48 invisible | 1 Change | immediately |
-| 2 | Merge pack | merge ceiling | 1 Change | immediately |
-| 3 | Review backstop | Reviewer reach | 1 Change | after 2 |
-| 4 | Post-merge watcher | merged ≠ live | 1 Change | after 1 |
-| 5 | Discovery cron | roles with no trigger | 1 Change, variable-gated | `factory:proposed` < 5 for 2 days |
+| 1 | Publish the verdicts | 35 Changes with no decision surface | 1 Change | immediately |
+| 2 | Refresh an answered Change | the deadlock (behind + refuse) | 1 Change | immediately |
+| 3 | Reviewer reach filter | Dependabot / fork Changes unread | 1 Change | after 2 |
+| 4 | Post-merge watcher | merged ≠ live | 1 Change | independently |
+| 5 | Explorer triggers | roles with no trigger | 1 Change, variable-gated | open Changes < 20 for 2 days |
 
-Each is one Change under the 400-line / 20-file cap, test-first, with its own Issue. Items 1 and 2
-are the ones worth building first: they are the pair that turns 48 findings and 23 Changes into a
-week of decisions rather than a backlog.
+Items 1 and 2 are the pair worth building first: 1 makes the 35 decidable by a human in one pass,
+2 stops the machine from re-creating the same rot tomorrow. Items 3–5 are independent and small.
 
 ## What this deliberately does not do
 
-- No machine merge, no machine `ready-for-agent`, no machine label beyond `factory:proposed` and
-  `factory:sentinel`.
-- No remediation: the watcher files and stops. ADR 0045 stands.
-- No new agent may edit code except the roles that already do.
-- No metric work before a Baseline. ADR 0047 stands.
-- No parallel PR review: item 3 makes the Reviewer *reach* more Changes, it does not make it
-  review faster.
+- No proposer, no `factory:proposed` label: `factory:explored` is already the Fixer's queue and
+  `next-issue.ts` already ranks and caps it.
+- No review digest or merge pack *of comments*: the gate's verdicts are the pack (item 1).
+- No second Reviewer workflow: the schedule and its early exit exist.
+- No machine merge beyond the two-way-door rule already in `AGENTS.md`, and no machine promotion
+  of an Issue.
+- No remediation: the watcher files and stops (ADR 0045).
+- No metric work before a Baseline (ADR 0047).
+
+## Open question for Cabeda
+
+The 17 one-way-door Changes are the ones the machine can never clear by design. If most of the 35
+are one-way doors over a week, the honest conclusion is not "a better gate" but "the factory is
+producing work only a human can merge" — and the lever becomes Issue selection, not merge tooling.
+Item 1's digest is what makes that measurable before spending anything else.
