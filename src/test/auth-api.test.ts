@@ -869,6 +869,7 @@ describe("POST /api/events/[id]/undo-remove", () => {
     const players = await testPrisma.player.findMany({ where: { eventId: id }, orderBy: { order: "asc" } });
     expect(players.map((p) => p.name)).toEqual(["Alice", "Bob", "Charlie"]);
     const rev = await testPrisma.player.findFirst({ where: { eventId: id, name: "Bob" } });
+    expect(rev?.id).toBe(bob.id);
     expect(rev?.archivedAt).toBeNull();
   });
 
