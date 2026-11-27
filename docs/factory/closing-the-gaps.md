@@ -62,16 +62,26 @@ so "refused once" and "refused after three rounds" stop looking the same:
   docs Changes, so the gate lands them; they are listed apart only so they never read as stuck work.
 
 No new agent, no new label, no new App scope. The App token in `factory-merge.yml` carries
-`issues: read` on purpose (ADR 0046: the token is blast radius), so the write happens in a
+`issues: read` on purpose (ADR 0048: our own App token, scoped per run — the reasoning is the
+comment at `factory-merge.yml:54-62`), so the write happens in a
 **second job** that has no App key at all: the verdict job uploads its JSON with
 `actions/upload-artifact`, and the publish job downloads it and writes one Issue with the built-in
 `GITHUB_TOKEN` and `permissions: issues: write` — the shape `factory-issue.yml`'s `notice` job
 already uses.
 
-**Files.** `scripts/factory/factory-merge-run.ts` (emit the JSON), `.github/workflows/factory-merge.yml`
-(upload + publish job), `src/test/factory-merge-run.test.ts`. **Door:** one-way — it edits a workflow.
+**It has to be made testable first, and that is part of the Change.** `factory-merge-run.ts` today
+exports nothing and ends with `process.exitCode = main();` (`:177`) — importing it in a unit test
+would run the merge loop, which calls the real `gh pr merge` whenever `DRY_RUN` is not `"true"`.
+The Change therefore first gives the script the shape `next-review.ts:85-87` and `next-issue.ts`
+already have: an `import.meta.url` guard around `main()`, and an exported pure builder —
+`verdictReport(pr, facts, verdict)` — that returns the publish payload. The test asserts that
+builder over fixtures; the guard means importing it runs nothing.
 
-## 2. Reviewer reach: one filter line
+**Files.** `scripts/factory/factory-merge-run.ts` (guard, exported builder, JSON emission),
+`.github/workflows/factory-merge.yml` (upload + publish job), `src/test/factory-merge-run.test.ts`.
+**Door:** one-way — it edits a workflow.
+
+## 2. Reviewer reach: one query and one filter
 
 **Gap.** The Reviewer's schedule is real, and its unread-list already skips the agent when empty.
 The reason it still never reads a Dependabot or fork Change is one line:
@@ -79,8 +89,16 @@ The reason it still never reads a Dependabot or fork Change is one line:
 cover them — a Dependabot or fork run receives no secrets, so no App token — which is exactly why the
 scheduled path exists.
 
-**Proposal.** Let the scheduled pick include non-draft Changes from any head. **The Reviewer pushes
-nothing, for any head** — `.opencode/agents/reviewer.md:32` denies `git push*` and its prompt says
+**Proposal.** Let the scheduled pick include Changes from any head, **excluding drafts** — and that
+last word is a real addition, not a given: `next-review.ts:64-67` asks `gh pr list` for only
+`number,headRefName,headRefOid,comments,reviews`, `ReviewCandidate` (`:30-36`) has no draft field, so
+`pickReview` (`:46-52`) cannot filter them out. The job's draft guard
+(`factory-reviewer.yml:103-107`) applies only to `pull_request` events; on `schedule` it is skipped
+entirely. So the Change is three coordinated edits, not one line: `isDraft` added to the `--json`
+field list, to `ReviewCandidate`, and to the pick; plus a draft case in the test, because
+`reviewer.md:52-53` promises "a draft is skipped until it is marked ready".
+
+**The Reviewer pushes nothing, for any head** — `.opencode/agents/reviewer.md:32` denies `git push*` and its prompt says
 "you do not push: your job is to argue in a comment" — so the fork case needs no new guard:
 comment-only is the whole capability. (The "pushes fixes to `factory/*`" line in
 `docs/factory/README.md:229` is stale and is corrected in the same Change.)
@@ -90,7 +108,8 @@ Human Changes are unaffected; they arrive through the `pull_request` trigger.
 The behaviour this changes is pinned today: `src/test/factory-next-review.test.ts:69` asserts
 `pickReview` returns `null` for a human head. That test must be **re-pinned to the new rule**, not
 deleted — deleting it would make the gate pass by removing the assertion that proves the picker
-still works.
+still works — and the new draft case sits beside it. `src/test/workflows.test.ts:273-278` states the
+old schedule behaviour in the same spirit and is updated with it.
 
 **Files.** `scripts/factory/next-review.ts`, `src/test/factory-next-review.test.ts`,
 `docs/factory/README.md:229`. **Door:** one-way (`scripts/factory/`).
