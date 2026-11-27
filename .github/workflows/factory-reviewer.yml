@@ -148,7 +148,9 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.FACTORY_APP_ID }}
+          # `app-id` is deprecated in v3; GitHub accepts the App ID as the JWT
+          # issuer under the new name, so no new variable is needed.
+          client-id: ${{ vars.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_KEY }}
           # The action refuses to start on a token without contents write, and
           # a factory PR's actor is the App, whose repo permission is `none` —
@@ -249,11 +251,12 @@ jobs:
           gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
 
       - name: Record the verdict
-        # Informational, not a gate. The merge decision is the signature: the
-        # gate accepts only a verdict signed over this head, so a review that
-        # wrote nothing is refused there with or without a red check here.
-        # A refusal is a legitimate outcome too — reddening the Change for it
-        # made every refused PR look broken to a human reading the list.
+        # This check IS the gate: `reviewer` is a required status check, so a
+        # refusal must fail it. Anything else makes "Verdict: refuse" a comment
+        # next to a green tick, which is a review nobody has to answer.
+        #
+        # A missing verdict fails too. Silence is not approval, and a Change
+        # whose review never finished has not been read.
         if: always()
         id: verdict
         run: |
@@ -262,9 +265,11 @@ jobs:
           case "$verdict" in
             approve) echo "::notice title=Reviewer::approve" ;;
             refuse)
-              echo "::warning title=Reviewer::refuse — the findings are in the review comment"
+              echo "::error title=Reviewer::refuse — the findings are in the review comment"
+              exit 1
               ;;
             *)
-              echo "::warning title=Reviewer::no verdict was written — the review did not finish; the merge gate reads that as a refusal"
+              echo "::error title=Reviewer::no verdict was written — the review did not finish"
+              exit 1
               ;;
           esac
