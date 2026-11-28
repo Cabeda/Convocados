@@ -7,6 +7,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useLocale } from "~/lib/useT";
 import { googleCalendarUrl } from "~/lib/calendar";
 import { isGameEnded } from "~/lib/gameStatus";
+import { useLargeText } from "./story/useLargeText";
 import { canViewPrice, menuGroups } from "~/lib/eventHeader";
 import type { EventData } from "./types";
 import { MyNotificationsDialog } from "./MyNotificationsDialog";
@@ -120,6 +121,8 @@ export function EventHeader({
     recurrence: event.isRecurring && event.recurrenceRule ? JSON.parse(event.recurrenceRule) : undefined,
   });
 
+  const largeText = useLargeText();
+
   return (
     <Box component="header">
       <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
@@ -129,8 +132,8 @@ export function EventHeader({
             sx={{
               fontSize: { xs: "1.5rem", sm: "1.75rem" }, fontWeight: 700, lineHeight: 1.15, m: 0,
               overflowWrap: "anywhere", textWrap: "balance",
-              // Three lines at most; the whole title is in the edit form and the tooltip.
-              display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 3, overflow: "hidden",
+              // Three lines at most; the whole title is in the edit form and the tooltip. Not for large text: it is shown whole.
+              ...(largeText ? {} : { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 3, overflow: "hidden" }),
             }}
           >
             {event.title}

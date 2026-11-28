@@ -5,6 +5,7 @@ import { screen, cleanup, fireEvent, waitFor, within } from "@testing-library/re
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
+import { cssFor } from "../emotionCss";
 import { EventHeader } from "~/components/event/EventHeader";
 import type { EventData } from "~/components/event/types";
 
@@ -244,6 +245,19 @@ describe("EventHeader — when and where", () => {
     renderHeader({ isAuthenticated: true, isParticipant: false });
     await screen.findByRole("button", { name: "Follow game" });
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/cost"), expect.anything());
+  });
+
+  it("cuts a very long title at three lines at normal text size, and shows it whole at 200% text", () => {
+    const title = "A very long title ".repeat(12);
+    renderHeader({ event: { title } });
+    expect(cssFor(screen.getByRole("heading", { level: 1 }))).toMatch(/-webkit-line-clamp:\s*3/);
+    cleanup();
+    const root = document.documentElement;
+    root.style.fontSize = "32px";
+    try {
+      renderHeader({ event: { title } });
+      expect(cssFor(screen.getByRole("heading", { level: 1 }))).not.toMatch(/line-clamp/);
+    } finally { root.style.fontSize = ""; }
   });
 
   it("says just Ended once a one-off is over: the recap card keeps the day, so it is not said twice", () => {

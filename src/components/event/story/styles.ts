@@ -18,6 +18,9 @@ export const motion = (property: string, ms = 280) => ({
 
 /** Press feedback: a 2% squeeze for 80ms. Instant for people who ask for less motion. */
 export const pressable = {
+  // No grey flash and no 300ms wait for a double-tap-to-zoom that is not coming.
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
   transition: "transform 80ms ease, opacity 80ms ease",
   "&:active": { transform: "scale(.98)", opacity: 0.85 },
   [CALM]: { transition: "none", "&:active": { transform: "none" } },

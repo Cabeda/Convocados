@@ -154,3 +154,75 @@ test.describe("App bar when signed out", () => {
     });
   }
 });
+
+test.describe("Accessibility settings", () => {
+  test.setTimeout(60_000);
+
+  test("200% text at 320px: a long title is shown whole, nothing is clipped, nothing scrolls sideways", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.addInitScript(() => { document.documentElement.style.fontSize = "200%"; });
+    const api = withIp(page.context().request, uniqueIp());
+    const title = "Thursday night five-a-side at the old school pitch behind the market";
+    const created = await api.post("/api/events", {
+      data: { title, location: "Test Stadium", dateTime: new Date(Date.now() + 86_400_000).toISOString(), maxPlayers: 10, sport: "football-5v5" },
+    });
+    const { id } = await created.json();
+    await page.goto(`/events/${id}`);
+    await expect(page.locator("[data-ssr-event-summary]")).toHaveCount(0);
+    const h1 = page.getByRole("heading", { level: 1 });
+    await expect(h1).toHaveText(title);
+    const clipped = await h1.evaluate((el) => el.scrollHeight > el.clientHeight + 1);
+    expect(clipped, "the title is cut off").toBe(false);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  });
+
+  test("at normal size the same title stops at three lines", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    const api = withIp(page.context().request, uniqueIp());
+    const created = await api.post("/api/events", {
+      data: { title: "Thursday night five-a-side at the old school pitch behind the market with the long name", location: "Test Stadium", dateTime: new Date(Date.now() + 86_400_000).toISOString(), maxPlayers: 10, sport: "football-5v5" },
+    });
+    const { id } = await created.json();
+    await page.goto(`/events/${id}`);
+    // The server's read-only summary has its own heading until the page takes over.
+    await expect(page.locator("[data-ssr-event-summary]")).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Thursday night");
+    const m = await page.getByRole("heading", { level: 1 }).evaluate((el) => ({ h: el.getBoundingClientRect().height, fs: getComputedStyle(el).fontSize, sh: el.scrollHeight }));
+    const lines = Math.round(m.h / (parseFloat(m.fs) * 1.15));
+    expect(lines, JSON.stringify(m)).toBeLessThanOrEqual(3);
+    expect(m.sh, "the rest of the title is cut off, not shown").toBeGreaterThan(m.h);
+  });
+
+  test("forced colors: filled slots keep a 2px outline in the text colour, and yours is the system highlight", async ({ page }) => {
+    await page.emulateMedia({ forcedColors: "active" });
+    const eventId = await finishedGameFuture(page, "Forced Viewer");
+    await page.goto(`/events/${eventId}`);
+    const slots = page.getByTestId("lineup-slots");
+    await expect(slots).toBeVisible();
+    const probe = async (css: string) => page.evaluate((c) => { const d = document.createElement("div"); d.style.cssText = c; document.body.appendChild(d); const v = getComputedStyle(d); const out = { bg: v.backgroundColor, color: v.color }; d.remove(); return out; }, css);
+    const canvasText = (await probe("color: CanvasText")).color;
+    const highlight = (await probe("background-color: Highlight")).bg;
+    const other = await page.getByTestId("slot").first().evaluate((el) => { const v = getComputedStyle(el); return { w: v.borderTopWidth, c: v.borderTopColor, style: v.borderTopStyle }; });
+    expect(other).toEqual({ w: "2px", c: canvasText, style: "solid" });
+    const mine = await page.getByTestId("slot-me").evaluate((el) => { const v = getComputedStyle(el); return { w: v.borderTopWidth, bg: v.backgroundColor }; });
+    expect(mine.w).toBe("2px");
+    expect(mine.bg).toBe(highlight);
+  });
+});
+
+/** A game that has not been played yet, 6 of 10 places taken, with the signed-in viewer on the list. */
+async function finishedGameFuture(page: Page, name: string) {
+  const request = page.context().request;
+  const ip = uniqueIp();
+  const api = withIp(request, ip);
+  const email = `e2e-slots-${Date.now()}-${Math.floor(Math.random() * 1e6)}@test.com`;
+  await request.post("/api/auth/sign-up/email", { data: { email, password: "TestPassword123!", name }, headers: { "X-Forwarded-For": ip } });
+  sql(`UPDATE User SET emailVerified = 1 WHERE email = '${email}'`);
+  await request.post("/api/auth/sign-in/email", { data: { email, password: "TestPassword123!" }, headers: { "X-Forwarded-For": ip } });
+  const created = await api.post("/api/events", {
+    data: { title: "Slots game", location: "Test Stadium", dateTime: new Date(Date.now() + 2 * 86_400_000).toISOString(), maxPlayers: 10, sport: "football-5v5" },
+  });
+  const { id } = await created.json();
+  for (const n of [name, "Ana Maria", "Beto Santos", "Carla Dias"]) await api.post(`/api/events/${id}/players`, { data: { name: n, linkToAccount: n === name } });
+  return id as string;
+}
