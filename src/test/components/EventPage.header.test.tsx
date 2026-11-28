@@ -72,4 +72,41 @@ describe("EventPage — the header slice", () => {
     const day = new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(past);
     expect(line.textContent).not.toContain(day);
   });
+
+  describe("a cancelled game", () => {
+    beforeEach(() => { overrides = { gameStatus: "cancelled" }; });
+
+    it("says so above the recap and tells a player nobody can join any more", async () => {
+      renderWithTheme(<EventPage eventId="evt-1" />);
+      expect(await screen.findByRole("heading", { level: 2, name: "This game was cancelled" })).toBeInTheDocument();
+      expect(screen.getByText("Nobody can join or be added any more.")).toBeInTheDocument();
+    });
+
+    it("tells an admin it cannot be reopened and where to plan a new one", async () => {
+      overrides = { gameStatus: "cancelled", ownerId: "u-1" };
+      renderWithTheme(<EventPage eventId="evt-1" />);
+      expect(await screen.findByText("A cancelled game can't be reopened. Plan a new one from your games.")).toBeInTheDocument();
+    });
+
+    it("hides Join and the add-a-player field, which the server would refuse with a 409", async () => {
+      renderWithTheme(<EventPage eventId="evt-1" />);
+      await screen.findByRole("heading", { level: 2, name: "This game was cancelled" });
+      expect(screen.queryByRole("button", { name: /^Join as/ })).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("Add player name or email")).not.toBeInTheDocument();
+    });
+
+    it("has no next-game line to point at", async () => {
+      overrides = { gameStatus: "cancelled", ownerId: "u-1", isRecurring: true, recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }) };
+      renderWithTheme(<EventPage eventId="evt-1" />);
+      await screen.findByRole("heading", { level: 1 });
+      expect(screen.queryByText(/^Next game · /)).not.toBeInTheDocument();
+    });
+  });
+
+  it("offers Join on a game that is on, so the cancelled test above means something", async () => {
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    expect(await screen.findByRole("button", { name: "Join as Jose Silva" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Add player name or email")).toBeInTheDocument();
+    expect(screen.queryByText("This game was cancelled")).not.toBeInTheDocument();
+  });
 });

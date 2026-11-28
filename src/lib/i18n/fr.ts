@@ -1694,6 +1694,9 @@ statsGoals: "Buts",
   headerLoading: "Chargement du match",
   moreDetails: "Plus de détails",
   editSaveFailed: "Impossible d'enregistrer les modifications. Vérifie ta connexion et réessaie.",
+  cancelledTitle: "Ce match a été annulé",
+  cancelledBodyAdmin: "Un match annulé ne peut pas être rouvert. Organise-en un nouveau depuis tes matchs.",
+  cancelledBodyPlayer: "Plus personne ne peut s'inscrire ni être ajouté.",
 };
 
 export default fr;

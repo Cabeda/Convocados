@@ -1694,6 +1694,9 @@ statsGoals: "Tore",
   headerLoading: "Spiel wird geladen",
   moreDetails: "Mehr Details",
   editSaveFailed: "Die Änderungen konnten nicht gespeichert werden. Prüfe die Verbindung und versuche es erneut.",
+  cancelledTitle: "Dieses Spiel wurde abgesagt",
+  cancelledBodyAdmin: "Ein abgesagtes Spiel lässt sich nicht wieder öffnen. Plane ein neues unter „Meine Spiele“.",
+  cancelledBodyPlayer: "Niemand kann mehr beitreten oder hinzugefügt werden.",
 };
 
 export default de;

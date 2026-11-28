@@ -45,6 +45,7 @@ import {
 import { buildEventShareText, shareEvent } from "./event/shareEvent";
 import type { EventData, Player, KnownPlayer } from "./event";
 import { EventRecap } from "./event/story/EventRecap";
+import { CancelledBanner } from "./event/story/CancelledBanner";
 import { HeaderSkeleton } from "./event/story/HeaderSkeleton";
 import { NextGameDateTemp } from "./event/story/NextGameDateTemp";
 import { SignInButton } from "./SignInButton";
@@ -165,6 +166,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
     () => (event ? isGameEnded(event.dateTime, event.durationMinutes) : false),
     [event],
   );
+
+  // A cancelled game takes nobody any more (the server answers 409), so the page offers no way in.
+  const cancelled = event?.gameStatus === "cancelled";
+  const joinClosed = gameEnded || cancelled;
 
   // Invite token from ?inviteToken=xxx — lets the link bypass password and shows a banner.
   useEffect(() => {
@@ -856,11 +861,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ADR 0018: Auto-join deep link (needs handleQuickJoinPillClick to be defined)
   useEffect(() => {
-    if (deepLinkAction === "join" && session?.user?.name && !gameEnded) {
+    if (deepLinkAction === "join" && session?.user?.name && !joinClosed) {
       setTimeout(() => handleQuickJoinPillClick(session.user!.name), 500);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepLinkAction, session?.user?.name, gameEnded]);
+  }, [deepLinkAction, session?.user?.name, joinClosed]);
 
   const removePlayer = async (playerId: string) => {
     // Optimistic update
@@ -1203,6 +1208,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onCancelGame={() => setCancelConfirmOpen(true)}
             />
 
+            {cancelled && <CancelledBanner canManage={canEditSettings} />}
+
             {/* Last game recap — for everyone (signed-out and non-players get the result).
                 Seeded from the initial payload so nothing flashes before the client fetch. */}
             <EventRecap
@@ -1218,11 +1225,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
               deepLinkAction={deepLinkAction}
             />
 
-            {rule && <NextGameDateTemp date={nextGameDate} timezone={event.timezone} />}
+            {rule && !cancelled && <NextGameDateTemp date={nextGameDate} timezone={event.timezone} />}
 
             {/* Join / You joined — replaces YOUR RESPONSE (AttendanceCta) per #818.
                 Web parity with Android hero revamp: single CTA, not Going/Not coming. */}
-            {!gameEnded && (() => {
+            {!joinClosed && (() => {
               if (!isAuthenticated) {
                 return (
                   <Paper elevation={1} sx={{ borderRadius: 3, p: 2, textAlign: "center" }}>
@@ -1344,7 +1351,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 ? () => handleQuickJoinPillClick(session.user!.name)
                 : undefined}
               eventDateTime={event.dateTime}
-              rosterLocked={gameEnded}
+              rosterLocked={joinClosed}
               declined={event.declined}
               invited={event.invited}
               canManageInvites={canManageInvites}

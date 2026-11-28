@@ -1694,6 +1694,9 @@ statsGoals: "Goal",
   headerLoading: "Caricamento della partita",
   moreDetails: "Altri dettagli",
   editSaveFailed: "Impossibile salvare le modifiche. Controlla la connessione e riprova.",
+  cancelledTitle: "Questa partita è stata annullata",
+  cancelledBodyAdmin: "Una partita annullata non può essere riaperta. Organizzane una nuova dalle tue partite.",
+  cancelledBodyPlayer: "Nessuno può più iscriversi o essere aggiunto.",
 };
 
 export default it;

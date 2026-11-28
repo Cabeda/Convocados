@@ -1754,6 +1754,9 @@ statsGoals: "Goals",
   headerLoading: "Loading the game",
   moreDetails: "More details",
   editSaveFailed: "Couldn't save your changes. Check your connection and try again.",
+  cancelledTitle: "This game was cancelled",
+  cancelledBodyAdmin: "A cancelled game can't be reopened. Plan a new one from your games.",
+  cancelledBodyPlayer: "Nobody can join or be added any more.",
 } as const;
 
 export default en;
