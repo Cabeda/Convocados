@@ -118,11 +118,12 @@ export function EventRecap(p: EventRecapProps) {
   if (!status || !lastGame) return null;
   if (phase === "hidden" || (phase === "reminder" && payTask?.kind !== "pay" && !reminderReported)) return null;
 
-  const summary = scoreSummary({
+  const result = {
     hasScore: status.hasScore, scoreOne: status.scoreOne, scoreTwo: status.scoreTwo,
-    teamOneName: status.teamOneName, teamTwoName: status.teamTwoName,
-    viewerTeam: status.viewerTeam ?? null, seasonDelta: status.seasonRank?.counted ? status.seasonRank.delta : null,
-  }, t);
+    teamOneName: status.teamOneName, teamTwoName: status.teamTwoName, viewerTeam: status.viewerTeam ?? null,
+  };
+  const summary = scoreSummary({ ...result, seasonDelta: status.seasonRank?.counted ? status.seasonRank.delta : null }, t);
+  const outcome = scoreSummary({ ...result, seasonDelta: null }, t);
   const dateLabel = formatDateInTz(new Date(lastGame), locale, p.timezone, { weekday: "short", day: "numeric", month: "short" });
   // Only an event that does not repeat yet asks "make it weekly?", and only of someone who can say yes.
   const offerWeekly = p.canManage && phase === "full" && !p.isRecurring && !status.isRecurring && status.allComplete;
@@ -147,7 +148,7 @@ export function EventRecap(p: EventRecapProps) {
         <LastGameRecap
           eventId={p.eventId} status={status} expanded={expanded} canCollapse={pending === 0}
           onToggle={onToggle} dateLabel={dateLabel} role={role} viewerName={p.viewerName} viewerNames={status.viewerNames}
-          tasks={tasks} summary={summary} onChanged={refresh}
+          tasks={tasks} summary={summary} outcome={outcome} onChanged={refresh}
           onOptimistic={onOptimistic} onRollback={onRollback} onCompleted={() => setJustCompleted(true)}
           autoOpenScore={p.deepLinkAction === "add-score"} highlightPay={p.deepLinkAction === "pay"}
         />

@@ -24,13 +24,13 @@ export function RecapLinks({ eventId, status, showPayments }: { eventId: string;
     { key: "ranking", label: t("recapLinkRanking"), icon: <LeaderboardIcon fontSize="small" />, href: `/events/${eventId}/rankings`, sub: t("recapLinkRankingSub") },
   ];
   return (
-    <Box sx={{ display: "flex", flexWrap: "wrap", borderTop: 1, borderColor: "divider" }}>
-      {tiles.map((l, i) => (
+    <Box sx={{ display: "flex", flexWrap: "wrap", gap: "1px", bgcolor: "divider", borderTop: 1, borderColor: "divider" }}>
+      {tiles.map((l) => (
         <Button
           key={l.key} component="a" href={l.href}
           sx={{
             flex: "1 1 6rem", minWidth: 0, minHeight: 72, flexDirection: "column", justifyContent: "center", gap: 0.25, px: 1, borderRadius: 0,
-            textTransform: "none", color: "text.primary", borderLeft: i ? 1 : 0, borderColor: "divider", hyphens: "manual", ...tappable,
+            textTransform: "none", color: "text.primary", bgcolor: "background.paper", hyphens: "manual", ...tappable,
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, fontSize: "0.9375rem", fontWeight: 700, lineHeight: 1.25, textAlign: "center" }}>{l.icon}{l.label}</Box>

@@ -22,7 +22,7 @@ export function RecapSkeleton({ strip = false }: { strip?: boolean }) {
         </Box>
       ) : (
         <>
-          <Box sx={{ px: 2, pt: 1.5, pb: 2.5 }}>
+          <Box sx={{ px: 2, pt: 1.5, pb: 2.5, minHeight: 200 }}>
             <Box sx={{ ...bar("35%", 16), mb: 1.5 }} />
             <Box sx={{ maxWidth: BOARD_MAX_WIDTH, mx: "auto", display: "flex", justifyContent: "space-between", alignItems: "end" }}>
               <Box sx={bar("3.5rem", "4.75rem")} /><Box sx={bar("3.5rem", "4.75rem")}
@@ -31,12 +31,15 @@ export function RecapSkeleton({ strip = false }: { strip?: boolean }) {
             <Box sx={{ ...bar("50%", 18), mt: 1.5 }} />
           </Box>
           {[0, 1].map((i) => (
-            <Box key={i} sx={{ borderTop: 1, borderColor: "divider", minHeight: 64, px: 2, display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box key={i} sx={{ borderTop: 1, borderColor: "divider", minHeight: 72, px: 2, display: "flex", alignItems: "center", gap: 1.5 }}>
               <Box sx={{ ...bar(12, 12), borderRadius: "50%" }} />
               <Box sx={{ flex: 1, display: "grid", gap: 0.75 }}><Box sx={bar("55%", 16)} /><Box sx={bar("75%", 12)} /></Box>
               <Box sx={{ ...bar(96, 48), borderRadius: 999 }} />
             </Box>
           ))}
+          <Box sx={{ borderTop: 1, borderColor: "divider", minHeight: 72, px: 2, display: "flex", alignItems: "center", justifyContent: "space-around" }}>
+            {[0, 1, 2].map((i) => <Box key={i} sx={bar("20%", 32)} />)}
+          </Box>
         </>
       )}
     </Box>

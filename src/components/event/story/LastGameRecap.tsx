@@ -33,6 +33,8 @@ export interface LastGameRecapProps {
   tasks: RecapTask[];
   /** The plain sentence from `scoreSummary`. */
   summary: string;
+  /** The same sentence without the season points: all the one-line strip has room for. */
+  outcome?: string;
   /** Re-read the status after something changed. */
   onChanged: () => void;
   /** The viewer did something: believe it before the server confirms it. */
@@ -197,7 +199,7 @@ export function LastGameRecap(p: LastGameRecapProps) {
   // One sentence about a missing score: the add-score row says it, so the summary stays quiet there.
   const showSummary = expanded && !scoreOpen && !(!hasScore && scoreTask);
   const showAllDoneRow = done.length === 0 && pending === 0 && role === "played" && hasScore;
-  const headerText = expanded ? (allDoneNow ? t("recapAllDone") : lastGame) : `${lastGame} · ${p.summary}`;
+  const headerText = expanded ? (allDoneNow ? t("recapAllDone") : lastGame) : `${lastGame} · ${p.outcome ?? p.summary}`;
   const rollOnChange = done.some((d) => d.kind === "score");
 
   return (

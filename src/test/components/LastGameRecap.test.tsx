@@ -187,12 +187,12 @@ describe("LastGameRecap — MVP result", () => {
 
 describe("LastGameRecap — strip and toggle", () => {
   it("collapses to a one-line strip: the result, the date and the sentence, with the details hidden from assistive tech", () => {
-    show({ expanded: false });
+    show({ expanded: false, outcome: "You won" });
     const toggle = screen.getByRole("button", { name: "Show details of the last game" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("button", { name: "I've paid" })).toBeNull(); // inert + aria-hidden, still in the DOM so it can animate open
     expect(screen.getByTestId("score-one")).toHaveTextContent("5"); // the same element, resized
-    expect(screen.getByTestId("recap-header-label")).toHaveTextContent("Last game · Wed 4 Mar · You won · +143 points this season");
+    expect(screen.getByTestId("recap-header-label")).toHaveTextContent(/^Last game · Wed 4 Mar · You won$/);
   });
 
   it("opens from the strip with the toggle, and by tapping the scoreboard", () => {

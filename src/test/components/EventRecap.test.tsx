@@ -136,4 +136,31 @@ describe("EventRecap", () => {
     expect(await screen.findByText("You owe €5")).toBeInTheDocument();
     expect(screen.queryByTestId("needs-you-dot")).toBeNull();
   });
+
+  it("?action=pay scrolls the pay ROW into view, not the card", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    mount(base, { deepLinkAction: "pay" });
+    await screen.findByText("You owe €5");
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+    const row = scroll.mock.contexts[0] as HTMLElement;
+    expect(row.getAttribute("data-testid")).toBe("recap-task");
+    expect(row).toHaveTextContent("You owe €5");
+  });
+
+  it("on game day ?action=pay lands on the reminder, which says where to pay", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    mount(base, { nextKickoff: hours(2), deepLinkAction: "pay" });
+    await screen.findByText("You still owe €5");
+    await waitFor(() => expect(scroll).toHaveBeenCalled());
+    expect(screen.getByRole("link", { name: "Payments" })).toHaveAttribute("href", "/events/e1/payments");
+  });
+
+  it("the reminder says what you reported once you tap I've paid", async () => {
+    mount(base, { nextKickoff: hours(2) });
+    fireEvent.click(await screen.findByRole("button", { name: "I've paid" }));
+    expect(await screen.findByText("You said you paid €5 · waiting for Maria")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "I've paid" })).toBeNull();
+  });
 });
