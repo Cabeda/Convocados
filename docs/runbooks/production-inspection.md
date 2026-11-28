@@ -131,7 +131,7 @@ and `db.oldestMigrationAt` is the earliest `_prisma_migrations` timestamp.
 history is missing or its raw value cannot be read; the raw value is logged once
 so the production shape can be identified. Health sets `degraded: true` when the
 database was created this boot, when it has no Events and its oldest migration is
-under an hour old, or when it has no Events and no readable migration timestamp —
+under an hour old, or when it has no Events and its migration history is missing —
 the shape a lost volume leaves after `prisma migrate deploy` recreates an empty
 schema. The status stays `ok` on purpose: a 503 would remove the instance from
 Fly's load balancer and the scheduler polls through that URL.

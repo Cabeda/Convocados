@@ -7,10 +7,10 @@ import { createLogger } from "../../lib/logger.server";
 const log = createLogger("health");
 
 /** Health is polled every few seconds; an unreadable migration shape is worth
- * reporting once per boot, not on every poll. */
+ * reporting once per episode, not on every poll. */
 let loggedUnreadableMigration = false;
 
-/** Test-only hook: the once-per-boot flag survives between cases in a file. */
+/** Test-only hook: the once-per-episode flag survives between cases in a file. */
 export function resetHealthProvenanceLog(): void {
   loggedUnreadableMigration = false;
 }
