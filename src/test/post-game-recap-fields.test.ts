@@ -107,4 +107,56 @@ describe("post-game-status: recap fields", () => {
     expect(json.hasScore).toBe(false);
     expect(json.latestHistoryId).toBeNull();
   });
+
+  it("matches the viewer through their linked player when the account name differs", async () => {
+    const event = await seedLastGame();
+    await prisma.user.create({ data: { id: "u-link", name: "anab99", email: "anab@example.com", emailVerified: true } });
+    await prisma.player.create({ data: { eventId: event.id, name: "Rui", userId: "u-link" } });
+    mockGetSession.mockResolvedValue({ user: { id: "u-link", name: "anab99" } } as any);
+    mockCheckOwnership.mockResolvedValue(null as any);
+    const json = await (await getPostGameStatus(ctx({ id: event.id }))).json();
+    expect(json.isPlayer).toBe(true);
+    expect(json.viewerTeam).toBe(1);
+    expect(json.viewerNames).toEqual(expect.arrayContaining(["anab99", "Rui"]));
+  });
+
+  it("includes the linked roster name of the payment rows in viewerNames", async () => {
+    const event = await seedLastGame();
+    await prisma.user.create({ data: { id: "u-ep", name: "Account", email: "acc@example.com", emailVerified: true } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana", userId: "u-ep" } });
+    mockGetSession.mockResolvedValue({ user: { id: "u-ep", name: "Account" } } as any);
+    mockCheckOwnership.mockResolvedValue(null as any);
+    const json = await (await getPostGameStatus(ctx({ id: event.id }))).json();
+    expect(json.viewerNames).toEqual(expect.arrayContaining(["Account", "Ana"]));
+    expect(json.viewerTeam).toBe(0);
+  });
+
+  it("has no viewerNames for a signed-out viewer", async () => {
+    const event = await seedLastGame();
+    expect((await (await getPostGameStatus(ctx({ id: event.id }))).json()).viewerNames).toEqual([]);
+  });
+
+  it("reports whether the collector has payment details to show", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Pay", location: "P", dateTime: kickoff, teamOneName: "Foxes", teamTwoName: "Lions" },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: kickoff, status: "played", payerExternalName: "Maria" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const ana = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ana.id, order: 0 } });
+    await prisma.gamePayment.create({ data: { gameId: game.id, eventPlayerId: ana.id, playerName: "Ana", amount: 5, status: "pending" } });
+    const cost = await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 10, currency: "EUR" } });
+
+    expect((await (await getPostGameStatus(ctx({ id: event.id }))).json()).payerHasPaymentDetails).toBe(false);
+
+    await prisma.eventCost.update({ where: { id: cost.id }, data: { paymentMethods: JSON.stringify([{ type: "mbway", value: "911111111" }]) } });
+    expect((await (await getPostGameStatus(ctx({ id: event.id }))).json()).payerHasPaymentDetails).toBe(true);
+  });
+
+  it("counts how many people played the last game", async () => {
+    const event = await seedLastGame();
+    expect((await (await getPostGameStatus(ctx({ id: event.id }))).json()).lastGamePlayerCount).toBe(2);
+  });
 });

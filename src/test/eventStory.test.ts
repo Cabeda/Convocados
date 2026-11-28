@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createT } from "~/lib/i18n";
 import {
   recapPhase, recapTasks, scoreSummary, isSetsScoringSport, RECAP_HIDE_BEFORE_KICKOFF_MS,
+  nextRecapBoundary, pendingTaskCount,
   type RecapPhaseInput, type RecapTasksInput, type RecapPayment,
 } from "~/lib/eventStory";
 
@@ -108,7 +109,11 @@ describe("recapTasks — player", () => {
   });
 
   it("carries the amount and the collector on the pay task", () => {
-    expect(tasks()[1]).toEqual({ kind: "pay", amount: 5, payerName: "Maria", eventPlayerId: "ep-Ana" });
+    expect(tasks()[1]).toEqual({ kind: "pay", needsYou: true, amount: 5, payerName: "Maria", eventPlayerId: "ep-Ana", hasPaymentDetails: false });
+  });
+
+  it("tells the pay task whether the collector has payment details to show", () => {
+    expect(tasks({ payerHasPaymentDetails: true })[1]).toMatchObject({ kind: "pay", hasPaymentDetails: true });
   });
 
   it("puts add-score first when the score is missing, and no mvp (needs a score)", () => {
@@ -116,12 +121,12 @@ describe("recapTasks — player", () => {
   });
 
   it("flags the add-score task as inline only when a history row exists", () => {
-    expect(tasks({ hasScore: false })[0]).toEqual({ kind: "addScore", inline: true });
-    expect(tasks({ hasScore: false, latestHistoryId: null })[0]).toEqual({ kind: "addScore", inline: false });
+    expect(tasks({ hasScore: false })[0]).toEqual({ kind: "addScore", needsYou: true, inline: true });
+    expect(tasks({ hasScore: false, latestHistoryId: null })[0]).toEqual({ kind: "addScore", needsYou: true, inline: false });
   });
 
   it("sends sets-scored sports (tennis, padel) to the History page instead of inline steppers", () => {
-    expect(tasks({ hasScore: false, setsScoring: true })[0]).toEqual({ kind: "addScore", inline: false });
+    expect(tasks({ hasScore: false, setsScoring: true })[0]).toEqual({ kind: "addScore", needsYou: true, inline: false });
     expect(isSetsScoringSport("Padel")).toBe(true);
     expect(isSetsScoringSport("football")).toBe(false);
   });
@@ -163,20 +168,39 @@ describe("recapTasks — player", () => {
   });
 
   it("asks the organiser to pick a collector when nobody is collecting", () => {
-    expect(tasks({ payerName: null })[1]).toEqual({ kind: "nopayer", amount: 5, canChoose: false });
+    expect(tasks({ payerName: null })[1]).toEqual({ kind: "nopayer", needsYou: false, amount: 5, canChoose: false });
   });
 
-  it("collector sees a collect task with progress until everyone paid", () => {
+  it("collector sees a collect task with progress until everyone paid — counts only, no money sum", () => {
     const t1 = tasks({
       viewerName: "Maria", payerName: "Maria", myMvpComplete: true,
       payments: [row("Ana", "pending"), row("Rui", "paid"), row("Maria", "paid", 5, true)],
     });
-    expect(t1).toEqual([{ kind: "collect", collector: null, paidCount: 2, totalCount: 3, paidAmount: 10, totalAmount: 15 }]);
+    expect(t1).toEqual([{ kind: "collect", needsYou: false, paidCount: 2, totalCount: 3, sentCount: 0 }]);
   });
 
-  it("names the collector for an admin who is watching, not collecting", () => {
-    const [collect] = tasks({ role: "absent", canManage: true, viewerName: "Boss", myMvpComplete: true });
-    expect(collect).toMatchObject({ kind: "collect", collector: "Maria" });
+  it("asks the collector to act only when somebody says they paid", () => {
+    const [collect] = tasks({
+      viewerName: "Maria", payerName: "Maria", myMvpComplete: true,
+      payments: [row("Ana", "sent"), row("Rui", "paid"), row("Maria", "paid", 5, true)],
+    });
+    expect(collect).toMatchObject({ kind: "collect", needsYou: true, sentCount: 1 });
+  });
+
+  it("does not repeat who is collecting to an admin who is only watching", () => {
+    expect(kinds({ role: "absent", canManage: true, viewerName: "Boss", myMvpComplete: true })).toEqual([]);
+  });
+
+  it("matches the viewer through a linked roster name when the account name differs", () => {
+    const linked = { viewerName: "anab99", viewerNames: ["anab99", "Ana"] };
+    expect(tasks(linked)[1]).toMatchObject({ kind: "pay", eventPlayerId: "ep-Ana" });
+    expect(kinds({ ...linked, payerName: "Ana", payments: [row("Ana", "pending", 5, true), row("Rui", "pending")], myMvpComplete: true }))
+      .toEqual(["collect"]);
+  });
+
+  it("falls back to the account name when no linked name is known", () => {
+    expect(kinds({ viewerNames: [] })).toEqual(["mvp", "pay"]);
+    expect(kinds({ viewerNames: undefined })).toEqual(["mvp", "pay"]);
   });
 
   it("collector has nothing to do once everyone paid", () => {
@@ -188,13 +212,13 @@ describe("recapTasks — player", () => {
 });
 
 describe("recapTasks — organiser, bench, absent, signed out", () => {
-  it("lets an admin who did not play add the score, but not vote, and see who owes", () => {
-    expect(kinds({ role: "absent", canManage: true, hasScore: false, viewerName: "Boss" })).toEqual(["addScore", "collect"]);
-    expect(kinds({ role: "absent", canManage: true, hasScore: true, viewerName: "Boss" })).toEqual(["collect"]);
+  it("lets an admin who did not play add the score, but not vote", () => {
+    expect(kinds({ role: "absent", canManage: true, hasScore: false, viewerName: "Boss" })).toEqual(["addScore"]);
+    expect(kinds({ role: "absent", canManage: true, hasScore: true, viewerName: "Boss" })).toEqual([]);
   });
 
   it("lets an admin who played choose the collector when nobody is", () => {
-    expect(tasks({ canManage: true, payerName: null })[1]).toEqual({ kind: "nopayer", amount: 5, canChoose: true });
+    expect(tasks({ canManage: true, payerName: null })[1]).toEqual({ kind: "nopayer", needsYou: true, amount: 5, canChoose: true });
   });
 
   it("gives a benched or absent non-admin viewer no tasks", () => {
@@ -249,7 +273,38 @@ describe("scoreSummary", () => {
     expect(sum({ scoreTwo: null })).toBe("Score not added yet");
   });
 
+  it("says point, not points, for a single point", () => {
+    expect(sum({ seasonDelta: 1 })).toBe("You won · +1 point this season");
+    expect(sum({ viewerTeam: 1, seasonDelta: -1 })).toBe("You lost · \u22121 point this season");
+  });
+
   it("uses no ranking jargon", () => {
     expect(sum()).not.toMatch(/RP|tier|crew|provisional|elo/i);
+  });
+});
+
+describe("pendingTaskCount", () => {
+  it("counts only the rows that need the viewer, not the informational ones", () => {
+    expect(pendingTaskCount(tasks({ payerName: null }))).toBe(1); // mvp; "nobody is collecting" is information for a non-admin
+    expect(pendingTaskCount(tasks({ payerName: null, canManage: true }))).toBe(2);
+    expect(pendingTaskCount([])).toBe(0);
+  });
+});
+
+describe("nextRecapBoundary", () => {
+  const base = { now: NOW, nextKickoff: farKickoff, hasLastGame: true, weekly: true };
+
+  it("is the moment the recap makes room for game day (6h before the next kickoff)", () => {
+    expect(nextRecapBoundary(base)).toBe(farKickoff.getTime() - RECAP_HIDE_BEFORE_KICKOFF_MS);
+  });
+
+  it("is null once that moment has passed: nothing time-based can change any more", () => {
+    expect(nextRecapBoundary({ ...base, nextKickoff: new Date(NOW.getTime() + 2 * HOUR) })).toBeNull();
+  });
+
+  it("is null when the phase can never change with the clock", () => {
+    expect(nextRecapBoundary({ ...base, weekly: false })).toBeNull();
+    expect(nextRecapBoundary({ ...base, nextKickoff: null })).toBeNull();
+    expect(nextRecapBoundary({ ...base, hasLastGame: false })).toBeNull();
   });
 });

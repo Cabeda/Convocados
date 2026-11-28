@@ -36,6 +36,12 @@ export interface PostGameStatus {
   lastGameDateTime?: string | null;
   /** Which team the viewer played for in the last game (0 = score one). */
   viewerTeam?: 0 | 1 | null;
+  /** The account name plus the roster names linked to the viewer's account. */
+  viewerNames?: string[];
+  /** How many people played the last game; null when unknown. */
+  lastGamePlayerCount?: number | null;
+  /** The collector has payment details to show ("How to pay"). */
+  payerHasPaymentDetails?: boolean;
 }
 
 const POLL_MS = 15_000;

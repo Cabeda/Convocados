@@ -69,11 +69,15 @@ export interface RecapTasksInput {
   /** True once THIS viewer has voted, or has no MVP task. */
   myMvpComplete: boolean;
   viewerName: string | null;
+  /** Roster names linked to the viewer's account (the account name often differs from the roster name). */
+  viewerNames?: readonly string[];
   viewerPaymentSettled: boolean;
   gameMode: "tracked" | "untracked" | null;
   payerName: string | null;
   payments: readonly RecapPayment[] | null;
   allPaid: boolean;
+  /** The collector has somewhere to send money to (drives the "How to pay" link). */
+  payerHasPaymentDetails?: boolean;
   /** Tennis and padel are scored in sets, which the History page owns. */
   setsScoring?: boolean;
 }
@@ -82,12 +86,31 @@ export interface RecapTasksInput {
 export const isSetsScoringSport = (sport: string) =>
   ["tennis", "tennis-singles", "tennis-doubles", "padel"].includes(sport.toLowerCase());
 
+/**
+ * One thing on the recap. `needsYou` separates what the viewer must do (it gets
+ * the amber dot and keeps the card open) from what is only information.
+ */
 export type RecapTask =
-  | { kind: "addScore"; /** False when no history row exists yet, so the score cannot be saved in place. */ inline: boolean }
-  | { kind: "mvp" }
-  | { kind: "pay"; amount: number; payerName: string; eventPlayerId: string }
-  | { kind: "nopayer"; amount: number; canChoose: boolean }
-  | { kind: "collect"; /** The viewer is the one collecting (otherwise an admin watching, naming the collector). */ collector: string | null; paidCount: number; totalCount: number; paidAmount: number; totalAmount: number };
+  | { kind: "addScore"; needsYou: boolean; /** False when no history row exists yet, so the score cannot be saved in place. */ inline: boolean }
+  | { kind: "mvp"; needsYou: boolean }
+  | { kind: "pay"; needsYou: boolean; amount: number; payerName: string; eventPlayerId: string; /** The collector has details to show, so "How to pay" makes sense. */ hasPaymentDetails: boolean }
+  | { kind: "nopayer"; needsYou: boolean; amount: number; canChoose: boolean }
+  /** The viewer is the one collecting: a count of who paid, and a nudge only when someone says they sent it. */
+  | { kind: "collect"; needsYou: boolean; paidCount: number; totalCount: number; sentCount: number };
+
+/** How many rows really need the viewer (informational rows do not count). */
+export const pendingTaskCount = (tasks: readonly RecapTask[]) => tasks.filter((x) => x.needsYou).length;
+
+/**
+ * The next moment the clock alone changes the recap phase, or null when it can
+ * never change that way (so the page needs no ticker at all).
+ */
+export function nextRecapBoundary(input: { now: Date | number; nextKickoff: Date | null; hasLastGame: boolean; weekly: boolean }): number | null {
+  if (!input.hasLastGame || !input.weekly || !input.nextKickoff) return null;
+  const now = typeof input.now === "number" ? input.now : input.now.getTime();
+  const boundary = input.nextKickoff.getTime() - RECAP_HIDE_BEFORE_KICKOFF_MS;
+  return boundary > now ? boundary : null;
+}
 
 const same = (a: string | null | undefined, b: string | null | undefined) =>
   !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -96,37 +119,37 @@ const same = (a: string | null | undefined, b: string | null | undefined) =>
 export function recapTasks(input: RecapTasksInput): RecapTask[] {
   if (!input.hasLastGame) return [];
   const out: RecapTask[] = [];
+  // The account name, then whatever roster names are linked to the account.
+  const mine = [input.viewerName, ...(input.viewerNames ?? [])];
+  const isViewer = (name: string | null | undefined) => mine.some((n) => same(n, name));
 
   // Anyone who played can add the score, and so can the owner and admins.
   if (!input.hasScore && (input.role === "played" || input.canManage)) {
-    out.push({ kind: "addScore", inline: !!input.latestHistoryId && !input.setsScoring });
+    out.push({ kind: "addScore", needsYou: true, inline: !!input.latestHistoryId && !input.setsScoring });
   }
 
   // MVP is for players only, and only once there is a result to vote on.
   if (input.role === "played" && input.mvpEnabled && input.hasScore && input.latestHistoryId && !input.myMvpComplete) {
-    out.push({ kind: "mvp" });
+    out.push({ kind: "mvp", needsYou: true });
   }
 
   // Money is a task only when a cost exists and the game is tracked (otherwise
   // everyone pays their own share outside the app).
   const roll = input.payments ?? [];
   if (input.hasCost && input.gameMode === "tracked" && roll.length > 0) {
-    const mine = roll.find((r) => same(r.name, input.viewerName));
+    const myRow = roll.find((r) => isViewer(r.name));
     // `sent` means the viewer already said they paid: that is done for them.
-    const owes = !!mine && !mine.isPayer && mine.status === "pending" && !input.viewerPaymentSettled;
-    if (owes && mine) {
+    const owes = !!myRow && !myRow.isPayer && myRow.status === "pending" && !input.viewerPaymentSettled;
+    if (owes && myRow) {
       out.push(input.payerName
-        ? { kind: "pay", amount: mine.amount, payerName: input.payerName, eventPlayerId: mine.eventPlayerId }
-        : { kind: "nopayer", amount: mine.amount, canChoose: input.canManage });
+        ? { kind: "pay", needsYou: true, amount: myRow.amount, payerName: input.payerName, eventPlayerId: myRow.eventPlayerId, hasPaymentDetails: !!input.payerHasPaymentDetails }
+        : { kind: "nopayer", needsYou: input.canManage, amount: myRow.amount, canChoose: input.canManage });
     }
-    const collecting = same(input.payerName, input.viewerName) || (input.canManage && !!input.payerName);
-    if (collecting && !input.allPaid) {
+    // Only the collector gets the row: for everyone else "who is collecting" is already said where they pay.
+    if (isViewer(input.payerName) && !input.allPaid) {
       const s = summarizePayments(roll);
-      out.push({
-        kind: "collect", collector: same(input.payerName, input.viewerName) ? null : input.payerName,
-        paidCount: s.paidCount, totalCount: s.totalCount,
-        paidAmount: s.paidAmount, totalAmount: roll.reduce((sum, r) => sum + r.amount, 0),
-      });
+      const sentCount = roll.filter((r) => r.status === "sent").length;
+      out.push({ kind: "collect", needsYou: sentCount > 0, paidCount: s.paidCount, totalCount: s.totalCount, sentCount });
     }
   }
   return out;
@@ -161,5 +184,6 @@ export function scoreSummary(input: ScoreSummaryInput, t: TFunction): string {
 
   if (viewerTeam === null || seasonDelta === null || seasonDelta === 0) return outcome;
   const signed = `${seasonDelta > 0 ? "+" : MINUS}${Math.abs(seasonDelta)}`;
-  return `${outcome} \u00b7 ${t("recapPointsThisSeason", { delta: signed })}`;
+  const points = Math.abs(seasonDelta) === 1 ? "recapPointsThisSeasonOne" : "recapPointsThisSeason";
+  return `${outcome} \u00b7 ${t(points, { delta: signed })}`;
 }

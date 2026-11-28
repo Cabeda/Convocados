@@ -2,6 +2,11 @@ import type { PaletteMode, ThemeOptions } from "@mui/material/styles";
 import { tokens, type DesignTokens } from "./tokens";
 
 export { tokens } from "./tokens";
+
+declare module "@mui/material/styles" {
+  interface Palette { attention: { main: string; ring: string } }
+  interface PaletteOptions { attention?: { main: string; ring: string } }
+}
 export type { DesignTokens, PaletteTokens } from "./tokens";
 
 function paletteForMode(mode: PaletteMode, t: DesignTokens) {
@@ -12,6 +17,7 @@ function paletteForMode(mode: PaletteMode, t: DesignTokens) {
     error: { ...t.palette[mode].error },
     warning: { ...t.palette[mode].warning },
     success: { ...t.palette[mode].success },
+    attention: { main: t.palette[mode].attention.fill, ring: t.palette[mode].attention.ring },
     background: { ...t.palette[mode].background },
     divider: t.palette[mode].divider,
   };

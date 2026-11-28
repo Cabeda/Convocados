@@ -9,6 +9,8 @@ import { occurrencePaymentRoll } from "./paymentRoll.server";
 import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
 import { summarizePayments } from "./paymentSummary";
 import { parseTeamsSnapshot } from "./gameSnapshot";
+import { isNameInList, namesFromTeamsSnapshot, normalizeName } from "./snapshotParticipants";
+import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 
 /**
  * Shared post-game wrap-up status computation.
@@ -63,6 +65,12 @@ export interface PostGameStatusPayload {
   lastGameDateTime: string | null;
   /** Which team the viewer played for in the last game (0 = score one); null when they did not play or are signed out. */
   viewerTeam: 0 | 1 | null;
+  /** Every name the viewer is known by on this event: the account name plus the roster names linked to their account. */
+  viewerNames: string[];
+  /** How many people played the last game (from its lineup snapshot); null when unknown. */
+  lastGamePlayerCount: number | null;
+  /** The collector has somewhere to send money to (payment methods resolve), so the card can offer "How to pay". */
+  payerHasPaymentDetails: boolean;
 }
 
 export async function computePostGameStatus(
@@ -99,7 +107,7 @@ export async function computePostGameStatus(
       gamePayments: null, gameConfig: null, seasonRank: null,
       rankStanding: null, viewerPaymentSettled: false,
       isRecurring: event.isRecurring ?? false,
-      lastGameDateTime: null, viewerTeam: null,
+      lastGameDateTime: null, viewerTeam: null, viewerNames: [], lastGamePlayerCount: null, payerHasPaymentDetails: false,
     };
   }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
@@ -153,7 +161,11 @@ export async function computePostGameStatus(
   // Unlike isParticipant, the Owner/Admin settlement override does NOT apply —
   // MVP voting is restricted to players, so an admin who didn't play must not
   // be offered the Vote MVP task nor have the banner held open by MVP state.
-  const isPlayer = session?.user ? isHistoryParticipant(latestHistory, session.user.name) : false;
+  // The account name often differs from the roster name ("anab99" vs "Ana B"), so
+  // the roster rows linked to the account count too (falling back to the name).
+  const viewerNames = session?.user ? await resolveViewerNames(event.id, session.user.id, session.user.name) : [];
+  const playedAs = viewerNames.find((n) => isHistoryParticipant(latestHistory, n)) ?? null;
+  const isPlayer = playedAs !== null;
 
   // ─── MVP voting completion ──────────────────────────────────────────
   let mvpComplete = true;
@@ -353,7 +365,7 @@ export async function computePostGameStatus(
         scoreTwo: latestHistory.scoreTwo,
         teamsSnapshot: latestHistory.teamsSnapshot,
       },
-      session.user.name,
+      playedAs ?? session.user.name,
     );
   }
 
@@ -369,7 +381,7 @@ export async function computePostGameStatus(
         isFriendly: latestHistory.isFriendly,
         teamsSnapshot: latestHistory.teamsSnapshot,
       },
-      session.user.name,
+      playedAs ?? session.user.name,
     );
   }
 
@@ -378,11 +390,18 @@ export async function computePostGameStatus(
   // admins keep the task open until every share is in.
   let viewerPaymentSettled = false;
   if (session?.user && !isSettlementAdmin) {
-    const viewerName = session.user.name;
     const rows = wrapUpSettlement?.rows ?? [];
-    const mine = rows.find((r) => r.name === viewerName);
-    const isReceiver = (wrapUpSettlement?.payerName ?? null) === viewerName;
+    const mine = rows.find((r) => isNameInList(viewerNames, r.name));
+    const isReceiver = isNameInList(viewerNames, wrapUpSettlement?.payerName ?? null);
     viewerPaymentSettled = !isReceiver && !!mine && !mine.isPayer && mine.status === "paid";
+  }
+
+  // Whether the collector has somewhere to send money to: drives the card's "How to pay" link.
+  let payerHasPaymentDetails = false;
+  if (wrapUpSettlement && wrapUpSettlement.mode === "tracked" && wrapUpSettlement.payerName) {
+    try {
+      payerHasPaymentDetails = (await resolvePaymentDetails(event.id, wrapUpSettlement.gameId)).methods.length > 0;
+    } catch { /* details are a courtesy: never fail the status for them */ }
   }
 
   return {
@@ -406,15 +425,34 @@ export async function computePostGameStatus(
     lastGameDateTime: latestHistory
       ? latestHistory.dateTime.toISOString()
       : gameEnded ? event.dateTime.toISOString() : null,
-    viewerTeam: session?.user ? viewerTeamIndex(latestHistory?.teamsSnapshot ?? null, session.user.name) : null,
+    viewerTeam: session?.user ? viewerTeamIndex(latestHistory?.teamsSnapshot ?? null, viewerNames) : null,
+    viewerNames,
+    lastGamePlayerCount: namesFromTeamsSnapshot(latestHistory?.teamsSnapshot).length || null,
+    payerHasPaymentDetails,
   };
 }
 
-/** The index of the team (0 = score one) whose snapshot lineup contains `name`, or null. */
-function viewerTeamIndex(teamsSnapshot: string | null, name: string): 0 | 1 | null {
+/** The account name plus the names of roster rows (Player, EventPlayer) linked to this account on the event. */
+async function resolveViewerNames(eventId: string, userId: string, accountName: string): Promise<string[]> {
+  const [players, eventPlayers] = await Promise.all([
+    prisma.player.findMany({ where: { eventId, userId }, select: { name: true } }),
+    prisma.eventPlayer.findMany({ where: { eventId, userId }, select: { name: true } }),
+  ]);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of [accountName, ...players.map((p) => p.name), ...eventPlayers.map((p) => p.name)]) {
+    const key = normalizeName(name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+/** The index of the team (0 = score one) whose snapshot lineup contains any of `names`, or null. */
+function viewerTeamIndex(teamsSnapshot: string | null, names: readonly string[]): 0 | 1 | null {
   const teams = parseTeamsSnapshot(teamsSnapshot);
   if (!teams) return null;
-  const wanted = name.trim().toLowerCase();
-  const idx = teams.findIndex((team) => team.players.some((p) => p.trim().toLowerCase() === wanted));
+  const idx = teams.findIndex((team) => team.players.some((p) => isNameInList(names, p)));
   return idx === 0 || idx === 1 ? idx : null;
 }
