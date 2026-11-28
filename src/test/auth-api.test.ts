@@ -1080,7 +1080,26 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const claimedUser = await seedUser({ name: "Different Name" });
     mockAuth(claimedUser.id, "Different Name");
     const id = await seedEvent({ ownerId: owner.id });
-    // Add a player claimed by this user
+    // The account holds a spot in a later game under a name that is not on the settled game.
+    await testPrisma.player.create({
+      data: { name: "Zed", order: 0, eventId: id, userId: claimedUser.id },
+    });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows a player whose account is linked to the name on the settled game's teams", async () => {
+    // The ledger knows them as "Alice"; the account is "Different Name". The post-game status reads
+    // the same link, so the score task it offers must be one this endpoint accepts.
+    const owner = await seedUser();
+    const claimedUser = await seedUser({ name: "Different Name" });
+    mockAuth(claimedUser.id, "Different Name");
+    const id = await seedEvent({ ownerId: owner.id });
     await testPrisma.player.create({
       data: { name: "Alice", order: 0, eventId: id, userId: claimedUser.id },
     });
@@ -1090,7 +1109,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     ];
     const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it("allows participant to edit teams", async () => {

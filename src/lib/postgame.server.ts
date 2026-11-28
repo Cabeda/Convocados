@@ -3,13 +3,14 @@ import { isGameEnded } from "./gameStatus";
 import { getSession, checkOwnership } from "./auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
 import { isSettledGameParticipant } from "./participants.server";
-import { isHistoryParticipant } from "./snapshotParticipants";
 import { getWrapUpGameSettlement } from "./settlement.server";
 import { occurrencePaymentRoll } from "./paymentRoll.server";
 import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
 import { summarizePayments } from "./paymentSummary";
 import { parseTeamsSnapshot } from "./gameSnapshot";
-import { isNameInList, namesFromTeamsSnapshot, normalizeName } from "./snapshotParticipants";
+import { findViewerName, isNameInList, namesFromTeamsSnapshot } from "./snapshotParticipants";
+import { viewerRosterNames } from "./viewerIdentity.server";
+import { countEligibleVoters, viewerHasVoted } from "./mvp.server";
 import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 
 /**
@@ -105,7 +106,7 @@ async function viewerNamesFor(eventId: string, userId: string, accountName: stri
     const hit = viewerNamesCache.get(key);
     if (hit && hit.expires > now) return hit.names;
   }
-  const names = await resolveViewerNames(eventId, userId, accountName);
+  const names = await viewerRosterNames(eventId, { id: userId, name: accountName });
   if (viewerNamesCache.size >= VIEWER_NAMES_MAX) {
     for (const [k, v] of viewerNamesCache) if (v.expires <= now) viewerNamesCache.delete(k);
     // Still full: drop the oldest entry (a Map iterates in insertion order).
@@ -209,7 +210,7 @@ export async function computePostGameStatus(
   // The account name often differs from the roster name ("anab99" vs "Ana B"), so
   // the roster rows linked to the account count too (falling back to the name).
   const viewerNames = session?.user ? await viewerNamesFor(event.id, session.user.id, session.user.name, light) : [];
-  const playedAs = viewerNames.find((n) => isHistoryParticipant(latestHistory, n)) ?? null;
+  const playedAs = findViewerName(viewerNames, namesFromTeamsSnapshot(latestHistory?.teamsSnapshot));
   const isPlayer = playedAs !== null;
 
   // ─── MVP voting completion ──────────────────────────────────────────
@@ -239,20 +240,8 @@ export async function computePostGameStatus(
     const isVotingOpen = gameHasEnded && !newerGame && withinWindow;
 
     if (isVotingOpen) {
-      // Count eligible voters: participants in teamsSnapshot that have user accounts
-      let eligibleCount = 0;
-      if (latestHistory.teamsSnapshot) {
-        try {
-          const teams = JSON.parse(latestHistory.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
-          const allNames = teams.flatMap((t) => t.players.map((p) => p.name));
-          // Find users whose names match participants (case-insensitive)
-          const matchingUsers = await prisma.user.findMany({
-            where: { name: { in: allNames } },
-            select: { name: true },
-          });
-          eligibleCount = matchingUsers.length;
-        } catch { /* ignore */ }
-      }
+      // Count eligible voters: lineup names that belong to an account (by name or by a linked roster row)
+      const eligibleCount = await countEligibleVoters(event.id, namesFromTeamsSnapshot(latestHistory.teamsSnapshot));
 
       if (eligibleCount > 0) {
         // Count votes already cast for this game
@@ -268,25 +257,7 @@ export async function computePostGameStatus(
 
       // Personal task: has THIS user voted?
       if (isPlayer && session?.user) {
-        let viewerVoted: boolean;
-        const userPlayers = await prisma.player.findMany({
-          where: { eventId: event.id, userId: session.user.id },
-          select: { id: true },
-        });
-        if (userPlayers.length > 0) {
-          const existing = await prisma.mvpVote.findFirst({
-            where: { gameHistoryId: latestHistory.id, voterPlayerId: { in: userPlayers.map((p) => p.id) } },
-            select: { id: true },
-          });
-          viewerVoted = !!existing;
-        } else {
-          // Participant with no Player record — votes are stored name-based.
-          const existing = await prisma.mvpVote.findFirst({
-            where: { gameHistoryId: latestHistory.id, voterPlayerId: `name:${session.user.name}` },
-            select: { id: true },
-          });
-          viewerVoted = !!existing;
-        }
+        const viewerVoted = await viewerHasVoted(latestHistory.id, event.id, session.user, viewerNames);
         // After 24h the banner stops nagging even without a vote (same
         // ceiling as bannerMvpComplete); voting itself stays open on history.
         myMvpComplete = viewerVoted || hoursSinceGameEnd >= 24;
@@ -373,6 +344,7 @@ export async function computePostGameStatus(
         sessionUser: session.user,
         event,
         latestHistory,
+        viewerNames,
       });
     }
   }
@@ -485,23 +457,6 @@ async function collectorHasPaymentDetails(
   } catch {
     return false;
   }
-}
-
-/** The account name plus the names of roster rows (Player, EventPlayer) linked to this account on the event. */
-async function resolveViewerNames(eventId: string, userId: string, accountName: string): Promise<string[]> {
-  const [players, eventPlayers] = await Promise.all([
-    prisma.player.findMany({ where: { eventId, userId }, select: { name: true } }),
-    prisma.eventPlayer.findMany({ where: { eventId, userId }, select: { name: true } }),
-  ]);
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const name of [accountName, ...players.map((p) => p.name), ...eventPlayers.map((p) => p.name)]) {
-    const key = normalizeName(name);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push(name);
-  }
-  return out;
 }
 
 /** The index of the team (0 = score one) whose snapshot lineup contains any of `names`, or null. */
