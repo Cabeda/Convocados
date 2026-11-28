@@ -671,3 +671,18 @@ describe("the Reviewer can approve or send a Change back", () => {
     expect(deliver).toContain("ghAsPerson([");
   });
 });
+
+
+describe("rounds on different Changes do not queue behind each other", () => {
+  // One shared lock put nine refused Changes four hours apart; they are nine
+  // branches, so only two rounds on the *same* Change actually contend.
+  it("keys the lock on the Change, and keeps a shared key for the picker", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      concurrency?: { group?: string };
+    };
+    const group = doc.concurrency?.group ?? "";
+    expect(group).toContain("inputs.pr");
+    expect(group).toContain("github.event.pull_request.number");
+    expect(group).toContain("'pick'");
+  });
+});
