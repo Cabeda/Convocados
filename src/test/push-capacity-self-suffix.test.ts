@@ -171,6 +171,7 @@ describe("capacity suffix is not appended to bodies that already state it (#1730
 
       const fcm = fcmBodiesByLocale();
       const web = webBodiesByLocale();
+      const englishBody = createT("en")(scenario.key, scenario.params);
 
       for (const locale of LOCALES) {
         const expected = createT(locale)(scenario.key, scenario.params);
@@ -178,6 +179,11 @@ describe("capacity suffix is not appended to bodies that already state it (#1730
         expect(web[locale], `web push ${locale}`).toBe(expected);
         expect(fcm[locale], `FCM ${locale} must not append a suffix`).not.toContain(" · ");
         expect(web[locale], `web push ${locale} must not append a suffix`).not.toContain(" · ");
+        if (locale !== "en") {
+          expect(expected, `${locale} base translation must be localized`).not.toBe(englishBody);
+          expect(fcm[locale], `FCM ${locale} must not fall back to English`).not.toBe(englishBody);
+          expect(web[locale], `web push ${locale} must not fall back to English`).not.toBe(englishBody);
+        }
       }
     });
   }

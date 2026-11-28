@@ -353,7 +353,7 @@ const fr: TranslationKeys = {
   notifyPlayersJoined: "{count} players joined",
   notifyPlayersLeft: "{count} players left",
   notifyPlayerActivityGrouped: "{count} player updates",
-  notifyGameFullAlert: "🎉 Game is full! All spots taken",
+  notifyGameFullAlert: "🎉 Match complet ! Toutes les places prises",
   notifySpotAvailable: "📢 A spot opened up!",
   notifyGameCancelled: "❌ {title} a été annulé",
   notifyGameInvite: "🏟️ Vous avez été ajouté à {title}",
