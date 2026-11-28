@@ -29,16 +29,23 @@ export interface RecapPhaseInput {
   seen: boolean;
   /** The viewer still owes their share (drives the game-day reminder row). */
   owesShare: boolean;
+  /**
+   * The score is missing and this viewer may add it (they played, or they own or administer the event).
+   * Game day must not bury an unfinished score entry, so it keeps a minimal reminder.
+   */
+  addScorePending?: boolean;
 }
 
 export function recapPhase(input: RecapPhaseInput): RecapPhase {
-  const { hasLastGame, cancelled, weekly, nextKickoff, role, taskCount, seen, owesShare } = input;
+  const { hasLastGame, cancelled, weekly, nextKickoff, role, taskCount, seen, owesShare, addScorePending } = input;
   if (!hasLastGame || cancelled) return "hidden";
 
   const now = typeof input.now === "number" ? input.now : input.now.getTime();
   // A one-off never hides the recap: there is no next game to make room for.
   if (weekly && nextKickoff && now >= nextKickoff.getTime() - RECAP_HIDE_BEFORE_KICKOFF_MS) {
-    return owesShare ? "reminder" : "hidden";
+    // The MVP vote and the money fold into one small reminder, but a missing score never disappears:
+    // nobody else can say how the game ended once the page is about the next one.
+    return owesShare || addScorePending ? "reminder" : "hidden";
   }
 
   // Players and signed-out visitors see the full card until they have seen it
@@ -97,6 +104,17 @@ export type RecapTask =
   | { kind: "nopayer"; needsYou: boolean; amount: number; canChoose: boolean }
   /** The viewer is the one collecting: a count of who paid, and a nudge only when someone says they sent it. */
   | { kind: "collect"; needsYou: boolean; paidCount: number; totalCount: number; sentCount: number };
+
+/**
+ * Where the `?action=add-score` deep link lands: the steppers on the recap (`inline`), or the History
+ * page (`history`) for a game that cannot be scored in place (sets-scored sports, no history row yet).
+ * Null when there is nothing for this viewer to add, so the link has nothing to do.
+ */
+export function addScoreDeepLinkTarget(tasks: readonly RecapTask[]): "inline" | "history" | null {
+  const task = tasks.find((x) => x.kind === "addScore");
+  if (!task || task.kind !== "addScore") return null;
+  return task.inline ? "inline" : "history";
+}
 
 /** How many rows really need the viewer (informational rows do not count). */
 export const pendingTaskCount = (tasks: readonly RecapTask[]) => tasks.filter((x) => x.needsYou).length;

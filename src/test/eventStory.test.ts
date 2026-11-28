@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createT } from "~/lib/i18n";
 import {
   recapPhase, recapTasks, scoreSummary, isSetsScoringSport, RECAP_HIDE_BEFORE_KICKOFF_MS,
-  nextRecapBoundary, pendingTaskCount,
+  nextRecapBoundary, pendingTaskCount, addScoreDeepLinkTarget,
   type RecapPhaseInput, type RecapTasksInput, type RecapPayment,
 } from "~/lib/eventStory";
 
@@ -14,7 +14,7 @@ const farKickoff = new Date(NOW.getTime() + 72 * HOUR);
 // ── recapPhase ───────────────────────────────────────────────────────────────
 const phaseBase: RecapPhaseInput = {
   now: NOW, nextKickoff: farKickoff, hasLastGame: true, weekly: true, cancelled: false,
-  role: "played", taskCount: 0, seen: true, owesShare: false,
+  role: "played", taskCount: 0, seen: true, owesShare: false, addScorePending: false,
 };
 const phase = (o: Partial<RecapPhaseInput> = {}) => recapPhase({ ...phaseBase, ...o });
 
@@ -55,7 +55,26 @@ describe("recapPhase", () => {
   it("is hidden for a weekly event within 6h of the next kickoff", () => {
     const kickoff = new Date(NOW.getTime() + RECAP_HIDE_BEFORE_KICKOFF_MS);
     expect(phase({ nextKickoff: kickoff })).toBe("hidden");
+    // MVP and pay tasks fold away on game day; only a missing score survives it (see the next tests).
     expect(phase({ nextKickoff: new Date(NOW.getTime() + 2 * HOUR), taskCount: 2, seen: false })).toBe("hidden");
+  });
+
+  it("keeps a reminder on game day while the score is still missing and the viewer may add it", () => {
+    const soon = new Date(NOW.getTime() + 2 * HOUR);
+    expect(phase({ nextKickoff: soon, taskCount: 1, addScorePending: true })).toBe("reminder");
+    // Even after kickoff has passed, and even when nothing is owed.
+    expect(phase({ nextKickoff: new Date(NOW.getTime() - HOUR), addScorePending: true, owesShare: false })).toBe("reminder");
+    expect(phase({ nextKickoff: soon, addScorePending: true, owesShare: true })).toBe("reminder");
+  });
+
+  it("does not keep a reminder for a score that is not the viewer's to add", () => {
+    expect(phase({ nextKickoff: new Date(NOW.getTime() + 2 * HOUR), addScorePending: false })).toBe("hidden");
+  });
+
+  it("a cancelled game or a missing last game still hides everything, score pending or not", () => {
+    const soon = new Date(NOW.getTime() + 2 * HOUR);
+    expect(phase({ nextKickoff: soon, addScorePending: true, cancelled: true })).toBe("hidden");
+    expect(phase({ nextKickoff: soon, addScorePending: true, hasLastGame: false })).toBe("hidden");
   });
 
   it("stays visible just outside the 6h window", () => {
@@ -129,6 +148,18 @@ describe("recapTasks — player", () => {
     expect(tasks({ hasScore: false, setsScoring: true })[0]).toEqual({ kind: "addScore", needsYou: true, inline: false });
     expect(isSetsScoringSport("Padel")).toBe(true);
     expect(isSetsScoringSport("football")).toBe(false);
+  });
+
+  it("sends the add-score deep link to the right place for every kind of game", () => {
+    // A football game with a history row: the steppers on the recap.
+    expect(addScoreDeepLinkTarget(tasks({ hasScore: false }))).toBe("inline");
+    // Tennis and padel are scored in sets, and a game without a history row cannot be scored in place: History.
+    expect(addScoreDeepLinkTarget(tasks({ hasScore: false, setsScoring: true }))).toBe("history");
+    expect(addScoreDeepLinkTarget(tasks({ hasScore: false, latestHistoryId: null }))).toBe("history");
+    // Nothing to add (score is in, or the viewer may not add it): the link has nothing to do.
+    expect(addScoreDeepLinkTarget(tasks({ hasScore: true }))).toBeNull();
+    expect(addScoreDeepLinkTarget(tasks({ hasScore: false, role: "absent", canManage: false }))).toBeNull();
+    expect(addScoreDeepLinkTarget([])).toBeNull();
   });
 
   it("drops the mvp task when MVP is turned off", () => {
