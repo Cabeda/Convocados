@@ -2,9 +2,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Container, Paper, Typography, Stack, Button,
-  Alert, Skeleton, ToggleButton, ToggleButtonGroup,
+  Skeleton, ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
-import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import StadiumIcon from "@mui/icons-material/Stadium";
 import { ThemeModeProvider } from "./ThemeModeProvider";
@@ -23,7 +22,7 @@ import { TeamField } from "./TeamField";
 import type { Imatch } from "~/lib/random";
 import { useLocale } from "~/lib/useT";
 import { addKnownName, getQjName } from "~/lib/knownNames";
-import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
+import { fromDateTimeLocalValue } from "~/lib/timezones";
 import { nextOccurrence, parseRecurrenceRule } from "~/lib/recurrence";
 import { isGameEnded } from "~/lib/gameStatus";
 import { mergeSuggestionPills } from "~/lib/suggestionPills";
@@ -1148,7 +1147,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
     </ThemeModeProvider>
   );
 
-  const wasReset = event.wasReset ?? false;
   // A weekly game keeps its finished date on the page until the next occurrence takes over:
   // say when the next one is, never the date that already passed.
   const rule = parseRecurrenceRule(event.recurrenceRule);
@@ -1162,28 +1160,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={3}>
 
-            {wasReset && (
-              <Alert severity="info" icon={<EventRepeatIcon />}>
-                {t("recurringResetAlert", {
-                  date: formatDateInTz(gameDate, locale, event.timezone, {
-                    weekday: "long", month: "long", day: "numeric",
-                  }),
-                })}
-              </Alert>
-            )}
-
             {inviteToken && event && (
               <InviteBanner token={inviteToken} eventId={event.id} onAccepted={fetchEvent} />
             )}
-
-            {/* #457 Push prompt banner — event-detail trigger. #463 high-intent:
-                render as a centered modal when the user has a pending RSVP and
-                the event kicks off within 48h. */}
-            <PushPromptBanner
-              followCount={0}
-              forceOnEventDetail={isAuthenticated}
-              highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvpStatus) : false}
-            />
 
             {/* #457 Organizer-only attendance summary — now rendered inside the PlayerList footer. */}
 
@@ -1219,10 +1198,21 @@ export default function EventPage({ eventId }: { eventId: string }) {
               isAuthenticated={isAuthenticated}
               canManage={isOwner || isAdmin}
               isRecurring={!!event.isRecurring}
+              hasLastGame={event.hasLastGame}
               nextKickoff={event.dateTime}
               timezone={event.timezone}
               sport={sport}
               deepLinkAction={deepLinkAction}
+            />
+
+            {/* #457 Push prompt banner — event-detail trigger. A "later" prompt: it comes after the recap, never above
+                the title. #463 high-intent:
+                render as a centered modal when the user has a pending RSVP and
+                the event kicks off within 48h. */}
+            <PushPromptBanner
+              followCount={0}
+              forceOnEventDetail={isAuthenticated}
+              highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvpStatus) : false}
             />
 
             {rule && !cancelled && <NextGameDateTemp date={nextGameDate} timezone={event.timezone} />}

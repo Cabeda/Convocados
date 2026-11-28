@@ -100,7 +100,6 @@ const en = {
   gameNotFound: "Game not found",
   gameNotFoundDesc: "This link may be invalid or expired.",
   createNewGame: "Create a new game",
-  recurringResetAlert: "This recurring game was reset for the next occurrence on {date}. The player list has been cleared.",
   copyLink: "Copy link",
   players: "Players",
   addPlayerPlaceholder: "Add player name or email",

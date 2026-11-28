@@ -335,9 +335,16 @@ export const GET: APIRoute = async ({ params, request }) => {
     ? await computePostGameStatus(params.id!, request)
     : null;
 
+  // Whether a last game exists to recap, for everyone (signed out too): the page reserves the recap's
+  // place only when there is one, so a brand-new weekly game does not jump when it turns out to have none.
+  const latestHistory = await prisma.gameHistory.findFirst({
+    where: { eventId: event.id }, orderBy: { dateTime: "desc" }, select: { status: true },
+  });
+
   return Response.json({
     wasReset,
     ...event,
+    hasLastGame: !!latestHistory && latestHistory.status !== "cancelled",
     postGameStatus,
     teamResults: filteredTeamResults,
     gameId: event.currentGameId ?? null,

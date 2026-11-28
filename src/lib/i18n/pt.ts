@@ -101,7 +101,6 @@ const pt: TranslationKeys = {
   gameNotFound: "Jogo não encontrado",
   gameNotFoundDesc: "Este link pode ser inválido ou ter expirado.",
   createNewGame: "Criar um novo jogo",
-  recurringResetAlert: "Este jogo recorrente foi reiniciado para a próxima ocorrência em {date}. A lista de jogadores foi limpa.",
   copyLink: "Copiar link",
   players: "Jogadores",
   addPlayerPlaceholder: "Adicionar nome ou email",
