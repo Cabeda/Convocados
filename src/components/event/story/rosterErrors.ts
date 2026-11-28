@@ -16,3 +16,18 @@ export function rosterErrorMessage(reason: unknown, t: TFunction, ctx: { maxPlay
   if (reason.status === 429) return t("ngTooFast");
   return ctx.fallback;
 }
+
+/**
+ * A failed invite (by email or as a link), in the same plain words as a failed add — a rate limit says the same
+ * thing on both paths, and the server's own sentence is matched, never shown.
+ */
+export function inviteErrorMessage(reason: unknown, t: TFunction, ctx: { name: string; fallback: string }): string {
+  if (!(reason instanceof ApiError)) return ctx.fallback;
+  const said = reason.serverMessage ?? "";
+  if (reason.status === 429) return t("ngTooFast");
+  if (reason.status === 403) return t("ngInviteNotAllowed");
+  if (reason.status === 409 && /declined/i.test(said)) return t("ngDeclinedAlready", { name: ctx.name });
+  if (reason.status === 409) return t("ngAlreadyIn", { name: ctx.name });
+  if (reason.status === 400 && /already started/i.test(said)) return t("ngGameEnded");
+  return ctx.fallback;
+}

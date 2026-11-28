@@ -283,7 +283,7 @@ export function NextGame(p: NextGameProps) {
                 <Box id="add-friend">
                   <AddFriendPanel
                     full={event.players.length >= event.maxPlayers} positionsEnabled={!!event.positionsEnabled} suggestions={suggestions} busy={friends.busy || roster.busy}
-                    onSubmit={friends.submit} onSubmitMany={friends.submitMany} onLink={friends.linkFor}
+                    onSubmit={friends.submit} onAddNamedEmail={friends.submitNamedEmail} onSubmitMany={friends.submitMany} onLink={friends.linkFor}
                     onClose={() => { setAdding(false); setTimeout(() => addButtonRef.current?.focus(), 0); }}
                   />
                 </Box>

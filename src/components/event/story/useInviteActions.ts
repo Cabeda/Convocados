@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { ApiError, apiErrorMessage, apiRequest } from "~/lib/api/client";
 import { useT } from "~/lib/useT";
 import type { TFunction } from "~/lib/i18n";
+import { inviteErrorMessage } from "./rosterErrors";
 
 export interface InviteRef { id: string; inviteId?: string | null; name: string }
 
@@ -33,7 +34,7 @@ export function useInviteActions({ eventId, refetch, notify }: InviteActionsArgs
    * Invite a registered user by email. "unregistered" means nobody has that email yet, so the caller
    * falls back to adding them with the email (which sends the invitation to register).
    */
-  const inviteByEmail = useCallback(async (email: string, name: string): Promise<"sent" | "unregistered" | "failed"> => {
+  const inviteByEmail = useCallback(async (email: string, name: string): Promise<"sent" | "unregistered" | { failed: string }> => {
     try {
       const json = (await apiRequest("POST /api/events/{id}/invites", { params: { id: eventId }, body: { email } })) as { channels?: unknown; inviteUrl?: unknown };
       const labels = channelLabels(json?.channels, t);
@@ -43,22 +44,23 @@ export function useInviteActions({ eventId, refetch, notify }: InviteActionsArgs
       return "sent";
     } catch (e) {
       if (e instanceof ApiError && e.status === 404 && /No registered user/i.test(e.serverMessage ?? "")) return "unregistered";
-      return "failed";
+      return { failed: inviteErrorMessage(e, t, { name, fallback: t("ngAddError") }) };
     }
   }, [eventId, notify, refetch, t]);
 
   /** Make an invite link nobody is notified about (deliver:false) and open the share dialog with it. */
-  const inviteLink = useCallback(async (target: InviteTarget, name: string): Promise<boolean> => {
+  const inviteLink = useCallback(async (target: InviteTarget, name: string): Promise<true | { failed: string }> => {
+    const fallback = t("ngInviteLinkError");
     try {
       const json = (await apiRequest("POST /api/events/{id}/invites", { params: { id: eventId }, body: { ...target, deliver: false } })) as { inviteUrl?: unknown };
-      if (typeof json?.inviteUrl !== "string") return false;
+      if (typeof json?.inviteUrl !== "string") return { failed: fallback };
       setShare({ url: json.inviteUrl, name });
       await refetch();
       return true;
-    } catch {
-      return false;
+    } catch (e) {
+      return { failed: inviteErrorMessage(e, t, { name, fallback }) };
     }
-  }, [eventId, refetch]);
+  }, [eventId, refetch, t]);
 
   const resend = useCallback(async (invite: InviteRef) => {
     const inviteId = invite.inviteId ?? invite.id;

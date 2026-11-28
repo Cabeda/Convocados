@@ -187,6 +187,51 @@ describe("Add a friend — played with you before", () => {
     expect(server.sent("POST", "/players")[0].body).toEqual({ name: "Zoe Lima", linkToAccount: false });
   });
 
+  it("writes why each person is suggested right on the chip, not only in a tooltip", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: rows(1) }, setup);
+    await openPanel(user);
+    const zoe = await screen.findByRole("button", { name: "Zoe Lima" });
+    expect(within(zoe).getByText("4 games here")).toBeVisible();
+    expect(zoe).toHaveAccessibleDescription("4 games here");
+    expect(within(screen.getByRole("button", { name: "Frank Ode" })).getByText("Played with you 3×")).toBeVisible();
+  });
+
+  it("says '1 game here' in the singular", async () => {
+    const user = userEvent.setup();
+    renderPage({}, (s) => s.on("GET", "/known-players", () => ({ players: [{ name: "Zoe Lima", gamesPlayed: 1, userId: null }] })));
+    await openPanel(user);
+    expect(within(await screen.findByRole("button", { name: "Zoe Lima" })).getByText("1 game here")).toBeVisible();
+  });
+
+  it("narrows the chips to what is typed, ignoring case and accents, while the typed text can still be added as it is", async () => {
+    const user = userEvent.setup();
+    renderPage({}, (s) => s.on("GET", "/known-players", () => ({ players: [{ name: "José Costa", gamesPlayed: 4, userId: null }, { name: "Zoe Lima", gamesPlayed: 2, userId: null }, { name: "Joana Reis", gamesPlayed: 1, userId: null }] })));
+    const field = await openPanel(user);
+    await screen.findByRole("button", { name: "Zoe Lima" });
+    await user.type(field, "jose");
+    expect(screen.getByRole("button", { name: "José Costa" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Zoe Lima" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Joana Reis" })).not.toBeInTheDocument();
+    // Nobody matches: the heading goes with the chips, and the typed name is still addable.
+    await user.type(field, "x");
+    expect(screen.queryByTestId("friend-chips")).not.toBeInTheDocument();
+    expect(screen.queryByText("Played with you before")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to the game" })).toBeEnabled();
+    // Clearing the field brings every chip back.
+    await user.clear(field);
+    expect(screen.getByRole("button", { name: "Zoe Lima" })).toBeInTheDocument();
+  });
+
+  it("shows no chips next to an email: nobody is a match for an address", async () => {
+    const user = userEvent.setup();
+    renderPage({}, setup);
+    const field = await openPanel(user);
+    await screen.findByRole("button", { name: "Zoe Lima" });
+    await user.type(field, "zoe@example.com");
+    expect(screen.queryByTestId("friend-chips")).not.toBeInTheDocument();
+  });
+
   it("reads nothing until the panel is opened", async () => {
     renderPage({ players: rows(1) }, setup);
     await screen.findByTestId("lineup-slots");
@@ -194,14 +239,15 @@ describe("Add a friend — played with you before", () => {
     expect(server.sent("GET", "/co-players")).toHaveLength(0);
   });
 
-  it("gives an organizer the ranked suggestions first, with the reason as a tooltip", async () => {
+  it("gives an organizer the ranked suggestions first, with the reason written under the name", async () => {
     mockSession.data = OWNER;
     const user = userEvent.setup();
     renderPage({ players: rows(1), gameId: "g1" }, (s) => { setup(s); s.on("GET", "/suggestions", () => ({ suggestions: [{ userId: "u-g", name: "Grace Hall", reason: "Plays every week" }] })); });
     await openPanel(user);
     const grace = await screen.findByRole("button", { name: "Grace Hall" });
-    expect(grace).toHaveAttribute("title", "Plays every week");
-    const names = screen.getAllByRole("button").map((b) => b.textContent);
+    expect(grace).toHaveAccessibleDescription("Plays every week");
+    expect(within(grace).getByText("Plays every week")).toBeVisible();
+    const names = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? b.textContent);
     expect(names.indexOf("Grace Hall")).toBeLessThan(names.indexOf("Zoe Lima"));
   });
 
@@ -245,31 +291,134 @@ describe("Add a friend — position, email, link, several", () => {
     const user = userEvent.setup();
     renderPage({}, (s) => s.on("POST", "/invites", () => ({ ok: true, channels: { email: true, webPush: false, appPush: false }, inviteUrl: "https://x.test/i/abc" })));
     await user.type(await openPanel(user), "rui@example.com{Enter}");
-    expect(await screen.findByText("Invite sent to rui via email")).toBeInTheDocument();
+    expect(await screen.findByText("Invite sent to rui@example.com via email")).toBeInTheDocument();
     expect(server.sent("POST", "/invites")[0].body).toEqual({ email: "rui@example.com" });
     expect(server.sent("POST", "/players")).toHaveLength(0);
     expect(await screen.findByDisplayValue("https://x.test/i/abc")).toBeInTheDocument();
   });
 
-  it("adds an email nobody has registered under a name, never the address, and says the invitation went out", async () => {
-    const user = userEvent.setup();
-    renderPage({}, (s) => {
+  describe("an email nobody has registered", () => {
+    const unregistered = (s: ReturnType<typeof fakeServer>, invited: string | null = "emailed") => {
       s.on("POST", "/invites", () => respond(404, { error: "No registered user with that email." }));
-      s.on("POST", "/players", () => ({ ok: true, resolvedName: "new.person", anonymous: true, invited: "emailed" }));
+      s.on("POST", "/players", (c) => { s.state.event.players.push({ id: `srv-${c.body?.name}`, name: String(c.body?.name), userId: null }); return { ok: true, resolvedName: String(c.body?.name), anonymous: true, invited }; });
+    };
+
+    it("asks 'What's their name?' instead of publishing the part before the @, and says who can see it", async () => {
+      const user = userEvent.setup();
+      renderPage({}, unregistered);
+      await user.type(await openPanel(user), "new.person@example.com{Enter}");
+      const field = await screen.findByRole("textbox", { name: /What's their name\?/ });
+      expect(field).toHaveFocus();
+      expect(field).toBeRequired();
+      expect(screen.getByText("Everyone in this game will see the name. We send new.person@example.com an invitation, and the address stays private.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Add to the game" })).toBeDisabled();
+      expect(server.sent("POST", "/players")).toHaveLength(0);
     });
-    await user.type(await openPanel(user), "new.person@example.com{Enter}");
-    expect(await screen.findByText("Added new.person. We emailed new.person@example.com an invitation to join Convocados.")).toBeInTheDocument();
-    expect(server.sent("POST", "/players")[0].body).toEqual({ name: "new.person", linkToAccount: false, email: "new.person@example.com" });
+
+    it("adds them under the name that was typed, with the email for the invitation, and says it went out", async () => {
+      const user = userEvent.setup();
+      renderPage({}, unregistered);
+      await user.type(await openPanel(user), "new.person@example.com{Enter}");
+      await user.type(await screen.findByRole("textbox", { name: /What's their name\?/ }), "Rui Costa{Enter}");
+      expect(await screen.findByText("Added Rui Costa. We emailed new.person@example.com an invitation to join Convocados.")).toBeInTheDocument();
+      expect(server.sent("POST", "/players")[0].body).toEqual({ name: "Rui Costa", linkToAccount: false, email: "new.person@example.com" });
+      // The registered-user check is not asked twice.
+      expect(server.sent("POST", "/invites")).toHaveLength(1);
+      // Back to the one field, ready for the next person.
+      await waitFor(() => expect(screen.getByRole("textbox", { name: "Their name or email" })).toHaveFocus());
+    });
+
+    it("never publishes the address as a name: the name is required", async () => {
+      const user = userEvent.setup();
+      renderPage({}, unregistered);
+      await user.type(await openPanel(user), "new.person@example.com{Enter}");
+      await user.type(await screen.findByRole("textbox", { name: /What's their name\?/ }), "   {Enter}");
+      expect(server.sent("POST", "/players")).toHaveLength(0);
+      expect(screen.getByRole("button", { name: "Add to the game" })).toBeDisabled();
+    });
+
+    it("Escape or 'Change the email' goes back to the field with the email still in it", async () => {
+      const user = userEvent.setup();
+      renderPage({}, unregistered);
+      await user.type(await openPanel(user), "new.person@example.com{Enter}");
+      await screen.findByRole("textbox", { name: /What's their name\?/ });
+      await user.keyboard("{Escape}");
+      const field = await screen.findByRole("textbox", { name: "Their name or email" });
+      expect(field).toHaveValue("new.person@example.com");
+      expect(screen.getByTestId("add-friend-panel")).toBeInTheDocument();
+    });
+
+    it("says plainly when no invitation email could go out because of the limits", async () => {
+      const user = userEvent.setup();
+      renderPage({}, (s) => unregistered(s, null));
+      await user.type(await openPanel(user), "new.person@example.com{Enter}");
+      await user.type(await screen.findByRole("textbox", { name: /What's their name\?/ }), "Rui{Enter}");
+      expect(await screen.findByText(/No email went out: invite emails are limited for each game and each person\. Send them an invite link instead\./)).toBeInTheDocument();
+    });
+
+    it("uses the name from a contact without asking", async () => {
+      const user = userEvent.setup();
+      (navigator as unknown as { contacts: unknown }).contacts = { select: vi.fn().mockResolvedValue([{ name: ["Rui Costa"], email: ["rui@example.com"] }]) };
+      renderPage({}, unregistered);
+      await openPanel(user);
+      await user.click(screen.getByRole("button", { name: "Add from contacts" }));
+      expect(await screen.findByText("Added Rui Costa. We emailed rui@example.com an invitation to join Convocados.")).toBeInTheDocument();
+      expect(screen.queryByRole("textbox", { name: /What's their name\?/ })).not.toBeInTheDocument();
+    });
+
+    it("in a list, emails without names go on as Guest, Guest 2 — never the address", async () => {
+      const user = userEvent.setup();
+      renderPage({}, unregistered);
+      await openPanel(user);
+      await user.click(screen.getByRole("button", { name: "Add several" }));
+      await user.type(screen.getByRole("textbox", { name: "One name per line. You can paste a list." }), "a@example.com{Enter}b@example.com{Enter}Carla");
+      await user.click(screen.getByRole("button", { name: "Add them all" }));
+      expect(await screen.findByText("Added 3 people ✓")).toBeInTheDocument();
+      expect(server.sent("POST", "/players").map((c) => c.body?.name)).toEqual(["Guest", "Guest 2", "Carla"]);
+    });
   });
 
-  it("says plainly when no invitation email could go out because of the limits", async () => {
-    const user = userEvent.setup();
-    renderPage({}, (s) => {
-      s.on("POST", "/invites", () => respond(404, { error: "No registered user with that email." }));
-      s.on("POST", "/players", () => ({ ok: true, resolvedName: "new.person", anonymous: true, invited: null }));
+  describe("when the invite cannot be sent, it says so in the same plain words as adding", () => {
+    it("429: the same sentence as a rate limit on adding a name", async () => {
+      const user = userEvent.setup();
+      renderPage({}, (s) => s.on("POST", "/invites", () => respond(429, { error: "Too many requests." })));
+      await user.type(await openPanel(user), "rui@example.com{Enter}");
+      expect(await screen.findByRole("alert")).toHaveTextContent("Too many tries in a row. Wait a minute and try again.");
     });
-    await user.type(await openPanel(user), "new.person@example.com{Enter}");
-    expect(await screen.findByText(/No email went out: invite emails are limited for each game and each person\. Send them an invite link instead\./)).toBeInTheDocument();
+
+    it("429 on the invite link too", async () => {
+      const user = userEvent.setup();
+      renderPage({}, (s) => s.on("POST", "/invites", () => respond(429, { error: "Too many requests." })));
+      await user.type(await openPanel(user), "Rui");
+      await user.click(screen.getByRole("button", { name: "Send an invite link instead" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("Too many tries in a row. Wait a minute and try again.");
+    });
+
+    it("403: says who may invite", async () => {
+      const user = userEvent.setup();
+      renderPage({}, (s) => s.on("POST", "/invites", () => respond(403, { error: "Only the owner, an admin, or a player of this event can send invites." })));
+      await user.type(await openPanel(user), "rui@example.com{Enter}");
+      expect(await screen.findByRole("alert")).toHaveTextContent("Only people in this game and the organizer can invite.");
+    });
+
+    it("409: says they are already in the list, or said they can't make it", async () => {
+      const user = userEvent.setup();
+      renderPage({}, (s) => s.on("POST", "/invites", () => respond(409, { error: "This player is already on the player list." })));
+      await user.type(await openPanel(user), "rui@example.com{Enter}");
+      expect(await screen.findByRole("alert")).toHaveTextContent("rui@example.com is already in the list.");
+      cleanup();
+      const user2 = userEvent.setup();
+      renderPage({}, (s) => s.on("POST", "/invites", () => respond(409, { error: "This player declined this game." })));
+      await user2.type(await openPanel(user2), "rui@example.com{Enter}");
+      expect(await screen.findByRole("alert")).toHaveTextContent("rui@example.com said they can't make it.");
+    });
+
+    it("anything else: the plain 'couldn't add' sentence, not the server's", async () => {
+      const user = userEvent.setup();
+      renderPage({}, (s) => s.on("POST", "/invites", () => respond(500, { error: "SQLITE_BUSY" })));
+      await user.type(await openPanel(user), "rui@example.com{Enter}");
+      expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't add them. Check your connection and try again.");
+    });
   });
 
   it("asks a signed-out visitor to sign in, or type a name, instead of an email", async () => {
@@ -290,6 +439,18 @@ describe("Add a friend — position, email, link, several", () => {
     expect(await screen.findByDisplayValue("https://x.test/i/link")).toBeInTheDocument();
     expect(server.sent("POST", "/invites")[0].body).toEqual({ name: "Rui", deliver: false });
     expect(server.sent("POST", "/players")).toHaveLength(0);
+  });
+
+  it("never leaves 'Send an invite link instead' looking dead: with nothing typed it says what to do, and moves to the field", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const field = await openPanel(user);
+    const button = screen.getByRole("button", { name: "Send an invite link instead" });
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Type their name or email first, then we make a link for them.");
+    expect(field).toHaveFocus();
+    expect(server.sent("POST", "/invites")).toHaveLength(0);
   });
 
   it("says when the invite link could not be made", async () => {
