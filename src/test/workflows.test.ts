@@ -686,3 +686,16 @@ describe("rounds on different Changes do not queue behind each other", () => {
     expect(group).toContain("'pick'");
   });
 });
+
+
+describe("a batch of reviews is not one review and seven cancellations", () => {
+  // `group: factory-review` kept one pending run and cancelled the rest: eight
+  // dispatches produced one review. Reads of different Changes contend for
+  // nothing.
+  it("keys the Reviewer's lock on the Change too", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      concurrency?: { group?: string };
+    };
+    expect(doc.concurrency?.group ?? "").toContain("inputs.pr");
+  });
+});
