@@ -40,3 +40,12 @@ export const BOARD_MAX_WIDTH = "28rem";
 export const cheer = () => {
   try { navigator.vibrate?.(10); } catch { /* not supported */ }
 };
+
+/** An icon button on the event header: a 44px target with press feedback and a focus ring. */
+export const iconAction = { width: 44, height: 44, color: "text.primary", ...tappable };
+
+/** Grows the tap area of an inline link to about 44px without moving any text. */
+export const hitArea = {
+  position: "relative",
+  "&::after": { content: '""', position: "absolute", inset: "-10px -6px" },
+} as const;

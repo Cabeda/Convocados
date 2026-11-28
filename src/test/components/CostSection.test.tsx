@@ -4,7 +4,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
-import { PaymentSurface } from "~/components/PaymentSurface";
 import { CostSection } from "~/components/CostSection";
 
 function mockFetch(routes: Record<string, unknown>) {
@@ -26,66 +25,6 @@ afterEach(() => {
 
 beforeEach(() => {
   mockFetch({});
-});
-
-describe("PaymentSurface", () => {
-  it("shows the price line and a View payments link", async () => {
-    mockFetch({
-      "/api/events/e1/cost": { totalAmount: 50, currency: "EUR", effectivePaymentMethods: null },
-      "/api/events/e1/payments/settlement": {
-        people: [], viewerEventPlayerId: null, viewerRole: "owner",
-      },
-    });
-    renderWithTheme(<PaymentSurface eventId="e1" canEdit isAuthenticated maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/50.00€/)).toBeInTheDocument());
-    expect(screen.getByText(/per player/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /view payments/i })).toBeInTheDocument();
-  });
-
-  it("per-player share is total / maxPlayers (required slots), not total / current players", async () => {
-    mockFetch({
-      "/api/events/e1/cost": { totalAmount: 50, currency: "EUR", effectivePaymentMethods: null },
-      "/api/events/e1/payments/settlement": {
-        people: [], viewerEventPlayerId: null, viewerRole: "owner",
-      },
-    });
-    renderWithTheme(<PaymentSurface eventId="e1" canEdit isAuthenticated maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/5.00€/)).toBeInTheDocument());
-  });
-
-  it("shows the you-owe CTA to a player with debt (not to the owner)", async () => {
-    mockFetch({
-      "/api/events/e1/cost": { totalAmount: 50, currency: "EUR", effectivePaymentMethods: null },
-      "/api/events/e1/payments/settlement": {
-        people: [{ name: "Ana", isPlayer: true, owedAmount: 10, lines: [{ gameId: "g1", dateTime: "2026-08-01T00:00:00Z", amount: 10, status: "pending", role: "debtor" }] }],
-        viewerEventPlayerId: "ep1", viewerRole: "player",
-      },
-    });
-    renderWithTheme(<PaymentSurface eventId="e1" canEdit={false} isAuthenticated maxPlayers={10} />);
-    await waitFor(() => expect(screen.getByText(/You owe 10.00€/)).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /report sent/i })).toBeInTheDocument();
-  });
-
-  it("loads the settlement summary through the typed client", async () => {
-    mockFetch({
-      "/api/events/e1/cost": { totalAmount: 50, currency: "EUR", effectivePaymentMethods: null },
-      "/api/events/e1/payments/settlement": { people: [], viewerEventPlayerId: null, viewerRole: "player" },
-    });
-    renderWithTheme(<PaymentSurface eventId="e1" canEdit={false} isAuthenticated maxPlayers={10} />);
-    // The client always names the method; a hand-written `fetch(url)` sends no init.
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith("/api/events/e1/payments/settlement", { method: "GET" }),
-    );
-  });
-
-  it("renders nothing for anonymous users", () => {
-    mockFetch({
-      "/api/events/e1/cost": { totalAmount: 50, currency: "EUR", effectivePaymentMethods: null },
-      "/api/events/e1/payments/settlement": { people: [], viewerEventPlayerId: null, viewerRole: "player" },
-    });
-    renderWithTheme(<PaymentSurface eventId="e1" canEdit={false} isAuthenticated={false} maxPlayers={10} />);
-    expect(screen.queryByText(/50.00€/)).not.toBeInTheDocument();
-  });
 });
 
 describe("CostSection", () => {

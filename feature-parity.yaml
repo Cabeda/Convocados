@@ -56,6 +56,10 @@ event-detail:
     reorder-players: { web: true, android: true, wearos: false }
     known-players-autocomplete: { web: true, android: true, wearos: false }
     contact-picker-invite: { web: true, android: true, wearos: false }
+    # Slice 2 of the event-page redesign. Android keeps its own event screen for now;
+    # follow-up: bring the flat header, the ⋮ bottom sheet and the cancelled banner to EventDetailScreen.
+    flat-header-actions: { web: true, android: false, wearos: false }
+    more-sheet: { web: true, android: false, wearos: false }
 
 teams:
   web: true

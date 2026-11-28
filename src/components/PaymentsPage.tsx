@@ -12,6 +12,7 @@ import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { CostSection } from "./CostSection";
+import { PayerCard } from "./PayerCard";
 
 const STATUS_LABEL: Record<string, TranslationKey> = {
   pending: "paymentsStatusPending",
@@ -160,6 +161,9 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
 
       {/* ── Cost & payment methods (manager of price/methods) ──────── */}
       <CostSection eventId={eventId} isManager={data?.viewerRole === "owner" || data?.viewerRole === "admin"} maxPlayers={data?.maxPlayers ?? 0} />
+
+      {/* ── Who is collecting: claim, take over, stand down (moved here from the event header) ── */}
+      <Box sx={{ mt: 2 }}><PayerCard eventId={eventId} /></Box>
 
       {/* ── People rollup ─────────────────────────────────────────── */}
       {data && data.people.length > 0 && (

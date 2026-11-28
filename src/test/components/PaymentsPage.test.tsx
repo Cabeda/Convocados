@@ -134,3 +134,22 @@ describe("PaymentsPage settle-all affordance (#1236)", () => {
     );
   });
 });
+
+describe("PaymentsPage payer card (moved here from the event header)", () => {
+  it("lets a roster player claim the collector role when nobody has it", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(url);
+      requests.push(`${init?.method ?? "GET"} ${u}`);
+      const headers = new Headers({ "Content-Type": "application/json" });
+      const body = u === SETTLEMENT_URL ? summary()
+        : u === "/api/events/e1/payments/payer"
+          ? { gameId: "g1", mode: "tracked", hasCost: true, payerName: null, isPayer: false, isRosterPlayer: true, vacant: true }
+          : {};
+      return Promise.resolve({ ok: true, status: 200, headers, json: async () => body });
+    }));
+    renderWithTheme(<PaymentsPage eventId="e1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /collect/i }));
+    await waitFor(() => expect(requests).toContain("POST /api/events/e1/payments/payer/claim"));
+  });
+});

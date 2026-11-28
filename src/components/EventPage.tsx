@@ -1,7 +1,7 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, user interactions mutate it, server data resyncs on refetch. Setting from async fetch callbacks is also fine. */
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
-  Container, Paper, Typography, Box, Stack, Button,
+  Container, Paper, Typography, Stack, Button,
   Alert, Skeleton, ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
@@ -24,6 +24,7 @@ import type { Imatch } from "~/lib/random";
 import { useLocale } from "~/lib/useT";
 import { addKnownName, getQjName } from "~/lib/knownNames";
 import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
+import { nextOccurrence, parseRecurrenceRule } from "~/lib/recurrence";
 import { isGameEnded } from "~/lib/gameStatus";
 import { mergeSuggestionPills } from "~/lib/suggestionPills";
 import { useSession } from "~/lib/auth.client";
@@ -35,7 +36,6 @@ import {
   PaymentNudgeDialog,
   EventDialogs,
   PasswordPrompt,
-  useCountdown,
   AddPlayerConfirmDialog,
   CreatedShareNudge,
   InviteShareDialog,
@@ -45,6 +45,8 @@ import {
 import { buildEventShareText, shareEvent } from "./event/shareEvent";
 import type { EventData, Player, KnownPlayer } from "./event";
 import { EventRecap } from "./event/story/EventRecap";
+import { HeaderSkeleton } from "./event/story/HeaderSkeleton";
+import { NextGameDateTemp } from "./event/story/NextGameDateTemp";
 import { SignInButton } from "./SignInButton";
 import { PushPromptBanner } from "./PushPromptBanner";
 import { ConfirmLeaveDialog, computeBenchEmptyAfter, computeWithin48h } from "./event/ConfirmLeaveDialog";
@@ -976,42 +978,35 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Title & location save ───────────────────────────────────────────────────
 
-  const handleSaveTitle = async (title: string) => {
-    // Optimistic update
-    setEvent((e) => e ? { ...e, title } : e);
-    // The route's response is unused; a refetch is the recovery path on either outcome.
-    await apiRequest("PUT /api/events/{id}/title", { params: { id: eventId }, body: { title } })
-      .catch(() => undefined);
-    fetchEvent();
+  /**
+   * Show an edit at once, then ask the server. Either way the page re-reads the server's
+   * answer, so a refused edit rolls itself back; the error goes on to the caller to say so.
+   */
+  const saveField = async <T,>(patch: Partial<EventData>, save: () => Promise<T>): Promise<T> => {
+    setEvent((e) => e ? { ...e, ...patch } : e);
+    try { return await save(); } finally { fetchEvent(); }
   };
+
+  const handleSaveTitle = (title: string) =>
+    saveField({ title }, () => apiRequest("PUT /api/events/{id}/title", { params: { id: eventId }, body: { title } })).then(() => undefined);
 
   const handleSaveLocation = async (location: string) => {
-    const data = (await apiRequest("PUT /api/events/{id}/location", {
-      params: { id: eventId },
-      body: { location },
-    }).catch(() => null)) as { geocoded?: boolean } | null;
-    if (location && !data?.geocoded) {
-      setSnackbar(t("locationNotGeocoded"));
-    }
-    fetchEvent();
+    const data = await saveField({ location }, () => apiRequest("PUT /api/events/{id}/location", {
+      params: { id: eventId }, body: { location },
+    })) as { geocoded?: boolean } | null;
+    if (location && !data?.geocoded) setSnackbar(t("locationNotGeocoded"));
   };
 
-  const handleSaveDateTime = async (dateTime: string, timezone: string) => {
-    // Convert the datetime-local value (in the event's timezone) to a UTC ISO string
+  const handleSaveDateTime = (dateTime: string, timezone: string) => {
+    // The datetime-local value is in the event's timezone: send it as UTC.
     const utcIso = fromDateTimeLocalValue(dateTime, timezone);
-    await apiRequest("PUT /api/events/{id}/datetime", {
-      params: { id: eventId },
-      body: { dateTime: utcIso, timezone },
-    }).catch(() => undefined);
-    fetchEvent();
+    return saveField({ dateTime: utcIso, timezone }, () => apiRequest("PUT /api/events/{id}/datetime", {
+      params: { id: eventId }, body: { dateTime: utcIso, timezone },
+    })).then(() => undefined);
   };
 
-  const handleSaveSport = async (sport: string) => {
-    // The route's response is derived from the event; the refetch supplies it.
-    await apiRequest("PUT /api/events/{id}/sport", { params: { id: eventId }, body: { sport } })
-      .catch(() => undefined);
-    fetchEvent();
-  };
+  const handleSaveSport = (sport: string) =>
+    saveField({ sport }, () => apiRequest("PUT /api/events/{id}/sport", { params: { id: eventId }, body: { sport } })).then(() => undefined);
 
   // ── Ownership ───────────────────────────────────────────────────────────────
 
@@ -1048,7 +1043,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Derived state ───────────────────────────────────────────────────────────
 
   const gameDate = useMemo(() => event ? new Date(event.dateTime) : new Date(), [event]);
-  const countdown = useCountdown(gameDate, t("gameTime"));
 
   const isAuthenticated = !!session?.user;
   const { isOwner, isAdmin, isOwnerless, canEditSettings, canManageInvites, canEditTeams } = perms;
@@ -1116,30 +1110,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       <ResponsiveLayout>
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={3}>
-            <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
-              <Skeleton variant="rectangular" height={3} />
-              <Box sx={{ p: { xs: 2, sm: 3 } }}>
-                <Stack spacing={2}>
-                  <Skeleton variant="text" width="60%" height={36} />
-                  <Skeleton variant="text" width="30%" height={20} />
-                  <Skeleton variant="rectangular" height={32} width={120} sx={{ borderRadius: 2 }} />
-                  <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 1 }} />
-                  <Stack spacing={0.75}>
-                    <Skeleton variant="text" width="45%" height={20} />
-                    <Skeleton variant="text" width="35%" height={20} />
-                  </Stack>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Skeleton variant="rounded" width={60} height={24} />
-                    <Skeleton variant="rounded" width={80} height={24} />
-                  </Box>
-                  <Skeleton variant="rectangular" height={1} />
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Skeleton variant="circular" width={40} height={40} />
-                    <Skeleton variant="circular" width={40} height={40} />
-                  </Box>
-                </Stack>
-              </Box>
-            </Paper>
+            <HeaderSkeleton />
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
               <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
               <Stack spacing={1}>
@@ -1175,6 +1146,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
   );
 
   const wasReset = event.wasReset ?? false;
+  // A weekly game keeps its finished date on the page until the next occurrence takes over:
+  // say when the next one is, never the date that already passed.
+  const rule = parseRecurrenceRule(event.recurrenceRule);
+  const nextGameDate = gameEnded && rule ? nextOccurrence(gameDate, rule, new Date(), event.timezone) : gameDate;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -1215,9 +1190,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               event={event}
               sport={sport}
               gameDate={gameDate}
-              countdown={countdown}
               canEditSettings={canEditSettings}
-              isOwner={isOwner}
               isAuthenticated={isAuthenticated}
               isOwnerless={isOwnerless}
               localMatches={localMatches}
@@ -1228,7 +1201,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSaveSport={handleSaveSport}
               onClaimOwnership={handleClaimOwnership}
               onCancelGame={() => setCancelConfirmOpen(true)}
-              onSnackbar={setSnackbar}
             />
 
             {/* Last game recap — for everyone (signed-out and non-players get the result).
@@ -1245,6 +1217,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
               sport={sport}
               deepLinkAction={deepLinkAction}
             />
+
+            {rule && <NextGameDateTemp date={nextGameDate} timezone={event.timezone} />}
 
             {/* Join / You joined — replaces YOUR RESPONSE (AttendanceCta) per #818.
                 Web parity with Android hero revamp: single CTA, not Going/Not coming. */}

@@ -78,6 +78,8 @@
 | Reorder Players | ✅ | ✅ | ❌ |
 | Known Players Autocomplete | ✅ | ✅ | ❌ |
 | Contact Picker Invite | ✅ | ✅ | ❌ |
+| Flat Header Actions | ✅ | ❌ | ❌ |
+| More Sheet | ✅ | ❌ | ❌ |
 
 ### Teams
 
