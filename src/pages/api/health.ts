@@ -6,6 +6,15 @@ import { createLogger } from "../../lib/logger.server";
 
 const log = createLogger("health");
 
+/** Health is polled every few seconds; an unreadable migration shape is worth
+ * reporting once per boot, not on every poll. */
+let loggedUnreadableMigration = false;
+
+/** Test-only hook: the once-per-boot flag survives between cases in a file. */
+export function resetHealthProvenanceLog(): void {
+  loggedUnreadableMigration = false;
+}
+
 /** Scheduler polls every 5–30s; anything older than 3min means it's down.
  * (3min tolerates maintenance timeouts + rotating deploys without false alarms.) */
 const SCHEDULER_STALE_MS = 3 * 60 * 1000;
@@ -106,15 +115,38 @@ async function probeHealth(): Promise<Response> {
     const oldestResult = await prisma.$queryRawUnsafe(
       "SELECT MIN(started_at) AS oldestMigrationAt FROM _prisma_migrations",
     ) as { oldestMigrationAt: string | null }[];
-    const oldestMigrationAt = parseMigrationTimestamp(oldestResult[0]?.oldestMigrationAt);
+    const rawOldestMigrationAt = oldestResult[0]?.oldestMigrationAt ?? null;
+    const oldestMigrationAt = parseMigrationTimestamp(rawOldestMigrationAt);
+    // No readable timestamp is not proof of a fresh database, but it is not a
+    // healthy reading either. A missing value (an empty/lost migration history)
+    // or a shape the parser cannot read both leave provenance unknown; log the
+    // raw value once so production's shape is identified, not guessed.
+    const provenanceUnknown = oldestMigrationAt === null;
+    if (!provenanceUnknown) {
+      // A second unreadable episode (restore, another lost volume) must log.
+      loggedUnreadableMigration = false;
+    } else if (!loggedUnreadableMigration) {
+      loggedUnreadableMigration = true;
+      log.warn(
+        { rawOldestMigrationAt },
+        "unreadable or missing _prisma_migrations.started_at; database provenance unknown",
+      );
+    }
     const eventCount = await prisma.event.count();
     const createdThisBoot =
       oldestMigrationAt !== null && oldestMigrationAt.getTime() >= resolveBootAt();
     const migrationAgeMs =
       oldestMigrationAt === null ? null : Date.now() - oldestMigrationAt.getTime();
+    // A null history on an empty database is the recreated-volume shape: with no
+    // timestamp nothing proves the database predates this boot, so surface it.
+    // A non-null unparseable value stays undegraded so a routine migration
+    // deploy cannot raise a false alarm.
+    const missingMigrationHistory = rawOldestMigrationAt === null;
     const freshDatabase =
       createdThisBoot ||
-      (eventCount === 0 && migrationAgeMs !== null && migrationAgeMs < FRESH_DB_WINDOW_MS);
+      (eventCount === 0 &&
+        (missingMigrationHistory ||
+          (migrationAgeMs !== null && migrationAgeMs < FRESH_DB_WINDOW_MS)));
 
     const response: Record<string, unknown> = {
       status: "ok",
@@ -125,6 +157,7 @@ async function probeHealth(): Promise<Response> {
         freelistCount: Number(Object.values(freelistResult[0] ?? {})[0] ?? 0),
         walSizeBytes,
         createdThisBoot,
+        provenance: provenanceUnknown ? "unknown" : "known",
         oldestMigrationAt: oldestMigrationAt?.toISOString() ?? null,
       },
     };

@@ -1,10 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
-import { GET, resetHealthCache } from "~/pages/api/health";
+import { GET, resetHealthCache, resetHealthProvenanceLog } from "~/pages/api/health";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
+const logWarn = vi.hoisted(() => vi.fn());
+vi.mock("~/lib/logger.server", () => ({
+  logger: { info: vi.fn(), warn: logWarn, error: vi.fn(), debug: vi.fn() },
+  createLogger: () => ({ info: vi.fn(), warn: logWarn, error: vi.fn(), debug: vi.fn() }),
+}));
+
 beforeEach(async () => {
+  logWarn.mockClear();
   // start.sh exports the normalized switch that health reads; tests do not run
   // start.sh, so simulate a production boot with replication available.
   delete process.env.BACKUPS_ENABLED;
@@ -28,6 +35,7 @@ beforeEach(async () => {
   resetRateLimitStore();
   resetApiRateLimitStore();
   resetHealthCache();
+  resetHealthProvenanceLog();
 });
 
 function ctx() {
@@ -47,6 +55,7 @@ describe("GET /api/health", () => {
     expect(body.db).toBeDefined();
     expect(body.db.journalMode).toBe("wal");
     expect(body.db.writable).toBe(true);
+    expect(body.db.provenance).toBe("known");
   });
 
   it("includes SQLite page/freelist counts and WAL size", async () => {
@@ -102,6 +111,54 @@ describe("GET /api/health", () => {
     expect(body.db.oldestMigrationAt).toBeNull();
     expect(body.db.createdThisBoot).toBe(false);
     expect(body.degraded).toBeUndefined();
+    // An unreadable shape is not proof of a fresh database, but it is not a
+    // healthy reading either: name the provenance unknown and log the raw value
+    // so production's shape can be identified instead of guessed.
+    expect(body.db.provenance).toBe("unknown");
+    expect(logWarn).toHaveBeenCalledTimes(1);
+    expect(logWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ rawOldestMigrationAt: "not-a-timestamp" }),
+      expect.stringContaining("_prisma_migrations"),
+    );
+
+    // Health is polled every few seconds; the unknown shape is logged once.
+    await GET(ctx());
+    expect(logWarn).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a null migration timestamp as unknown provenance, not healthy", async () => {
+    // Production reports MIN(started_at) = NULL: an empty _prisma_migrations
+    // history is the shape a lost volume leaves, and the column itself is NOT
+    // NULL so there is no row to seed. The Events-free database must be
+    // distinguishable from a healthy one, or the recreated-database alarm stays
+    // unreachable in the only case it exists for.
+    const realQuery = prisma.$queryRawUnsafe.bind(prisma);
+    const querySpy = vi.spyOn(prisma, "$queryRawUnsafe").mockImplementation(((
+      query: string,
+      ...args: unknown[]
+    ) =>
+      typeof query === "string" && query.includes("MIN(started_at)")
+        ? Promise.resolve([{ oldestMigrationAt: null }])
+        : realQuery(query, ...args)) as typeof prisma.$queryRawUnsafe);
+
+    try {
+      const res = await GET(ctx());
+      const body = await res.json();
+      expect(body.db.oldestMigrationAt).toBeNull();
+      expect(body.db.createdThisBoot).toBe(false);
+      expect(body.db.provenance).toBe("unknown");
+      expect(body.degraded).toBe(true);
+      expect(logWarn).toHaveBeenCalledWith(
+        expect.objectContaining({ rawOldestMigrationAt: null }),
+        expect.stringContaining("_prisma_migrations"),
+      );
+
+      // Health is polled every few seconds; the null shape is logged once.
+      await GET(ctx());
+      expect(logWarn).toHaveBeenCalledTimes(1);
+    } finally {
+      querySpy.mockRestore();
+    }
   });
 
   it("degrades an empty database whose migration is under an hour old", async () => {

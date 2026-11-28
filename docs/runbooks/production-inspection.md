@@ -126,12 +126,15 @@ degraded for it. The app reads the normalized `BACKUPS_ENABLED_NORMALIZED` /
 `BACKUPS_ACTIVE` flags that `start.sh` exports, so the two cannot disagree.
 
 `db.createdThisBoot` is true when the schema was applied after this boot started,
-and `db.oldestMigrationAt` is the earliest `_prisma_migrations` timestamp. Health
-sets `degraded: true` when the database was created this boot, or when it has no
-Events and its oldest migration is under an hour old — the shape a lost volume
-leaves after `prisma migrate deploy` recreates an empty schema. The status stays
-`ok` on purpose: a 503 would remove the instance from Fly's load balancer and the
-scheduler polls through that URL.
+and `db.oldestMigrationAt` is the earliest `_prisma_migrations` timestamp.
+`db.provenance` is `known` when that timestamp parses and `unknown` when the
+history is missing or its raw value cannot be read; the raw value is logged once
+so the production shape can be identified. Health sets `degraded: true` when the
+database was created this boot, when it has no Events and its oldest migration is
+under an hour old, or when it has no Events and no readable migration timestamp —
+the shape a lost volume leaves after `prisma migrate deploy` recreates an empty
+schema. The status stays `ok` on purpose: a 503 would remove the instance from
+Fly's load balancer and the scheduler polls through that URL.
 
 ## Related
 
