@@ -25,6 +25,8 @@ interface Props {
   /** Opens the list from outside (a pressed slot, a deep link). */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Open until the viewer chooses otherwise: set when two people's letters had to be told apart. */
+  autoOpen?: boolean;
 }
 
 interface RowProps {
@@ -68,12 +70,12 @@ function Row({ player, me, number, positionsEnabled, selectable, selected, onSel
  * "Who's in": the names behind the initials, for anyone who recognises people by name
  * (and for screen readers). Two columns; the bench follows, numbered.
  */
-export function WhosIn({ playing, bench, viewerId, positionsEnabled, canSelect, selectedId, onSelect, options, open: openProp, onOpenChange }: Props) {
+export function WhosIn({ playing, bench, viewerId, positionsEnabled, canSelect, selectedId, onSelect, options, open: openProp, onOpenChange, autoOpen }: Props) {
   const t = useT();
   const id = useId();
-  const [openState, setOpenState] = useState(false);
-  const open = openProp ?? openState;
-  const setOpen = (v: boolean) => { setOpenState(v); onOpenChange?.(v); };
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const open = openProp ?? chosen ?? !!autoOpen;
+  const setOpen = (v: boolean) => { setChosen(v); onOpenChange?.(v); };
   if (playing.length === 0 && bench.length === 0) return null;
 
   return (

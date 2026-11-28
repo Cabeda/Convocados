@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box } from "@mui/material";
 import { useT } from "~/lib/useT";
-import { SLOT_GAP, SLOT_MAX_SIZE, initials, slotColumns, slotMinSize } from "~/lib/nextGame";
+import { SLOT_GAP, SLOT_MAX_SIZE, slotColumns, slotLabels, slotMinSize } from "~/lib/nextGame";
 import type { Player } from "../types";
 import { EASE, focusRing, pressable } from "./styles";
 
@@ -39,12 +39,14 @@ interface Props {
 
 /**
  * One slot per place in the game: initials in a circle when taken, a dashed ring when open.
- * The viewer's own slot is in the primary colour. The grid wraps to rows of up to 8 and
- * never makes a slot smaller than 36px.
+ * The viewer's own slot is in the primary colour. Two people who would show the same letters
+ * get more of their name. The grid balances its rows (10 → 5 + 5) and never makes a slot smaller
+ * than 36px — widths and wrapping are checked in a real browser, not in jsdom.
  */
 export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedId, onPress, onOpenSpot, controlsId }: Props) {
   const t = useT();
   const fresh = useFreshNames(players.map((p) => p.name));
+  const { labels } = slotLabels(players.map((p) => p.name));
   const columns = slotColumns(maxPlayers);
   const min = slotMinSize(maxPlayers);
   // Aim for `columns` per row, but never below the minimum size: a narrow screen takes fewer and wraps.
@@ -93,7 +95,7 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
               } : {}),
             }}
           >
-            <span aria-hidden>{initials(player.name)}</span>
+            <span aria-hidden>{labels[i]}</span>
           </Box>
         );
       })}

@@ -494,3 +494,25 @@ describe("Next game — the page around it", () => {
     await waitFor(() => expect(within(screen.getByTestId("lineup-slots")).getAllByTestId(/^slot/)).toHaveLength(2));
   });
 });
+
+describe("Next game — telling people apart in the lineup", () => {
+  it("opens 'Who's in' by itself when two slots would show the same letters, and says the letters apart", async () => {
+    renderPage({ players: [{ id: "a", name: "Joana Weiss", userId: null }, { id: "b", name: "Jack Weiss", userId: null }, { id: "c", name: "Rui Costa", userId: null }] });
+    const list = await screen.findByTestId("whos-in");
+    expect(within(list).getByText("Joana Weiss")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Who's in" })).toHaveAttribute("aria-expanded", "true");
+    const letters = screen.getAllByTestId("slot").map((s) => s.textContent);
+    expect(letters).toEqual(["JoW", "JaW", "RC"]);
+  });
+
+  it("stays collapsed when every slot is clear on its own, and a person's choice to close it sticks", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Beto Santos", userId: null }] });
+    await screen.findByTestId("lineup-slots");
+    expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
+    cleanup();
+    renderPage({ players: [{ id: "a", name: "Joana Weiss", userId: null }, { id: "b", name: "Jack Weiss", userId: null }] });
+    await user.click(await screen.findByRole("button", { name: "Who's in" }));
+    expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
+  });
+});

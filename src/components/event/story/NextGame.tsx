@@ -4,7 +4,7 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import { useLocale } from "~/lib/useT";
 import { nextOccurrence, parseRecurrenceRule } from "~/lib/recurrence";
-import { benchLabelNames, canUndoRemoval, nextGamePhase, rsvpView } from "~/lib/nextGame";
+import { benchLabelNames, canUndoRemoval, nextGamePhase, rsvpView, slotLabels } from "~/lib/nextGame";
 import { splitRoster } from "~/lib/rosterCapacity";
 import { canRemoveEventPlayer, type EventPermissions } from "~/lib/eventView";
 import type { EventData, Player } from "../types";
@@ -209,6 +209,7 @@ export function NextGame(p: NextGameProps) {
                 </Typography>
               )}
               <WhosIn
+                autoOpen={slotLabels(active.map((x) => x.name)).collides}
                 playing={active} bench={bench} viewerId={viewer?.id ?? null} positionsEnabled={!!event.positionsEnabled}
                 canSelect={canRemove} selectedId={selection?.from === "row" ? selection.id : null} onSelect={(pl) => select(pl, "row")}
                 options={(pl) => <PlayerOptions player={pl} onRemove={() => requestRemove(pl)} onClose={closeOptions} disabled={removal.busy} />}

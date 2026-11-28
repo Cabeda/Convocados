@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   COUNTDOWN_WINDOW_MS, nextGamePhase, countdownOf, nextTickDelay, isGameDay, initials, shortNames,
-  slotMinSize, slotColumns, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval,
+  slotMinSize, slotColumns, slotLabels, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval,
 } from "~/lib/nextGame";
 
 const MIN = 60_000;
@@ -90,10 +90,63 @@ describe("initials", () => {
     expect(initials("rui costa")).toBe("RC");
   });
   it("takes two letters of a single word", () => expect(initials("Beto")).toBe("BE"));
-  it("copes with emoji, accents and stray spaces", () => {
+  it("copes with accents, stray spaces and nothing at all", () => {
     expect(initials("  Éva   ")).toBe("ÉV");
-    expect(initials("😀 Joe")).toBe("😀J");
     expect(initials("")).toBe("?");
+    expect(initials("   ")).toBe("?");
+  });
+  it("ignores text in brackets: a note is not part of the name", () => {
+    expect(initials("Ana (convidada)")).toBe("AN");
+    expect(initials("João (GR)")).toBe("JO");
+    expect(initials("(GR)")).toBe("?");
+  });
+  it("skips suffixes such as Jr., IV and MD", () => {
+    expect(initials("João Silva Jr.")).toBe("JS");
+    expect(initials("Rui Costa IV")).toBe("RC");
+    expect(initials("Maria Souza MD")).toBe("MS");
+    expect(initials("Jr")).toBe("JR");
+  });
+  it("shows a plus-one as a plus and the letter of who brought them", () => {
+    expect(initials("+1 do Rui")).toBe("+R");
+    expect(initials("+1 de Ana")).toBe("+A");
+    expect(initials("+2 of Sam")).toBe("+S");
+    expect(initials("+1")).toBe("+1");
+  });
+  it("drops leading marks that are not letters", () => {
+    expect(initials("~ Ana Costa")).toBe("AC");
+    expect(initials("*Beto")).toBe("BE");
+  });
+  it("keeps an emoji whole, even one built from several (family, flags, skin tones)", () => {
+    expect(initials("😀 Joe")).toBe("😀J");
+    expect(initials("👨‍👩‍👧 Família")).toBe("👨‍👩‍👧F");
+    expect(initials("👍🏽")).toBe("👍🏽");
+    expect(initials("🇵🇹 Rui")).toBe("🇵🇹R");
+  });
+  it("takes a letter from each part of a hyphenated single name", () => {
+    expect(initials("Jean-Luc")).toBe("JL");
+    expect(initials("Ana-Maria Silva")).toBe("AS");
+  });
+  it("takes the first two characters of a name written without spaces", () => {
+    expect(initials("山田太郎")).toBe("山田");
+    expect(initials("김민준")).toBe("김민");
+  });
+});
+
+describe("slotLabels — two people never show the same letters", () => {
+  it("is the plain initials when nobody collides", () => {
+    expect(slotLabels(["Ana Maria", "Beto Santos"])).toEqual({ labels: ["AM", "BS"], collides: false });
+  });
+  it("adds a letter to each of two people who would both be JW", () => {
+    expect(slotLabels(["Joana Weiss", "Jack Weiss", "Rui Costa"])).toEqual({ labels: ["JoW", "JaW", "RC"], collides: true });
+  });
+  it("tells two single names apart", () => {
+    expect(slotLabels(["Beto", "Bernardo"])).toEqual({ labels: ["Bet", "Ber"], collides: true });
+  });
+  it("keeps adding letters until the people differ", () => {
+    expect(slotLabels(["Joana Weiss", "Joanna Weiss"]).labels).toEqual(["JoanaW", "JoannW"]);
+  });
+  it("leaves identical names alone: nothing more can be told apart", () => {
+    expect(slotLabels(["Ana Maria", "ana maria"]).labels).toEqual(["AM", "AM"]);
   });
 });
 
@@ -118,12 +171,28 @@ describe("slotMinSize", () => {
 });
 
 describe("slotColumns", () => {
-  it("splits a small game into even rows and fills rows of 8 for a full pitch", () => {
-    expect([1, 2, 4].map(slotColumns)).toEqual([1, 2, 4]);
+  it("balances the rows: 10 → 5+5, 12 → 6+6, 16 → 8+8, 22 → 8+7+7", () => {
+    expect(slotColumns(10)).toBe(5);
+    expect(slotColumns(12)).toBe(6);
+    expect(slotColumns(16)).toBe(8);
+    expect(slotColumns(22)).toBe(8);
+  });
+  it("keeps a small game in big slots: 4 in one row, 6 as 3+3, 8 as 4+4", () => {
+    expect([1, 2, 3, 4].map(slotColumns)).toEqual([1, 2, 3, 4]);
     expect([5, 6, 7, 8].map(slotColumns)).toEqual([3, 3, 4, 4]);
-    expect([9, 16, 22, 40].map(slotColumns)).toEqual([8, 8, 8, 8]);
   });
   it("never asks for zero columns", () => expect(slotColumns(0)).toBe(1));
+  it("fills every row it asks for, from 2 to 30 players", () => {
+    for (let n = 2; n <= 30; n++) {
+      const cols = slotColumns(n);
+      const rows = Math.ceil(n / cols);
+      expect(cols * rows, `n=${n}`).toBeGreaterThanOrEqual(n);
+      expect((rows - 1) * cols, `n=${n} has an empty last row`).toBeLessThan(n);
+      expect(cols, `n=${n} too wide`).toBeLessThanOrEqual(8);
+      // No more rows than the width allows: the rows are as few as the cap permits.
+      expect(rows, `n=${n} more rows than needed`).toBe(Math.ceil(n / (n <= 8 ? 4 : 8)));
+    }
+  });
 });
 
 describe("rsvpView — one answer for what the RSVP row says", () => {

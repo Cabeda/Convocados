@@ -64,15 +64,80 @@ export function isGameDay(now: number, startMs: number, timezone: string): boole
   return dayKey(now, timezone) === dayKey(startMs, timezone);
 }
 
-/** Letters for a lineup slot: first and last word, or two letters of a single word. Emoji stay whole. */
+const segmenter = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
+
+/** What a person sees as one character: a letter with its accent, a family emoji, a flag, a thumb with a skin tone. */
+function graphemes(text: string): string[] {
+  return segmenter ? Array.from(segmenter.segment(text), (s) => s.segment) : Array.from(text);
+}
+
+const SUFFIXES = /^(jr|sr|ii|iii|iv|md|phd)\.?$/i;
+/** "+1 do Rui", "+2 of Sam": a guest, named after who brought them. */
+const PLUS_ONE = /^\+\d+\s+(?:de|do|da|dos|das|del|di|of|von|van|d')\s*(.+)$/i;
+const NOT_A_NAME_START = /^[^\p{L}\p{N}\p{Extended_Pictographic}\p{Regional_Indicator}]+/u;
+
+/** The words of a name as written, minus notes in brackets and suffixes like "Jr." — and the plus-one marker. */
+function nameWords(name: string): { words: string[]; plus: boolean } {
+  const bare = name.replace(/[(（][^)）]*[)）]/g, " ").trim();
+  const guest = PLUS_ONE.exec(bare);
+  const text = (guest ? guest[1] : bare).replace(NOT_A_NAME_START, "");
+  const words = text.split(/\s+/).filter(Boolean);
+  // A suffix is not a name — unless it is all there is.
+  while (words.length > 1 && SUFFIXES.test(words[words.length - 1])) words.pop();
+  return { words, plus: !!guest };
+}
+
+const cap = (g: string) => g.toUpperCase();
+
+/**
+ * Letters for a lineup slot: the first letter of the first and last word, or two letters of a
+ * single word. A person is never cut in half: accents, flags and family emoji stay whole.
+ * Notes in brackets and suffixes ("Jr.", "IV", "MD") are not read; "+1 do Rui" shows as "+R".
+ */
 export function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (/^\+\d+$/.test(name.trim())) return name.trim();
+  const { words, plus } = nameWords(name);
   if (words.length === 0) return "?";
-  const letters = (w: string) => Array.from(w);
-  const pick = words.length === 1
-    ? letters(words[0]).slice(0, 2).join("")
-    : letters(words[0])[0] + letters(words[words.length - 1])[0];
-  return pick.toUpperCase();
+  const first = graphemes(words[0]);
+  let pick: string;
+  if (plus) pick = "+" + cap(first[0]);
+  else if (words.length > 1) pick = cap(first[0]) + cap(graphemes(words[words.length - 1])[0]);
+  else {
+    // One word: a hyphenated name gives a letter per part ("Jean-Luc" → JL); otherwise its first two characters.
+    const parts = words[0].split("-").filter(Boolean);
+    pick = parts.length > 1 ? cap(graphemes(parts[0])[0]) + cap(graphemes(parts[parts.length - 1])[0]) : cap(first.slice(0, 2).join(""));
+  }
+  return pick;
+}
+
+/** The longer form for two people who share initials: more of the first name, then the last initial ("JoW", "JaW"). */
+function longInitials(name: string, k: number): string {
+  const { words, plus } = nameWords(name);
+  if (words.length === 0 || plus) return initials(name);
+  const first = graphemes(words[0]);
+  const head = cap(first[0]) + first.slice(1, k).join("").toLowerCase();
+  if (words.length === 1) return cap(first[0]) + first.slice(1, k + 1).join("").toLowerCase();
+  return head + cap(graphemes(words[words.length - 1])[0]);
+}
+
+/**
+ * The letters for every slot. Where two people would show the same letters, those people get
+ * more of their first name until they differ; `collides` says it happened, so the page can
+ * open "Who's in" by itself — the letters alone no longer tell people apart.
+ */
+export function slotLabels(names: readonly string[]): { labels: string[]; collides: boolean } {
+  const plain = names.map(initials);
+  const shared = (label: string, list: readonly string[]) => list.filter((l) => l === label).length > 1;
+  let pending = plain.map((_, i) => i).filter((i) => shared(plain[i], plain));
+  if (pending.length === 0) return { labels: plain, collides: false };
+  const labels = [...plain];
+  for (let k = 2; k <= 8 && pending.length > 0; k++) {
+    for (const i of pending) labels[i] = longInitials(names[i], k);
+    pending = pending.filter((i) => shared(labels[i], labels));
+  }
+  // Still the same after every letter of the first name: they are the same person to the eye, so leave them.
+  for (const i of pending) labels[i] = plain[i];
+  return { labels, collides: true };
 }
 
 /** "Ana M." for each name — whole words only. Names that would collide stay in full. */
@@ -96,12 +161,14 @@ export const SLOT_MAX_SIZE = 56;
 export const SLOT_GAP = 8;
 
 /**
- * How many slots a row aims for: a small game splits into even rows (6 → 3 + 3, 8 → 4 + 4),
- * a pitch of 9 or more fills rows of 8. A narrow screen may fit fewer and wraps to more rows.
+ * How many slots a row aims for, with the rows balanced: 10 → 5 + 5, 12 → 6 + 6, 16 → 8 + 8,
+ * 22 → 8 + 7 + 7. A small game stays in big slots, at most 4 to a row (6 → 3 + 3, 8 → 4 + 4); a pitch of
+ * 9 or more takes up to 8. A narrow screen may fit fewer and wraps to more rows.
  */
 export function slotColumns(maxPlayers: number): number {
-  if (maxPlayers <= 4) return Math.max(1, maxPlayers);
-  return maxPlayers <= 8 ? Math.ceil(maxPlayers / 2) : 8;
+  if (maxPlayers <= 1) return 1;
+  const rows = Math.ceil(maxPlayers / (maxPlayers <= 8 ? 4 : 8));
+  return Math.ceil(maxPlayers / rows);
 }
 
 export type RsvpView =
