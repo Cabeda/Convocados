@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import {
   BottomSlotProvider,
   useBottomSlotClaim,
+  useFixedBottomBanner,
   type BottomBannerId,
 } from "~/lib/bottomSlot";
 
@@ -67,5 +68,28 @@ describe("BottomSlotProvider arbitration", () => {
     render(<Probe id="push" wants />);
 
     expect(await screen.findByTestId("push")).toBeInTheDocument();
+  });
+});
+
+function Clearance() {
+  const fixed = useFixedBottomBanner();
+  return <div data-testid="clearance" data-fixed={fixed ? "true" : "false"} />;
+}
+
+describe("useFixedBottomBanner", () => {
+  it("is true while an update or install banner is fixed to the bottom, false for the inline push prompt and for none", async () => {
+    const { rerender } = render(<BottomSlotProvider><Probe id="push" wants /><Clearance /></BottomSlotProvider>);
+    expect((await screen.findByTestId("clearance")).dataset.fixed).toBe("false");
+    rerender(<BottomSlotProvider><Probe id="push" wants /><Probe id="install" wants /><Clearance /></BottomSlotProvider>);
+    await screen.findByTestId("install");
+    expect(screen.getByTestId("clearance").dataset.fixed).toBe("true");
+    rerender(<BottomSlotProvider><Probe id="push" wants /><Probe id="install" wants={false} /><Clearance /></BottomSlotProvider>);
+    await screen.findByTestId("push");
+    expect(screen.getByTestId("clearance").dataset.fixed).toBe("false");
+  });
+
+  it("is false with no provider at all", () => {
+    render(<Clearance />);
+    expect(screen.getByTestId("clearance").dataset.fixed).toBe("false");
   });
 });

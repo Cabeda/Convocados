@@ -113,10 +113,10 @@ So, before wiring any check into a gate:
 
 ## Big modules: extract, do not grow
 
-Four components are over 1,000 lines — `EventPage` 1504, `HistoryCardFull` 1500,
-`EventSettingsPage` 1144, `PlayerList` 1067 — and each is a place where a small change has a
-wide blast radius and where hand-written `useCallback` dependency arrays fight the compiler.
-Two of them needed compensating edits in a single session for exactly that reason.
+Two components are over 1,000 lines — `HistoryCardFull` 1500, `EventSettingsPage` 1144 — and each
+is a place where a small change has a wide blast radius and where hand-written `useCallback`
+dependency arrays fight the compiler. (`EventPage` and `PlayerList` were on this list until the
+event-page redesign split them into `event/story/*`.)
 
 There is deliberately no `max-lines` rule: it cannot tell a 1,500-line component from a
 1,646-line translations file, and the 25 warnings it would raise are noise, not pressure.

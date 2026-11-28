@@ -12,6 +12,8 @@ export interface PostGameStatus {
   isParticipant: boolean;
   isPlayer: boolean;
   latestHistoryId: string | null;
+  /** An ended one-off with no history row yet: the live game its first score is saved on. */
+  pendingGameId?: string | null;
   costCurrency: string | null;
   costAmount: number | null;
   hasPendingPastPayments: boolean;

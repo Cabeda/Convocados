@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Stack } from "@mui/material";
+import { Stack } from "@mui/material";
 import { useLocale } from "~/lib/useT";
 import { formatDateInTz } from "~/lib/timezones";
 import { formatMoneyCompact } from "~/lib/money";
 import {
   addScoreDeepLinkTarget, isSetsScoringSport, nextRecapBoundary, pendingTaskCount, recapPhase, recapTasks, scoreSummary, type RecapRole,
 } from "~/lib/eventStory";
-import { RecurrencePrompt } from "../../RecurrencePrompt";
 import { applyOptimistic, usePostGameStatus, type Optimistic, type PostGameStatus } from "./postGameStatus";
 import { LastGameRecap } from "./LastGameRecap";
 import { RecapReminder } from "./RecapReminder";
@@ -30,6 +29,10 @@ export interface EventRecapProps {
   sport?: string;
   /** `?action=` from the URL. */
   deepLinkAction: string | null;
+  /** True while the recap is showing something the viewer still has to do (the RSVP below goes quiet). */
+  onBlockingChange?: (blocking: boolean) => void;
+  /** How the viewer's last game ended while the recap is on the page (for the tab title); null when there is nothing to say. */
+  onResultChange?: (result: { outcome: "won" | "lost" | "draw"; mine: number; theirs: number } | null) => void;
 }
 
 const seenKey = (eventId: string, gameId: string) => `recap:seen:${eventId}:${gameId}`;
@@ -42,6 +45,12 @@ const read = (key: string): string | null => {
 };
 const write = (key: string, value: string) => {
   try { localStorage.setItem(key, value); } catch { /* private mode */ }
+};
+
+/** The shape this viewer last saw the recap in on this event, or null if never: the loading page holds that much room. */
+export const lastRecapShape = (eventId: string): "full" | "strip" | null => {
+  const shape = read(shapeKey(eventId));
+  return shape === "full" || shape === "strip" ? shape : null;
 };
 
 /**
@@ -69,7 +78,7 @@ export function EventRecap(p: EventRecapProps) {
 
   const role: RecapRole = !p.isAuthenticated ? "signedOut" : status?.isPlayer ? "played" : "absent";
   const tasks = useMemo(() => !status ? [] : recapTasks({
-    role, canManage: p.canManage, hasLastGame: !!lastGame, latestHistoryId: status.latestHistoryId, hasScore: status.hasScore,
+    role, canManage: p.canManage, hasLastGame: !!lastGame, latestHistoryId: status.latestHistoryId, pendingGameId: status.pendingGameId, hasScore: status.hasScore,
     hasCost: status.hasCost, mvpEnabled: status.mvpEnabled, myMvpComplete: status.myMvpComplete ?? true, viewerName: p.viewerName,
     viewerNames: status.viewerNames,
     viewerPaymentSettled: !!status.viewerPaymentSettled, gameMode: status.gameConfig?.mode ?? null,
@@ -110,6 +119,20 @@ export function EventRecap(p: EventRecapProps) {
     window.location.assign(`/events/${p.eventId}/history`);
   }, [p.deepLinkAction, p.eventId, addScoreTarget]);
   useEffect(() => { setPaused(phase === "hidden"); }, [phase, setPaused]);
+  const blocking = pending > 0 && (phase === "full" || phase === "strip");
+  const { onBlockingChange } = p;
+  useEffect(() => { onBlockingChange?.(blocking); }, [blocking, onBlockingChange]);
+
+  const { onResultChange } = p;
+  const viewerResult = useMemo(() => {
+    if (!status || !status.hasScore || status.scoreOne === null || status.scoreTwo === null) return null;
+    if (phase !== "full" && phase !== "strip") return null;
+    if (status.viewerTeam === null || status.viewerTeam === undefined) return null;
+    const [mine, theirs] = status.viewerTeam === 0 ? [status.scoreOne, status.scoreTwo] : [status.scoreTwo, status.scoreOne];
+    return { outcome: mine === theirs ? "draw" as const : mine > theirs ? "won" as const : "lost" as const, mine, theirs };
+  }, [status, phase]);
+  const resultKey = viewerResult ? `${viewerResult.outcome}:${viewerResult.mine}:${viewerResult.theirs}` : "";
+  useEffect(() => { onResultChange?.(viewerResult); }, [resultKey]); // eslint-disable-line react-hooks/exhaustive-deps -- the key stands for the value
 
   const onOptimistic = useCallback((patch: Optimistic) => setOptimistic((o) => ({ ...o, ...patch })), []);
   const onRollback = useCallback((key: keyof Optimistic) => setOptimistic((o) => { const { [key]: _gone, ...rest } = o; return rest; }), []);
@@ -131,7 +154,7 @@ export function EventRecap(p: EventRecapProps) {
   // has ended). A brand-new weekly game has none, and a skeleton for it would be a jump of its own.
   const expectRecap = !!p.hasLastGame || (!p.isRecurring && new Date(p.nextKickoff).getTime() < now);
   if (!loaded && !status) {
-    return expectRecap ? <RecapSkeleton strip={read(shapeKey(p.eventId)) === "strip"} /> : null;
+    return expectRecap ? <RecapSkeleton strip={lastRecapShape(p.eventId) === "strip"} /> : null;
   }
   if (!status || !lastGame) return null;
   const showScoreReminder = phase === "reminder" && (!!scoreTask || scoreSavedHere);
@@ -143,17 +166,14 @@ export function EventRecap(p: EventRecapProps) {
   };
   const summary = scoreSummary({ ...result, seasonDelta: status.seasonRank?.counted ? status.seasonRank.delta : null }, t);
   const outcome = scoreSummary({ ...result, seasonDelta: null }, t);
-  const dateLabel = formatDateInTz(new Date(lastGame), locale, p.timezone, { weekday: "short", day: "numeric", month: "short" });
-  // Only an event that does not repeat yet asks "make it weekly?", and only of someone who can say yes.
-  const offerWeekly = p.canManage && phase === "full" && !p.isRecurring && !status.isRecurring && status.allComplete;
-
+  const dateLabel = formatDateInTz(new Date(lastGame), locale, p.timezone, { day: "numeric", month: "short" });
   return (
     <Stack spacing={1.5}>
       {showScoreReminder && (
         <RecapScoreReminder
           eventId={p.eventId} teamOneName={status.teamOneName} teamTwoName={status.teamTwoName}
           task={scoreTask?.kind === "addScore" ? scoreTask : { kind: "addScore", needsYou: true, inline: true }}
-          targetId={status.latestHistoryId} saved={scoreSavedHere} onSavedChange={setScoreSavedHere}
+          targetId={status.latestHistoryId ?? status.pendingGameId ?? null} saved={scoreSavedHere} onSavedChange={setScoreSavedHere}
           autoOpen={p.deepLinkAction === "add-score"} onOptimistic={onOptimistic} onRollback={onRollback} onChanged={refresh}
         />
       )}
@@ -179,9 +199,6 @@ export function EventRecap(p: EventRecapProps) {
           onOptimistic={onOptimistic} onRollback={onRollback} onCompleted={() => setJustCompleted(true)}
           autoOpenScore={p.deepLinkAction === "add-score" && addScoreTarget === "inline"} highlightPay={p.deepLinkAction === "pay"}
         />
-      )}
-      {offerWeekly && (
-        <Box><RecurrencePrompt eventId={p.eventId} isRecurring={false} complete flat /></Box>
       )}
     </Stack>
   );

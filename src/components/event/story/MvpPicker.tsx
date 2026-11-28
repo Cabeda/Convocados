@@ -42,6 +42,8 @@ export function MvpPicker({ eventId, historyId, panelId, selfName, selfNames, in
   const [showAll, setShowAll] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const focusedRef = useRef(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const pickedOnceRef = useRef(false);
   const mine = useMemo(() => [selfName, ...(selfNames ?? [])].map((n) => (n ?? "").trim().toLowerCase()).filter(Boolean), [selfName, selfNames]);
 
   useEffect(() => {
@@ -61,6 +63,15 @@ export function MvpPicker({ eventId, historyId, panelId, selfName, selfNames, in
     focusedRef.current = true;
     listRef.current?.querySelector<HTMLInputElement>("input[type='radio']")?.focus();
   }, [people]);
+
+  // Choosing a name must leave Confirm in sight: a phone's page may end below it.
+  useEffect(() => {
+    if (!pick) return;
+    if (!pickedOnceRef.current && initialPick === pick) { pickedOnceRef.current = true; return; }
+    pickedOnceRef.current = true;
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    confirmRef.current?.scrollIntoView?.({ block: "nearest", behavior: calm ? "auto" : "smooth" });
+  }, [pick, initialPick]);
 
   const searching = query.trim() !== "";
   const shown = useMemo(() => {
@@ -115,7 +126,7 @@ export function MvpPicker({ eventId, historyId, panelId, selfName, selfNames, in
         }}
       >
         <Button
-          variant="contained" disableElevation disabled={!chosen} onClick={() => chosen && onVote(chosen)}
+          ref={confirmRef} variant="contained" disableElevation disabled={!chosen} onClick={() => chosen && onVote(chosen)}
           sx={{ flex: 1, minHeight: PANEL_ACTION_HEIGHT, borderRadius: 999, fontSize: "1.0625rem", fontWeight: 700, textTransform: "none", ...tappable }}
         >
           {t("recapMvpConfirm")}

@@ -78,6 +78,10 @@
 | Reorder Players | ✅ | ✅ | ❌ |
 | Known Players Autocomplete | ✅ | ✅ | ❌ |
 | Contact Picker Invite | ✅ | ✅ | ❌ |
+| Flat Header Actions | ✅ | ❌ | ❌ |
+| More Sheet | ✅ | ❌ | ❌ |
+| Next Game Block | ✅ | ❌ | ❌ |
+| Manage Lineup | ✅ | ❌ | ❌ |
 
 ### Teams
 
@@ -89,6 +93,8 @@
 | View Teams | ✅ | ✅ | ✅ |
 | Field View | ✅ | ✅ | ❌ |
 | Player Positions | ✅ | ✅ | ❌ |
+| Flat Teams Block | ✅ | ❌ | ❌ |
+| Play Again One Off | ✅ | ❌ | ❌ |
 
 ### Score Tracking
 

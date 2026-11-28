@@ -18,7 +18,7 @@ interface Props {
    * so agents that do not execute scripts can find the data (ADR 0034).
    */
   alternateJson?: string;
-  /** Override the default theme-color (default: #1b6b4a). */
+  /** Override the theme-color for both light and dark (default: brand green on light, #111412 on dark). */
   themeColor?: string;
   /**
    * Optional `view-transition-name` for this page's main content. Set to a
@@ -52,7 +52,7 @@ const {
   metaTags = [],
   jsonLd,
   alternateJson,
-  themeColor = "#1b6b4a",
+  themeColor,
   mainTransitionName,
   mainClass,
   agentLinks = false,
@@ -79,7 +79,13 @@ import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
     */}
     <meta name="apple-mobile-web-app-title" content="Convocados" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content={themeColor} />
+    {/* The browser bar follows the system theme: the brand green on light, the page's own dark (the shell background) on dark. */}
+    {themeColor
+      ? <meta name="theme-color" content={themeColor} />
+      : <>
+          <meta name="theme-color" content="#1b6b4a" media="(prefers-color-scheme: light)" />
+          <meta name="theme-color" content="#111412" media="(prefers-color-scheme: dark)" />
+        </>}
     {metaTags.map((tag) => <meta property={tag.property} content={tag.content} />)}
     {alternateJson && <link rel="alternate" type="application/json" href={alternateJson} />}
     {jsonLd && <script type="application/ld+json" set:html={jsonLd} />}
@@ -93,6 +99,7 @@ import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
     */}
     <style is:inline>
       html, body { background-color: #111412; }
+      main:focus { outline: none; }
       body { color: #e6e6e6; margin: 0; }
       /* ponytail: cross-document view transitions (browser-native, CSS-only).
          Works with client:only islands because navigation is a full page load.
@@ -103,6 +110,11 @@ import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
       @view-transition { navigation: auto; }
       ::view-transition-old(root),
       ::view-transition-new(root) { animation-duration: 200ms; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+      /* Less motion means none: every transition and animation on the page (the app's own and MUI's ripples, toasts and
+         dialogs) finishes in one frame. Each component also switches its own off; this is the net under them. */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+      }
       @media (prefers-reduced-motion: reduce) {
         ::view-transition-old(root),
         ::view-transition-new(root) { animation: none !important; }
@@ -111,6 +123,8 @@ import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
   </head>
   <body>
     <main
+      id="main-content"
+      tabindex="-1"
       class={mainClass}
       style={mainTransitionName ? `view-transition-name: ${mainTransitionName};` : undefined}
     >

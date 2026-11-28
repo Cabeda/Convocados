@@ -70,6 +70,8 @@ export interface RecapTasksInput {
   canManage: boolean;
   hasLastGame: boolean;
   latestHistoryId: string | null;
+  /** An ended one-off with no history row yet: the live game the first score is saved on. */
+  pendingGameId?: string | null;
   hasScore: boolean;
   hasCost: boolean;
   mvpEnabled: boolean;
@@ -89,7 +91,6 @@ export interface RecapTasksInput {
   setsScoring?: boolean;
 }
 
-/** Sports whose result is a list of sets, not one number per team. */
 /**
  * Is there a last game to recap? True when the newest history row is a game that was played: a cancelled
  * one has no result, scoreboard or tasks (the same rule `computePostGameStatus` applies).
@@ -98,6 +99,7 @@ export interface RecapTasksInput {
 export const hasRecappableGame = (latestHistory: { status: string } | null | undefined): boolean =>
   !!latestHistory && latestHistory.status !== "cancelled";
 
+/** Sports whose result is a list of sets, not one number per team. */
 export const isSetsScoringSport = (sport: string) =>
   ["tennis", "tennis-singles", "tennis-doubles", "padel"].includes(sport.toLowerCase());
 
@@ -151,7 +153,7 @@ export function recapTasks(input: RecapTasksInput): RecapTask[] {
 
   // Anyone who played can add the score, and so can the owner and admins.
   if (!input.hasScore && (input.role === "played" || input.canManage)) {
-    out.push({ kind: "addScore", needsYou: true, inline: !!input.latestHistoryId && !input.setsScoring });
+    out.push({ kind: "addScore", needsYou: true, inline: !!(input.latestHistoryId ?? input.pendingGameId) && !input.setsScoring });
   }
 
   // MVP is for players only, and only once there is a result to vote on.

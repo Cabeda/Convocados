@@ -97,3 +97,7 @@ export interface KnownPlayer {
 export type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number; userId: string | null; image?: string | null; coPlayCount?: number }
   | { type: "create"; name: string };
+
+/** What the add field hands over when someone is added: a name or an email, optionally linked to an account. */
+export type AddPlayerIntent =
+  | { kind: "single"; name: string; email?: string; userId?: string; position?: string; source: "chip" | "dropdown" | "input" };

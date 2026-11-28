@@ -7,7 +7,7 @@ import GroupsIcon from "@mui/icons-material/Groups";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
 import { crewColor } from "~/lib/crewColors";
-import type { CrewHeaderChip, CrewRef } from "./TeamPicker";
+import type { CrewHeaderChip, CrewRef } from "./team/types";
 import { applyFormationLayout, firstFreeSlot, placePlayer, setFormation } from "~/lib/teams";
 import { getDefaultFormation, getFormation, getFormationsForSport } from "~/lib/formations";
 import {

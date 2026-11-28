@@ -30,7 +30,7 @@ import { useSession, signOut } from "~/lib/auth.client";
 import { apiRequest } from "~/lib/api/client";
 import { shareForHomeScreen } from "~/lib/pwaInstall";
 import { INSTALL_BANNER_DISMISS_KEY, installBannerDismissed } from "~/lib/pushPrompt";
-import { BottomSlotProvider, useBottomSlotClaim } from "~/lib/bottomSlot";
+import { BottomSlotProvider, useBottomSlotClaim, useFixedBottomBanner } from "~/lib/bottomSlot";
 import { SignInButton } from "./SignInButton";
 import SupportLinks from "./SupportLinks";
 import NotificationsBell from "./NotificationsBell";
@@ -75,6 +75,15 @@ function ElevationScroll({ children }: { children: React.ReactElement<{ elevatio
   const trigger = useScrollTrigger({ disableHysteresis: true, threshold: 0 });
   // eslint-disable-next-line @eslint-react/no-clone-element -- MUI idiom for forwarding elevation prop
   return React.cloneElement(children, { elevation: trigger ? 4 : 0 });
+}
+
+/**
+ * The room under the footer: the notch's inset always, and the height of a fixed banner while one shows,
+ * so the last line of the page can be scrolled clear of it.
+ */
+export function BottomClearance() {
+  const fixed = useFixedBottomBanner();
+  return <Box aria-hidden data-testid="bottom-clearance" data-banner={fixed ? "true" : undefined} sx={{ flex: "none", height: fixed ? "calc(6rem + env(safe-area-inset-bottom))" : "env(safe-area-inset-bottom)" }} />;
 }
 
 function UpdateBanner() {
@@ -391,6 +400,16 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
       bgcolor: theme.palette.background.default,
       transition: theme.transitions.create("background-color"),
     }}>
+      {/* First stop for a keyboard: past the app bar, straight to the page. Seen only while focused. */}
+      <Box
+        component="a" href="#main-content" data-testid="skip-link"
+        sx={{
+          position: "absolute", left: 8, top: 8, zIndex: theme.zIndex.tooltip + 1, px: 2, py: 1.25, borderRadius: 999, bgcolor: "primary.main", color: "primary.contrastText",
+          fontWeight: 700, textDecoration: "none", transform: "translateY(-200%)", "&:focus-visible": { transform: "none", outline: "2px solid", outlineColor: "text.primary", outlineOffset: "2px" },
+        }}
+      >
+        {t("skipToContent")}
+      </Box>
       <UpdateBanner />
       <InstallBanner />
       <ElevationScroll>
@@ -408,20 +427,23 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               sx={{
                 flexGrow: 1, fontWeight: 700, textDecoration: "none", color: "inherit",
                 "&:hover": { color: theme.palette.primary.main },
-                display: "flex", alignItems: "center", gap: 0.5,
+                display: "flex", alignItems: "center", gap: 0.5, minWidth: 0,
               }}
             >
               {t("appName")}
-              <Chip label="beta" size="small" sx={{ fontSize: "0.6rem", height: 18, ml: 0.5 }} />
+              {/* Below 400px the room is for the buttons that do something: the badge goes first. */}
+              <Chip label="beta" size="small" sx={{ fontSize: "0.6rem", height: 18, ml: 0.5, "@media (max-width:399.95px)": { display: "none" } }} />
             </Typography>
             {/* The in-app feed has been written since the notification queue
                 landed; the web had no way to read it (#1560). */}
             <NotificationsBell signedIn={!!session?.user} />
 
             <Tooltip title={t("publicGames")}>
+              {/* Below 340px the bar is wider than the screen and pushes the avatar out of it: this one goes. */}
               <IconButton color="inherit" aria-label={t("publicGames")}
                 href="/public"
-                component="a">
+                component="a"
+                sx={{ "@media (max-width:339.95px)": { display: "none" } }}>
                 <PublicIcon />
               </IconButton>
             </Tooltip>
@@ -520,7 +542,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                     // full-page navigation — the user stays on the current page.
                     refetchSession?.();
                   }}
-                  sx={{ textTransform: "none", fontWeight: 600 }}
+                  sx={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, minHeight: 44 }}
                 >
                   {t("signIn")}
                 </SignInButton>
@@ -547,7 +569,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
         </AppBar>
       </ElevationScroll>
 
-      <Box component="main" sx={{ flexGrow: 1, width: "100%", pb: 4 }}>
+      <Box sx={{ flexGrow: 1, width: "100%", pb: 4 }}>
         {children}
       </Box>
 
@@ -597,7 +619,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
           <Typography variant="body2" align="center" sx={{ color: theme.palette.text.secondary }}>
             © {new Date().getFullYear()} {t("appName")}
           </Typography>
-          <Typography variant="caption" align="center" component="div" sx={{ color: theme.palette.text.disabled }}>
+          <Typography variant="caption" align="center" component="div" sx={{ color: theme.palette.text.secondary }}>
             <Typography
               component="a"
               href="https://github.com/Cabeda/Convocados/releases"
@@ -610,6 +632,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
           </Typography>
         </Container>
       </Box>
+      <BottomClearance />
     </Box>
     </BottomSlotProvider>
   );

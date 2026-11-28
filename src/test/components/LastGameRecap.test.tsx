@@ -63,6 +63,11 @@ describe("LastGameRecap — full card", () => {
     expect(screen.getByText("You won · +143 points this season")).toBeInTheDocument();
   });
 
+  it("is a named region headed by an h2, like every other section of the page", () => {
+    show();
+    expect(screen.getByRole("region", { name: "Last game · Wed 4 Mar" })).toContainElement(screen.getByRole("heading", { level: 2, name: "Last game · Wed 4 Mar" }));
+  });
+
   it("uses no ranking jargon anywhere on the card", () => {
     const { container } = show();
     expect(container.textContent).not.toMatch(/\bRP\b|\bTier\b|\bCrew\b|Provisional|Wrap it up/);
@@ -133,11 +138,12 @@ describe("LastGameRecap — full card", () => {
     expect(container.textContent).not.toMatch(/\d+\/\d+/);
   });
 
-  it("gives every link tile the same minimum height and a sub line", () => {
+  // The tiles' alignment is layout: e2e/event-recap-layout.spec.ts measures it in five locales at 320 and 390px.
+  it("gives every link tile a name and a one-line sub that says what it holds", () => {
     show();
-    for (const name of [/Game details/, /Payments/, /Ranking/]) {
-      expect(cssFor(screen.getByRole("link", { name }))).toMatch(/min-height:\s*72px/);
-    }
+    expect(screen.getByRole("link", { name: "Game details 12 played" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Payments 1 of 2 paid" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ranking this season" })).toBeInTheDocument();
   });
 
   it("hides the payments link when no cost exists", () => {
@@ -164,17 +170,17 @@ describe("LastGameRecap — full card", () => {
   });
 
   it("says a missing score once: dashes and one sentence for someone who cannot add it", () => {
-    show({ status: missing, summary: "Score not added yet", tasks: [], role: "absent" });
+    show({ status: missing, summary: "No score yet", tasks: [], role: "absent" });
     expect(screen.getByTestId("score-one")).toHaveTextContent("–");
-    expect(screen.getAllByText("Score not added yet")).toHaveLength(1);
+    expect(screen.getAllByText("No score yet")).toHaveLength(1);
     expect(screen.queryByText(/Someone who played/)).toBeNull();
-    expect(screen.queryByText(/Nobody has added it yet/)).toBeNull();
+    expect(screen.queryByText(/Add it so everyone sees it/)).toBeNull();
   });
 
   it("lets the add-score row carry the sentence for someone who can add it", () => {
-    show({ status: missing, summary: "Score not added yet", tasks: [{ kind: "addScore", needsYou: true, inline: true }] });
-    expect(screen.getByText("Nobody has added it yet. Add it so everyone sees it.")).toBeInTheDocument();
-    expect(screen.queryByText("Score not added yet")).toBeNull();
+    show({ status: missing, summary: "No score yet", tasks: [{ kind: "addScore", needsYou: true, inline: true }] });
+    expect(screen.getByText("No score yet. Add it so everyone sees it.")).toBeInTheDocument();
+    expect(screen.queryByText("No score yet")).toBeNull();
   });
 });
 
@@ -332,7 +338,7 @@ describe("LastGameRecap — actions", () => {
   });
 
   it("add-score opens the steppers in place of the scoreboard when a history row exists", () => {
-    show({ status: missing, tasks: [{ kind: "addScore", needsYou: true, inline: true }], summary: "Score not added yet" });
+    show({ status: missing, tasks: [{ kind: "addScore", needsYou: true, inline: true }], summary: "No score yet" });
     fireEvent.click(screen.getByRole("button", { name: "Add score" }));
     expect(screen.getByRole("button", { name: "One more for Shadow Foxes" })).toBeInTheDocument();
     // team names and numbers are said once: the steppers ARE the scoreboard now
@@ -357,8 +363,21 @@ describe("LastGameRecap — actions", () => {
     expect(screen.getAllByText("1")).toHaveLength(1);
   });
 
+  it("an ended one-off with no history row saves its first score on the live game", async () => {
+    stubFetch();
+    const onChanged = vi.fn();
+    show({
+      status: { ...missing, latestHistoryId: null, pendingGameId: "game-9" }, onChanged,
+      tasks: [{ kind: "addScore", needsYou: true, inline: true }], autoOpenScore: true,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "One more for Shadow Foxes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save score" }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(calls.find((c) => c.method === "PATCH")).toMatchObject({ url: "/api/events/e1/history/game-9", body: { scoreOne: 1, scoreTwo: 0 } });
+  });
+
   it("add-score falls back to History when the score cannot be saved in place", () => {
-    show({ status: missing, tasks: [{ kind: "addScore", needsYou: true, inline: false }], summary: "Score not added yet" });
+    show({ status: missing, tasks: [{ kind: "addScore", needsYou: true, inline: false }], summary: "No score yet" });
     expect(screen.getByRole("link", { name: "Open history" })).toHaveAttribute("href", "/events/e1/history");
   });
 

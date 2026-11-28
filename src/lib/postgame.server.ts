@@ -9,7 +9,7 @@ import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type Vie
 import { summarizePayments } from "./paymentSummary";
 import { parseTeamsSnapshot } from "./gameSnapshot";
 import { findViewerName, isNameInList, namesFromTeamsSnapshot } from "./snapshotParticipants";
-import { viewerRosterNames } from "./viewerIdentity.server";
+import { isOnLiveRoster, viewerRosterNames } from "./viewerIdentity.server";
 import { countEligibleVoters, viewerHasVoted } from "./mvp.server";
 import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 
@@ -31,6 +31,11 @@ export interface PostGameStatusPayload {
   isParticipant: boolean;
   isPlayer: boolean;
   latestHistoryId: string | null;
+  /**
+   * An ended one-off has no history row until its first score: the live Game to save that score on
+   * (PATCH history/{id} accepts it and creates the row). Null whenever a history row exists or the game is weekly.
+   */
+  pendingGameId: string | null;
   paymentsSnapshot: Array<{ playerName: string; amount: number; status: string; method?: string | null }> | null;
   costCurrency: string | null;
   costAmount: number | null;
@@ -144,7 +149,7 @@ export async function computePostGameStatus(
   if (latestHistory?.status === "cancelled") {
     return {
       gameEnded: false, hasScore: false, hasCost: false, allPaid: true,
-      allComplete: true, isParticipant: false, isPlayer: false, latestHistoryId: null,
+      allComplete: true, isParticipant: false, isPlayer: false, latestHistoryId: null, pendingGameId: null,
       paymentsSnapshot: null, costCurrency: null, costAmount: null,
       hasPendingPastPayments: false, mvpEnabled: false, mvpComplete: true,
       bannerMvpComplete: true, myMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
@@ -211,7 +216,11 @@ export async function computePostGameStatus(
   // the roster rows linked to the account count too (falling back to the name).
   const viewerNames = session?.user ? await viewerNamesFor(event.id, session.user.id, session.user.name, light) : [];
   const playedAs = findViewerName(viewerNames, namesFromTeamsSnapshot(latestHistory?.teamsSnapshot));
-  const isPlayer = playedAs !== null;
+  // An ended one-off has no history row until its first score: who played is who was on the live game's roster.
+  const onLiveRoster = !latestHistory && gameEnded && !event.isRecurring && !!session?.user && event.currentGameId
+    ? await isOnLiveRoster(event.currentGameId, viewerNames)
+    : false;
+  const isPlayer = playedAs !== null || onLiveRoster;
 
   // ─── MVP voting completion ──────────────────────────────────────────
   let mvpComplete = true;
@@ -422,6 +431,7 @@ export async function computePostGameStatus(
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
+    pendingGameId: !latestHistory && gameEnded && !event.isRecurring ? event.currentGameId : null,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
     myMvpComplete,
     paidAggregate,

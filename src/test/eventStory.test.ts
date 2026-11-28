@@ -144,6 +144,12 @@ describe("recapTasks — player", () => {
     expect(tasks({ hasScore: false, latestHistoryId: null })[0]).toEqual({ kind: "addScore", needsYou: true, inline: false });
   });
 
+  it("an ended one-off has no history row yet, but its live game takes the score: still inline", () => {
+    expect(tasks({ hasScore: false, latestHistoryId: null, pendingGameId: "g1" })[0]).toEqual({ kind: "addScore", needsYou: true, inline: true });
+    // MVP still needs a real history row to vote on.
+    expect(kinds({ hasScore: true, latestHistoryId: null, pendingGameId: "g1" })).not.toContain("mvp");
+  });
+
   it("sends sets-scored sports (tennis, padel) to the History page instead of inline steppers", () => {
     expect(tasks({ hasScore: false, setsScoring: true })[0]).toEqual({ kind: "addScore", needsYou: true, inline: false });
     expect(isSetsScoringSport("Padel")).toBe(true);
@@ -297,11 +303,11 @@ describe("scoreSummary", () => {
   });
 
   it("says the score is missing", () => {
-    expect(sum({ hasScore: false, scoreOne: null, scoreTwo: null })).toBe("Score not added yet");
+    expect(sum({ hasScore: false, scoreOne: null, scoreTwo: null })).toBe("No score yet");
   });
 
   it("treats a half-filled score as missing", () => {
-    expect(sum({ scoreTwo: null })).toBe("Score not added yet");
+    expect(sum({ scoreTwo: null })).toBe("No score yet");
   });
 
   it("says point, not points, for a single point", () => {
