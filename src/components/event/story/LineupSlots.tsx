@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Box } from "@mui/material";
 import { useT } from "~/lib/useT";
-import { SLOT_GAP, SLOT_MAX_SIZE, slotColumns, slotLabels, slotMinSize } from "~/lib/nextGame";
+import { slotLabels } from "~/lib/nextGame";
 import type { Player } from "../types";
 import { EASE, controlBorder, focusRing, pressable } from "./styles";
+import { useSlotGrid } from "./useSlotGrid";
 
 const CALM = "@media (prefers-reduced-motion: reduce)";
 
@@ -49,19 +50,16 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
   const t = useT();
   const fresh = useFreshNames(players.map((p) => p.name));
   const { labels } = slotLabels(players.map((p) => p.name));
-  const columns = slotColumns(maxPlayers);
-  const min = slotMinSize(maxPlayers);
-  // Aim for `columns` per row, but never below the minimum size: a narrow screen takes fewer and wraps.
-  const track = `max(${min}px, calc((100% - ${(columns - 1) * SLOT_GAP}px) / ${columns} - 0.5px))`;
+  const grid = useSlotGrid(maxPlayers);
+  // Opening a slot's options pushes the rows below it down by one; the options take that row.
+  const openRow = selectedId ? grid.rowOf[players.findIndex((p) => p.id === selectedId)] ?? null : null;
+  const at = (i: number) => ({ gridRow: grid.rowOf[i] + 1 + (openRow !== null && grid.rowOf[i] > openRow ? 1 : 0), gridColumn: grid.colOf[i] + 1 });
 
   return (
+    <Box ref={grid.wrapRef}>
     <Box
       role="group" aria-label={t("ngLineupAria", { n: players.length, max: maxPlayers })} data-testid="lineup-slots"
-      sx={{
-        // "dense": the options span a whole row, and the slots after the tapped one fill the rest of its row.
-        display: "grid", gridAutoFlow: "row dense", gridTemplateColumns: `repeat(auto-fill, minmax(${track}, 1fr))`, gap: `${SLOT_GAP}px`,
-        maxWidth: columns * SLOT_MAX_SIZE + (columns - 1) * SLOT_GAP,
-      }}
+      sx={grid.gridSx}
     >
       {Array.from({ length: maxPlayers }, (_, i) => {
         const player = players[i] ?? null;
@@ -69,7 +67,7 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
           return (
             <Box
               key={`open-${i}`} aria-hidden data-testid="open-slot" onClick={onOpenSpot}
-              sx={{ aspectRatio: "1", borderRadius: "50%", border: "1.5px dashed", borderColor: controlBorder, boxSizing: "border-box", cursor: onOpenSpot ? "pointer" : "default" }}
+              sx={{ ...at(i), aspectRatio: "1", borderRadius: "50%", border: "1.5px dashed", borderColor: controlBorder, boxSizing: "border-box", cursor: onOpenSpot ? "pointer" : "default" }}
             />
           );
         }
@@ -86,7 +84,7 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
               : { role: "img" })}
             aria-label={pressable_ ? t("ngOptionsFor", { name }) : name} title={player.name} data-testid={me ? "slot-me" : "slot"} data-trigger={`slot:${player.id}`}
             sx={{
-              all: pressable_ ? "unset" : undefined, boxSizing: "border-box", position: "relative", aspectRatio: "1", borderRadius: "50%",
+              all: pressable_ ? "unset" : undefined, ...at(i), boxSizing: "border-box", position: "relative", aspectRatio: "1", borderRadius: "50%",
               display: "grid", placeItems: "center", minWidth: 0, fontSize: "0.8125rem", fontWeight: 700, lineHeight: 1, letterSpacing: "0.01em",
               bgcolor: me ? "primary.main" : "action.selected", color: me ? "primary.contrastText" : "text.primary",
               outline: selected ? "2px solid" : "none", outlineColor: "primary.main", outlineOffset: "2px",
@@ -100,10 +98,11 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
           >
             <span aria-hidden>{labels[i]}</span>
           </Box>
-          {selected && options && <Box data-testid="slot-options-row" sx={{ gridColumn: "1 / -1" }}>{options}</Box>}
+          {selected && options && <Box data-testid="slot-options-row" sx={{ gridRow: grid.rowOf[i] + 2, gridColumn: "1 / -1" }}>{options}</Box>}
           </Fragment>
         );
       })}
+    </Box>
     </Box>
   );
 }

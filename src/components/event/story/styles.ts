@@ -67,5 +67,5 @@ export const controlBorder = (theme: Theme) => alpha(theme.palette.text.secondar
 
 /** Read by a screen reader, never seen: the live region for what other people just did. */
 export const srOnly = {
-  position: "absolute", width: 1, height: 1, p: 0, m: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0,
+  position: "absolute", width: "1px", height: "1px", p: 0, m: "-1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0,
 } as const;

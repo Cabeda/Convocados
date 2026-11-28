@@ -769,14 +769,17 @@ describe("An unlinked row with the viewer's own name (the organizer added them b
 describe("Options open right under the slot that was tapped", () => {
   it("puts the options in the grid itself, directly after the tapped slot, spanning the whole row (the row layout is checked in a real browser: jsdom has no layout)", async () => {
     const user = userEvent.setup();
-    renderPage({ players: rows(5) });
+    renderPage({ players: rows(7) });
     await user.click(await screen.findByRole("button", { name: "Options for Player 1" }));
     const grid = screen.getByTestId("lineup-slots");
     const row = await screen.findByTestId("slot-options-row");
     expect(row.parentElement).toBe(grid);
     expect(row.previousElementSibling).toBe(screen.getByRole("button", { name: "Options for Player 1" }));
     expect(cssFor(row)).toMatch(/grid-column:\s*1\s*\/\s*-1/);
-    expect(cssFor(grid)).toMatch(/grid-auto-flow:\s*row dense/);
+    // Player 1 is in the first row; the options take the row under it and the rest move down one.
+    expect(cssFor(row)).toMatch(/grid-row:\s*2/);
+    expect(cssFor(screen.getByRole("button", { name: "Options for Player 5" }))).toMatch(/grid-row:\s*3/);
+    expect(cssFor(screen.getByRole("button", { name: "Options for Player 4" }))).toMatch(/grid-row:\s*1/);
     // Not at the end of the grid, and only one set of options.
     expect(grid.lastElementChild).not.toBe(row);
     expect(screen.getAllByTestId("player-options")).toHaveLength(1);
@@ -803,6 +806,13 @@ describe("Other people joining and leaving are announced politely", () => {
     expect(announce()).toHaveAttribute("aria-live", "polite");
     expect(announce()).toHaveAttribute("aria-atomic", "true");
     expect(announce()).toBeEmptyDOMElement();
+  });
+
+  it("takes no room on the page: a 1px box, not a full-width one (a width of 1 in sx means 100% and made the page scroll sideways)", async () => {
+    renderPage({ players: rows(2) });
+    await screen.findByTestId("lineup-slots");
+    expect(cssFor(announce())).toMatch(/width:\s*1px/);
+    expect(cssFor(announce())).toMatch(/height:\s*1px/);
   });
 
   it("says 'Ana M. joined' once the poll finds her — and says nothing about the first reading", async () => {

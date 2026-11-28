@@ -201,6 +201,30 @@ export function slotColumns(maxPlayers: number): number {
   return Math.ceil(maxPlayers / rows);
 }
 
+/**
+ * The people in each row, as evenly as they split, widest first: 22 across 8 → 8 + 7 + 7 (not 8 + 8 + 6).
+ * `across` is how many fit on one row at this screen width; a narrow screen wraps to more rows, still even.
+ */
+export function slotRows(count: number, across: number): number[] {
+  if (count <= 0) return [];
+  const rows = Math.ceil(count / Math.max(1, across));
+  const base = Math.floor(count / rows);
+  const extra = count % rows;
+  return Array.from({ length: rows }, (_, i) => base + (i < extra ? 1 : 0));
+}
+
+/**
+ * How many slots fit across `width` px at `min` px each with `gap` between, never more than `wanted`
+ * (what the game asks for), never fewer than one. Unknown width (0, before layout): what the game asks for.
+ */
+export function fitColumns(width: number, min: number, gap: number, wanted: number): number {
+  if (width <= 0) return Math.max(1, wanted);
+  return Math.max(1, Math.min(wanted, Math.floor((width + gap) / (min + gap))));
+}
+
+/** The most slots a game of this size puts in one row. */
+export const maxAcross = (maxPlayers: number) => (maxPlayers <= 8 ? 4 : 8);
+
 export type RsvpView =
   | { kind: "signIn" }
   | { kind: "choose"; full: boolean }

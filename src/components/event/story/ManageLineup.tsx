@@ -55,7 +55,7 @@ export function ManageLineup({ players, maxPlayers, positionsEnabled, onMove, on
       {player.userId
         ? <PlayerAvatar userId={player.userId} name={player.name} image={player.image} size={24} clickable={false} />
         : <span title={t("anonymousPlayer")}><AnonymousPlayerIcon /></span>}
-      <Typography sx={{ flex: "1 1 8rem", minWidth: 0, fontSize: "1rem", overflowWrap: "anywhere" }}>
+      <Typography sx={{ flex: "1 1 4rem", minWidth: 0, fontSize: "1rem", overflowWrap: "anywhere" }}>
         {index < maxPlayers ? `${index + 1}. ` : `${index - maxPlayers + 1}. `}{player.name}
       </Typography>
       {positionsEnabled && (

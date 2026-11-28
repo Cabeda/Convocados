@@ -31,7 +31,7 @@ const pill = {
 } as const;
 
 /** The pill for a choice between two: wraps its own words and drops under the other when two will not fit. */
-const choosePill = { ...pill, flex: "1 1 9rem", whiteSpace: "normal", lineHeight: 1.2, py: 0.75, textWrap: "balance" } as const;
+const choosePill = { ...pill, flex: "1 1 9rem", px: 2, whiteSpace: "normal", lineHeight: 1.2, py: 0.75, textWrap: "balance" } as const;
 
 const quiet = { minHeight: 44, px: 1.5, textTransform: "none", fontWeight: 700, fontSize: "1rem", color: "text.secondary", borderRadius: 999, ...tappable } as const;
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   COUNTDOWN_WINDOW_MS, nextGamePhase, countdownOf, nextTickDelay, isGameDay, initials, shortNames,
-  slotMinSize, slotColumns, slotLabels, phaseChangeDelay, nextGameHint, rosterChanges, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval, removeRule,
+  slotMinSize, slotColumns, slotRows, fitColumns, slotLabels, phaseChangeDelay, nextGameHint, rosterChanges, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval, removeRule,
 } from "~/lib/nextGame";
 
 const MIN = 60_000;
@@ -326,5 +326,44 @@ describe("rosterChanges — who joined and who left between two readings of the 
   });
   it("counts two people with one name as two", () => {
     expect(rosterChanges([row("Ana")], [row("Ana"), row("Ana")], null)).toEqual({ joined: ["Ana"], left: [] });
+  });
+});
+
+describe("slotRows — the people in each row, as evenly as they split", () => {
+  it("splits 22 into 8 + 7 + 7, 10 into 5 + 5, 16 into 8 + 8, 12 into 6 + 6", () => {
+    expect(slotRows(22, 8)).toEqual([8, 7, 7]);
+    expect(slotRows(10, 5)).toEqual([5, 5]);
+    expect(slotRows(16, 8)).toEqual([8, 8]);
+    expect(slotRows(12, 8)).toEqual([6, 6]);
+  });
+  it("keeps 4 in one row, and 7 as 4 + 3 when rows may hold 4", () => {
+    expect(slotRows(4, 4)).toEqual([4]);
+    expect(slotRows(7, 4)).toEqual([4, 3]);
+  });
+  it("on a narrow screen balances the wrapped rows too: 22 at 6 across is 6 + 6 + 5 + 5, never 6 + 6 + 6 + 4", () => {
+    expect(slotRows(22, 6)).toEqual([6, 6, 5, 5]);
+    expect(slotRows(16, 6)).toEqual([6, 5, 5]);
+  });
+  it("holds every person exactly once, rows never differ by more than one, and no row is wider than allowed (2..40 people, 1..8 across)", () => {
+    for (let n = 2; n <= 40; n++) for (let max = 1; max <= 8; max++) {
+      const rows = slotRows(n, max);
+      expect(rows.reduce((a, b) => a + b, 0), `n=${n} max=${max}`).toBe(n);
+      expect(Math.max(...rows) - Math.min(...rows), `n=${n} max=${max}`).toBeLessThanOrEqual(1);
+      expect(Math.max(...rows), `n=${n} max=${max}`).toBeLessThanOrEqual(max);
+    }
+  });
+  it("agrees with slotColumns for the widest row", () => {
+    for (let n = 2; n <= 30; n++) expect(slotRows(n, n <= 8 ? 4 : 8)[0]).toBe(slotColumns(n));
+  });
+});
+
+describe("fitColumns — how many slots really fit across", () => {
+  it("is as many as fit at the minimum size, never more than the game wants, never fewer than one", () => {
+    expect(fitColumns(288, 36, 8, 8)).toBe(6);
+    expect(fitColumns(358, 36, 8, 8)).toBe(8);
+    expect(fitColumns(1000, 36, 8, 8)).toBe(8);
+    expect(fitColumns(288, 52, 8, 4)).toBe(4);
+    expect(fitColumns(100, 52, 8, 4)).toBe(1);
+    expect(fitColumns(0, 52, 8, 4)).toBe(4);
   });
 });
