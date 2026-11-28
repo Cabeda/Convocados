@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { teamTitle, viewerTeamIndex, drawGate, drawStep, showRatings, playAgainView } from "~/lib/teamsView";
+import { defaultTeamName, teamTitle, viewerTeamIndex, drawGate, drawStep, showRatings, playAgainView } from "~/lib/teamsView";
 
 describe("teamTitle", () => {
   it("calls the stock names 'Team 1' and 'Team 2' and keeps names a group chose", () => {
@@ -61,5 +61,14 @@ describe("playAgainView", () => {
   it("tells everyone else who to ask", () => {
     expect(playAgainView({ canManage: false, ownerName: "Sam" })).toEqual({ kind: "ask", owner: "Sam" });
     expect(playAgainView({ canManage: false, ownerName: null })).toEqual({ kind: "ask", owner: null });
+  });
+});
+
+describe("defaultTeamName", () => {
+  it("is the stock name a team starts with, which teamTitle shows as plain Team 1 / Team 2", () => {
+    expect(defaultTeamName(0)).toBe("Ninjas");
+    expect(defaultTeamName(1)).toBe("Gunas");
+    expect(teamTitle(defaultTeamName(0), 0)).toEqual({ custom: false });
+    expect(teamTitle(defaultTeamName(1), 1)).toEqual({ custom: false });
   });
 });

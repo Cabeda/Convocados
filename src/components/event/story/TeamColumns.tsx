@@ -12,7 +12,7 @@ import type { TranslationKey } from "~/lib/i18n";
 import type { Imatch } from "~/lib/random";
 import { movePlayer } from "~/lib/teams";
 import { shortNames } from "~/lib/nextGame";
-import { teamTitle } from "~/lib/teamsView";
+import { defaultTeamName, teamTitle } from "~/lib/teamsView";
 import { TeamDragGhost, teamMotionKeyframes, useTeamDrag } from "../../team/useTeamDrag";
 import { EASE, NUMERAL_FONT, srOnly, tappable } from "./styles";
 
@@ -96,11 +96,17 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
     onResultChange(next);
   };
 
-  const save = (index: number, team: string) => {
-    const value = draft.trim() || team;
+  /**
+   * The field starts from the name the column shows (`label`), so what is typed is what the group will see:
+   * the same name changes nothing, and an empty one puts the team back to its default.
+   */
+  const save = (index: number, team: string, label: string) => {
+    const typed = draft.trim();
+    const value = typed || defaultTeamName(index);
     refocusRef.current = index;
     setEditing(null);
-    if (value !== team) onRename?.(index, value);
+    if (typed === label || value === team) return;
+    onRename?.(index, value);
   };
 
   let order = 0;
@@ -130,13 +136,13 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
                       size="small" value={draft} autoFocus fullWidth
                       onChange={(e) => setDraft(e.target.value.slice(0, 50))}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") { e.preventDefault(); save(index, team.team); }
+                        if (e.key === "Enter") { e.preventDefault(); save(index, team.team, label); }
                         if (e.key === "Escape") { e.preventDefault(); refocusRef.current = index; setEditing(null); }
                       }}
                       slotProps={{ htmlInput: { maxLength: 50, "aria-label": t("renameTeam", { label }) } }}
                       sx={{ minWidth: 0, "& .MuiInputBase-input": { fontSize: "1rem", py: 1 } }}
                     />
-                    <IconButton aria-label={t("tbSaveName")} onClick={() => save(index, team.team)} sx={{ width: 44, height: 44, flex: "none", ...tappable }}><CheckIcon fontSize="small" /></IconButton>
+                    <IconButton aria-label={t("tbSaveName")} onClick={() => save(index, team.team, label)} sx={{ width: 44, height: 44, flex: "none", ...tappable }}><CheckIcon fontSize="small" /></IconButton>
                     <IconButton aria-label={t("cancel")} onClick={() => { refocusRef.current = index; setEditing(null); }} sx={{ width: 44, height: 44, flex: "none", ...tappable }}><CloseIcon fontSize="small" /></IconButton>
                   </>
                 ) : (
@@ -151,7 +157,7 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
                     {onRename && (
                       <IconButton
                         ref={(el) => { penRef.current[index] = el; }} aria-label={t("renameTeam", { label })}
-                        onClick={() => { setDraft(team.team); setEditing(index); }}
+                        onClick={() => { setDraft(label); setEditing(index); }}
                         sx={{ width: 44, height: 44, flex: "none", mr: -1, color: "text.secondary", ...tappable }}
                       >
                         <EditIcon sx={{ fontSize: "1.125rem" }} />

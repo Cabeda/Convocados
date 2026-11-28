@@ -95,3 +95,70 @@ describe("TeamColumns — the line under a name", () => {
     expect(screen.getByTestId("team-player-Bob Smith")).not.toHaveTextContent(/red/i);
   });
 });
+
+describe("TeamColumns — renaming a team", () => {
+  const stock: Imatch[] = [
+    { team: "Ninjas", players: [{ name: "Alice Jones", order: 0 }] },
+    { team: "Gunas", players: [{ name: "Bob Smith", order: 0 }] },
+  ];
+  const custom: Imatch[] = [
+    { team: "Lions", players: [{ name: "Alice Jones", order: 0 }] },
+    { team: "Gunas", players: [{ name: "Bob Smith", order: 0 }] },
+  ];
+  const open = (matches: Imatch[], onRename = vi.fn()) => {
+    render(
+      <TeamColumns
+        matches={matches} viewerTeam={null} viewerName={null} canEdit drag={false} shuffleKey={0} reveal={false}
+        onResultChange={() => {}} onRename={onRename}
+      />,
+    );
+    return onRename;
+  };
+  const field = (label: string) => screen.getByRole("textbox", { name: `Rename ${label}` }) as HTMLInputElement;
+
+  it("prefills the name the column shows, not the stored stock name", () => {
+    open(stock);
+    fireEvent.click(screen.getByRole("button", { name: "Rename Team 1" }));
+    expect(field("Team 1").value).toBe("Team 1");
+  });
+
+  it("prefills a custom name as it is shown", () => {
+    open(custom);
+    fireEvent.click(screen.getByRole("button", { name: "Rename Lions" }));
+    expect(field("Lions").value).toBe("Lions");
+  });
+
+  it("saving the shown name unchanged changes nothing (the stock name is not written)", () => {
+    const onRename = open(stock);
+    fireEvent.click(screen.getByRole("button", { name: "Rename Team 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+    expect(onRename).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Rename Team 2" }));
+    fireEvent.keyDown(field("Team 2"), { key: "Enter" });
+    expect(onRename).not.toHaveBeenCalled();
+  });
+
+  it("saving a new name renames that side, trimmed", () => {
+    const onRename = open(stock);
+    fireEvent.click(screen.getByRole("button", { name: "Rename Team 2" }));
+    fireEvent.change(field("Team 2"), { target: { value: "  Wolves " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+    expect(onRename).toHaveBeenCalledExactlyOnceWith(1, "Wolves");
+  });
+
+  it("saving it empty puts a custom name back to the default", () => {
+    const onRename = open(custom);
+    fireEvent.click(screen.getByRole("button", { name: "Rename Lions" }));
+    fireEvent.change(field("Lions"), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+    expect(onRename).toHaveBeenCalledExactlyOnceWith(0, "Ninjas");
+  });
+
+  it("saving it empty on a team that already has the default changes nothing", () => {
+    const onRename = open(stock);
+    fireEvent.click(screen.getByRole("button", { name: "Rename Team 1" }));
+    fireEvent.change(field("Team 1"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+    expect(onRename).not.toHaveBeenCalled();
+  });
+});

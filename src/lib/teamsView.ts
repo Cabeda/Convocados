@@ -15,6 +15,11 @@ export function teamTitle(name: string, index: number): TeamTitle {
   return name === STOCK_NAMES[index] ? { custom: false } : { custom: true, name };
 }
 
+/** The stored name a team has when the group never chose one; saving an empty name puts a team back to it. */
+export function defaultTeamName(index: number): string {
+  return STOCK_NAMES[index] ?? "";
+}
+
 /** Which team (0 or 1) the viewer plays in, matched through their account first and by name only as a fallback. */
 export function viewerTeamIndex(
   teams: ReadonlyArray<{ members: ReadonlyArray<{ name: string }> }>,
