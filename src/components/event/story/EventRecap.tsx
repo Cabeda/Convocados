@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Box, Stack } from "@mui/material";
+import { Stack } from "@mui/material";
 import { useLocale } from "~/lib/useT";
 import { formatDateInTz } from "~/lib/timezones";
 import { formatMoneyCompact } from "~/lib/money";
 import {
   isSetsScoringSport, nextRecapBoundary, pendingTaskCount, recapPhase, recapTasks, scoreSummary, type RecapRole,
 } from "~/lib/eventStory";
-import { RecurrencePrompt } from "../../RecurrencePrompt";
 import { applyOptimistic, usePostGameStatus, type Optimistic, type PostGameStatus } from "./postGameStatus";
 import { LastGameRecap } from "./LastGameRecap";
 import { RecapReminder } from "./RecapReminder";
@@ -140,9 +139,6 @@ export function EventRecap(p: EventRecapProps) {
   const summary = scoreSummary({ ...result, seasonDelta: status.seasonRank?.counted ? status.seasonRank.delta : null }, t);
   const outcome = scoreSummary({ ...result, seasonDelta: null }, t);
   const dateLabel = formatDateInTz(new Date(lastGame), locale, p.timezone, { weekday: "short", day: "numeric", month: "short" });
-  // Only an event that does not repeat yet asks "make it weekly?", and only of someone who can say yes.
-  const offerWeekly = p.canManage && phase === "full" && !p.isRecurring && !status.isRecurring && status.allComplete;
-
   return (
     <Stack spacing={1.5}>
       {phase === "reminder" && (payTask?.kind === "pay" || reminderReported) && (
@@ -167,9 +163,6 @@ export function EventRecap(p: EventRecapProps) {
           onOptimistic={onOptimistic} onRollback={onRollback} onCompleted={() => setJustCompleted(true)}
           autoOpenScore={p.deepLinkAction === "add-score"} highlightPay={p.deepLinkAction === "pay"}
         />
-      )}
-      {offerWeekly && (
-        <Box><RecurrencePrompt eventId={p.eventId} isRecurring={false} complete flat /></Box>
       )}
     </Stack>
   );

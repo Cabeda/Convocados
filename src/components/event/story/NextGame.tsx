@@ -16,6 +16,7 @@ import { PaymentNudgeDialog } from "../PaymentNudgeDialog";
 import { AddFriendPanel } from "./AddFriendPanel";
 import { LineupSlots } from "./LineupSlots";
 import { NextGameHeader } from "./NextGameHeader";
+import { PlayAgain } from "./PlayAgain";
 import { PlayerOptions } from "./PlayerOptions";
 import { RsvpRow } from "./RsvpRow";
 import { UndoToast } from "./UndoToast";
@@ -28,6 +29,7 @@ import { useFriendSuggestions } from "./useFriendSuggestions";
 import { useInviteActions } from "./useInviteActions";
 import type { MyRsvp } from "./useMyRsvp";
 import { useNextGameClock } from "./useNextGameClock";
+import { usePlayAgain } from "./usePlayAgain";
 import { usePaymentGate } from "./usePaymentGate";
 import { useRosterActions } from "./useRosterActions";
 import { useRosterAnnouncements } from "./useRosterAnnouncements";
@@ -82,6 +84,17 @@ export function NextGame(p: NextGameProps) {
   const invites = useInviteActions({ eventId: p.eventId, refetch: p.refetch, notify: p.notify });
   const gate = usePaymentGate(p.eventId);
   const removal = useRosterRemoval({ eventId: p.eventId, players: event.players, setEvent: p.setEvent, refetch: p.refetch, beginWrite, perms, notify: p.notify });
+
+  const playAgain = usePlayAgain({
+    event, setEvent: p.setEvent, refetch: p.refetch, beginWrite, notify: p.notify, locale,
+    words: useMemo(() => ({ failed: t("paFailed"), now: (day: string) => t("paNowEvery", { day }) }), [t]),
+  });
+  // When "Make it weekly" worked, the next game is on the page: it takes focus, so the button that went away is not missed.
+  const { worked, ack } = playAgain;
+  useEffect(() => {
+    if (worked && phase === "signupsSoon") { ack(); document.getElementById("next-game-heading")?.focus(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `ack` only clears the flag
+  }, [worked, phase]);
 
   const [nudgeOpen, setNudgeOpen] = useState(false);
   // The warnings the leave dialog shows are worked out when it opens, not on every render.
@@ -199,7 +212,14 @@ export function NextGame(p: NextGameProps) {
     }
   }, [canAct, hasViewer, view.kind, p.deepLinkAction]);
 
-  if (phase === "none") return null;
+  if (phase === "none") {
+    return (
+      <PlayAgain
+        canManage={perms.canEditSettings} ownerName={event.ownerName} busy={playAgain.busy} error={playAgain.error}
+        onMakeWeekly={() => void playAgain.makeWeekly()} onDismissError={playAgain.clearError}
+      />
+    );
+  }
   // A cancelled game keeps its list for reading — who was in — and nothing to press.
   if (phase === "cancelled") {
     return (
