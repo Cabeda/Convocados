@@ -25,6 +25,8 @@
     "db:seed": "sh scripts/with-env.sh tsx prisma/seed.ts",
     "db:seed:settle": "sh scripts/with-env.sh tsx prisma/seed-settle-demo.ts",
     "db:seed:rank": "sh scripts/with-env.sh tsx prisma/seed-rank-demo.ts",
+    "db:seed:prototype-postgame": "sh scripts/with-env.sh tsx prisma/seed-prototype-complex-postgame.ts",
+    "prototype:postgame": "sh scripts/prototype-postgame.sh",
     "db:seed:rank-reveal": "sh scripts/with-env.sh tsx prisma/seed-rank-reveal.ts",
     "db:seed:rank-card": "sh scripts/with-env.sh tsx prisma/seed-rank-card-demo.ts",
     "db:seed:rank-underdog": "sh scripts/with-env.sh tsx prisma/seed-rank-underdog-demo.ts",
