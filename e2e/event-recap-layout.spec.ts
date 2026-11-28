@@ -82,4 +82,19 @@ test.describe("Recap layout on a phone (390 x 667)", () => {
     await expect(confirm).toBeEnabled();
     await expect.poll(() => inView(page, confirm), { message: "Confirm vote is inside the viewport", timeout: 3000 }).toBe(true);
   });
+
+  test("after voting, the confirmation is on screen where the vote row was", async ({ page }) => {
+    const eventId = await finishedGame(page, { score: true, name: "Layout Voter" });
+    await page.goto(`/events/${eventId}`);
+    await page.getByRole("button", { name: /^Vote/ }).first().click();
+    await page.getByRole("radio").first().check();
+    await page.getByRole("button", { name: "Confirm vote" }).click();
+    const line = page.getByTestId("recap-live");
+    await expect(line).toContainText("You voted for");
+    await expect(line).toBeFocused();
+    await expect.poll(() => inView(page, line), { message: "the confirmation line is inside the viewport", timeout: 3000 }).toBe(true);
+    // The card did not shrink past the line: its heading is not scrolled out of the page above it.
+    const card = await page.getByTestId("last-game-recap").boundingBox();
+    expect(card!.y + card!.height).toBeGreaterThan(0);
+  });
 });

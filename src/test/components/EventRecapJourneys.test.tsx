@@ -128,6 +128,34 @@ describe("optimistic hide with rollback", () => {
   });
 });
 
+describe("a finished row keeps its place", () => {
+  const both = { ...base, myMvpComplete: false };
+
+  it("votes: the confirmation sits above the unpaid row it was above, and the live line is scrolled into view", async () => {
+    seen();
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      mount(both);
+      fireEvent.click(await screen.findByRole("button", { name: "Vote" }));
+      fireEvent.click(await screen.findByRole("radio", { name: "Rui" }));
+      scroll.mockClear();
+      fireEvent.click(screen.getByRole("button", { name: "Confirm vote" }));
+      await flush();
+      const live = screen.getByTestId("recap-live");
+      const pay = screen.getByRole("button", { name: "I've paid" });
+      // The vote row stays first; the unpaid row stays under it (nothing slides up into its place).
+      expect(live.compareDocumentPosition(pay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(live).toHaveAttribute("role", "status");
+      expect(scroll.mock.contexts).toContain(live);
+      expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ block: "nearest" }));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+});
+
 describe("focus", () => {
   const withVote = { ...base, myMvpComplete: false, gamePayments: base.gamePayments.map((r) => ({ ...r, status: "paid" })), allPaid: true };
 

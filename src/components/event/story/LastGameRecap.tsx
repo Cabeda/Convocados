@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Box, Button, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
@@ -53,6 +53,9 @@ type Panel = "score" | "mvp";
 interface Restore { score?: [number, number]; pick?: string; error?: Panel }
 interface DoneRow { kind: string; title: string }
 
+/** A task and the row that replaces it when it is finished share one slot. */
+const slotOf = (kind: string) => (kind === "addScore" ? "score" : kind);
+
 const CALM = "@media (prefers-reduced-motion: reduce)";
 const fadeIn = {
   animation: `recapFade 200ms ${EASE}`,
@@ -96,9 +99,20 @@ export function LastGameRecap(p: LastGameRecapProps) {
   // After something is finished the button that did it is gone: the live line is where focus goes.
   const doneCountRef = useRef(0);
   useEffect(() => {
-    if (done.length > doneCountRef.current) statusRef.current?.focus();
+    if (done.length > doneCountRef.current) {
+      const row = statusRef.current;
+      row?.focus({ preventScroll: true });
+      // The card just got shorter: keep the line that says what happened (and the card around it) on screen.
+      const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      row?.scrollIntoView?.({ block: "nearest", behavior: calm ? "auto" : "smooth" });
+    }
     doneCountRef.current = done.length;
-  }, [done.length]);
+  }, [done]);
+
+  // A finished row keeps the place its task had for the rest of the visit: nothing under it jumps up.
+  const [slotOrder, setSlotOrder] = useState<string[]>(() => tasks.map((x) => slotOf(x.kind)));
+  const unseen = tasks.map((x) => slotOf(x.kind)).filter((k) => !slotOrder.includes(k));
+  if (unseen.length > 0) setSlotOrder([...slotOrder, ...unseen]);
 
   // After Not now, focus goes back to the button that opened the panel.
   useEffect(() => {
@@ -137,7 +151,7 @@ export function LastGameRecap(p: LastGameRecapProps) {
     }).then((ok) => { if (ok) p.onChanged(); });
   };
 
-  const rows = tasks.map((task) => {
+  const rowFor = (task: RecapTask): ReactNode => {
     const key = task.kind;
     switch (task.kind) {
       case "addScore":
@@ -191,6 +205,25 @@ export function LastGameRecap(p: LastGameRecapProps) {
           />
         );
     }
+  };
+  const taskBySlot = new Map(tasks.map((task) => [slotOf(task.kind), task] as const));
+  const slots = [...slotOrder, ...done.map((d) => d.kind).filter((k) => !slotOrder.includes(k))];
+  const latestDone = done[done.length - 1]?.kind;
+  const rows = slots.map((slot) => {
+    const finished = done.find((d) => d.kind === slot);
+    if (finished) {
+      return (
+        <Box
+          key={slot} role="status" data-testid="recap-live" tabIndex={-1}
+          ref={slot === latestDone ? statusRef : undefined}
+          sx={{ outline: "none", ...focusRing, "&:focus-visible": { outline: "none" } }}
+        >
+          <RecapTaskRow done title={finished.title} />
+        </Box>
+      );
+    }
+    const task = taskBySlot.get(slot);
+    return task ? rowFor(task) : null;
   });
 
   const showPayments = status.hasCost && role !== "signedOut";
@@ -265,9 +298,6 @@ export function LastGameRecap(p: LastGameRecapProps) {
       >
         <Box sx={{ overflow: "clip", minHeight: 0 }}>
           {rows}
-          <Box ref={statusRef} role="status" data-testid="recap-live" tabIndex={-1} sx={{ outline: "none", ...focusRing, "&:focus-visible": { outline: "none" } }}>
-            {done.map((d) => <RecapTaskRow key={d.kind} done title={d.title} />)}
-          </Box>
           {showAllDoneRow && <RecapTaskRow done title={t("recapAllDone")} />}
           {role === "signedOut" && (
             <RecapTaskRow testId="recap-signin" title={t("recapSignInRow")} needsYou={false}>
