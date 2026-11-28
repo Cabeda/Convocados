@@ -264,6 +264,8 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
   // while an answer is still pending and the game kicks off within 48h.
   const [myRsvp, setMyRsvp] = useMyRsvp(eventId, isAuthenticated);
 
+  const highIntentPush = isAuthenticated && !!event && isHighIntentForPush(event.dateTime, myRsvp);
+
   // ── Loading / locked / not found states ─────────────────────────────────────
 
   if (isLoading) return (
@@ -360,15 +362,6 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
               onBlockingChange={setRecapBlocking}
             />
 
-            {/* #457 Push prompt banner — event-detail trigger. A "later" prompt: it comes after the recap, never above
-                the title. #463 high-intent: render as a centered modal when the user has a pending RSVP and
-                the event kicks off within 48h. */}
-            <PushPromptBanner
-              followCount={0}
-              forceOnEventDetail={isAuthenticated}
-              highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvp) : false}
-            />
-
             <NextGame
               eventId={eventId} event={event} setEvent={setEvent} refetch={fetchEvent} beginWrite={beginWrite}
               viewer={session?.user ? { id: session.user.id, name: session.user.name } : null}
@@ -376,6 +369,12 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
               deepLinkAction={deepLinkAction} notify={setSnackbar}
               onSignedIn={() => { refetchSession?.(); fetchEvent(); }}
             />
+
+            {/* #457 Push prompt — the last, quietest thing on the page: one row after the next game, and only once the recap has
+                nothing left for the viewer. #463 high-intent (a pending RSVP within 48h) is still a modal, which asks at once. */}
+            {(!recapBlocking || highIntentPush) && (
+              <PushPromptBanner quiet followCount={0} forceOnEventDetail={isAuthenticated} highIntent={highIntentPush} />
+            )}
 
           </Stack>
         </Container>
