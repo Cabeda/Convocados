@@ -467,36 +467,6 @@ describe("Next game — who we are still waiting for", () => {
   });
 });
 
-describe("Next game — drawing teams", () => {
-  it("gives the organizer one quiet button; below full it asks first", async () => {
-    const user = userEvent.setup();
-    mockSession.data = { user: { id: "owner-9", name: "Sam" } };
-    renderPage({ players: rows(4) });
-    await user.click(await screen.findByRole("button", { name: "Draw teams now" }));
-    expect(await screen.findByText("Randomize with missing players?")).toBeInTheDocument();
-    expect(server.sent("POST", "/randomize")).toHaveLength(0);
-  });
-
-  it("draws at once when the list is full", async () => {
-    const user = userEvent.setup();
-    mockSession.data = { user: { id: "owner-9", name: "Sam" } };
-    renderPage({ maxPlayers: 4, players: rows(4) });
-    await user.click(await screen.findByRole("button", { name: "Draw teams now" }));
-    await waitFor(() => expect(server.sent("POST", "/randomize")).toHaveLength(1));
-  });
-
-  it("is not offered to a player, nor with fewer than two names", async () => {
-    renderPage({ players: rows(4) });
-    await screen.findByTestId("lineup-slots");
-    expect(screen.queryByRole("button", { name: /Draw/ })).not.toBeInTheDocument();
-    cleanup();
-    mockSession.data = { user: { id: "owner-9", name: "Sam" } };
-    renderPage({ players: rows(1) });
-    await screen.findByTestId("lineup-slots");
-    expect(screen.queryByRole("button", { name: /Draw/ })).not.toBeInTheDocument();
-  });
-});
-
 describe("Next game — the page around it", () => {
   it("keeps a polled list from undoing what the viewer just did", async () => {
     const user = userEvent.setup();
@@ -545,20 +515,20 @@ describe("Next game — the finished game's teams are never the next game's", ()
   ];
   const ended = { isRecurring: true, recurrenceRule: WEEKLY, dateTime: new Date(Date.now() - 3 * HOUR).toISOString(), players: rows(4), teamResults };
 
-  it("shows the Teams card for an open game", async () => {
+  it("shows the teams for an open game", async () => {
     renderPage({ players: rows(4), teamResults });
-    expect(await screen.findByRole("heading", { level: 6, name: "Teams" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 3, name: /^Teams for / })).toBeInTheDocument();
   });
 
-  it("shows the Teams card while the game is being played", async () => {
+  it("shows the teams while the game is being played", async () => {
     renderPage({ players: rows(4), teamResults, dateTime: new Date(Date.now() - HOUR / 2).toISOString() });
-    expect(await screen.findByRole("heading", { level: 6, name: "Teams" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 3, name: /^Teams for / })).toBeInTheDocument();
   });
 
   it("hides them between the end of a weekly game and its reset (signups soon), with the frozen roster", async () => {
     renderPage(ended);
     await screen.findByText("Sign-ups open in a moment");
-    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Teams/ })).not.toBeInTheDocument();
     expect(screen.queryByText("Ninjas")).not.toBeInTheDocument();
     expect(screen.queryByText("Player 0")).not.toBeInTheDocument();
   });
@@ -566,13 +536,13 @@ describe("Next game — the finished game's teams are never the next game's", ()
   it("hides them after a one-off game ends: its result lives in the recap", async () => {
     renderPage({ ...ended, isRecurring: false, recurrenceRule: null });
     await screen.findByRole("heading", { level: 1 });
-    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Teams/ })).not.toBeInTheDocument();
   });
 
   it("hides them on a cancelled game", async () => {
     renderPage({ players: rows(4), teamResults, gameStatus: "cancelled" });
     await screen.findByRole("heading", { level: 2, name: "This game was cancelled" });
-    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Teams/ })).not.toBeInTheDocument();
   });
 });
 

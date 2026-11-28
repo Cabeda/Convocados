@@ -18,7 +18,6 @@ function Harness({ event, ...over }: { event: Record<string, unknown> } & Omit<P
       eventId="evt-1" event={current} setEvent={setCurrent as unknown as NextGameProps["setEvent"]} refetch={async () => {}} beginWrite={() => () => {}}
       viewer={{ id: "u-1", name: "Jose Silva" }} perms={perms} rsvp={null} setRsvp={() => {}} recapBlocking={false}
       deepLinkAction={null} notify={() => {}} onSignedIn={() => {}}
-      draw={{ hasTeams: false, isDrawing: false, onDraw: () => {}, onConfirmRedraw: () => {}, onConfirmEarlyDraw: () => {} }}
       {...over}
     />
   );

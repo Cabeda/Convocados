@@ -42,7 +42,7 @@ function renderHeader(o: Overrides = {}) {
     <EventHeader
       eventId="evt-1" event={event} sport={event.sport} gameDate={new Date(event.dateTime)}
       canEditSettings={o.canEditSettings ?? false} isAuthenticated={o.isAuthenticated ?? true}
-      isOwnerless={o.isOwnerless ?? false} localMatches={null} gameStatus={o.gameStatus ?? null}
+      isOwnerless={o.isOwnerless ?? false} hasTeams={false} gameStatus={o.gameStatus ?? null}
       isParticipant={o.isParticipant ?? true} onSignedIn={o.onSignedIn}
       onSaveTitle={props.onSaveTitle} onSaveLocation={props.onSaveLocation} onSaveDateTime={props.onSaveDateTime}
       onSaveSport={props.onSaveSport} onClaimOwnership={props.onClaimOwnership} onCancelGame={props.onCancelGame}

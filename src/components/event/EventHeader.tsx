@@ -8,7 +8,6 @@ import { useLocale } from "~/lib/useT";
 import { googleCalendarUrl } from "~/lib/calendar";
 import { isGameEnded } from "~/lib/gameStatus";
 import { canViewPrice, menuGroups } from "~/lib/eventHeader";
-import type { Imatch } from "~/lib/random";
 import type { EventData } from "./types";
 import { MyNotificationsDialog } from "./MyNotificationsDialog";
 import { SignInButton } from "../SignInButton";
@@ -34,7 +33,7 @@ interface Props {
   isOwnerless: boolean;
   /** A linked player on the roster: the server lets them read the price. */
   isParticipant: boolean;
-  localMatches: Imatch[] | null;
+  hasTeams: boolean;
   gameStatus?: string | null;
   onSaveTitle: (title: string) => Promise<void>;
   onSaveLocation: (location: string) => Promise<void>;
@@ -53,7 +52,7 @@ interface Props {
  * Everything else lives in the ⋮ sheet.
  */
 export function EventHeader({
-  eventId, event, sport, gameDate, canEditSettings, isAuthenticated, isOwnerless, isParticipant, localMatches, gameStatus,
+  eventId, event, sport, gameDate, canEditSettings, isAuthenticated, isOwnerless, isParticipant, hasTeams, gameStatus,
   onSaveTitle, onSaveLocation, onSaveDateTime, onSaveSport, onClaimOwnership, onCancelGame, onSignedIn,
 }: Props) {
   const { t } = useLocale();
@@ -111,7 +110,7 @@ export function EventHeader({
     ratingsOn: event.eloEnabled ?? true,
     calendarOpen: !cancelled && !gameEnded,
     showAttendance: gameDate < new Date() || !!event.isRecurring,
-    canWatch: isMobile && !!localMatches?.length,
+    canWatch: isMobile && hasTeams,
     isCancelled: cancelled,
     paymentsReachable: isAuthenticated || (isOwnerless && !event.isPublic),
   });

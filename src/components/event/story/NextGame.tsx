@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import ShuffleIcon from "@mui/icons-material/Shuffle";
 import { useLocale } from "~/lib/useT";
 import { nextOccurrence, parseRecurrenceRule } from "~/lib/recurrence";
-import { benchLabelNames, canUndoRemoval, nextGamePhase, removeRule, rsvpView, slotLabels, type RemoveRule } from "~/lib/nextGame";
+import { benchLabelNames, canUndoRemoval, isGameDay, nextGamePhase, removeRule, rsvpView, slotLabels, type RemoveRule } from "~/lib/nextGame";
 import { splitRoster } from "~/lib/rosterCapacity";
 import { findSelfRosterRow, type EventPermissions } from "~/lib/eventView";
 import { apiRequest } from "~/lib/api/client";
@@ -21,6 +20,7 @@ import { PlayerOptions } from "./PlayerOptions";
 import { RsvpRow } from "./RsvpRow";
 import { UndoToast } from "./UndoToast";
 import { WaitingRow } from "./WaitingRow";
+import { TeamsBlock } from "./TeamsBlock";
 import { WhosIn } from "./WhosIn";
 import { controlBorder, srOnly, tappable } from "./styles";
 import { useFriendActions } from "./useFriendActions";
@@ -32,15 +32,6 @@ import { usePaymentGate } from "./usePaymentGate";
 import { useRosterActions } from "./useRosterActions";
 import { useRosterAnnouncements } from "./useRosterAnnouncements";
 import { useRosterRemoval } from "./useRosterRemoval";
-
-export interface DrawControls {
-  hasTeams: boolean;
-  isDrawing: boolean;
-  /** Draw now: the roster is full, or the organizer has already agreed to an early draw. */
-  onDraw: () => void;
-  onConfirmRedraw: () => void;
-  onConfirmEarlyDraw: () => void;
-}
 
 export interface NextGameProps {
   eventId: string;
@@ -57,7 +48,6 @@ export interface NextGameProps {
   deepLinkAction: string | null;
   notify: (message: string) => void;
   onSignedIn: () => void;
-  draw: DrawControls;
 }
 
 /**
@@ -228,14 +218,7 @@ export function NextGame(p: NextGameProps) {
   const nextUp = benchNames.more > 0
     ? t(benchNames.more === 1 ? "ngNextUpMoreOne" : "ngNextUpMore", { names: benchNames.names.join(", "), n: benchNames.more })
     : t("ngNextUp", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format(benchNames.names) });
-  const canDraw = perms.canEditSettings && active.length >= 2;
   const error = roster.error ?? invites.error ?? removal.error;
-
-  const drawNow = () => {
-    if (p.draw.hasTeams) p.draw.onConfirmRedraw();
-    else if (active.length < event.maxPlayers) p.draw.onConfirmEarlyDraw();
-    else p.draw.onDraw();
-  };
 
   return (
     <Box component="section" aria-label={t("nextGame")} data-testid="next-game" sx={{ maxWidth: "32rem" }}>
@@ -308,17 +291,12 @@ export function NextGame(p: NextGameProps) {
                 </Box>
               )}
               {removal.undo && <UndoToast message={t("undoRemoveDesc", { name: removal.undo.name })} onUndo={() => void removal.runUndo()} onDismiss={removal.dismissUndo} />}
-              {canDraw && !cancelled && (
-                <Button
-                  startIcon={<ShuffleIcon />} variant={p.draw.hasTeams ? "text" : "outlined"} disabled={p.draw.isDrawing} aria-busy={p.draw.isDrawing || undefined}
-                  onClick={drawNow}
-                  sx={{ mt: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, ...(p.draw.hasTeams ? { color: "text.secondary" } : { color: "text.primary", borderColor: controlBorder }), ...tappable }}
-                >
-                  {p.draw.hasTeams ? t("ngDrawAgain") : t("ngDrawNow")}
-                </Button>
-              )}
             </Box>
           )}
+          <TeamsBlock
+            event={event} perms={perms} viewer={viewer} refetch={p.refetch} notify={p.notify}
+            date={date} gameDay={isGameDay(now, startMs, event.timezone)} count={active.length}
+          />
         </>
       )}
 
