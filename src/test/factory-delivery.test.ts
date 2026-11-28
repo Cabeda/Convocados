@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import {
   deliveryPlan,
+  envForPerson,
   isDeliverableBranch,
   parseStatus,
   readHandoff,
@@ -154,5 +155,33 @@ describe("the fixer keeps its branch and its token apart", () => {
     expect(round).toContain('"TOKEN"');
     expect(usesOf(jobs.push ?? {})).not.toContain("anomalyco/opencode/github@latest");
     expect(JSON.stringify(jobs.push?.permissions ?? {})).toBe("{}");
+  });
+});
+
+
+describe("the Change is opened as a person, nothing else is", () => {
+  // GitHub refuses a review by the author, and the Reviewer is the App, so the
+  // Change is opened with FACTORY_PAT. Everything else — the push, the labels,
+  // the comments — stays on the App token, which is what the CLA sees.
+  it("uses the person token, byte for byte, when the secret is set", () => {
+    expect(envForPerson("ghp_example")).toEqual({ GH_TOKEN: "ghp_example" });
+  });
+
+  it("inherits instead of sending an empty token when the secret is absent", () => {
+    // An empty GH_TOKEN would fail every `gh` call and stop every Change from
+    // opening, so "no secret" has to mean "keep the App token", not "no token".
+    expect(envForPerson(undefined)).toBeUndefined();
+    expect(envForPerson("")).toBeUndefined();
+  });
+
+  it("spends the person token on exactly one call", () => {
+    const source = readFileSync(
+      path.join(process.cwd(), "scripts/factory/deliver.ts"),
+      "utf8",
+    );
+    // The `pr create` argument list. A second use would move labels or comments
+    // onto a human identity and change who the CLA sees on the Change.
+    expect([...source.matchAll(/ghAsPerson\(\[/g)]).toHaveLength(1);
+    expect(source).toContain('"pr", "create"');
   });
 });
