@@ -8,21 +8,20 @@
  * (`GET /api/me/home`) must agree on that filter, so it lives here instead of
  * being re-derived per route. See [isDiscoverableAt] for the exact test.
  */
-import type { Prisma } from "@prisma/client";
+import type { Event as PrismaEvent, Prisma } from "@prisma/client";
 import { prisma } from "./db.server";
 import { filterCancelledCurrentGames } from "./currentGame.server";
+import { getRosterCapacity, type RosterCapacity } from "./roster.server";
 
 /**
- * A discovery-listed Event with its non-archived Player count.
+ * A discovery-listed Event.
  *
- * Roster counts must exclude archived rows: legacy Player rows accumulate across
- * recurring occurrences and `getRosterCapacity` (the authoritative accessor,
- * ADR 0016) filters `archivedAt: null`. Counting all `players` inflates
- * `playerCount` and under-reports `spotsLeft`.
+ * Capacity must come from `getRosterCapacity` (the authoritative accessor, ADR 0016),
+ * not `Event._count.players`: legacy Player rows accumulate across recurring
+ * occurrences and invite ghosts are GameParticipants, so both the participant
+ * and the no-current-game branch answer the way every other roster surface does.
  */
-export type DiscoverableEventRow = Prisma.EventGetPayload<{
-  include: { _count: { select: { players: true } } };
-}>;
+export type DiscoverableEventRow = PrismaEvent;
 
 export interface DiscoverableEventSummary {
   id: string;
@@ -75,8 +74,7 @@ export function discoverableUpcomingWhere(
   };
 }
 
-/** Serialise an Event row (with `players` included) for a discover surface. */
-export function mapDiscoverableEvent(e: DiscoverableEventRow): DiscoverableEventSummary {
+function toSummary(e: DiscoverableEventRow, capacity: RosterCapacity): DiscoverableEventSummary {
   return {
     id: e.id,
     url: `/events/${e.id}`,
@@ -89,12 +87,17 @@ export function mapDiscoverableEvent(e: DiscoverableEventRow): DiscoverableEvent
     dateTime: e.dateTime.toISOString(),
     timezone: e.timezone,
     maxPlayers: e.maxPlayers,
-    playerCount: e._count.players,
-    spotsLeft: Math.max(0, e.maxPlayers - e._count.players),
+    playerCount: capacity.totalCount,
+    spotsLeft: capacity.spotsLeft,
     isRecurring: e.isRecurring,
     recurrenceRule: e.recurrenceRule,
     ownerId: e.ownerId,
   };
+}
+
+/** Serialise an Event row for a discover surface through the roster seam. */
+export async function mapDiscoverableEvent(e: DiscoverableEventRow): Promise<DiscoverableEventSummary> {
+  return toSummary(e, await getRosterCapacity(e.id, e.maxPlayers, e.currentGameId));
 }
 
 /**
@@ -172,18 +175,24 @@ export async function findDiscoverableUpcomingEvents(opts: {
   // Discover only shows Events the user can still join (ADR 0041): a full Event
   // has no spots remaining. "Fewer active players than maxPlayers" cannot be
   // expressed as a relation filter, so the joinable check runs here on the
-  // accurate non-archived count. The public listing (`/api/events/public`)
-  // deliberately keeps full Events visible, so this rule does not live in
+  // roster seam's answer. The public listing (`/api/events/public`) deliberately
+  // keeps full Events visible, so this rule does not live in
   // `discoverableUpcomingWhere`.
   const events = await prisma.event.findMany({
     where: discoverableUpcomingWhere(now, excludeEventIds),
-    include: { _count: { select: { players: { where: { archivedAt: null } } } } },
     orderBy: { dateTime: "asc" },
     take: Math.max(take, RANK_POOL),
   });
   const notCancelled = await filterCancelledCurrentGames(events);
-  const joinable = notCancelled
-    .filter((e) => e.maxPlayers - e._count.players > 0)
-    .map(mapDiscoverableEvent);
-  return rankDiscover(joinable, origin, preferredSports).slice(0, take);
+  const joinable = await Promise.all(
+    notCancelled.map(async (e) => {
+      const capacity = await getRosterCapacity(e.id, e.maxPlayers, e.currentGameId);
+      return capacity.spotsLeft > 0 ? toSummary(e, capacity) : null;
+    }),
+  );
+  return rankDiscover(
+    joinable.filter((e): e is DiscoverableEventSummary => e !== null),
+    origin,
+    preferredSports,
+  ).slice(0, take);
 }

@@ -10,9 +10,6 @@ export const GET: APIRoute = async ({ request }) => {
 
   const events = await prisma.event.findMany({
     where: discoverableUpcomingWhere(),
-    include: {
-      _count: { select: { players: { where: { archivedAt: null } } } },
-    },
     orderBy: { dateTime: "asc" },
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -25,7 +22,7 @@ export const GET: APIRoute = async ({ request }) => {
   const hasMore = events.length > limit;
 
   return Response.json({
-    data: visible.map(mapDiscoverableEvent),
+    data: await Promise.all(visible.map(mapDiscoverableEvent)),
     nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
     hasMore,
   });

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
+import { getRosterCapacity } from "../../../../lib/roster.server";
 
 /** GET — user profile with game history, filtered by viewer permissions */
 export const GET: APIRoute = async ({ params, request }) => {
@@ -50,7 +51,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       ownerId: true,
       isRecurring: true,
       recurrenceRule: true,
-      _count: { select: { players: true } },
+      currentGameId: true,
       players: { select: { userId: true } },
     },
     orderBy: { dateTime: "desc" },
@@ -73,7 +74,7 @@ export const GET: APIRoute = async ({ params, request }) => {
           ownerId: true,
           isRecurring: true,
           recurrenceRule: true,
-          _count: { select: { players: true } },
+          currentGameId: true,
           players: { select: { userId: true } },
         },
       },
@@ -110,7 +111,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const visibleOwned = ownedEvents.filter(canView);
   const visibleJoined = joinedEvents.filter(canView);
 
-  const serialize = (e: typeof ownedEvents[number]) => ({
+  const serialize = async (e: typeof ownedEvents[number]) => ({
     id: e.id,
     title: e.title,
     location: e.location,
@@ -118,7 +119,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     timezone: e.timezone,
     sport: e.sport,
     maxPlayers: e.maxPlayers,
-    playerCount: e._count.players,
+    playerCount: (await getRosterCapacity(e.id, e.maxPlayers, e.currentGameId)).totalCount,
     isRecurring: e.isRecurring,
     recurrenceRule: e.recurrenceRule,
   });
@@ -136,8 +137,8 @@ export const GET: APIRoute = async ({ params, request }) => {
       : undefined,
     publicStats: user.publicStats,
     profileVisibility: user.profileVisibility ?? "public",
-    owned: visibleOwned.map(serialize),
-    joined: visibleJoined.map(serialize),
+    owned: await Promise.all(visibleOwned.map(serialize)),
+    joined: await Promise.all(visibleJoined.map(serialize)),
     stats: {
       totalGames: visibleOwned.length + visibleJoined.length,
       ownedGames: visibleOwned.length,
