@@ -91,6 +91,8 @@ export function LastGameRecap(p: LastGameRecapProps) {
   const mvpPanelId = `recap-panel-mvp-${eventId}`;
   const hasScore = status.scoreOne !== null && status.scoreTwo !== null;
   const historyId = status.latestHistoryId;
+  // A one-off that ended has no history row until its first score: that save goes to its live game, which creates the row.
+  const scoreTargetId = historyId ?? status.pendingGameId ?? null;
   const pending = pendingTaskCount(tasks);
   const allDoneNow = done.length > 0 && pending === 0;
   const scoreTask = tasks.find((x) => x.kind === "addScore");
@@ -126,10 +128,10 @@ export function LastGameRecap(p: LastGameRecapProps) {
   const toggle = (panel: Panel) => (openPanel === panel ? cancel(panel) : (setRestore(null), setOpenPanel(panel)));
 
   const saveScore = (a: number, b: number) => {
-    if (!historyId) return;
+    if (!scoreTargetId) return;
     void scoreAction.run({
       apply: () => { onOptimistic?.({ score: [a, b] }); setRestore(null); setOpenPanel(null); addDone({ kind: "score", title: t("recapScoreSaved") }); onCompleted?.(); },
-      request: () => apiRequest("PATCH /api/events/{id}/history/{historyId}", { params: { id: eventId, historyId }, body: { scoreOne: a, scoreTwo: b } }),
+      request: () => apiRequest("PATCH /api/events/{id}/history/{historyId}", { params: { id: eventId, historyId: scoreTargetId }, body: { scoreOne: a, scoreTwo: b } }),
       revert: () => { onRollback?.("score"); removeDone("score"); setRestore({ score: [a, b], error: "score" }); setOpenPanel("score"); },
     }).then((ok) => { if (ok) p.onChanged(); });
   };
@@ -155,7 +157,7 @@ export function LastGameRecap(p: LastGameRecapProps) {
     const key = task.kind;
     switch (task.kind) {
       case "addScore":
-        return task.inline && historyId ? (
+        return task.inline && scoreTargetId ? (
           <RecapTaskRow
             key={key} needsYou={task.needsYou} title={t("recapAddScoreTitle")} sub={t("recapAddScoreSub")} action={t("recapAddScoreAction")}
             expanded={scoreOpen} panelId={scorePanelId} actionRef={(el) => { triggerElsRef.current.score = el; }} onAction={() => toggle("score")}

@@ -73,7 +73,7 @@ export function EventRecap(p: EventRecapProps) {
 
   const role: RecapRole = !p.isAuthenticated ? "signedOut" : status?.isPlayer ? "played" : "absent";
   const tasks = useMemo(() => !status ? [] : recapTasks({
-    role, canManage: p.canManage, hasLastGame: !!lastGame, latestHistoryId: status.latestHistoryId, hasScore: status.hasScore,
+    role, canManage: p.canManage, hasLastGame: !!lastGame, latestHistoryId: status.latestHistoryId, pendingGameId: status.pendingGameId, hasScore: status.hasScore,
     hasCost: status.hasCost, mvpEnabled: status.mvpEnabled, myMvpComplete: status.myMvpComplete ?? true, viewerName: p.viewerName,
     viewerNames: status.viewerNames,
     viewerPaymentSettled: !!status.viewerPaymentSettled, gameMode: status.gameConfig?.mode ?? null,

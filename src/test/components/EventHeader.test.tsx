@@ -246,9 +246,9 @@ describe("EventHeader — when and where", () => {
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/cost"), expect.anything());
   });
 
-  it("says Ended and the date once a one-off is over, so the recap keeps the result and the header the day", () => {
+  it("says just Ended once a one-off is over: the recap card keeps the day, so it is not said twice", () => {
     renderHeader({ event: { dateTime: new Date(Date.now() - 5 * 86400_000).toISOString() } });
-    expect(screen.getByText(/^Ended \w{3} \d+ \w+$/)).toBeInTheDocument();
+    expect(screen.getByText("Ended")).toBeInTheDocument();
   });
 
   it("looks cancelled: the word Cancelled, the date struck through, no Share and no Follow", async () => {

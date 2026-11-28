@@ -13,6 +13,7 @@ import { perPlayerShare } from "../../../../../lib/gameCost";
 import { postLedgerEntry } from "../../../../../lib/ledger.server";
 import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
+import { isGameEnded } from "../../../../../lib/gameStatus";
 import { resolveMirrorGame, applyTeamsSnapshotToGame, mirrorPaymentsSnapshotToGame } from "../../../../../lib/gameDualWrite.server";
 
 const log = createLogger("history-patch");
@@ -214,9 +215,16 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     const game = await prisma.game.findUnique({
       where: { id: params.historyId, eventId: params.id },
     });
-    if (game && game.status === "played") {
-      const snap = await buildSnapshotForGame(params.id ?? "", game);
-      entry = await prisma.gameHistory.create({ data: snap });
+    // A one-off that has ended never gets a reset, so its live Game stays "upcoming" and no history row is ever made.
+    // The first score creates it (the recap's inline "Add the score" saves on the live Game's id).
+    const endedOneOff = !!game && !event.isRecurring && event.currentGameId === game.id && isGameEnded(event.dateTime, event.durationMinutes);
+    if (game && (game.status === "played" || endedOneOff)) {
+      // The occurrence may already have its row (a second save on the same live Game id): edit that one.
+      entry = await prisma.gameHistory.findFirst({ where: { eventId: params.id, dateTime: game.dateTime } });
+      if (!entry) {
+        const snap = await buildSnapshotForGame(params.id ?? "", game);
+        entry = await prisma.gameHistory.create({ data: snap });
+      }
       historyId = entry.id;
     }
   }

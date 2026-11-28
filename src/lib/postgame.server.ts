@@ -30,6 +30,11 @@ export interface PostGameStatusPayload {
   isParticipant: boolean;
   isPlayer: boolean;
   latestHistoryId: string | null;
+  /**
+   * An ended one-off has no history row until its first score: the live Game to save that score on
+   * (PATCH history/{id} accepts it and creates the row). Null whenever a history row exists or the game is weekly.
+   */
+  pendingGameId: string | null;
   paymentsSnapshot: Array<{ playerName: string; amount: number; status: string; method?: string | null }> | null;
   costCurrency: string | null;
   costAmount: number | null;
@@ -98,7 +103,7 @@ export async function computePostGameStatus(
   if (latestHistory?.status === "cancelled") {
     return {
       gameEnded: false, hasScore: false, hasCost: false, allPaid: true,
-      allComplete: true, isParticipant: false, isPlayer: false, latestHistoryId: null,
+      allComplete: true, isParticipant: false, isPlayer: false, latestHistoryId: null, pendingGameId: null,
       paymentsSnapshot: null, costCurrency: null, costAmount: null,
       hasPendingPastPayments: false, mvpEnabled: false, mvpComplete: true,
       bannerMvpComplete: true, myMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
@@ -402,6 +407,7 @@ export async function computePostGameStatus(
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
+    pendingGameId: !latestHistory && gameEnded && !event.isRecurring ? event.currentGameId : null,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
     myMvpComplete,
     paidAggregate,

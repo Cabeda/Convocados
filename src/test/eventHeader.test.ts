@@ -89,8 +89,8 @@ describe("scheduleLabel", () => {
     expect(label()).toBe("Fri 4 Dec · 20:49 · 90 min");
   });
 
-  it("says Ended and the date for a one-off whose game is over, and no time or length", () => {
-    expect(label({ ended: true })).toBe("Ended Fri 4 Dec");
+  it("says just Ended for a one-off whose game is over: the date is on the recap below, and not said twice", () => {
+    expect(label({ ended: true })).toBe("Ended");
   });
 
   it("leaves the length out when there is none", () => {

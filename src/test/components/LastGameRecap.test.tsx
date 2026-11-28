@@ -139,17 +139,17 @@ describe("LastGameRecap — full card", () => {
   });
 
   it("says a missing score once: dashes and one sentence for someone who cannot add it", () => {
-    show({ status: missing, summary: "Score not added yet", tasks: [], role: "absent" });
+    show({ status: missing, summary: "No score yet", tasks: [], role: "absent" });
     expect(screen.getByTestId("score-one")).toHaveTextContent("–");
-    expect(screen.getAllByText("Score not added yet")).toHaveLength(1);
+    expect(screen.getAllByText("No score yet")).toHaveLength(1);
     expect(screen.queryByText(/Someone who played/)).toBeNull();
-    expect(screen.queryByText(/Nobody has added it yet/)).toBeNull();
+    expect(screen.queryByText(/Add it so everyone sees it/)).toBeNull();
   });
 
   it("lets the add-score row carry the sentence for someone who can add it", () => {
-    show({ status: missing, summary: "Score not added yet", tasks: [{ kind: "addScore", needsYou: true, inline: true }] });
-    expect(screen.getByText("Nobody has added it yet. Add it so everyone sees it.")).toBeInTheDocument();
-    expect(screen.queryByText("Score not added yet")).toBeNull();
+    show({ status: missing, summary: "No score yet", tasks: [{ kind: "addScore", needsYou: true, inline: true }] });
+    expect(screen.getByText("No score yet. Add it so everyone sees it.")).toBeInTheDocument();
+    expect(screen.queryByText("No score yet")).toBeNull();
   });
 });
 
@@ -307,7 +307,7 @@ describe("LastGameRecap — actions", () => {
   });
 
   it("add-score opens the steppers in place of the scoreboard when a history row exists", () => {
-    show({ status: missing, tasks: [{ kind: "addScore", needsYou: true, inline: true }], summary: "Score not added yet" });
+    show({ status: missing, tasks: [{ kind: "addScore", needsYou: true, inline: true }], summary: "No score yet" });
     fireEvent.click(screen.getByRole("button", { name: "Add score" }));
     expect(screen.getByRole("button", { name: "One more for Shadow Foxes" })).toBeInTheDocument();
     // team names and numbers are said once: the steppers ARE the scoreboard now
@@ -332,8 +332,21 @@ describe("LastGameRecap — actions", () => {
     expect(screen.getAllByText("1")).toHaveLength(1);
   });
 
+  it("an ended one-off with no history row saves its first score on the live game", async () => {
+    stubFetch();
+    const onChanged = vi.fn();
+    show({
+      status: { ...missing, latestHistoryId: null, pendingGameId: "game-9" }, onChanged,
+      tasks: [{ kind: "addScore", needsYou: true, inline: true }], autoOpenScore: true,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "One more for Shadow Foxes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save score" }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(calls.find((c) => c.method === "PATCH")).toMatchObject({ url: "/api/events/e1/history/game-9", body: { scoreOne: 1, scoreTwo: 0 } });
+  });
+
   it("add-score falls back to History when the score cannot be saved in place", () => {
-    show({ status: missing, tasks: [{ kind: "addScore", needsYou: true, inline: false }], summary: "Score not added yet" });
+    show({ status: missing, tasks: [{ kind: "addScore", needsYou: true, inline: false }], summary: "No score yet" });
     expect(screen.getByRole("link", { name: "Open history" })).toHaveAttribute("href", "/events/e1/history");
   });
 

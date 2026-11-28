@@ -105,7 +105,8 @@ export function scheduleLabel(i: ScheduleInput, t: ReturnType<typeof createT>): 
     return [every, when, length].filter(Boolean).join(" · ");
   }
 
+  // An ended one-off says so and nothing more: its date is on the recap card right below ("Last game · 28 Nov").
+  if (i.ended) return t("headerEnded");
   const date = day({ weekday: "short", day: "numeric", month: "short" });
-  if (i.ended) return t("headerEnded", { when: date });
   return [date, time, length].filter(Boolean).join(" · ");
 }
