@@ -8,6 +8,7 @@ import { getWrapUpGameSettlement } from "./settlement.server";
 import { occurrencePaymentRoll } from "./paymentRoll.server";
 import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
 import { summarizePayments } from "./paymentSummary";
+import { parseTeamsSnapshot } from "./gameSnapshot";
 
 /**
  * Shared post-game wrap-up status computation.
@@ -58,6 +59,10 @@ export interface PostGameStatusPayload {
   viewerPaymentSettled: boolean;
   /** Whether the Event already recurs — drives the post-game "make it recurring" prompt. */
   isRecurring: boolean;
+  /** Kickoff of the last game (latest history row, or the ended event itself); null when there is none or it was cancelled. */
+  lastGameDateTime: string | null;
+  /** Which team the viewer played for in the last game (0 = score one); null when they did not play or are signed out. */
+  viewerTeam: 0 | 1 | null;
 }
 
 export async function computePostGameStatus(
@@ -94,6 +99,7 @@ export async function computePostGameStatus(
       gamePayments: null, gameConfig: null, seasonRank: null,
       rankStanding: null, viewerPaymentSettled: false,
       isRecurring: event.isRecurring ?? false,
+      lastGameDateTime: null, viewerTeam: null,
     };
   }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
@@ -397,5 +403,18 @@ export async function computePostGameStatus(
     rankStanding,
     viewerPaymentSettled,
     isRecurring: event.isRecurring ?? false,
+    lastGameDateTime: latestHistory
+      ? latestHistory.dateTime.toISOString()
+      : gameEnded ? event.dateTime.toISOString() : null,
+    viewerTeam: session?.user ? viewerTeamIndex(latestHistory?.teamsSnapshot ?? null, session.user.name) : null,
   };
+}
+
+/** The index of the team (0 = score one) whose snapshot lineup contains `name`, or null. */
+function viewerTeamIndex(teamsSnapshot: string | null, name: string): 0 | 1 | null {
+  const teams = parseTeamsSnapshot(teamsSnapshot);
+  if (!teams) return null;
+  const wanted = name.trim().toLowerCase();
+  const idx = teams.findIndex((team) => team.players.some((p) => p.trim().toLowerCase() === wanted));
+  return idx === 0 || idx === 1 ? idx : null;
 }
