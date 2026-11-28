@@ -212,6 +212,27 @@ describe("processPaymentEscalation", () => {
     );
   });
 
+  it("does not name a self-reported payer as unpaid in the organizer alert", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const sentDebtor = await seedUser({ name: "SentDebtor" });
+    const event = await seedPastEvent(owner.id, 170); // ended 170h ago (>7 days)
+    await seedOwedPayment(event.id, "SentDebtor", 5, "sent", sentDebtor.id);
+    await prisma.paymentNudgeStage.create({
+      data: { eventId: event.id, userId: sentDebtor.id, stage: 3 },
+    });
+
+    const result = await processPaymentEscalation();
+
+    expect(result.organizerAlerts).toHaveLength(1);
+    // The outstanding step is the organizer's own confirmation, so the alert
+    // must ask for that instead of describing the payer as delinquent.
+    const organizerPush = mockSendPush.mock.calls.find((call) => call[0] === owner.id);
+    expect(organizerPush).toBeDefined();
+    const body = organizerPush![2] as string;
+    expect(body).not.toContain("haven't paid");
+    expect(body).toContain("confirm receipt");
+  });
+
   it("escalates opted-out players without pushing them (push pref gates delivery only)", async () => {
     mockWantsReminder.mockReturnValue(false);
     const owner = await seedUser({ name: "Owner" });

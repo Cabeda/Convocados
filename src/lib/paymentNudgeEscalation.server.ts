@@ -112,6 +112,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     // debt starts cleanly at stage 0.
     const activeUserIds = new Set<string>();
     const eventDebtorNames: string[] = [];
+    const eventSelfReportedNames: string[] = [];
     const eventOrganizerAlerts: string[] = [];
 
     for (const payment of gamePayments) {
@@ -121,7 +122,8 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       activeUserIds.add(userId);
 
       // `sent` is the payer's self-report; the outstanding step is the
-      // organizer's confirmation, so no stage may nudge them as delinquent.
+      // organizer's confirmation, so no stage — and not the organizer alert —
+      // may nudge or name them as delinquent.
       const selfReported = payment.status === "sent";
 
       // Get or create nudge stage tracker
@@ -193,7 +195,10 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         });
         result.organizerAlerts.push(`${userId}:${event.id}`);
         eventOrganizerAlerts.push(`${userId}:${event.id}`);
-        eventDebtorNames.push(payment.playerName);
+        // A self-reported payer is awaiting the organizer's confirmation, not
+        // delinquent: tell the owner to confirm instead of naming them unpaid.
+        if (selfReported) eventSelfReportedNames.push(payment.playerName);
+        else eventDebtorNames.push(payment.playerName);
       }
     }
 
@@ -216,13 +221,23 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       }).catch(() => {});
     }
 
-    // Send organizer alert as a batch (one notification for all stage-3-expired debtors per event)
-    if (event.ownerId && eventOrganizerAlerts.length > 0 && eventDebtorNames.length > 0) {
-      const body = `${eventDebtorNames.length} player(s) still haven't paid after a week: ${eventDebtorNames.slice(0, 3).join(", ")}${eventDebtorNames.length > 3 ? ` +${eventDebtorNames.length - 3} more` : ""}`;
+    // Send organizer alert as a batch (one notification for all stage-3-expired
+    // payments per event). Self-reported payers get a confirmation ask, never
+    // the "still haven't paid" accusation reserved for genuine debtors.
+    if (event.ownerId && eventOrganizerAlerts.length > 0) {
+      const nameList = (names: string[]) =>
+        `${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3} more` : ""}`;
+      const parts: string[] = [];
+      if (eventDebtorNames.length > 0) {
+        parts.push(`${eventDebtorNames.length} player(s) still haven't paid after a week: ${nameList(eventDebtorNames)}`);
+      }
+      if (eventSelfReportedNames.length > 0) {
+        parts.push(`${eventSelfReportedNames.length} player(s) say they've sent payment — confirm receipt: ${nameList(eventSelfReportedNames)}`);
+      }
       await sendPushToUser(
         event.ownerId,
         event.title,
-        body,
+        parts.join(" "),
         `/events/${event.id}?action=confirm-payment`,
       ).catch((err) => log.error({ err, eventId: event.id }, "Failed to send organizer payment alert"));
     }
