@@ -205,7 +205,7 @@ export function LastGameRecap(p: LastGameRecapProps) {
   return (
     <Box
       component="section" aria-labelledby="recap-heading" data-testid="last-game-recap"
-      sx={{ bgcolor: "background.paper", border: 1, borderColor: "divider", borderRadius: "20px", overflow: "hidden" }}
+      sx={{ bgcolor: "background.paper", border: 1, borderColor: "divider", borderRadius: "20px", overflow: "clip" }}
     >
       <Box
         data-testid="recap-scoreboard"
@@ -263,7 +263,7 @@ export function LastGameRecap(p: LastGameRecapProps) {
         id={detailsId} aria-hidden={!expanded} inert={!expanded}
         sx={{ display: "grid", gridTemplateRows: expanded ? "1fr" : "0fr", opacity: expanded ? 1 : 0, ...motion("grid-template-rows, opacity") }}
       >
-        <Box sx={{ overflow: "hidden", minHeight: 0 }}>
+        <Box sx={{ overflow: "clip", minHeight: 0 }}>
           {rows}
           <Box ref={statusRef} role="status" data-testid="recap-live" tabIndex={-1} sx={{ outline: "none", ...focusRing, "&:focus-visible": { outline: "none" } }}>
             {done.map((d) => <RecapTaskRow key={d.kind} done title={d.title} />)}
