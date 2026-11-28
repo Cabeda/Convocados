@@ -1196,6 +1196,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               canEditSettings={canEditSettings}
               isAuthenticated={isAuthenticated}
               isOwnerless={isOwnerless}
+              isParticipant={!!session?.user?.id && event.players.some((p) => p.userId === session.user.id)}
               localMatches={localMatches}
               gameStatus={event.gameStatus}
               onSaveTitle={handleSaveTitle}

@@ -200,12 +200,12 @@ describe("EventHeader — the line-up of actions", () => {
 describe("EventHeader — when and where", () => {
   it("says a one-off's date, time and length once", () => {
     renderHeader();
-    expect(screen.getByText(/ at \d\d:\d\d · 90 min/)).toBeInTheDocument();
+    expect(screen.getByText(/^\w{3} \d+ \w+ · \d\d:\d\d · 90 min$/)).toBeInTheDocument();
   });
 
   it("says a weekly game repeats instead of giving one date", () => {
     renderHeader({ event: { isRecurring: true, recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }) } });
-    expect(screen.getByText(/Every week on Friday at \d\d:\d\d · 90 min/)).toBeInTheDocument();
+    expect(screen.getByText(/^Weekly · \w{3} \d\d:\d\d · 90 min$/)).toBeInTheDocument();
   });
 
   it("links the place to a map", () => {
@@ -213,23 +213,40 @@ describe("EventHeader — when and where", () => {
     expect(screen.getByRole("link", { name: "Campo" })).toHaveAttribute("href", expect.stringContaining("google.com/maps"));
   });
 
-  it("shows the price per player to someone who can see it", async () => {
+  it("shows a player their own share, and an organiser the share and the total", async () => {
     cost = { totalAmount: 50, currency: "EUR" };
     renderHeader();
-    expect(await screen.findByText(/€5 each/)).toBeInTheDocument();
+    expect(await screen.findByText("€5 each")).toBeInTheDocument();
+    expect(screen.queryByText(/total/)).not.toBeInTheDocument();
+    cleanup();
+    cost = { totalAmount: 80, currency: "EUR" };
+    renderHeader({ canEditSettings: true, event: { maxPlayers: 16 } });
+    expect(await screen.findByText("€5 each · €80 total")).toBeInTheDocument();
   });
 
-  it("offers an admin a way to set a price, and offers a player nothing", async () => {
-    renderHeader({ canEditSettings: true });
-    expect(await screen.findByRole("link", { name: "Set price" })).toHaveAttribute("href", "/events/evt-1/payments");
-    cleanup();
-    renderHeader({ canEditSettings: false });
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    expect(screen.queryByRole("link", { name: "Set price" })).not.toBeInTheDocument();
+  it("does not call the cost API for someone who is neither a player nor an organiser", async () => {
+    renderHeader({ isAuthenticated: true, isParticipant: false });
+    await screen.findByRole("button", { name: "Follow game" });
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/cost"), expect.anything());
+  });
+
+  it("says Ended and the date once a one-off is over, so the recap keeps the result and the header the day", () => {
+    renderHeader({ event: { dateTime: new Date(Date.now() - 5 * 86400_000).toISOString() } });
+    expect(screen.getByText(/^Ended \w{3} \d+ \w+$/)).toBeInTheDocument();
+  });
+
+  it("looks cancelled: the word Cancelled, the date struck through, no Share and no Follow", async () => {
+    renderHeader({ gameStatus: "cancelled" });
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+    const struck = screen.getByText(/· \d\d:\d\d · 90 min$/);
+    expect(struck.tagName).toBe("S");
+    expect(screen.queryByRole("button", { name: "Share with players" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Follow game|Following/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More" })).toBeInTheDocument();
   });
 
   it("does not ask for the price at all when signed out", () => {
-    renderHeader({ isAuthenticated: false });
+    renderHeader({ isAuthenticated: false, isParticipant: false });
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/cost"), expect.anything());
   });
 });

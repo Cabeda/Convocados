@@ -82,10 +82,17 @@ describe("EventPage — the header slice", () => {
       expect(screen.getByText("Nobody can join or be added any more.")).toBeInTheDocument();
     });
 
-    it("tells an admin it cannot be reopened and where to plan a new one", async () => {
+    it("tells an admin it cannot be reopened and gives a real button to plan a new one", async () => {
       overrides = { gameStatus: "cancelled", ownerId: "u-1" };
       renderWithTheme(<EventPage eventId="evt-1" />);
-      expect(await screen.findByText("A cancelled game can't be reopened. Plan a new one from your games.")).toBeInTheDocument();
+      expect(await screen.findByText("A cancelled game can't be reopened. Plan a new one instead.")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Plan a new game" })).toHaveAttribute("href", "/");
+    });
+
+    it("gives a player the news and no button", async () => {
+      renderWithTheme(<EventPage eventId="evt-1" />);
+      await screen.findByRole("heading", { level: 2, name: "This game was cancelled" });
+      expect(screen.queryByRole("link", { name: "Plan a new game" })).not.toBeInTheDocument();
     });
 
     it("hides Join and the add-a-player field, which the server would refuse with a 409", async () => {

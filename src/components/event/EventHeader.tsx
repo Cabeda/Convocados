@@ -7,7 +7,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useLocale } from "~/lib/useT";
 import { googleCalendarUrl } from "~/lib/calendar";
 import { isGameEnded } from "~/lib/gameStatus";
-import { menuGroups } from "~/lib/eventHeader";
+import { canViewPrice, menuGroups } from "~/lib/eventHeader";
 import type { Imatch } from "~/lib/random";
 import type { EventData } from "./types";
 import { MyNotificationsDialog } from "./MyNotificationsDialog";
@@ -32,6 +32,8 @@ interface Props {
   canEditSettings: boolean;
   isAuthenticated: boolean;
   isOwnerless: boolean;
+  /** A linked player on the roster: the server lets them read the price. */
+  isParticipant: boolean;
   localMatches: Imatch[] | null;
   gameStatus?: string | null;
   onSaveTitle: (title: string) => Promise<void>;
@@ -52,7 +54,7 @@ interface Props {
  * TODO(slice-3): the countdown (under 24 h) and the live pill come back with the next-game block.
  */
 export function EventHeader({
-  eventId, event, sport, gameDate, canEditSettings, isAuthenticated, isOwnerless, localMatches, gameStatus,
+  eventId, event, sport, gameDate, canEditSettings, isAuthenticated, isOwnerless, isParticipant, localMatches, gameStatus,
   onSaveTitle, onSaveLocation, onSaveDateTime, onSaveSport, onClaimOwnership, onCancelGame, onSignedIn,
 }: Props) {
   const { t } = useLocale();
@@ -104,10 +106,11 @@ export function EventHeader({
   };
 
   const cancelled = gameStatus === "cancelled";
+  const gameEnded = isGameEnded(event.dateTime, event.durationMinutes ?? 60);
   const groups = menuGroups({
     canEdit: canEditSettings, isOwnerless, isAuthenticated,
     ratingsOn: event.eloEnabled ?? true,
-    calendarOpen: !cancelled && !isGameEnded(event.dateTime, event.durationMinutes ?? 60),
+    calendarOpen: !cancelled && !gameEnded,
     showAttendance: gameDate < new Date() || !!event.isRecurring,
     canWatch: isMobile && !!localMatches?.length,
     isCancelled: cancelled,
@@ -159,7 +162,13 @@ export function EventHeader({
 
       {editing
         ? <EventEditForm event={event} sport={sport} onSave={submit} onCancel={() => setEditing(false)} />
-        : <EventInfoLines eventId={eventId} event={event} gameDate={gameDate} canEdit={canEditSettings} isAuthenticated={isAuthenticated} />}
+        : (
+          <EventInfoLines
+            eventId={eventId} event={event} gameDate={gameDate} canEdit={canEditSettings} cancelled={cancelled}
+            canViewPrice={canViewPrice({ canEdit: canEditSettings, isParticipant, isOwnerless, isPublic: !!event.isPublic })}
+            ended={gameEnded}
+          />
+        )}
 
       {isAuthenticated && isOwnerless && (
         <Box sx={{ mt: 1 }}>
