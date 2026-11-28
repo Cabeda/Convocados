@@ -342,14 +342,22 @@ export const PATCH: APIRoute = async ({ params, request }) => {
         });
 
         // ADR 0019: Write cost_adjustment correction rows for post-migration games
-        const existingDebits = await tx.walletTransaction.findMany({
-          where: { eventId: params.id, eventInstanceId: game.id, reason: "per_game_share", direction: "debit" },
-          select: { userId: true, amountCents: true },
+        const chargeRows = await tx.walletTransaction.findMany({
+          where: { eventId: params.id, eventInstanceId: game.id, reason: { in: ["per_game_share", "cost_adjustment"] } },
+          select: { userId: true, reason: true, direction: true, amountCents: true },
         });
+        const existingDebits = chargeRows.filter((r) => r.reason === "per_game_share" && r.direction === "debit");
 
         if (existingDebits.length > 0) {
+          const netByUser = new Map<string, number>();
+          for (const row of chargeRows) {
+            const signed = row.direction === "debit" ? row.amountCents : -row.amountCents;
+            netByUser.set(row.userId, (netByUser.get(row.userId) ?? 0) + signed);
+          }
           for (const debit of existingDebits) {
-            const delta = newShareCents - debit.amountCents;
+            const currentCents = netByUser.get(debit.userId) ?? 0;
+            if (currentCents <= 0) continue;
+            const delta = newShareCents - currentCents;
             if (delta === 0) continue;
             await postLedgerEntry({
               eventId: params.id!,

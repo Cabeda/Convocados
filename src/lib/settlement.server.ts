@@ -413,13 +413,8 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     });
   }
 
-  // ADR 0007/0019: the ledger is the source of truth for money. Charge each
-  // lineup player a `per_game_share` debit so the outstanding balance is real
-  // (previously only `payment_received` credits existed, clamping the balance
-  // to zero). Runs for played games too, at the row's frozen amount, so a
-  // revived lineup player's debt is not missing from Home/the gate; only the
-  // pre-game sync reverses an uncharged player, because deleting a settled
-  // debit would rewrite money the group already played for.
+  // ADR 0007/0019: charge each lineup player a `per_game_share` debit, at the
+  // row's frozen amount for a played game; only pre-game sync reverses one.
   const frozen = game?.status === "played";
   const rows = await db.gamePayment.findMany({
     where: { gameId, archivedAt: null },
@@ -437,11 +432,9 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
 
 /**
  * Keep the ledger's `per_game_share` charge side in step with the game's
- * charged players. Pre-game, a debit is posted for each charged player and a
- * removed player's debit is deleted. A played game's money is frozen, so it is
- * reconciled with idempotent `cost_adjustment` corrections instead — a revived
- * or added player gets the debit the roll shows, and a removed player gets a
- * credit that cancels it without rewriting the original row.
+ * charged players. Pre-game, a debit is posted per charged player and a removed
+ * player's debit is deleted. A played game instead gets idempotent
+ * `cost_adjustment` corrections: revive debits, remove credits, no rewrites.
  */
 async function syncChargeDebits(
   db: DbClient,
@@ -510,12 +503,6 @@ async function syncPlayedChargeDebits(
   activeIds: Set<string>,
   currency: string,
 ): Promise<void> {
-  const alreadyCharged = await db.walletTransaction.findFirst({
-    where: { eventId, eventInstanceId: gameId, reason: "per_game_share", direction: "debit" },
-    select: { id: true },
-  });
-  if (!alreadyCharged) return;
-
   const rows = await db.walletTransaction.findMany({
     where: {
       eventId,
@@ -531,6 +518,7 @@ async function syncPlayedChargeDebits(
     const delta = row.direction === "debit" ? row.amountCents : -row.amountCents;
     netByUser.set(row.userId, (netByUser.get(row.userId) ?? 0) + delta);
   }
+  if (hasShareDebit.size === 0) return;
 
   const postAdjustment = async (userId: string, amountCents: number, direction: "debit" | "credit") => {
     await postLedgerEntry(
