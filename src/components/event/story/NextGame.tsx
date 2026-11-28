@@ -220,7 +220,7 @@ export function NextGame(p: NextGameProps) {
               <Button
                 ref={addButtonRef} variant="outlined" startIcon={<PersonAddIcon />} aria-expanded={adding} aria-controls="add-friend"
                 onClick={() => { setAdding((a) => !a); setAddingEver(true); }}
-                sx={{ mt: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, color: "text.primary", borderColor: "divider", ...tappable }}
+                sx={{ mt: 1, mr: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, color: "text.primary", borderColor: "divider", ...tappable }}
               >
                 {t("ngAddFriend")}
               </Button>
