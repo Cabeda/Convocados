@@ -7,6 +7,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useLocale } from "~/lib/useT";
 import { googleCalendarUrl } from "~/lib/calendar";
 import { isGameEnded } from "~/lib/gameStatus";
+import { isGameDayNow } from "~/lib/nextGame";
 import { useLargeText } from "./story/useLargeText";
 import { canViewPrice, menuGroups } from "~/lib/eventHeader";
 import type { EventData } from "./types";
@@ -169,6 +170,7 @@ export function EventHeader({
             eventId={eventId} event={event} gameDate={gameDate} canEdit={canEditSettings} cancelled={cancelled}
             canViewPrice={canViewPrice({ canEdit: canEditSettings, isParticipant, isOwnerless, isPublic: !!event.isPublic })}
             ended={gameEnded}
+            gameDay={isGameDayNow(gameDate.getTime(), event.timezone)}
           />
         )}
 

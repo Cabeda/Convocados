@@ -260,6 +260,12 @@ describe("EventHeader — when and where", () => {
     } finally { root.style.fontSize = ""; }
   });
 
+  it("leaves the time out of the info line on game day: the next-game block says it once", () => {
+    renderHeader({ event: { dateTime: new Date(Date.now() + 60_000).toISOString(), durationMinutes: 90 } });
+    expect(screen.getByText(/· 90 min$/)).toBeInTheDocument();
+    expect(screen.queryByText(/\d\d:\d\d/)).not.toBeInTheDocument();
+  });
+
   it("says just Ended once a one-off is over: the recap card keeps the day, so it is not said twice", () => {
     renderHeader({ event: { dateTime: new Date(Date.now() - 5 * 86400_000).toISOString() } });
     expect(screen.getByText("Ended")).toBeInTheDocument();

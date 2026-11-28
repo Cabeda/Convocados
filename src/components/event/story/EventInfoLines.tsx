@@ -7,7 +7,6 @@ import { COMMON_TIMEZONES } from "~/lib/timezones";
 import { formatMoneyCompact } from "~/lib/money";
 import { perPlayerShare } from "~/lib/gameCost";
 import { scheduleLabel } from "~/lib/eventHeader";
-import { isGameDay } from "~/lib/nextGame";
 import type { EventData } from "../types";
 import { focusRing, hitArea } from "./styles";
 import { useEventPrice } from "./useEventPrice";
@@ -23,6 +22,8 @@ interface Props {
   /** The game is over: a one-off says when it was instead of when it starts. */
   ended: boolean;
   cancelled: boolean;
+  /** The game is today: the next-game block says "Today · 20:49", so the time is not said twice here. */
+  gameDay?: boolean;
 }
 
 const line = { display: "flex", alignItems: "flex-start", gap: 0.75, color: "text.secondary", fontSize: "1rem", lineHeight: 1.5, textWrap: "pretty" } as const;
@@ -38,14 +39,12 @@ const mapsHref = (location: string) =>
  * says "Ended Fri, 4 Dec", and a cancelled game says so, with its date struck through.
  * The next real date of a weekly game is the next-game block's job, not this line's.
  */
-export function EventInfoLines({ eventId, event, gameDate, canEdit, canViewPrice, ended, cancelled }: Props) {
+export function EventInfoLines({ eventId, event, gameDate, canEdit, canViewPrice, ended, cancelled, gameDay = false }: Props) {
   const { locale, t } = useLocale();
   const { loaded, cost } = useEventPrice(eventId, canViewPrice);
 
   const rule = parseRecurrenceRule(event.recurrenceRule);
-  // On game day the next-game block says "Today · 20:49": the time is not said twice.
-  const gameDay = !ended && !cancelled && isGameDay(Date.now(), gameDate.getTime(), event.timezone);
-  const schedule = scheduleLabel({ rule, gameDate, timezone: event.timezone, durationMinutes: event.durationMinutes, ended: ended && !rule, gameDay, locale }, t);
+  const schedule = scheduleLabel({ rule, gameDate, timezone: event.timezone, durationMinutes: event.durationMinutes, ended: ended && !rule, gameDay: gameDay && !ended && !cancelled, locale }, t);
 
   // The viewer is in another timezone than the game: say which one the time is in.
   const viewerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;

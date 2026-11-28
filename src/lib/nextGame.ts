@@ -94,6 +94,9 @@ export function isGameDay(now: number, startMs: number, timezone: string): boole
   return dayKey(now, timezone) === dayKey(startMs, timezone);
 }
 
+/** `isGameDay` against the clock right now. */
+export const isGameDayNow = (startMs: number, timezone: string): boolean => isGameDay(Date.now(), startMs, timezone);
+
 const segmenter = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
 
 /** What a person sees as one character: a letter with its accent, a family emoji, a flag, a thumb with a skin tone. */
