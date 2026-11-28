@@ -71,6 +71,16 @@ export function readHandoff(dir: string): Handoff {
   };
 }
 
+/**
+ * The environment for a call made as a person rather than the App.
+ *
+ * `undefined` means "inherit", which keeps the App token: a missing secret must
+ * never send an empty `GH_TOKEN`, because that stops every Change from opening.
+ */
+export function envForPerson(pat: string | undefined): NodeJS.ProcessEnv | undefined {
+  return pat ? { GH_TOKEN: pat } : undefined;
+}
+
 function run(command: string, args: string[], env?: NodeJS.ProcessEnv): string {
   return execFileSync(command, args, {
     encoding: "utf8",
@@ -109,8 +119,7 @@ function main(): number {
    * stay on the App token, so the CLA allowlist is untouched — the commits are
    * still the App's.
    */
-  const ghAsPerson = (args: string[]) =>
-    run("gh", args, process.env.FACTORY_PAT ? { GH_TOKEN: process.env.FACTORY_PAT } : undefined);
+  const ghAsPerson = (args: string[]) => run("gh", args, envForPerson(process.env.FACTORY_PAT));
 
   /** A terminal report the Issue can always receive, even when delivery fails. */
   const comment = (body: string) => {
