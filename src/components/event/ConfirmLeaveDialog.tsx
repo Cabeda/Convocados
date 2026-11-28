@@ -5,7 +5,7 @@ import {
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { useT } from "~/lib/useT";
 
-export type LeaveContext = "self" | "organizer";
+export type LeaveContext = "self" | "organizer" | "guest";
 
 /**
  * Pure helpers for the dialog's inputs — extracted out of component bodies so the
@@ -36,7 +36,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  /** Who is initiating the leave. self = the player themselves, organizer = owner/admin acting on someone. */
+  /** Who is initiating the leave. self = the player themselves, organizer = owner/admin acting on someone, guest = a player taking a guest off the list. */
   context: LeaveContext;
   /** Name of the player being removed (used in the organizer copy). For self, this is the user's own name (shown in the title for clarity). */
   playerName: string;
@@ -73,7 +73,7 @@ export function ConfirmLeaveDialog({
   onExited,
 }: Props) {
   const t = useT();
-  const showReplacementWarning = within48h && benchEmptyAfter;
+  const showReplacementWarning = context !== "guest" && within48h && benchEmptyAfter;
 
   const title = context === "self"
     ? t("leaveDialogSelfTitle")
@@ -81,6 +81,7 @@ export function ConfirmLeaveDialog({
 
   const body = context === "self"
     ? (showReplacementWarning ? t("leaveDialogSelfBody") : t("leaveDialogSelfBodyNoWarn"))
+    : context === "guest" ? t("ngRemoveGuestBody")
     : (showReplacementWarning ? t("leaveDialogOrganizerBody", { name: playerName }) : t("leaveDialogOrganizerBodyNoWarn", { name: playerName }));
 
   const confirmLabel = context === "self" ? t("leaveDialogConfirmSelf") : t("leaveDialogConfirmOrganizer");

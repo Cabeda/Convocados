@@ -4,9 +4,12 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import { useLocale } from "~/lib/useT";
 import { nextOccurrence, parseRecurrenceRule } from "~/lib/recurrence";
-import { benchLabelNames, canUndoRemoval, nextGamePhase, rsvpView, slotLabels } from "~/lib/nextGame";
+import { benchLabelNames, canUndoRemoval, nextGamePhase, removeRule, rsvpView, slotLabels, type RemoveRule } from "~/lib/nextGame";
 import { splitRoster } from "~/lib/rosterCapacity";
-import { canRemoveEventPlayer, type EventPermissions } from "~/lib/eventView";
+import { findSelfRosterRow, type EventPermissions } from "~/lib/eventView";
+import { apiRequest } from "~/lib/api/client";
+import { addedNamesHere, forgetAdded } from "~/lib/addedHere";
+import { normalizeForMatch } from "~/lib/stringMatch";
 import type { EventData, Player } from "../types";
 import { ConfirmLeaveDialog, computeBenchEmptyAfter, computeWithin48h } from "../ConfirmLeaveDialog";
 import { InviteShareDialog } from "../InviteShareDialog";
@@ -80,7 +83,10 @@ export function NextGame(p: NextGameProps) {
 
   const [nudgeOpen, setNudgeOpen] = useState(false);
   // The warnings the leave dialog shows are worked out when it opens, not on every render.
-  const [leaving, setLeaving] = useState<{ benchEmptyAfter: boolean; within48h: boolean } | null>(null);
+  const [leaving, setLeaving] = useState<{ player: Player; benchEmptyAfter: boolean; within48h: boolean } | null>(null);
+  // "That's you?": the viewer tapped "I'm in" and a row with their own name, but no account, was already there.
+  const [thatsYou, setThatsYou] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const [leaveBusy, setLeaveBusy] = useState(false);
   // Add a friend: the panel, opened from the button or an open slot. Its lists are read the first time it opens.
   const [adding, setAdding] = useState(false);
@@ -88,13 +94,15 @@ export function NextGame(p: NextGameProps) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // Options for one person (remove), opened from their slot or their row in "Who's in".
   const [selection, setSelection] = useState<{ id: string; from: "slot" | "row" } | null>(null);
-  const [removeConfirm, setRemoveConfirm] = useState<{ player: Player; benchEmptyAfter: boolean; within48h: boolean } | null>(null);
+  const [removeConfirm, setRemoveConfirm] = useState<{ player: Player; guest: boolean; benchEmptyAfter: boolean; within48h: boolean } | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const focusRow = () => rowRef.current?.focus();
 
   const { active, bench } = splitRoster(event.players, event.maxPlayers);
   const myRow = viewer ? event.players.find((x) => x.userId === viewer.id) ?? null : null;
+  // A row an organizer added under the viewer's name before they signed in: theirs to leave or claim, never linked by guesswork (#1331).
+  const nameRow = viewer && !myRow ? findSelfRosterRow(event.players, viewer) : null;
   const teamName = myRow ? event.teamResults.find((tr) => tr.members.some((m) => m.name === myRow.name))?.name ?? null : null;
   const takenNames = [...event.players.map((x) => x.name), ...(event.invited ?? []).map((x) => x.name)];
   const takenKey = takenNames.join("\u0000");
@@ -103,18 +111,46 @@ export function NextGame(p: NextGameProps) {
     eventId: p.eventId, enabled: addingEver, signedIn: !!viewer, organizer: perms.canManageInvites, hasGame: !!event.gameId, takenNames: takenStable,
   });
   const friends = useFriendActions({ add: roster.add, invites, signedIn: !!viewer, takenNames: takenStable, notify: p.notify });
-  const canRemove = (player: Player) => canRemoveEventPlayer(viewer?.id ?? null, { ownerId: event.ownerId, isPublic: !!event.isPublic, isAdmin: !!event.isAdmin }, player);
+  // The server lets anyone take an anonymous row off; the page narrows it (see removeRule).
+  const addedHere = addedNamesHere(p.eventId);
+  const ruleFor = (player: Player): RemoveRule => removeRule({
+    viewerId: viewer?.id ?? null, organizer: perms.isOwner || perms.isAdmin, player, addedHere: addedHere.has(normalizeForMatch(player.name)),
+    nameMatch: nameRow?.id === player.id,
+  });
+  const canRemove = (player: Player) => ruleFor(player) !== "none";
+  const isSelf = (player: Player) => ruleFor(player) === "self";
   const view = rsvpView({ viewerId: viewer?.id ?? null, players: event.players, maxPlayers: event.maxPlayers, rsvp: p.rsvp, teamName });
 
   const join = async (skipGate = false) => {
     if (!skipGate && (await gate.decide()) === "prompt") { setNudgeOpen(true); return; }
     const outcome = await roster.join();
     if (outcome === "payment") setNudgeOpen(true);
-    else if (outcome !== "busy") focusRow();
+    else if (outcome === "alreadyIn" && nameRow) {
+      // Not an error: that row is probably them. Open its options, with focus on Leave.
+      roster.clearError();
+      setThatsYou(true);
+      setSelection({ id: nameRow.id, from: "slot" });
+    } else if (outcome !== "busy") focusRow();
   };
-  const askToLeave = () => {
-    if (!myRow) return;
-    setLeaving({ benchEmptyAfter: computeBenchEmptyAfter(myRow.id, event.players, active, event.maxPlayers), within48h: computeWithin48h(event.dateTime) });
+  const askToLeave = (row: Player | null = myRow ?? nameRow) => {
+    if (!row) return;
+    setLeaving({ player: row, benchEmptyAfter: computeBenchEmptyAfter(row.id, event.players, active, event.maxPlayers), within48h: computeWithin48h(event.dateTime) });
+  };
+  const claim = async (player: Player) => {
+    setClaiming(true);
+    setSelection(null);
+    setThatsYou(false);
+    const end = p.beginWrite();
+    try {
+      await apiRequest("POST /api/events/{id}/claim-player", { params: { id: p.eventId }, body: { playerId: player.id } });
+      end();
+      await p.refetch();
+      focusRow();
+    } catch {
+      end();
+      roster.setError(t("ngClaimError", { name: player.name }));
+      void p.refetch();
+    } finally { setClaiming(false); }
   };
   const closeOptions = () => {
     const was = selection;
@@ -125,16 +161,19 @@ export function NextGame(p: NextGameProps) {
   const doRemove = async (player: Player) => {
     setSelection(null);
     const ok = await removal.remove(player);
+    if (ok) forgetAdded(p.eventId, player.name);
     // Nobody to offer Undo to: say what happened instead.
     if (ok && !canUndoRemoval(perms)) p.notify(t("undoRemoveDesc", { name: player.name }));
     setTimeout(() => addButtonRef.current?.focus(), 0);
   };
   const requestRemove = (player: Player) => {
-    if (viewer && player.userId === viewer.id) { setSelection(null); askToLeave(); return; }
-    if (!player.userId) { void doRemove(player); return; }
+    const rule = ruleFor(player);
+    if (rule === "none") return;
+    if (rule === "self") { setSelection(null); askToLeave(player); return; }
+    if (rule === "direct") { void doRemove(player); return; }
     setSelection(null);
     setRemoveConfirm({
-      player, benchEmptyAfter: computeBenchEmptyAfter(player.id, event.players, active, event.maxPlayers), within48h: computeWithin48h(event.dateTime),
+      player, guest: rule === "confirmGuest", benchEmptyAfter: computeBenchEmptyAfter(player.id, event.players, active, event.maxPlayers), within48h: computeWithin48h(event.dateTime),
     });
   };
   const select = (player: Player, from: "slot" | "row") => {
@@ -192,8 +231,12 @@ export function NextGame(p: NextGameProps) {
           <RsvpRow
             view={view} emphasis={!p.recapBlocking} busy={roster.busy} eventId={p.eventId} rowRef={rowRef}
             highlight={p.deepLinkAction === "rsvp"} onSignedIn={p.onSignedIn}
-            onJoin={() => void join()} onDecline={() => void decline()} onLeave={askToLeave}
+            onJoin={() => void join()} onDecline={() => void decline()} onLeave={() => askToLeave()}
           />
+
+          {thatsYou && nameRow && (
+            <Typography data-testid="thats-you" role="status" sx={{ mt: 1.5, fontSize: "1rem", lineHeight: 1.45, textWrap: "pretty" }}>{t("ngThatsYou")}</Typography>
+          )}
 
           {error && (
             <Alert severity="error" onClose={() => { roster.clearError(); invites.clearError(); removal.clearError(); }} sx={{ mt: 1.5 }}>{error}</Alert>
@@ -208,7 +251,7 @@ export function NextGame(p: NextGameProps) {
               />
               {selection?.from === "slot" && (() => {
                 const chosen = event.players.find((x) => x.id === selection.id);
-                return chosen ? <PlayerOptions id="slot-options" player={chosen} onRemove={() => requestRemove(chosen)} onClose={closeOptions} disabled={removal.busy} /> : null;
+                return chosen ? <PlayerOptions id="slot-options" player={chosen} onRemove={() => requestRemove(chosen)} onClose={closeOptions} disabled={removal.busy} self={isSelf(chosen)} onClaim={nameRow?.id === chosen.id ? () => void claim(chosen) : undefined} /> : null;
               })()}
               <Typography data-testid="lineup-summary" sx={{ mt: 1.25, fontSize: "0.9375rem", lineHeight: 1.45, color: "text.secondary", textWrap: "pretty" }}>{summary}</Typography>
               {bench.length > 0 && (
@@ -220,7 +263,7 @@ export function NextGame(p: NextGameProps) {
                 autoOpen={slotLabels(active.map((x) => x.name)).collides}
                 playing={active} bench={bench} viewerId={viewer?.id ?? null} positionsEnabled={!!event.positionsEnabled}
                 canSelect={canRemove} selectedId={selection?.from === "row" ? selection.id : null} onSelect={(pl) => select(pl, "row")}
-                options={(pl) => <PlayerOptions player={pl} onRemove={() => requestRemove(pl)} onClose={closeOptions} disabled={removal.busy} />}
+                options={(pl) => <PlayerOptions player={pl} onRemove={() => requestRemove(pl)} onClose={closeOptions} disabled={removal.busy || claiming} self={isSelf(pl)} onClaim={nameRow?.id === pl.id ? () => void claim(pl) : undefined} />}
               />
               <WaitingRow
                 invited={event.invited ?? []} declined={event.declined ?? []} canManage={perms.canManageInvites}
@@ -267,7 +310,7 @@ export function NextGame(p: NextGameProps) {
       <InviteShareDialog open={!!invites.share} name={invites.share?.name ?? ""} url={invites.share?.url ?? ""} onClose={invites.closeShare} />
 
       <ConfirmLeaveDialog
-        open={!!removeConfirm} onClose={() => setRemoveConfirm(null)} context="organizer" playerName={removeConfirm?.player.name ?? ""}
+        open={!!removeConfirm} onClose={() => setRemoveConfirm(null)} context={removeConfirm?.guest ? "guest" : "organizer"} playerName={removeConfirm?.player.name ?? ""}
         benchEmptyAfter={removeConfirm?.benchEmptyAfter ?? false} within48h={removeConfirm?.within48h ?? false} busy={removeBusy}
         onConfirm={async () => {
           if (!removeConfirm) return;
@@ -277,12 +320,16 @@ export function NextGame(p: NextGameProps) {
       />
 
       <ConfirmLeaveDialog
-        open={!!leaving} onClose={() => setLeaving(null)} context="self" playerName={myRow?.name ?? viewer?.name ?? ""}
+        open={!!leaving} onClose={() => setLeaving(null)} context="self" playerName={leaving?.player.name ?? myRow?.name ?? viewer?.name ?? ""}
         benchEmptyAfter={leaving?.benchEmptyAfter ?? false} within48h={leaving?.within48h ?? false} busy={leaveBusy}
         onExited={focusRow}
         onConfirm={async () => {
           setLeaveBusy(true);
-          try { await roster.leave(); } finally { setLeaveBusy(false); setLeaving(null); }
+          try {
+            // A linked row leaves through /leave, which also records "no". A row with only the viewer's name is taken off, never linked.
+            if (leaving && !leaving.player.userId) await doRemove(leaving.player);
+            else await roster.leave();
+          } finally { setLeaveBusy(false); setLeaving(null); }
         }}
       />
     </Box>

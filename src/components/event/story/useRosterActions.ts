@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type Dispatch, type SetStateAction } fro
 import { ApiError, apiRequest } from "~/lib/api/client";
 import { useT } from "~/lib/useT";
 import { addKnownName } from "~/lib/knownNames";
+import { rememberAdded } from "~/lib/addedHere";
 import type { EventData, Player } from "../types";
 import type { MyRsvp } from "./useMyRsvp";
 import { rosterErrorMessage } from "./rosterErrors";
@@ -25,7 +26,7 @@ export interface AddOptions {
 
 export type AddOutcome =
   | { ok: true; resolvedName: string; anonymous: boolean; /** What the server did about an emailed invitation: "notified", "emailed", or nothing. */ invited: string | null }
-  | { ok: false; reason: "busy" | "payment" | "failed"; message?: string };
+  | { ok: false; reason: "busy" | "payment" | "failed"; message?: string; /** The server said that name is already on the list. */ alreadyIn?: boolean };
 
 export interface RosterActionsArgs {
   eventId: string;
@@ -83,6 +84,8 @@ export function useRosterActions(a: RosterActionsArgs) {
       retryKey.current = null;
       const resolvedName = json.resolvedName ?? trimmed;
       addKnownName(resolvedName);
+      // A name without an account is the visitor's to take back, whoever they are (the server does not hand the row's id back).
+      if (!o.linkToAccount) rememberAdded(eventId, resolvedName);
       end();
       await refetch();
       return { ok: true, resolvedName, anonymous: json.anonymous === true, invited: json.invited ?? null };
@@ -94,7 +97,8 @@ export function useRosterActions(a: RosterActionsArgs) {
         void refetch();
         if (e.status === 402 && (e.payload as { code?: unknown } | undefined)?.code === "PAYMENT_GATE") return { ok: false, reason: "payment" };
       }
-      return { ok: false, reason: "failed", message: rosterErrorMessage(e, t, { maxPlayers: event.maxPlayers, fallback: o.fallback ?? t("ngJoinError"), name: trimmed }) };
+      const alreadyIn = e instanceof ApiError && e.status === 409 && (e.payload as { code?: unknown } | undefined)?.code === "ALREADY_IN_ROSTER";
+      return { ok: false, reason: "failed", alreadyIn, message: rosterErrorMessage(e, t, { maxPlayers: event.maxPlayers, fallback: o.fallback ?? t("ngJoinError"), name: trimmed }) };
     }
   }, [beginWrite, event.maxPlayers, eventId, refetch, setEvent, t, viewer?.id]);
 
@@ -102,14 +106,14 @@ export function useRosterActions(a: RosterActionsArgs) {
   const add = useCallback((name: string, o: AddOptions) => exclusive(() => addRow(name, o)), [addRow, exclusive]);
 
   /** The viewer joins themselves. "payment" asks the caller to show the payment dialog. */
-  const join = useCallback(async (): Promise<"joined" | "payment" | "failed" | "busy"> => {
+  const join = useCallback(async (): Promise<"joined" | "payment" | "failed" | "alreadyIn" | "busy"> => {
     if (!viewer) return "failed";
     const outcome = await add(viewer.name, { linkToAccount: true });
     if (!outcome) return "busy";
     if (outcome.ok) { setRsvp("yes"); notify(t("rsvpYesToast")); return "joined"; }
     if (outcome.reason === "payment") return "payment";
     setError(outcome.message ?? t("ngJoinError"));
-    return "failed";
+    return outcome.alreadyIn ? "alreadyIn" : "failed";
   }, [add, notify, setRsvp, t, viewer]);
 
   /** The viewer takes themselves off the list: goes through /leave, which also records "no". */

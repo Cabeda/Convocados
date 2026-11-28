@@ -6,10 +6,10 @@ import type { Player } from "../types";
 import { tappable } from "./styles";
 
 /**
- * The options for one person in the lineup: their name and "Remove". It opens with focus on Remove,
+ * The options for one person in the lineup: their name and "Remove" ("Leave" on the viewer's own slot). It opens with focus on Remove,
  * closes on Escape or the ×, and the page puts focus back where it was opened from.
  */
-export function PlayerOptions({ player, id, onRemove, onClose, disabled }: { player: Player; id?: string; onRemove: () => void; onClose: () => void; disabled?: boolean }) {
+export function PlayerOptions({ player, id, onRemove, onClose, disabled, self, onClaim }: { player: Player; id?: string; onRemove: () => void; onClose: () => void; disabled?: boolean; self?: boolean; onClaim?: () => void }) {
   const t = useT();
   const removeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { removeRef.current?.focus(); }, []);
@@ -20,8 +20,9 @@ export function PlayerOptions({ player, id, onRemove, onClose, disabled }: { pla
       sx={{ display: "flex", alignItems: "center", mt: 1, minHeight: 52, pl: 2, pr: 0.5, borderRadius: 2, bgcolor: "action.hover" }}
     >
       <Typography sx={{ flex: 1, minWidth: 0, fontSize: "1rem", fontWeight: 700, overflowWrap: "anywhere" }}>{player.name}</Typography>
-      <Button ref={removeRef} color="error" disabled={disabled} onClick={onRemove} aria-label={t("ngManageRemoveAria", { name: player.name })} sx={{ minHeight: 44, textTransform: "none", fontWeight: 700, ...tappable }}>
-        {t("ngRemove")}
+      {onClaim && <Button disabled={disabled} onClick={onClaim} sx={{ minHeight: 44, textTransform: "none", fontWeight: 700, ...tappable }}>{t("ngClaimMine")}</Button>}
+      <Button ref={removeRef} color="error" disabled={disabled} onClick={onRemove} {...(self ? {} : { "aria-label": t("ngManageRemoveAria", { name: player.name }) })} sx={{ minHeight: 44, textTransform: "none", fontWeight: 700, ...tappable }}>
+        {self ? t("leave") : t("ngRemove")}
       </Button>
       <IconButton aria-label={t("ngCloseAria")} onClick={onClose} sx={{ width: 44, height: 44, color: "text.secondary", ...tappable }}><CloseIcon fontSize="small" /></IconButton>
     </Box>

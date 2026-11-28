@@ -244,3 +244,33 @@ export function benchLabelNames(names: readonly string[]): { names: string[]; mo
 export function canUndoRemoval(perms: { isOwner: boolean; isAdmin: boolean; canEditSettings: boolean }): boolean {
   return perms.isOwner || perms.isAdmin || perms.canEditSettings;
 }
+
+export type RemoveRule =
+  /** The viewer's own slot: that is leaving, which has its own dialog. */
+  | "self"
+  /** Take off at once. */
+  | "direct"
+  /** An organizer removing someone with an account: ask first. */
+  | "confirmAccount"
+  /** A signed-in player removing a guest: ask first — "They will lose their place". */
+  | "confirmGuest"
+  /** Not theirs to remove. */
+  | "none";
+
+/**
+ * Who may take whom off the list, and how. The server lets ANYONE take an anonymous row off — which would let a
+ * passer-by empty the list — so the page narrows it: a signed-out visitor takes off only the names this browser
+ * added; a signed-in player asks first; someone with an account is protected from everyone but themselves and
+ * the organizer.
+ */
+export function removeRule(i: {
+  viewerId: string | null; organizer: boolean; player: { userId?: string | null }; addedHere: boolean;
+  /** The row has no account but carries the viewer's own name: removal only, never linked (#1331). */
+  nameMatch?: boolean;
+}): RemoveRule {
+  if (i.viewerId && (i.player.userId === i.viewerId || (i.nameMatch && !i.player.userId))) return "self";
+  if (i.organizer) return i.player.userId ? "confirmAccount" : "direct";
+  if (i.player.userId) return "none";
+  if (!i.viewerId) return i.addedHere ? "direct" : "none";
+  return "confirmGuest";
+}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   COUNTDOWN_WINDOW_MS, nextGamePhase, countdownOf, nextTickDelay, isGameDay, initials, shortNames,
-  slotMinSize, slotColumns, slotLabels, phaseChangeDelay, nextGameHint, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval,
+  slotMinSize, slotColumns, slotLabels, phaseChangeDelay, nextGameHint, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval, removeRule,
 } from "~/lib/nextGame";
 
 const MIN = 60_000;
@@ -280,5 +280,34 @@ describe("canUndoRemoval — the server only takes an undo from the organizer", 
   });
   it("is false for everyone else, who would get a 403 for the Undo they were offered", () => {
     expect(canUndoRemoval({ isOwner: false, isAdmin: false, canEditSettings: false })).toBe(false);
+  });
+});
+
+describe("removeRule — who may take whom off the list, and how", () => {
+  const anon = { userId: null };
+  const linked = { userId: "u-b" };
+  const rule = (o: Partial<{ viewerId: string | null; organizer: boolean; player: { userId: string | null }; addedHere: boolean }>) =>
+    removeRule({ viewerId: null, organizer: false, player: anon, addedHere: false, ...o });
+
+  it("an organizer takes an anonymous row off at once, and asks first before taking an account off", () => {
+    expect(rule({ viewerId: "o", organizer: true })).toBe("direct");
+    expect(rule({ viewerId: "o", organizer: true, player: linked })).toBe("confirmAccount");
+  });
+  it("a row without an account that carries the viewer's own name is their slot too", () => {
+    expect(removeRule({ viewerId: "u-1", organizer: false, player: anon, addedHere: false, nameMatch: true })).toBe("self");
+  });
+  it("a player's own slot is leaving, for everyone", () => {
+    expect(rule({ viewerId: "u-b", player: linked })).toBe("self");
+    expect(rule({ viewerId: "u-b", organizer: true, player: linked })).toBe("self");
+  });
+  it("a signed-in player may take an anonymous row off only after asking, and never somebody else's account", () => {
+    expect(rule({ viewerId: "u-1" })).toBe("confirmGuest");
+    expect(rule({ viewerId: "u-1", addedHere: true })).toBe("confirmGuest");
+    expect(rule({ viewerId: "u-1", player: linked })).toBe("none");
+  });
+  it("a signed-out visitor may take off only the names this browser added", () => {
+    expect(rule({ viewerId: null })).toBe("none");
+    expect(rule({ viewerId: null, addedHere: true })).toBe("direct");
+    expect(rule({ viewerId: null, player: linked, addedHere: true })).toBe("none");
   });
 });

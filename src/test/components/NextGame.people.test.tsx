@@ -34,6 +34,7 @@ const openPanel = async (user: ReturnType<typeof userEvent.setup>) => {
 beforeEach(() => {
   mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
   window.history.pushState({}, "", "/events/evt-1");
+  localStorage.clear();
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); delete (navigator as { contacts?: unknown }).contacts; });
 
@@ -366,10 +367,9 @@ describe("Remove — from the slot or the name", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Ana Maria" })).toHaveFocus());
   });
 
-  it("only offers options for people the viewer may remove", async () => {
+  it("a signed-in player gets options for guests, never for somebody else's account", async () => {
     renderPage({ players: withMe() });
     await screen.findByTestId("lineup-slots");
-    // Anyone may remove an anonymous row; the linked player is protected from a stranger.
     expect(screen.getByRole("button", { name: "Ana Maria" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Beto" })).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Beto" })).toBeInTheDocument();
@@ -394,24 +394,84 @@ describe("Remove — from the slot or the name", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Add a friend" })).toHaveFocus());
   });
 
-  it("does NOT offer Undo to someone the server would answer 403: a signed-out visitor removing an anonymous row", async () => {
+  it("a signed-out visitor cannot take off a name somebody else added: griefing is not a feature", async () => {
+    mockSession.data = null;
+    renderPage({ players: withMe() });
+    await screen.findByTestId("lineup-slots");
+    expect(screen.queryByRole("button", { name: "Ana Maria" })).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Ana Maria" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Options for Ana Maria" })).not.toBeInTheDocument();
+  });
+
+  it("a signed-out visitor may take back a name this browser added — at once, no Undo (the server would refuse it)", async () => {
     mockSession.data = null;
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
-    await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
-    expect(await screen.findByText("Ana Maria removed")).toBeInTheDocument();
-    expect(screen.queryByTestId("undo-toast")).not.toBeInTheDocument();
+    await user.type(await openPanel(user), "Rui{Enter}");
+    await screen.findByText("Added Rui ✓");
+    await user.click(await screen.findByRole("button", { name: "Rui" }));
+    await user.click(screen.getByRole("button", { name: "Remove Rui" }));
+    await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
+    expect(server.sent("DELETE", "/players")[0].body).toEqual({ playerId: "srv-Rui" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Rui" })).not.toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    // …and the name is forgotten: a row of that name added by somebody else later is not this visitor's to remove.
+    expect(localStorage.getItem("added-here:evt-1")).toBe("[]");
   });
 
-  it("does NOT offer Undo to a signed-in player removing an anonymous row either", async () => {
+  it("a signed-out visitor still cannot remove somebody else's row after adding their own", async () => {
+    mockSession.data = null;
+    const user = userEvent.setup();
+    renderPage({ players: withMe() });
+    await user.type(await openPanel(user), "Rui{Enter}");
+    await screen.findByText("Added Rui ✓");
+    expect(screen.queryByRole("button", { name: "Ana Maria" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rui" })).toBeInTheDocument();
+  });
+
+  it("a signed-in player asks first before taking a guest off: 'They will lose their place', and Cancel sends nothing", async () => {
     const user = userEvent.setup();
     renderPage({ players: withMe() });
     await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
     await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
+    expect(await screen.findByText("Remove Ana Maria?")).toBeInTheDocument();
+    expect(screen.getByText("They will lose their place.")).toBeInTheDocument();
+    await user.click(screen.getByTestId("leave-dialog-cancel"));
+    expect(server.sent("DELETE", "/players")).toHaveLength(0);
+    expect(screen.getAllByTestId("slot")).toHaveLength(2);
+  });
+
+  it("…then removes them, and does not offer Undo (the server would answer 403)", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: withMe() });
+    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
+    await user.click(await screen.findByTestId("leave-dialog-confirm"));
+    await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
     await screen.findByText("Ana Maria removed");
     expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
+
+  it("an organizer takes a guest off without being asked, as before", async () => {
+    mockSession.data = OWNER;
+    const user = userEvent.setup();
+    renderPage({ players: withMe() });
+    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
+    await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
+    expect(screen.queryByTestId("leave-dialog-confirm")).not.toBeInTheDocument();
+  });
+
+  it("your own slot says Leave; everyone else's says Remove", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: [{ id: "me", name: "Jose Silva", userId: "u-1" }, ...withMe()] });
+    await user.click(await screen.findByRole("button", { name: "Jose Silva (you)" }));
+    const own = await screen.findByTestId("player-options");
+    expect(within(own).getByRole("button", { name: "Leave" })).toBeInTheDocument();
+    expect(within(own).queryByRole("button", { name: /Remove/ })).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    expect(within(await screen.findByTestId("player-options")).getByRole("button", { name: "Remove Ana Maria" })).toHaveTextContent("Remove");
   });
 
   it("Undo puts them back with the details the server gave", async () => {
@@ -442,7 +502,7 @@ describe("Remove — from the slot or the name", () => {
     const user = userEvent.setup();
     renderPage({ players: [{ id: "me", name: "Jose Silva", userId: "u-1" }, ...withMe()] });
     await user.click(await screen.findByRole("button", { name: "Jose Silva (you)" }));
-    await user.click(screen.getByRole("button", { name: "Remove Jose Silva" }));
+    await user.click(screen.getByRole("button", { name: "Leave" }));
     expect(await screen.findByText("Leave this game?")).toBeInTheDocument();
     expect(server.sent("DELETE", "/players")).toHaveLength(0);
   });
@@ -487,3 +547,59 @@ describe("Add and remove — a polled list never undoes them", () => {
   });
 });
 
+describe("An unlinked row with the viewer's own name (the organizer added them before they signed in)", () => {
+  const mine: Row = { id: "j", name: "Jose Silva", userId: null };
+  const alreadyIn = (s: ReturnType<typeof fakeServer>) => s.on("POST", "/players", () => respond(409, { error: "\"Jose Silva\" is already in the list.", code: "ALREADY_IN_ROSTER" }));
+
+  it("'I'm in' says 'That's you?' and opens that slot's options, with focus on Leave, instead of a dead-end error", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: [mine, { id: "a", name: "Ana Maria", userId: null }] }, alreadyIn);
+    await user.click(await screen.findByRole("button", { name: "I'm in" }));
+    expect(await screen.findByTestId("thats-you")).toHaveTextContent("That's you? Tap your slot to leave or claim it.");
+    const options = await screen.findByTestId("player-options");
+    expect(within(options).getByRole("button", { name: "Leave" })).toHaveFocus();
+    expect(screen.queryByText("Jose Silva is already in the list.")).not.toBeInTheDocument();
+  });
+
+  it("leaving from it takes that row off the list; it never links the row to the account", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: [mine] }, alreadyIn);
+    await user.click(await screen.findByRole("button", { name: "I'm in" }));
+    await user.click(within(await screen.findByTestId("player-options")).getByRole("button", { name: "Leave" }));
+    await user.click(await screen.findByTestId("leave-dialog-confirm"));
+    await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
+    expect(server.sent("DELETE", "/players")[0].body).toEqual({ playerId: "j" });
+    expect(server.sent("POST", "/leave")).toHaveLength(0);
+    expect(server.sent("POST", "/claim-player")).toHaveLength(0);
+  });
+
+  it("claiming it links the row to the viewer's account and refreshes the list", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: [mine] }, (s) => {
+      alreadyIn(s);
+      s.on("POST", "/claim-player", () => { s.state.event.players = [{ id: "j", name: "Jose Silva", userId: "u-1" }]; return { ok: true, claimedPlayerId: "j" }; });
+    });
+    await user.click(await screen.findByRole("button", { name: "I'm in" }));
+    await user.click(within(await screen.findByTestId("player-options")).getByRole("button", { name: "That's me" }));
+    await waitFor(() => expect(server.sent("POST", "/claim-player")).toHaveLength(1));
+    expect(server.sent("POST", "/claim-player")[0].body).toEqual({ playerId: "j" });
+    expect(await screen.findByTestId("rsvp-status")).toHaveTextContent("You're in");
+    expect(screen.queryByTestId("player-options")).not.toBeInTheDocument();
+  });
+
+  it("says what went wrong when the claim is refused", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: [mine] }, (s) => { alreadyIn(s); s.on("POST", "/claim-player", () => respond(409, { error: "x" })); });
+    await user.click(await screen.findByRole("button", { name: "I'm in" }));
+    await user.click(within(await screen.findByTestId("player-options")).getByRole("button", { name: "That's me" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't link Jose Silva to your account.");
+  });
+
+  it("an already-in answer for somebody else's name is still the plain error", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }] }, (s) => s.on("POST", "/players", () => respond(409, { error: "x", code: "ALREADY_IN_ROSTER" })));
+    await user.click(await screen.findByRole("button", { name: "I'm in" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Jose Silva is already in the list.");
+    expect(screen.queryByTestId("thats-you")).not.toBeInTheDocument();
+  });
+});
