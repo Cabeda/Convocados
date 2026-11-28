@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
+import { denyMissingEventWriteScope } from "../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { cancelCurrentGame, CancelError } from "../../../../lib/cancelEvent.server";
 
@@ -10,6 +11,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const scopeDenied = await denyMissingEventWriteScope(request);
+  if (scopeDenied) return scopeDenied;
 
   const session = await getSession(request);
   if (!session?.user) return Response.json({ error: "Unauthorized." }, { status: 401 });

@@ -47,7 +47,7 @@ async function seedUserWithToken(prefix: string) {
   });
   const token = `tok-${userId}`;
   await prisma.oauthAccessToken.create({
-    data: { id: `at-${userId}`, token, clientId, userId, expiresAt: new Date(Date.now() + 3_600_000) },
+    data: { id: `at-${userId}`, token, clientId, userId, scopes: "write:events", expiresAt: new Date(Date.now() + 3_600_000) },
   });
   return { userId, token };
 }

@@ -1,7 +1,15 @@
 import { checkOwnership, checkEventAdmin } from "./auth.helpers.server";
 import type { SessionResult } from "./auth.helpers.server";
+import { authenticateRequest, requireScope } from "./authenticate.server";
+import { insufficientScopeChallenge } from "./mcp/protocol";
 import { prisma } from "./db.server";
 import { checkAccess, type AccessResult } from "./eventAccess";
+
+/**
+ * A bearer/API-key caller may mutate an Event only with at least one of these.
+ * A session cookie carries `["*"]` and passes; a link holder sends no bearer.
+ */
+export const EVENT_MUTATION_WRITE_SCOPES = ["write:events", "manage:payments"] as const;
 
 /**
  * The role an event-mutation caller holds, resolved at the authorization seam.
@@ -18,12 +26,13 @@ export interface EventMutationAuthz {
   isAdmin: boolean;
   session: SessionResult | null;
   /**
-   * Why a denial happened, when the client can act on it. Only
-   * `password_required` today: the Event is open by link but password-locked,
-   * so a client should route the user to the password prompt instead of
-   * reporting an ownership problem.
+   * Why a denial happened, when the client can act on it. `password_required`:
+   * the Event is open by link but password-locked, so a client should route the
+   * user to the password prompt instead of reporting an ownership problem.
+   * `insufficient_scope`: a bearer token without `write:events` or
+   * `manage:payments`, which the client must not retry as an ownership error.
    */
-  reason?: "password_required";
+  reason?: "password_required" | "insufficient_scope";
 }
 
 /** The minimal event facts the authorization seam needs. */
@@ -69,7 +78,7 @@ export async function authorizeEventMutation(
   );
 
   let role: EventMutationRole = "forbidden";
-  let reason: "password_required" | undefined;
+  let reason: "password_required" | "insufficient_scope" | undefined;
   if (isOwner) role = "owner";
   else if (isAdmin) role = "admin";
   else if (event.ownerId === null && !event.isPublic) {
@@ -78,7 +87,42 @@ export async function authorizeEventMutation(
     else reason = access.reason;
   }
 
+  // The token's scopes decide independently of role: an owner who authorized a
+  // read-only client must not write through it, and a linked participant must
+  // not use the payments self-report carve-out to write either.
+  if (await lacksEventWriteScope(request)) {
+    return { allowed: false, role: "forbidden", isOwner, isAdmin, session, reason: "insufficient_scope" };
+  }
+
   return { allowed: role !== "forbidden", role, isOwner, isAdmin, session, reason };
+}
+
+/** Whether the caller authenticated with a bearer/API key lacking both write scopes. */
+async function lacksEventWriteScope(request: Request): Promise<boolean> {
+  const authCtx = await authenticateRequest(request);
+  if (!authCtx) return false;
+  return !EVENT_MUTATION_WRITE_SCOPES.some((scope) => requireScope(authCtx, scope));
+}
+
+/** The existing `insufficient_scope` 403, with the challenge the MCP clients read. */
+export function insufficientScopeResponse(): Response {
+  return Response.json(
+    { error: "insufficient_scope", scope: EVENT_MUTATION_WRITE_SCOPES.join(" ") },
+    {
+      status: 403,
+      headers: {
+        "WWW-Authenticate": insufficientScopeChallenge([...EVENT_MUTATION_WRITE_SCOPES]),
+      },
+    },
+  );
+}
+
+/**
+ * Routes that keep their own owner/admin rule still need the token-scope guard
+ * before they write. Returns the 403 to send, or null to continue.
+ */
+export async function denyMissingEventWriteScope(request: Request): Promise<Response | null> {
+  return (await lacksEventWriteScope(request)) ? insufficientScopeResponse() : null;
 }
 
 /**
@@ -87,6 +131,7 @@ export async function authorizeEventMutation(
  * to the password prompt rather than report an ownership problem.
  */
 export function eventMutationDenied(authz: EventMutationAuthz, error: string): Response {
+  if (authz.reason === "insufficient_scope") return insufficientScopeResponse();
   return Response.json(
     authz.reason === "password_required" ? { error, locked: true } : { error },
     { status: 403 },
