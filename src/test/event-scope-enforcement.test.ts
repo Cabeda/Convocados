@@ -4,6 +4,9 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { authorizeEventMutation } from "~/lib/eventAuthz.server";
 import { PUT as cancelGame } from "~/pages/api/events/[id]/cancel";
 import { PUT as updatePayments } from "~/pages/api/events/[id]/payments";
+import { PUT as updateTitle } from "~/pages/api/events/[id]/title";
+import { PUT as updateDateTime } from "~/pages/api/events/[id]/datetime";
+import { DELETE as deleteHistory } from "~/pages/api/events/[id]/history/[historyId]";
 
 vi.mock("~/lib/notificationQueue.server", () => ({
   enqueueNotification: vi.fn().mockResolvedValue(undefined),
@@ -171,6 +174,49 @@ describe("event mutation scope enforcement", () => {
         where: { eventCostId_playerName: { eventCostId: cost.id, playerName: "Ana" } },
       })).status,
     ).toBe("pending");
+  });
+
+  it("refuses title, datetime and history DELETE with a read:events token", async () => {
+    const event = await seedEvent(ownerId);
+    const history = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        status: "played",
+        isFriendly: false,
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+      },
+    });
+
+    const title = await updateTitle(putCtx(event.id, readToken, { title: "Hijacked" }));
+    expect(title.status).toBe(403);
+    expect((await title.json()).error).toBe("insufficient_scope");
+
+    const datetime = await updateDateTime(
+      putCtx(event.id, readToken, { dateTime: new Date(Date.now() + 172_800_000).toISOString() }),
+    );
+    expect(datetime.status).toBe(403);
+    expect((await datetime.json()).error).toBe("insufficient_scope");
+
+    const historyRes = await deleteHistory({
+      request: putCtx(event.id, readToken).request,
+      params: { id: event.id, historyId: history.id },
+      url: new URL("http://localhost/api/test"),
+    } as any);
+    expect(historyRes.status).toBe(403);
+    expect((await historyRes.json()).error).toBe("insufficient_scope");
+
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: event.id } })).title).toBe("Scope Event");
+    expect(await prisma.gameHistory.findUnique({ where: { id: history.id } })).not.toBeNull();
+  });
+
+  it("still treats a session-style caller (scopes *) as full access", async () => {
+    const fullToken = await mintToken(ownerId, "*");
+    const event = await seedEvent(ownerId);
+    const game = await seedUpcomingGame(event.id);
+    expect((await cancelGame(putCtx(event.id, fullToken))).status).toBe(200);
+    expect((await prisma.game.findUniqueOrThrow({ where: { id: game.id } })).status).toBe("cancelled");
   });
 
   it("refuses a linked participant's self-report with a read:events token", async () => {

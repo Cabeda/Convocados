@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
-import { authorizeEventMutation } from "../../../../lib/eventAuthz.server";
+import { authorizeEventMutation, eventMutationDenied } from "../../../../lib/eventAuthz.server";
 import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
@@ -66,6 +66,12 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   const authz = await authorizeEventMutation(request, event);
   const session = await getSession(request);
+
+  // A read-only token must not write, not even its own "sent": refuse before
+  // the self-report carve-out below can turn a participant into a writer.
+  if (authz.reason === "insufficient_scope") {
+    return eventMutationDenied(authz, "Only the event owner can do this.");
+  }
 
   // Determine if this is a player self-reporting sent
   let isSelfReport = false;

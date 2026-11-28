@@ -4,6 +4,7 @@ import { processGame, recalculateAllRatings } from "../../../../../lib/elo.serve
 import { computeSkillUpdates } from "../../../../../lib/skill";
 import { MVP_ELO_BONUS } from "../../../../../lib/mvp.constants";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
+import { denyMissingEventWriteScope } from "../../../../../lib/eventAuthz.server";
 import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
@@ -693,6 +694,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 export const DELETE: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const scopeDenied = await denyMissingEventWriteScope(request);
+  if (scopeDenied) return scopeDenied;
 
   const session = await getSession(request);
   if (!session?.user) {
