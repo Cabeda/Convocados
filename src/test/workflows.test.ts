@@ -710,3 +710,18 @@ describe("a batch of reviews is not one review and seven cancellations", () => {
     );
   });
 });
+
+
+describe("a round is allowed to finish", () => {
+  // The `opencode` action opens a pull request at the end of its step. On a
+  // read-only pull-requests token that is a 403 which kills the step after the
+  // round has done its work — seven of nine rounds on 2026-11-28, 13 minutes
+  // each, nothing pushed. The push still happens in its own job.
+  it("mints the round's token with pull-requests write so the action can finish", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      jobs?: Record<string, { steps?: Array<{ name?: string; with?: Record<string, unknown> }> }>;
+    };
+    const mint = (doc.jobs?.round?.steps ?? []).find((s) => s.name === "Mint a token for the round");
+    expect(mint?.with?.["permission-pull-requests"]).toBe("write");
+  });
+});

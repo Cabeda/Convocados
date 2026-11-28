@@ -210,7 +210,7 @@ jobs:
         env:
           DATABASE_URL: file:./prisma/dev.db
 
-      - name: Mint a read token for the round
+      - name: Mint a token for the round
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
@@ -219,8 +219,16 @@ jobs:
           # The action refuses a token without write scope, so this one can
           # write; the push itself still happens in a different job, after this
           # one is gone. See the job comment.
+          #
+          # `pull-requests: write` is not for the agent. The `opencode` action
+          # opens a pull request itself when its step ends ("Creating pull
+          # request..." in the run log), and on a read token that is a 403 that
+          # kills the step *after* the round has done its work: seven of nine
+          # rounds on 2026-11-28 died there, at 13 minutes each, and nothing
+          # they produced was pushed. The agent still cannot merge, approve or
+          # close: those are denied in `fixer.md`, and the push stays in `push`.
           permission-contents: write
-          permission-pull-requests: read
+          permission-pull-requests: write
           permission-issues: write
 
       - name: Check out the Change
