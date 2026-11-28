@@ -84,15 +84,24 @@ describe("Next game — what the block says", () => {
     const user = userEvent.setup();
     renderPage({ maxPlayers: 2, players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Bia", userId: null }, { id: "c", name: "Carlos Dias", userId: null }, { id: "d", name: "Duda Lima", userId: null }] });
     const line = await screen.findByTestId("bench-line");
-    expect(line).toHaveTextContent("Bench (2) · Carlos D., Duda L. move up if someone drops out.");
+    expect(line).toHaveTextContent(/^Next up: Carlos D. and Duda L.$/);
     await user.click(screen.getByRole("button", { name: "Who's in" }));
     expect(screen.getByText("1. Carlos Dias")).toBeInTheDocument();
     expect(screen.getByText("2. Duda Lima")).toBeInTheDocument();
   });
 
+  it("names the first three on the bench and counts the rest: 'and 1 more', 'and 2 more'", async () => {
+    const bench = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `b${i}`, name: ["Kátia Lima", "Luís Faria", "Marta Santos", "Nuno Reis", "Olga Pinto"][i], userId: null }));
+    renderPage({ maxPlayers: 2, players: [...rows(2), ...bench(4)] });
+    expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Kátia L., Luís F., Marta S. and 1 more$/);
+    cleanup();
+    renderPage({ maxPlayers: 2, players: [...rows(2), ...bench(5)] });
+    expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Kátia L., Luís F., Marta S. and 2 more$/);
+  });
+
   it("uses the singular verb for a bench of one", async () => {
     renderPage({ maxPlayers: 1, players: [{ id: "a", name: "Ana", userId: null }, { id: "c", name: "Carlos", userId: null }] });
-    expect(await screen.findByTestId("bench-line")).toHaveTextContent("Bench (1) · Carlos moves up if someone drops out.");
+    expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Carlos$/);
   });
 });
 
@@ -161,6 +170,16 @@ describe("Next game — the RSVP row", () => {
   it("offers the bench when the list is full", async () => {
     renderPage({ maxPlayers: 3, players: rows(3) });
     expect(await screen.findByRole("button", { name: "Join the bench" })).toBeInTheDocument();
+  });
+
+  it("says once, in one plain sentence, what the bench means when the game is full — and not when it is not", async () => {
+    renderPage({ maxPlayers: 3, players: rows(3) });
+    await screen.findByRole("button", { name: "Join the bench" });
+    expect(screen.getAllByText("The game is full. You'll be on the bench and move up if someone drops out.")).toHaveLength(1);
+    cleanup();
+    renderPage({ maxPlayers: 5, players: rows(3) });
+    await screen.findByRole("button", { name: "I'm in" });
+    expect(screen.queryByText(/You'll be on the bench/)).not.toBeInTheDocument();
   });
 
   it("joins: the slot fills at once, and the request carries the name, an idempotency key and the client id", async () => {

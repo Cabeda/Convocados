@@ -64,7 +64,7 @@ export interface NextGameProps {
  * and who is still being waited for. Everything it decides lives in `src/lib/nextGame.ts`.
  */
 export function NextGame(p: NextGameProps) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { event, viewer, perms } = p;
   const rule = useMemo(() => parseRecurrenceRule(event.recurrenceRule), [event.recurrenceRule]);
   const startMs = useMemo(() => Date.parse(event.dateTime), [event.dateTime]);
@@ -212,7 +212,10 @@ export function NextGame(p: NextGameProps) {
   const summary = spotsLeft === 0 ? t("ngLineupFull", { max: event.maxPlayers })
     : t(spotsLeft === 1 ? "ngLineupOpenOne" : "ngLineupOpen", { n: active.length, max: event.maxPlayers, left: spotsLeft });
   const benchNames = benchLabelNames(bench.map((x) => x.name));
-  const benchText = [...benchNames.names, ...(benchNames.more > 0 ? [t("ngBenchMore", { n: benchNames.more })] : [])].join(", ");
+  // "Next up: Kátia L., Luís F., Marta S. and 1 more" — a list of names, then how many more.
+  const nextUp = benchNames.more > 0
+    ? t(benchNames.more === 1 ? "ngNextUpMoreOne" : "ngNextUpMore", { names: benchNames.names.join(", "), n: benchNames.more })
+    : t("ngNextUp", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format(benchNames.names) });
   const canDraw = perms.canEditSettings && active.length >= 2;
   const error = roster.error ?? invites.error ?? removal.error;
 
@@ -256,7 +259,7 @@ export function NextGame(p: NextGameProps) {
               <Typography data-testid="lineup-summary" sx={{ mt: 1.25, fontSize: "0.9375rem", lineHeight: 1.45, color: "text.secondary", textWrap: "pretty" }}>{summary}</Typography>
               {bench.length > 0 && (
                 <Typography data-testid="bench-line" sx={{ mt: 1, fontSize: "0.9375rem", lineHeight: 1.45, textWrap: "pretty" }}>
-                  <Box component="b">{t("ngBenchHeading", { n: bench.length })}</Box> · {t(bench.length === 1 ? "ngBenchLineOne" : "ngBenchLine", { names: benchText })}
+                  {nextUp}
                 </Typography>
               )}
               <WhosIn
