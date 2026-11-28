@@ -599,7 +599,12 @@ describe("a review is bounded by minutes that buy a verdict", () => {
     const doc = reviewer();
     // Serialised, not cancelled: the janitor dispatches review twice per tick,
     // and cancel-in-progress let a tick kill the review it had just picked.
-    expect(doc.concurrency).toEqual({ group: "factory-review", "cancel-in-progress": false });
+    // The key is per Change, because a shared one also dropped every run of a
+    // batch but the first — eight dispatches, one review, seven cancellations.
+    expect(doc.concurrency).toEqual({
+      group: "factory-review-${{ inputs.pr || github.event.pull_request.number || 'pick' }}",
+      "cancel-in-progress": false,
+    });
     const step = doc.jobs?.reviewer?.steps?.find((s) => s.name === "Review the Change");
     // 12 was fitted to docs-only diffs and killed real code reviews mid-read;
     // 20 still halves the old 25.
@@ -669,5 +674,39 @@ describe("the Reviewer can approve or send a Change back", () => {
     expect(fix).toContain("FACTORY_PAT: ${{ secrets.FACTORY_PAT }}");
     const deliver = readFileSync(join(process.cwd(), "scripts/factory/deliver.ts"), "utf8");
     expect(deliver).toContain("ghAsPerson([");
+  });
+});
+
+
+describe("rounds on different Changes do not queue behind each other", () => {
+  // One shared lock put nine refused Changes four hours apart; they are nine
+  // branches, so only two rounds on the *same* Change actually contend.
+  it("keys the lock on the Change, and keeps a shared key for the picker", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      concurrency?: { group?: string };
+    };
+    // The whole expression, not a member of it: dropping `issue_comment` or
+    // `check_suite` would leave both on the shared key — the four-hour queue
+    // this Change removes — while a `toContain` kept the suite green.
+    expect(doc.concurrency?.group).toBe(
+      "factory-fix-loop-${{ inputs.pr || github.event.pull_request.number || github.event.issue.number || github.event.check_suite.pull_requests[0].number || 'pick' }}",
+    );
+  });
+});
+
+
+describe("a batch of reviews is not one review and seven cancellations", () => {
+  // `group: factory-review` kept one pending run and cancelled the rest: eight
+  // dispatches produced one review. Reads of different Changes contend for
+  // nothing.
+  it("keys the Reviewer's lock on the Change too", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      concurrency?: { group?: string };
+    };
+    // The whole expression: a `pull_request` run that lost its own key would
+    // collapse back into one group, which is the eight-into-one this fixes.
+    expect(doc.concurrency?.group).toBe(
+      "factory-review-${{ inputs.pr || github.event.pull_request.number || 'pick' }}",
+    );
   });
 });

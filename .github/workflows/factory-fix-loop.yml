@@ -38,10 +38,14 @@ on:
         required: false
         type: string
 
-# One round at a time, across every Change. The Fixer is a single writer: two
-# runs on the same branch race the push, and the second one loses silently.
+# One round at a time **per Change**. Two runs on the same branch race the push
+# and the second loses silently, so the lock is keyed on the Change — one shared
+# group serialised every refused Change behind the previous one, which put nine
+# of them four hours apart. Different Changes are different branches, so they do
+# not contend. A run that has to pick (schedule, no PR named) keeps the shared
+# key, because two pickers would choose the same Change.
 concurrency:
-  group: factory-fix-loop
+  group: factory-fix-loop-${{ inputs.pr || github.event.pull_request.number || github.event.issue.number || github.event.check_suite.pull_requests[0].number || 'pick' }}
   cancel-in-progress: false
 
 # Nothing here needs the default token. The App token is minted in the job that

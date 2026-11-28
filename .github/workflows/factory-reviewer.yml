@@ -27,8 +27,12 @@ on:
 # in-flight run lets a tick kill the review it just picked — observed 2026-11-27
 # on #1881, where a 45-second-old review was cancelled and wrote no verdict.
 # Queueing wastes at most one run; cancelling loses the work and posts nothing.
+# One read per Change. The shared key kept a single pending run in the group and
+# cancelled every other dispatch, so a batch of eight reviews ran one and dropped
+# seven. Two reads of the same Change still serialise; different Changes do not
+# contend for anything — the role is read-only.
 concurrency:
-  group: factory-review
+  group: factory-review-${{ inputs.pr || github.event.pull_request.number || 'pick' }}
   cancel-in-progress: false
 
 # Everything flows through the App token minted in the job below. The
