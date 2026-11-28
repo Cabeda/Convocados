@@ -685,10 +685,12 @@ describe("rounds on different Changes do not queue behind each other", () => {
     const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
       concurrency?: { group?: string };
     };
-    const group = doc.concurrency?.group ?? "";
-    expect(group).toContain("inputs.pr");
-    expect(group).toContain("github.event.pull_request.number");
-    expect(group).toContain("'pick'");
+    // The whole expression, not a member of it: dropping `issue_comment` or
+    // `check_suite` would leave both on the shared key — the four-hour queue
+    // this Change removes — while a `toContain` kept the suite green.
+    expect(doc.concurrency?.group).toBe(
+      "factory-fix-loop-${{ inputs.pr || github.event.pull_request.number || github.event.issue.number || github.event.check_suite.pull_requests[0].number || 'pick' }}",
+    );
   });
 });
 
@@ -701,6 +703,10 @@ describe("a batch of reviews is not one review and seven cancellations", () => {
     const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
       concurrency?: { group?: string };
     };
-    expect(doc.concurrency?.group ?? "").toContain("inputs.pr");
+    // The whole expression: a `pull_request` run that lost its own key would
+    // collapse back into one group, which is the eight-into-one this fixes.
+    expect(doc.concurrency?.group).toBe(
+      "factory-review-${{ inputs.pr || github.event.pull_request.number || 'pick' }}",
+    );
   });
 });
