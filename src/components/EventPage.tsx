@@ -46,6 +46,7 @@ import { buildEventShareText, shareEvent } from "./event/shareEvent";
 import type { EventData, Player, KnownPlayer } from "./event";
 import { EventRecap } from "./event/story/EventRecap";
 import { CancelledBanner } from "./event/story/CancelledBanner";
+import { RecapSkeleton } from "./event/story/RecapSkeleton";
 import { HeaderSkeleton } from "./event/story/HeaderSkeleton";
 import { NextGameDateTemp } from "./event/story/NextGameDateTemp";
 import { SignInButton } from "./SignInButton";
@@ -1116,6 +1117,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={3}>
             <HeaderSkeleton />
+            <RecapSkeleton />
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
               <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
               <Stack spacing={1}>

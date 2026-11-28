@@ -60,7 +60,7 @@ export function EventInfoLines({ eventId, event, gameDate, canEdit, isAuthentica
     <Box sx={{ mt: 0.5, display: "grid", gap: 0.25 }}>
       <Box sx={line}>
         <AccessTimeIcon sx={icon} aria-hidden />
-        <span>{schedule}{tzLabel && <Box component="span" sx={{ color: "text.disabled" }}> ({tzLabel})</Box>}</span>
+        <span>{schedule}{tzLabel && <Box component="span" sx={{ color: "text.disabled" }}> · {tzLabel}</Box>}</span>
       </Box>
       {showPlace && (
         <Box sx={line}>
@@ -69,8 +69,8 @@ export function EventInfoLines({ eventId, event, gameDate, canEdit, isAuthentica
             {event.location
               ? <Link href={mapsHref(event.location)} target="_blank" rel="noopener noreferrer" underline="always" sx={link}>{event.location}</Link>
               : canEdit && <Typography component="span" sx={{ color: "text.disabled", font: "inherit" }}>{t("locationOptional")}</Typography>}
-            {price && <>{event.location || canEdit ? " · " : ""}{price}</>}
-            {askForPrice && <>{" · "}<Link href={`/events/${eventId}/payments`} underline="always" sx={link}>{t("setPrice")}</Link></>}
+            {price && <Box component="span" sx={{ whiteSpace: "nowrap" }}>{event.location || canEdit ? " · " : ""}{price}</Box>}
+            {askForPrice && <Box component="span" sx={{ whiteSpace: "nowrap" }}>{" · "}<Link href={`/events/${eventId}/payments`} underline="always" sx={link}>{t("setPrice")}</Link></Box>}
           </span>
         </Box>
       )}

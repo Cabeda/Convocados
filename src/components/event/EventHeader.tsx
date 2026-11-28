@@ -112,15 +112,15 @@ export function EventHeader({
 
   return (
     <Box component="header">
-      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
-        <Box sx={{ flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, py: 0.5 }}>
-          <Typography component="h1" sx={{ fontSize: "1.75rem", fontWeight: 700, lineHeight: 1.15, overflowWrap: "anywhere", textWrap: "balance" }}>
+      <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 0.5 }}>
+        <Box sx={{ flex: "1 1 10rem", minWidth: "min(10rem, 100%)", minHeight: 44, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, py: 0.5 }}>
+          <Typography component="h1" sx={{ fontSize: "1.75rem", fontWeight: 700, lineHeight: 1.15, overflowWrap: "break-word", textWrap: "balance" }}>
             {event.title}
           </Typography>
           {event.archivedAt && <Chip label={t("archivedBadge")} size="small" variant="outlined" />}
         </Box>
         {/* The icons' glyphs, not their 44px boxes, line up with the page edge. */}
-        <Box sx={{ display: "flex", flexShrink: 0, mr: -1.25 }}>
+        <Box sx={{ display: "flex", flexShrink: 0, ml: "auto", mr: -1.25 }}>
           {canEditSettings && (
             <IconButton ref={pencilRef} aria-label={t("editDateTime")} aria-expanded={editing} onClick={() => setEditing((v) => !v)} sx={{ ...iconAction, color: "text.secondary" }}>
               <EditIcon />
