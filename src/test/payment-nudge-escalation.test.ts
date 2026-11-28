@@ -246,3 +246,27 @@ describe("processPaymentEscalation", () => {
     expect(trackers).toHaveLength(0);
   });
 });
+
+describe("payment chase after a recurring reset (#1767)", () => {
+  it("sends stage 1 for the played occurrence even though the Event moved forward", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const event = await seedPastEvent(owner.id, 1); // played occurrence ended 1h ago
+    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
+
+    // advanceOccurrence.server.ts moves the Event to next week and points
+    // currentGameId at a fresh Game; the played Game keeps the debt.
+    const nextOccurrence = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const freshGame = await prisma.game.create({
+      data: { eventId: event.id, dateTime: nextOccurrence, status: "upcoming" },
+    });
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { dateTime: nextOccurrence, currentGameId: freshGame.id },
+    });
+
+    const result = await processPaymentEscalation();
+
+    expect(result.stage1Sent).toEqual([`${debtor.id}:${event.id}`]);
+  });
+});
