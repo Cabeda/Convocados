@@ -19,10 +19,12 @@ export interface AddOptions {
   linkToAccount: boolean;
   email?: string;
   position?: string;
+  /** What to say when the request fails for a reason we have no plain sentence for. Defaults to the "add you" one. */
+  fallback?: string;
 }
 
 export type AddOutcome =
-  | { ok: true; resolvedName: string; anonymous: boolean }
+  | { ok: true; resolvedName: string; anonymous: boolean; /** What the server did about an emailed invitation: "notified", "emailed", or nothing. */ invited: string | null }
   | { ok: false; reason: "busy" | "payment" | "failed"; message?: string };
 
 export interface RosterActionsArgs {
@@ -77,13 +79,13 @@ export function useRosterActions(a: RosterActionsArgs) {
         params: { id: eventId },
         body: { name: trimmed, linkToAccount: o.linkToAccount, ...(o.email ? { email: o.email.trim() } : {}), ...(o.position ? { position: o.position } : {}) },
         init: { headers: { "X-Client-Id": clientId(), "Idempotency-Key": key } },
-      })) as { resolvedName?: string; anonymous?: boolean };
+      })) as { resolvedName?: string; anonymous?: boolean; invited?: string | null };
       retryKey.current = null;
       const resolvedName = json.resolvedName ?? trimmed;
       addKnownName(resolvedName);
       end();
       await refetch();
-      return { ok: true, resolvedName, anonymous: json.anonymous === true };
+      return { ok: true, resolvedName, anonymous: json.anonymous === true, invited: json.invited ?? null };
     } catch (e) {
       setEvent((c) => (c ? { ...c, players: c.players.filter((p) => p.id !== tempId) } : c));
       end();
@@ -92,7 +94,7 @@ export function useRosterActions(a: RosterActionsArgs) {
         void refetch();
         if (e.status === 402 && (e.payload as { code?: unknown } | undefined)?.code === "PAYMENT_GATE") return { ok: false, reason: "payment" };
       }
-      return { ok: false, reason: "failed", message: rosterErrorMessage(e, t, { maxPlayers: event.maxPlayers, fallback: t("ngJoinError"), name: trimmed }) };
+      return { ok: false, reason: "failed", message: rosterErrorMessage(e, t, { maxPlayers: event.maxPlayers, fallback: o.fallback ?? t("ngJoinError"), name: trimmed }) };
     }
   }, [beginWrite, event.maxPlayers, eventId, refetch, setEvent, t, viewer?.id]);
 

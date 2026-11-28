@@ -31,7 +31,7 @@ describe("the next-game block speaks plain words in every language", () => {
   });
 
   it("never leaves an English sentence untranslated in another language", () => {
-    const same = ["ngImIn", "ngOpenSpot", "ngResend", "ngYouTag", "ngWhosIn", "ngDismiss"]; // spot-check real words
+    const same = ["ngImIn", "ngResend", "ngYouTag", "ngWhosIn", "ngDismiss"]; // spot-check real words
     for (const [locale, messages] of Object.entries(LOCALES)) {
       if (locale === "en") continue;
       for (const key of same) expect(messages[key], `${locale}.${key}`).not.toBe((en as Record<string, string>)[key]);

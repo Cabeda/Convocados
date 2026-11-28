@@ -64,7 +64,7 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
           return (
             <Box
               key={`open-${i}`} aria-hidden data-testid="open-slot" onClick={onOpenSpot}
-              sx={{ aspectRatio: "1", borderRadius: "50%", border: "1.5px dashed", borderColor: "text.secondary", opacity: 0.55, boxSizing: "border-box", cursor: onOpenSpot ? "pointer" : "default" }}
+              sx={{ aspectRatio: "1", borderRadius: "50%", border: "1.5px dashed", borderColor: "text.secondary", opacity: 0.75, boxSizing: "border-box", cursor: onOpenSpot ? "pointer" : "default" }}
             />
           );
         }
@@ -79,7 +79,7 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
             {...(pressable_
               ? { type: "button", onClick: () => onPress?.(player), "aria-expanded": selected, ...(controlsId ? { "aria-controls": controlsId } : {}) }
               : { role: "img" })}
-            aria-label={name} title={player.name} data-testid={me ? "slot-me" : "slot"}
+            aria-label={name} title={player.name} data-testid={me ? "slot-me" : "slot"} data-trigger={`slot:${player.id}`}
             sx={{
               all: pressable_ ? "unset" : undefined, boxSizing: "border-box", position: "relative", aspectRatio: "1", borderRadius: "50%",
               display: "grid", placeItems: "center", minWidth: 0, fontSize: "0.8125rem", fontWeight: 700, lineHeight: 1, letterSpacing: "0.01em",

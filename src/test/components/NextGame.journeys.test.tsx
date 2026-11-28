@@ -49,13 +49,15 @@ describe("Next game — what the block says", () => {
   });
 
   it("draws one slot per place, the viewer's own marked, each with the full name as its accessible name", async () => {
-    renderPage({ players: [...rows(2), me] });
+    renderPage({ players: [...rows(2), me, { id: "lk", name: "Linked Lia", userId: "u-lia" }] });
     await screen.findByTestId("lineup-slots");
-    expect(screen.getAllByTestId("slot")).toHaveLength(2);
-    expect(screen.getAllByTestId("open-slot")).toHaveLength(7);
+    expect(screen.getAllByTestId("slot")).toHaveLength(3);
+    expect(screen.getAllByTestId("open-slot")).toHaveLength(6);
     expect(screen.getByTestId("slot-me")).toHaveAccessibleName("Jose Silva (you)");
-    expect(screen.getByRole("img", { name: "Player 1" })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "3 of 10 places taken" })).toBeInTheDocument();
+    // A row the viewer may not touch is a picture with a name; one they may remove is a button with the same name.
+    expect(screen.getByRole("img", { name: "Linked Lia" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Player 1" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "4 of 10 places taken" })).toBeInTheDocument();
   });
 
   it("lists the names behind the initials in 'Who's in', linking account players to their profile", async () => {
@@ -322,7 +324,7 @@ describe("Next game — changing your answer", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't save your answer");
     expect(screen.getByTestId("rsvp-status")).toHaveTextContent("You're in");
     expect(screen.getAllByTestId("slot")).toHaveLength(3);
-    expect(screen.getAllByRole("img").map((n) => n.getAttribute("aria-label"))).toEqual(expect.arrayContaining(["Player 0", "Player 1", "Player 5"]));
+    expect(screen.getAllByTestId("slot").map((n) => n.getAttribute("aria-label"))).toEqual(expect.arrayContaining(["Player 0", "Player 1", "Player 5"]));
   });
 
   it("warns about no replacement when it is within 48 hours and nobody is on the bench", async () => {

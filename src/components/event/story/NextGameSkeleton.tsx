@@ -13,7 +13,7 @@ export function NextGameSkeleton({ maxPlayers = 16 }: { maxPlayers?: number }) {
   const columns = slotColumns(maxPlayers);
   const track = `max(${slotMinSize(maxPlayers)}px, calc((100% - ${(columns - 1) * SLOT_GAP}px) / ${columns} - 0.5px))`;
   return (
-    <Box role="status" aria-busy="true" aria-label={t("ngLoading")} data-testid="next-game-skeleton">
+    <Box role="status" aria-busy="true" aria-label={t("ngLoading")} data-testid="next-game-skeleton" sx={{ maxWidth: "32rem" }}>
       <Box sx={{ ...bar("30%", 22), maxWidth: 140 }} />
       <Box sx={{ ...bar("65%", 42), maxWidth: 300, mt: "2px" }} />
       <Box sx={{ ...bar("100%", 56), borderRadius: 999, mt: 2 }} />

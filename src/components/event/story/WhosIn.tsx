@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from "react";
-import { Box, Button, Chip, Link, Typography } from "@mui/material";
+import { Box, Button, Chip, IconButton, Link, Typography } from "@mui/material";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useT } from "~/lib/useT";
@@ -15,18 +16,27 @@ interface Props {
   bench: readonly Player[];
   viewerId: string | null;
   positionsEnabled: boolean;
-  /** Extra control at the end of a row (Remove, once the viewer may). */
-  rowAction?: (player: Player) => ReactNode;
+  /** Who the viewer may open options for (remove). */
+  canSelect?: (player: Player) => boolean;
+  selectedId?: string | null;
+  onSelect?: (player: Player) => void;
+  /** What shows under the selected row (the options). */
+  options?: (player: Player) => ReactNode;
   /** Opens the list from outside (a pressed slot, a deep link). */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
-function Row({ player, me, number, positionsEnabled, action }: { player: Player; me: boolean; number?: number; positionsEnabled: boolean; action: ReactNode }) {
+interface RowProps {
+  player: Player; me: boolean; number?: number; positionsEnabled: boolean;
+  selectable: boolean; selected: boolean; onSelect?: () => void; options?: ReactNode;
+}
+
+function Row({ player, me, number, positionsEnabled, selectable, selected, onSelect, options }: RowProps) {
   const t = useT();
   const label = number ? `${number}. ${player.name}` : player.name;
   return (
-    <Box component="li" sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 44, breakInside: "avoid", listStyle: "none" }}>
+    <Box component="li" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, minHeight: 44, breakInside: "avoid", listStyle: "none" }}>
       {player.userId
         ? <PlayerAvatar userId={player.userId} name={player.name} image={player.image} size={22} clickable={false} />
         : <span title={t("anonymousPlayer")}><AnonymousPlayerIcon /></span>}
@@ -41,7 +51,15 @@ function Row({ player, me, number, positionsEnabled, action }: { player: Player;
           <Chip size="small" variant="outlined" label={t(POSITION_KEYS[player.position])} />
         )}
       </Box>
-      {action}
+      {selectable && (
+        <IconButton
+          aria-label={t("ngOptionsFor", { name: player.name })} aria-expanded={selected} data-trigger={`row:${player.id}`} onClick={onSelect}
+          sx={{ width: 44, height: 44, color: "text.secondary", ...tappable }}
+        >
+          <MoreHorizIcon />
+        </IconButton>
+      )}
+      {selected && options && <Box sx={{ flexBasis: "100%" }}>{options}</Box>}
     </Box>
   );
 }
@@ -50,7 +68,7 @@ function Row({ player, me, number, positionsEnabled, action }: { player: Player;
  * "Who's in": the names behind the initials, for anyone who recognises people by name
  * (and for screen readers). Two columns; the bench follows, numbered.
  */
-export function WhosIn({ playing, bench, viewerId, positionsEnabled, rowAction, open: openProp, onOpenChange }: Props) {
+export function WhosIn({ playing, bench, viewerId, positionsEnabled, canSelect, selectedId, onSelect, options, open: openProp, onOpenChange }: Props) {
   const t = useT();
   const id = useId();
   const [openState, setOpenState] = useState(false);
@@ -71,7 +89,7 @@ export function WhosIn({ playing, bench, viewerId, positionsEnabled, rowAction, 
         <Box id={id} data-testid="whos-in">
           <Box component="ul" sx={{ m: 0, p: 0, columnCount: { xs: 1, sm: 2 }, columnGap: 3 }}>
             {playing.map((p) => (
-              <Row key={p.id} player={p} me={!!viewerId && p.userId === viewerId} positionsEnabled={positionsEnabled} action={rowAction?.(p)} />
+              <Row key={p.id} player={p} me={!!viewerId && p.userId === viewerId} positionsEnabled={positionsEnabled} selectable={!!canSelect?.(p)} selected={selectedId === p.id} onSelect={() => onSelect?.(p)} options={options?.(p)} />
             ))}
           </Box>
           {bench.length > 0 && (
@@ -79,7 +97,7 @@ export function WhosIn({ playing, bench, viewerId, positionsEnabled, rowAction, 
               <Typography component="h3" sx={{ mt: 1.5, fontSize: "0.875rem", fontWeight: 600, color: "text.secondary" }}>{t("ngBenchHeading", { n: bench.length })}</Typography>
               <Box component="ul" sx={{ m: 0, p: 0, columnCount: { xs: 1, sm: 2 }, columnGap: 3 }}>
                 {bench.map((p, i) => (
-                  <Row key={p.id} player={p} number={i + 1} me={!!viewerId && p.userId === viewerId} positionsEnabled={positionsEnabled} action={rowAction?.(p)} />
+                  <Row key={p.id} player={p} number={i + 1} me={!!viewerId && p.userId === viewerId} positionsEnabled={positionsEnabled} selectable={!!canSelect?.(p)} selected={selectedId === p.id} onSelect={() => onSelect?.(p)} options={options?.(p)} />
                 ))}
               </Box>
             </>
