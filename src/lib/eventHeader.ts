@@ -70,6 +70,8 @@ export interface ScheduleInput {
   durationMinutes?: number | null;
   /** A one-off whose game is over: say when it was, not when it starts. */
   ended: boolean;
+  /** The game is today: the next-game block right below says "Today · 20:49", so this line leaves the time out. */
+  gameDay?: boolean;
   locale: Locale;
 }
 
@@ -88,7 +90,7 @@ const weekdayShort = (code: string, locale: Locale): string => {
  */
 export function scheduleLabel(i: ScheduleInput, t: ReturnType<typeof createT>): string {
   const day = (opts: Intl.DateTimeFormatOptions) => formatDateInTz(i.gameDate, i.locale, i.timezone, opts);
-  const time = day({ hour: "2-digit", minute: "2-digit" });
+  const time = i.gameDay ? "" : day({ hour: "2-digit", minute: "2-digit" });
   const length = i.durationMinutes ? t("headerDuration", { n: i.durationMinutes }) : null;
 
   if (i.rule) {
@@ -96,16 +98,17 @@ export function scheduleLabel(i: ScheduleInput, t: ReturnType<typeof createT>): 
     if (freq === "weekly") {
       const days = byDay ? byDay.split(",").map((d) => weekdayShort(d, i.locale)).join(", ") : day({ weekday: "short" });
       const every = interval === 1 ? t("headerWeekly") : t("everyNWeeks", { n: interval });
-      return [every, `${days} ${time}`, length].filter(Boolean).join(" · ");
+      return [every, `${days} ${time}`.trim(), length].filter(Boolean).join(" · ");
     }
     const every = freq === "daily" ? (interval === 1 ? t("everyDay") : t("everyNDays", { n: interval }))
       : freq === "yearly" ? (interval === 1 ? t("everyYear") : t("everyNYears", { n: interval }))
         : (interval === 1 ? t("everyMonth") : t("everyNMonths", { n: interval }));
-    const when = freq === "daily" ? time : `${day({ day: "numeric", month: "short" })} ${time}`;
+    const when = freq === "daily" ? time : `${day({ day: "numeric", month: "short" })} ${time}`.trim();
     return [every, when, length].filter(Boolean).join(" · ");
   }
 
+  // An ended one-off says so and nothing more: its date is on the recap card right below ("Last game · 28 Nov").
+  if (i.ended) return t("headerEnded");
   const date = day({ weekday: "short", day: "numeric", month: "short" });
-  if (i.ended) return t("headerEnded", { when: date });
   return [date, time, length].filter(Boolean).join(" · ");
 }

@@ -6,15 +6,6 @@ import { useT } from "~/lib/useT";
 import { HeaderToast } from "./story/HeaderToast";
 
 interface Props {
-  // Re-randomize confirmation
-  confirmOpen: boolean;
-  onConfirmClose: () => void;
-  onConfirmRandomize: () => void;
-  // Early-draw confirmation (no teams yet, roster below full)
-  earlyDrawOpen: boolean;
-  onEarlyDrawClose: () => void;
-  onEarlyDrawConfirm: () => void;
-  earlyDrawCount: { n: number; max: number };
   // Relinquish ownership
   relinquishConfirmOpen: boolean;
   onRelinquishClose: () => void;
@@ -31,8 +22,6 @@ interface Props {
 }
 
 export function EventDialogs({
-  confirmOpen, onConfirmClose, onConfirmRandomize,
-  earlyDrawOpen, onEarlyDrawClose, onEarlyDrawConfirm, earlyDrawCount,
   relinquishConfirmOpen, onRelinquishClose, onRelinquishConfirm,
   cancelConfirmOpen, onCancelConfirmClose, onCancelConfirm, cancelConfirmBusy, isRecurring,
   toastQueue, onToastDone,
@@ -41,30 +30,6 @@ export function EventDialogs({
 
   return (
     <>
-      <Dialog open={confirmOpen} onClose={onConfirmClose}>
-        <DialogTitle>{t("rerandomizeTitle")}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t("rerandomizeDesc")}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onConfirmClose}>{t("cancel")}</Button>
-          <Button onClick={onConfirmRandomize} variant="contained">{t("randomize")}</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={earlyDrawOpen} onClose={onEarlyDrawClose}>
-        <DialogTitle>{t("randomizeEarlyTitle")}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {t("randomizeEarlyDesc", { n: earlyDrawCount.n, max: earlyDrawCount.max })}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onEarlyDrawClose}>{t("cancel")}</Button>
-          <Button onClick={onEarlyDrawConfirm} variant="contained">{t("randomize")}</Button>
-        </DialogActions>
-      </Dialog>
-
       {/* Relinquish ownership confirmation */}
       <Dialog open={relinquishConfirmOpen} onClose={onRelinquishClose}>
         <DialogTitle>{t("relinquishOwnership")}</DialogTitle>

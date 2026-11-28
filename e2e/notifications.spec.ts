@@ -110,38 +110,33 @@ test.describe("Snackbar notifications", () => {
     await context.close();
   });
 
-  test("undo snackbar appears after removing a player", async ({ page, request }) => {
-    const ip = uniqueIp();
-    const api = withIp(request, ip);
-    const eventId = await createEvent(api, "E2E Snackbar Undo Test", 10);
+  test("undo toast appears after removing a player", async ({ page, request }) => {
+    // Undo is offered to the organizer: the signed-in viewer owns the game.
+    await page.context().setExtraHTTPHeaders({ "X-Forwarded-For": uniqueIp() }); // its own write budget
+    const owner = page.context().request;
+    await createVerifiedUser(owner, `e2e-undo-${Date.now()}@test.com`, "TestPassword123!", "UndoOrganizer");
+    const eventId = await createEvent(withIp(owner, uniqueIp()), "E2E Snackbar Undo Test", 10);
 
-    // Add a player
-    const addRes = await api.post(`/api/events/${eventId}/players`, {
-      data: { name: "UndoTestPlayer" },
-    });
+    const addRes = await withIp(request, uniqueIp()).post(`/api/events/${eventId}/players`, { data: { name: "UndoTestPlayer" } });
     expect(addRes.status()).toBe(200);
 
     await page.goto(`/events/${eventId}`);
-    await expect(page.locator("text=UndoTestPlayer")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("lineup-slots")).toBeVisible({ timeout: 10_000 });
 
-    // Find and click the remove button for this player
-    // The remove button is an IconButton next to the player name
-    const playerRow = page.locator("text=UndoTestPlayer").locator("..");
-    const removeBtn = playerRow.locator('button[aria-label], svg').first();
+    // Tap the person's slot, then Remove: no dialog for an organizer taking off a guest.
+    await page.getByTestId("lineup-slots").getByRole("button", { name: "Options for UndoTestPlayer" }).click();
+    await page.getByRole("button", { name: "Remove UndoTestPlayer" }).click();
 
-    // Try clicking the delete icon — it's typically a small icon button in the player row
-    // Use a more robust approach: find the list item containing the player name
-    const listItem = page.locator(`[data-testid="player-item-UndoTestPlayer"], li:has-text("UndoTestPlayer")`).first();
-    const deleteBtn = listItem.locator('button').last();
-    await deleteBtn.click();
-    // The X button now opens a confirm-leave dialog (#469). Confirm the removal.
-    await page.getByTestId("leave-dialog-confirm").click();
+    // The undo toast says who went and offers Undo; the person is off the lineup.
+    const undo = page.getByTestId("undo-toast");
+    await expect(undo).toBeVisible({ timeout: 5_000 });
+    await expect(undo).toContainText("UndoTestPlayer removed");
+    await expect(page.getByRole("group", { name: "0 of 10 places taken" })).toBeVisible();
 
-    // Undo snackbar should appear
-    await expect(page.locator('.MuiSnackbar-root')).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator('.MuiSnackbar-root')).toContainText(/UndoTestPlayer/i);
-    // Should have an "Undo" action button
-    await expect(page.locator('.MuiSnackbar-root button')).toBeVisible();
+    // Undo puts them back.
+    await undo.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByRole("group", { name: "1 of 10 places taken" })).toBeVisible({ timeout: 10_000 });
+    await expect(undo).toBeHidden();
   });
 
   test("Skill Rating page is owner/admin-only", async ({ page, request }) => {
@@ -335,60 +330,64 @@ test.describe("Per-event notification overrides", () => {
   });
 });
 
-// ─── NotifyButton UI states ──────────────────────────────────────────────────
+// ─── Follow game (the notify control on the event page) ──────────────────────
 
-test.describe("NotifyButton UI", () => {
+test.describe("Follow game UI", () => {
   test.setTimeout(30_000);
 
-  test("notify button is visible on event page", async ({ page, request }) => {
-    const ip = uniqueIp();
-    const api = withIp(request, ip);
-    const eventId = await createEvent(api, "E2E NotifyButton Visible Test");
+  test("a signed-out visitor is offered 'Sign in to follow'", async ({ page, request }) => {
+    const eventId = await createEvent(withIp(request, uniqueIp()), "E2E Follow Signed Out Test");
 
     await page.goto(`/events/${eventId}`);
-    await expect(page.locator(`text=E2E NotifyButton Visible Test`)).toBeVisible({ timeout: 10_000 });
-
-    // The NotifyButton renders one of: "Get notified", "Notifications on", or nothing (unsupported)
-    // In headless Chromium, service workers and push are supported
-    const notifyBtn = page.locator('button:has-text("Get notified"), button:has-text("Notifications on")');
-    // It may also be hidden if the browser doesn't support push in headless mode
-    // Just verify the page loaded correctly — the button may or may not appear
-    await page.waitForTimeout(2_000);
-    const btnCount = await notifyBtn.count();
-    // In headless Chromium, PushManager may not be available, so the button won't render
-    // This is expected — we test the API layer separately
-    expect(btnCount).toBeGreaterThanOrEqual(0);
+    await expect(page.getByRole("heading", { name: "E2E Follow Signed Out Test" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Sign in to follow" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Follow game" })).toHaveCount(0);
   });
 
-  test("notify button shows denied state when permission is denied", async ({ browser, request }) => {
-    const ip = uniqueIp();
-    const api = withIp(request, ip);
-    const eventId = await createEvent(api, "E2E NotifyButton Denied Test");
+  test("following a game flips the button to 'Following' and it stays followed after a reload", async ({ page }) => {
+    await page.context().setExtraHTTPHeaders({ "X-Forwarded-For": uniqueIp() }); // its own write budget
+    const ctx = page.context().request;
+    await createVerifiedUser(ctx, `e2e-follow-${Date.now()}@test.com`, "TestPassword123!", "FollowTester");
+    const eventId = await createEvent(withIp(ctx, uniqueIp()), "E2E Follow Visible Test");
 
-    // Create a context with notifications denied
-    const context = await browser.newContext({
-      permissions: [], // no permissions granted
-    });
+    await page.goto(`/events/${eventId}`);
+    const follow = page.getByRole("button", { name: "Follow game" });
+    await expect(follow).toBeEnabled({ timeout: 10_000 });
+    await follow.click();
+
+    await expect(page.getByRole("button", { name: "Following" })).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(".MuiSnackbar-root").first()).toContainText(/reminders for this game/i);
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Following" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Follow game" })).toHaveCount(0);
+  });
+
+  test("with notifications blocked, following still works and says why no push will arrive", async ({ browser, request }) => {
+    const context = await browser.newContext({ permissions: [] });
     const page = await context.newPage();
+    await context.setExtraHTTPHeaders({ "X-Forwarded-For": uniqueIp() }); // its own write budget
+    const ctx = page.context().request;
+    await createVerifiedUser(ctx, `e2e-follow-denied-${Date.now()}@test.com`, "TestPassword123!", "FollowDenied");
+    const eventId = await createEvent(withIp(ctx, uniqueIp()), "E2E Follow Denied Test");
 
-    // Override Notification.permission to "denied"
+    // The browser says the user turned notifications off.
     await page.addInitScript(() => {
       Object.defineProperty(window, "Notification", {
-        value: { permission: "denied" },
+        value: { permission: "denied", requestPermission: async () => "denied" },
         writable: false,
       });
     });
 
     await page.goto(`/events/${eventId}`);
-    await expect(page.locator(`text=E2E NotifyButton Denied Test`)).toBeVisible({ timeout: 10_000 });
+    const follow = page.getByRole("button", { name: "Follow game" });
+    await expect(follow).toBeEnabled({ timeout: 10_000 });
+    await follow.click();
 
-    // Should show the denied button (disabled)
-    const deniedBtn = page.locator('button:has-text("Notifications blocked")');
-    await page.waitForTimeout(2_000);
-
-    if (await deniedBtn.count() > 0) {
-      await expect(deniedBtn).toBeDisabled();
-    }
+    // The game is followed (its reminders still reach the app), and the toast names the blocked browser permission.
+    await expect(page.getByRole("button", { name: "Following" })).toBeVisible({ timeout: 5_000 });
+    // Toasts take turns: the follow confirmation first, then why this device will not get push.
+    await expect(page.locator(".MuiSnackbar-root")).toContainText(/blocked in your browser settings/i, { timeout: 15_000 });
 
     await context.close();
   });
@@ -580,140 +579,72 @@ test.describe("Web push notification delivery", () => {
     await subscriberPage.goto(`/events/${eventId}`);
     await expect(subscriberPage.locator("text=E2E Push Delivery Test")).toBeVisible({ timeout: 10_000 });
 
-    // Wait for the page to hydrate and the NotifyButton to render
-    await subscriberPage.waitForTimeout(2_000);
+    // The follow control no longer subscribes this headless browser by itself, so the push
+    // subscription is made through the API: the server-side pipeline is what this test proves.
+    await subscriberPage.waitForTimeout(2_000); // let the page settle before the actor adds a player
 
-    // Check if the "Get notified" button is visible (requires PushManager support)
-    const notifyBtn = subscriberPage.locator('button:has-text("Get notified")');
-    const btnVisible = await notifyBtn.isVisible().catch(() => false);
-
-    if (!btnVisible) {
-      // PushManager not available in this headless browser — skip the delivery test
-      // but still verify the server-side pipeline via API
-      console.log("PushManager not available in headless mode — testing server-side pipeline only");
-
-      // Manually create a push subscription in the DB via API
-      const fakeEndpoint = `https://fcm.googleapis.com/fcm/send/e2e-delivery-${Date.now()}`;
-      const subRes = await api.post(`/api/events/${eventId}/push`, {
-        data: {
-          endpoint: fakeEndpoint,
-          keys: {
-            p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8p8REfXRI",
-            auth: "tBHItJI5svbpC7sc9axQiA",
-          },
-          locale: "en",
+    // Manually create a push subscription in the DB via API
+    const fakeEndpoint = `https://fcm.googleapis.com/fcm/send/e2e-delivery-${Date.now()}`;
+    const subRes = await api.post(`/api/events/${eventId}/push`, {
+      data: {
+        endpoint: fakeEndpoint,
+        keys: {
+          p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8p8REfXRI",
+          auth: "tBHItJI5svbpC7sc9axQiA",
         },
-      });
-      expect(subRes.status()).toBe(200);
+        locale: "en",
+      },
+    });
+    expect(subRes.status()).toBe(200);
 
-      // Verify subscription exists
-      const subCount = sqlQuery(
-        `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}' AND endpoint = '${fakeEndpoint}'`,
-      );
-      expect(parseInt(subCount)).toBeGreaterThanOrEqual(1);
-
-      // ── Browser B: actor adds a player (different clientId) ──
-      const actorIp = uniqueIp();
-      const addRes = await request.post(`/api/events/${eventId}/players`, {
-        data: { name: "PushTestPlayer" },
-        headers: {
-          "X-Forwarded-For": actorIp,
-          "X-Client-Id": "actor-client-different",
-        },
-      });
-      expect(addRes.status()).toBe(200);
-
-      // Wait for the drain to complete (it's fire-and-forget, give it a moment)
-      await subscriberPage.waitForTimeout(3_000);
-
-      // Verify the notification job was created and processed
-      const jobCount = sqlQuery(
-        `SELECT COUNT(*) FROM NotificationJob WHERE eventId = '${eventId}'`,
-      );
-      expect(parseInt(jobCount)).toBeGreaterThanOrEqual(1);
-
-      // Check that at least one job was processed (processedAt is set)
-      const processedCount = sqlQuery(
-        `SELECT COUNT(*) FROM NotificationJob WHERE eventId = '${eventId}' AND processedAt IS NOT NULL`,
-      );
-      expect(parseInt(processedCount)).toBeGreaterThanOrEqual(1);
-
-      // Check that no jobs failed (failedAt should be NULL for processed jobs)
-      const failedCount = sqlQuery(
-        `SELECT COUNT(*) FROM NotificationJob WHERE eventId = '${eventId}' AND failedAt IS NOT NULL`,
-      );
-      expect(parseInt(failedCount)).toBe(0);
-
-      // The push subscription should still exist (not deleted due to 410/404)
-      // Note: with a fake endpoint, the push service will reject it, but the
-      // subscription is only deleted on 410/404 status codes. A connection
-      // error or other failure keeps the subscription intact.
-      const subCountAfter = sqlQuery(
-        `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}' AND endpoint = '${fakeEndpoint}'`,
-      );
-      // Subscription may or may not survive depending on the push service response
-      // The important thing is the job was processed
-      expect(parseInt(subCountAfter)).toBeGreaterThanOrEqual(0);
-
-      await subscriberContext.close();
-      return;
-    }
-
-    // ── PushManager IS available — do the full browser-based flow ──
-
-    // Click "Get notified" to subscribe
-    await notifyBtn.click();
-
-    // Wait for the button to change to "Notifications on"
-    await expect(
-      subscriberPage.locator('button:has-text("Notifications on")'),
-    ).toBeVisible({ timeout: 10_000 });
-
-    // Verify subscription was stored in DB
+    // Verify subscription exists
     const subCount = sqlQuery(
-      `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}'`,
+      `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}' AND endpoint = '${fakeEndpoint}'`,
     );
     expect(parseInt(subCount)).toBeGreaterThanOrEqual(1);
 
-    // ── Browser B: actor adds a player (different context, different clientId) ──
+    // ── Browser B: actor adds a player (different clientId) ──
     const actorIp = uniqueIp();
     const addRes = await request.post(`/api/events/${eventId}/players`, {
       data: { name: "PushTestPlayer" },
       headers: {
         "X-Forwarded-For": actorIp,
-        "X-Client-Id": "actor-client-totally-different",
+        "X-Client-Id": "actor-client-different",
       },
     });
     expect(addRes.status()).toBe(200);
 
-    // Wait for the notification queue to drain
-    await subscriberPage.waitForTimeout(5_000);
+    // Wait for the drain to complete (it's fire-and-forget, give it a moment)
+    await subscriberPage.waitForTimeout(3_000);
 
-    // Verify the notification job was processed
+    // Verify the notification job was created and processed
+    const jobCount = sqlQuery(
+      `SELECT COUNT(*) FROM NotificationJob WHERE eventId = '${eventId}'`,
+    );
+    expect(parseInt(jobCount)).toBeGreaterThanOrEqual(1);
+
+    // Check that at least one job was processed (processedAt is set)
     const processedCount = sqlQuery(
       `SELECT COUNT(*) FROM NotificationJob WHERE eventId = '${eventId}' AND processedAt IS NOT NULL`,
     );
     expect(parseInt(processedCount)).toBeGreaterThanOrEqual(1);
 
-    // No failed jobs
+    // Check that no jobs failed (failedAt should be NULL for processed jobs)
     const failedCount = sqlQuery(
       `SELECT COUNT(*) FROM NotificationJob WHERE eventId = '${eventId}' AND failedAt IS NOT NULL`,
     );
     expect(parseInt(failedCount)).toBe(0);
 
-    // Try to read notifications from the service worker
-    const notifications = await subscriberPage.evaluate(async () => {
-      const reg = await navigator.serviceWorker?.ready;
-      if (!reg) return [];
-      const notifs = await reg.getNotifications();
-      return notifs.map((n) => ({ title: n.title, body: n.body }));
-    });
-
-    // If the push was actually delivered (real push service), we should see a notification
-    if (notifications.length > 0) {
-      expect(notifications[0].title).toBeTruthy();
-      expect(notifications[0].body).toContain("PushTestPlayer");
-    }
+    // The push subscription should still exist (not deleted due to 410/404)
+    // Note: with a fake endpoint, the push service will reject it, but the
+    // subscription is only deleted on 410/404 status codes. A connection
+    // error or other failure keeps the subscription intact.
+    const subCountAfter = sqlQuery(
+      `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}' AND endpoint = '${fakeEndpoint}'`,
+    );
+    // Subscription may or may not survive depending on the push service response
+    // The important thing is the job was processed
+    expect(parseInt(subCountAfter)).toBeGreaterThanOrEqual(0);
 
     await subscriberContext.close();
   });

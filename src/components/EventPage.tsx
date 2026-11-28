@@ -1,27 +1,11 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, user interactions mutate it, server data resyncs on refetch. Setting from async fetch callbacks is also fine. */
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import {
-  Container, Paper, Typography, Stack, Button,
-  ToggleButton, ToggleButtonGroup,
-} from "@mui/material";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import StadiumIcon from "@mui/icons-material/Stadium";
+import { Container, Typography, Stack, Button } from "@mui/material";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
-import { TeamPicker, type CrewHeaderChip, type PlayerStake } from "./TeamPicker";
-import StakesPreview from "./StakesPreview";
-import { useStakes } from "~/lib/useStakes";
-import {
-  crewMapFromLineup,
-  liveContribution,
-  liveCrewRoundScore,
-  OUTCOMES,
-  type MatchOutcome,
-} from "~/lib/stakesPreview";
-import { TeamField } from "./TeamField";
-import type { Imatch } from "~/lib/random";
 import { useLocale } from "~/lib/useT";
-import { fromDateTimeLocalValue } from "~/lib/timezones";
+import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
+import { pageTitle, type PageTitleInput } from "~/lib/pageTitle";
 import { useSession } from "~/lib/auth.client";
 import { apiRequest, ApiError, apiErrorMessage } from "~/lib/api/client";
 
@@ -42,9 +26,9 @@ import { NextGame } from "./event/story/NextGame";
 import { NextGameSkeleton } from "./event/story/NextGameSkeleton";
 import { useHeaderToasts } from "./event/story/HeaderToast";
 import { useMyRsvp } from "./event/story/useMyRsvp";
+import { useConnection } from "./event/story/useConnection";
+import { OfflineNotice } from "./event/story/OfflineNotice";
 import type { NextGameHint } from "~/lib/nextGame";
-import { useNextGamePhase } from "./event/story/useNextGamePhase";
-import { parseRecurrenceRule } from "~/lib/recurrence";
 import { PushPromptBanner } from "./PushPromptBanner";
 import { deriveEventPermissions } from "~/lib/eventView";
 
@@ -82,39 +66,13 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
   const deepLinkShareHandled = useRef(false);
 
   // ── UI state ────────────────────────────────────────────────────────────────
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [earlyDrawOpen, setEarlyDrawOpen] = useState(false);
   const { queue: toastQueue, push: setSnackbar, next: nextToast } = useHeaderToasts();
   const [inviteToken, setInviteToken] = useState<string | null>(null);
-  const [balanced, setBalanced] = useState(false);
-  const [_isPublic, setIsPublic] = useState(false);
-  const [sport, setSport] = useState("football-5v5");
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelConfirmBusy, setCancelConfirmBusy] = useState(false);
   // The recap still has something for the viewer to do, so the RSVP is the quiet variant.
   const [recapBlocking, setRecapBlocking] = useState(false);
-
-  // ── ELO ratings for balanced mode ───────────────────────────────────────────
-  const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
-  useEffect(() => {
-    if (!balanced) { setRatingsResponse(null); return; }
-    const controller = new AbortController();
-    apiRequest("GET /api/events/{id}/ratings", {
-      params: { id: eventId },
-      query: { limit: 100 },
-      init: { signal: controller.signal },
-    })
-      .then((data) => setRatingsResponse(data as { data: { name: string; rating: number }[] }))
-      .catch(() => {});
-    return () => controller.abort();
-  }, [balanced, eventId]);
-  const ratingsMap = useMemo(() => {
-    if (!ratingsResponse?.data) return undefined;
-    const map: Record<string, number> = {};
-    for (const r of ratingsResponse.data) map[r.name] = r.rating;
-    return map;
-  }, [ratingsResponse]);
 
   // The server renders a read-only event summary into the body so clients that
   // do not run JS (agents, crawlers) can read the event. Once this island
@@ -122,14 +80,6 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
   useEffect(() => {
     document.querySelector("[data-ssr-event-summary]")?.remove();
   }, []);
-
-  // ── Team state ──────────────────────────────────────────────────────────────
-  const [localMatches, setLocalMatches] = useState<Imatch[] | null>(null);
-  const [teamOneName, setTeamOneName] = useState("");
-  const [teamTwoName, setTeamTwoName] = useState("");
-  const [isRandomizing, setIsRandomizing] = useState(false);
-  const [shuffleVersion, setShuffleVersion] = useState(0);
-  const [teamView, setTeamView] = useState<"list" | "field">("list");
 
   // ── Event data ──────────────────────────────────────────────────────────────
   const [event, setEvent] = useState<EventData | null>(null);
@@ -154,6 +104,8 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
     return () => { writesRef.current.active -= 1; writesRef.current.lastEnd = Date.now(); };
   }, []);
 
+  const { offlineSince, report: reportConnection } = useConnection();
+
   const fetchEvent = useCallback(async () => {
     const started = Date.now();
     try {
@@ -161,6 +113,7 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
         params: { id: eventId },
         query: { inviteToken: inviteToken ?? undefined },
       })) as EventData & { locked?: boolean };
+      reportConnection(true);
       if (writesRef.current.active > 0 || started < writesRef.current.lastEnd) return;
       if (data.locked) {
         setLockedEvent({ id: data.id, title: data.title });
@@ -171,11 +124,13 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
         setError(null);
       }
     } catch (e) {
+      // Out of reach is a network failure or a server that is down; an answer like 404 means we did reach it.
+      reportConnection(!(e instanceof ApiError) ? false : e.status < 500);
       setError(e instanceof ApiError && e.status === 404 ? { status: 404 } : {});
     } finally {
       setIsLoading(false);
     }
-  }, [eventId, inviteToken]);
+  }, [eventId, inviteToken, reportConnection]);
 
   // Initial fetch
   useEffect(() => { fetchEvent(); }, [fetchEvent]);
@@ -232,147 +187,22 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
 
   const notFound = error?.status === 404;
 
-  // Server team results use raw team identifiers; swap in the (possibly
-  // renamed) display names once for both the list and field views.
-  const displayMatches = useMemo(() => {
-    if (!localMatches || !event) return localMatches;
-    return localMatches.map((m) => ({
-      ...m,
-      team: m.team === event.teamOneName ? teamOneName
-        : m.team === event.teamTwoName ? teamTwoName : m.team,
-    }));
-  }, [localMatches, event, teamOneName, teamTwoName]);
-
-  // Stakes Preview inputs: the two drawn lineups, or null until both have players.
-  const stakeLineups = useMemo(() => {
-    if (!displayMatches || displayMatches.length < 2) return null;
-    const teamOne = displayMatches[0].players.map((p) => p.name);
-    const teamTwo = displayMatches[1].players.map((p) => p.name);
-    if (teamOne.length === 0 || teamTwo.length === 0) return null;
-    return { teamOne, teamTwo };
-  }, [displayMatches]);
-
-  // Stakes Preview data + live client-side derivation (ADR 0050). Contributions
-  // and Crew round scores depend only on side assignment, so they update on drag;
-  // Rank deltas and standings positions refresh from the debounced request.
-  const stakes = useStakes(event?.id ?? "", stakeLineups?.teamOne ?? [], stakeLineups?.teamTwo ?? []);
-  const crewMap = useMemo(() => crewMapFromLineup(stakes.data?.lineup ?? []), [stakes.data]);
-  const stakeScenario = stakes.scenario;
-  const livePoints = useMemo(
-    () => (stakeLineups && stakeScenario
-      ? liveContribution(stakeLineups.teamOne, stakeLineups.teamTwo, stakeScenario.outcome)
-      : null),
-    [stakeLineups, stakeScenario],
-  );
-  const liveCrewScore = useMemo(() => {
-    if (!stakeLineups || !livePoints) return {};
-    const roster = [
-      ...stakeLineups.teamOne.map((name) => ({ name, side: "teamOne" as const })),
-      ...stakeLineups.teamTwo.map((name) => ({ name, side: "teamTwo" as const })),
-    ];
-    return liveCrewRoundScore(roster, crewMap, livePoints);
-  }, [stakeLineups, livePoints, crewMap]);
-  const stakeMap = useMemo(() => {
-    if (!stakeScenario) return undefined;
-    const map: Record<string, PlayerStake> = {};
-    for (const p of stakeScenario.players) {
-      map[p.name] = {
-        contribution: livePoints?.[p.name] ?? p.contribution,
-        rpDelta: p.rpDelta,
-        passed: p.passed,
-        provisional: p.provisional,
-      };
-    }
-    return map;
-  }, [stakeScenario, livePoints]);
-  const crewChipsByTeamIndex = useMemo<CrewHeaderChip[][] | undefined>(() => {
-    if (!stakeScenario) return undefined;
-    return (["teamOne", "teamTwo"] as const).map((side) => {
-      const crewIds = [
-        ...new Set(stakeScenario.players.filter((p) => p.side === side && p.crewId).map((p) => p.crewId as string)),
-      ];
-      return crewIds.flatMap((crewId) => {
-        const c = stakeScenario.crews.find((x) => x.crewId === crewId);
-        return c
-          ? [{ crewId, name: c.name, roundScore: liveCrewScore[crewId] ?? c.roundScore, positionAfter: c.positionAfter, passed: c.passed }]
-          : [];
-      });
-    });
-  }, [stakeScenario, liveCrewScore]);
-  const stakesOutcomeLabel = (outcome: MatchOutcome) =>
-    outcome === "teamOne"
-      ? t("stakesPreviewOutcomeOne", { team: teamOneName || t("stakesPreviewTeamOne") })
-      : outcome === "teamTwo"
-        ? t("stakesPreviewOutcomeTwo", { team: teamTwoName || t("stakesPreviewTeamTwo") })
-        : t("stakesPreviewOutcomeDraw");
-
+  // The tab says what matters now: the result after a game the viewer played, the next day otherwise.
+  // The server's own title (search, sharing) is what comes back when the page closes.
+  const [lastResult, setLastResult] = useState<PageTitleInput["result"]>(null);
+  const serverTitle = useRef<string | null>(null);
+  const tabTitle = event
+    ? pageTitle({
+      title: event.title, result: lastResult,
+      date: formatDateInTz(new Date(event.dateTime), locale, event.timezone, { weekday: "short", day: "numeric", month: "short" }),
+    }, t)
+    : null;
   useEffect(() => {
-    if (event) document.title = `${event.title} — Convocados`;
-    return () => { document.title = "Convocados"; };
-  }, [event]);
-
-  // ── Sync localMatches from server ───────────────────────────────────────────
-  const isDraggingRef = useRef(false);
-  useEffect(() => {
-    if (!event || isDraggingRef.current) return;
-    if (event.teamResults.length > 0) {
-      setLocalMatches(event.teamResults.map((tr) => ({
-        team: tr.name,
-        formation: tr.formation ?? null,
-        players: tr.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot ?? null })),
-      })));
-    } else {
-      setLocalMatches(null);
-    }
-    setTeamOneName(event.teamOneName);
-    setTeamTwoName(event.teamTwoName);
-    setIsPublic(event.isPublic);
-    setBalanced(event.balanced);
-    setSport(event.sport);
-  }, [event]);
-
-  // ── Team operations ─────────────────────────────────────────────────────────
-
-  const doRandomize = async () => {
-    setConfirmOpen(false);
-    setIsRandomizing(true);
-    setShuffleVersion((version) => version + 1);
-    try {
-      await apiRequest("POST /api/events/{id}/randomize", {
-        params: { id: eventId },
-        query: { balanced: balanced || undefined },
-      });
-      await fetchEvent();
-    } catch (e) {
-      setSnackbar(apiErrorMessage(e, t("somethingWentWrong")));
-    } finally {
-      setIsRandomizing(false);
-    }
-  };
-
-  const handleTeamChange = async (matches: Imatch[]) => {
-    setLocalMatches(matches);
-    isDraggingRef.current = true;
-    try {
-      await apiRequest("PUT /api/events/{id}/teams", {
-        params: { id: eventId },
-        body: { matches },
-      });
-    } catch (e) {
-      setSnackbar(apiErrorMessage(e, "Failed to update teams"));
-    } finally {
-      isDraggingRef.current = false;
-    }
-    fetchEvent();
-  };
-
-  const handleTeamNameSave = async (one: string, two: string) => {
-    await apiRequest("PUT /api/events/{id}/team-names", {
-      params: { id: eventId },
-      body: { teamOneName: one, teamTwoName: two },
-    }).catch(() => undefined);
-    fetchEvent();
-  };
+    if (tabTitle === null) return;
+    serverTitle.current ??= document.title;
+    document.title = tabTitle;
+  }, [tabTitle]);
+  useEffect(() => () => { if (serverTitle.current !== null) document.title = serverTitle.current; }, []);
 
   // ── Title & location save ───────────────────────────────────────────────────
 
@@ -441,17 +271,13 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
   const gameDate = useMemo(() => event ? new Date(event.dateTime) : new Date(), [event]);
 
   const isAuthenticated = !!session?.user;
-  const { isOwner, isAdmin, isOwnerless, canEditSettings, canEditTeams } = perms;
+  const { isOwner, isAdmin, isOwnerless, canEditSettings } = perms;
 
   // #463 high-intent: the signed-in viewer's answer, so the PushPromptBanner can render as a modal
   // while an answer is still pending and the game kicks off within 48h.
   const [myRsvp, setMyRsvp] = useMyRsvp(eventId, isAuthenticated);
 
-  // Whether this is the next game (open or being played). Between a weekly game's end and its reset the roster
-  // and the drawn teams are still the finished game's: they never show as the next game's.
-  const nextPhase = useNextGamePhase(
-    event ? Date.parse(event.dateTime) : 0, event?.durationMinutes ?? 0, !!parseRecurrenceRule(event?.recurrenceRule ?? null), !!cancelled,
-  );
+  const highIntentPush = isAuthenticated && !!event && isHighIntentForPush(event.dateTime, myRsvp);
 
   // ── Loading / locked / not found states ─────────────────────────────────────
 
@@ -460,7 +286,7 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
       <ResponsiveLayout>
         {/* One viewport tall at least, in this state and the next, so the footer is below the fold in both and never jumps into view. */}
         <Container maxWidth="md" sx={{ py: 4, minHeight: "100dvh" }}>
-          <Stack spacing={3}>
+          <Stack sx={{ gap: 3 }}>
             <HeaderSkeleton />
             {/* Only when a last game is known to exist (the page was told so, or this viewer has seen its recap here). */}
             {(hasLastGame || lastRecapShape(eventId) !== null) && <RecapSkeleton strip={lastRecapShape(eventId) === "strip"} />}
@@ -501,22 +327,23 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
     <ThemeModeProvider>
       <ResponsiveLayout>
         <Container maxWidth="md" sx={{ py: 4, minHeight: "100dvh" }}>
-          <Stack spacing={3}>
+          <Stack sx={{ gap: 3 }}>
 
             {inviteToken && event && (
               <InviteBanner token={inviteToken} eventId={event.id} onAccepted={fetchEvent} />
             )}
 
+            <div>
             <EventHeader
               eventId={eventId}
               event={event}
-              sport={sport}
+              sport={event.sport}
               gameDate={gameDate}
               canEditSettings={canEditSettings}
               isAuthenticated={isAuthenticated}
               isOwnerless={isOwnerless}
               isParticipant={!!session?.user?.id && event.players.some((p) => p.userId === session.user.id)}
-              localMatches={localMatches}
+              hasTeams={event.teamResults.length > 0}
               gameStatus={event.gameStatus}
               onSaveTitle={handleSaveTitle}
               onSaveLocation={handleSaveLocation}
@@ -526,6 +353,8 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
               onSignedIn={() => { refetchSession?.(); fetchEvent(); }}
               onCancelGame={() => setCancelConfirmOpen(true)}
             />
+            <OfflineNotice since={offlineSince} />
+            </div>
 
             {cancelled && <CancelledBanner canManage={canEditSettings} />}
 
@@ -541,18 +370,10 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
               hasLastGame={event.hasLastGame}
               nextKickoff={event.dateTime}
               timezone={event.timezone}
-              sport={sport}
+              sport={event.sport}
               deepLinkAction={deepLinkAction}
               onBlockingChange={setRecapBlocking}
-            />
-
-            {/* #457 Push prompt banner — event-detail trigger. A "later" prompt: it comes after the recap, never above
-                the title. #463 high-intent: render as a centered modal when the user has a pending RSVP and
-                the event kicks off within 48h. */}
-            <PushPromptBanner
-              followCount={0}
-              forceOnEventDetail={isAuthenticated}
-              highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvp) : false}
+              onResultChange={setLastResult}
             />
 
             <NextGame
@@ -561,109 +382,18 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
               perms={perms} rsvp={myRsvp} setRsvp={setMyRsvp} recapBlocking={recapBlocking}
               deepLinkAction={deepLinkAction} notify={setSnackbar}
               onSignedIn={() => { refetchSession?.(); fetchEvent(); }}
-              draw={{
-                hasTeams: !!(localMatches && localMatches.length > 0), isDrawing: isRandomizing, onDraw: doRandomize,
-                onConfirmRedraw: () => setConfirmOpen(true), onConfirmEarlyDraw: () => setEarlyDrawOpen(true),
-              }}
             />
 
-            {/* Teams — shown below players after randomization, for the next game only */}
-            {(nextPhase === "open" || nextPhase === "live") && localMatches && localMatches.length > 0 && (
-              <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
-                <Stack spacing={2}>
-                  <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
-                    <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
-                    <ToggleButtonGroup
-                      size="small"
-                      exclusive
-                      value={teamView}
-                      onChange={(_e, next) => { if (next) setTeamView(next); }}
-                      aria-label={t("teamViewToggleLabel")}
-                    >
-                      <ToggleButton value="list" aria-label={t("teamViewList")}>
-                        <ViewListIcon fontSize="small" sx={{ mr: 0.5 }} />
-                        {t("teamViewList")}
-                      </ToggleButton>
-                      <ToggleButton value="field" aria-label={t("teamViewField")}>
-                        <StadiumIcon fontSize="small" sx={{ mr: 0.5 }} />
-                        {t("teamViewField")}
-                      </ToggleButton>
-                    </ToggleButtonGroup>
-                  </Stack>
-                  {stakes.data?.roundAvailable && stakeScenario && (
-                    <ToggleButtonGroup
-                      size="small"
-                      exclusive
-                      fullWidth
-                      value={stakes.scenarioIndex}
-                      onChange={(_e, next) => { if (next !== null) stakes.setScenarioIndex(next); }}
-                      aria-label={t("stakesPreviewTitle")}
-                    >
-                      {OUTCOMES.map((outcome, index) => (
-                        <ToggleButton key={outcome} value={index} sx={{ textTransform: "none", fontWeight: 700 }}>
-                          {stakesOutcomeLabel(outcome)}
-                        </ToggleButton>
-                      ))}
-                    </ToggleButtonGroup>
-                  )}
-                  {teamView === "list" ? (
-                    <TeamPicker
-                      matches={displayMatches ?? []}
-                      onResultChange={handleTeamChange}
-                      shuffleKey={shuffleVersion}
-                      ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
-                      canEdit={canEditTeams}
-                      crewMap={stakeLineups ? crewMap : undefined}
-                      stakeMap={stakeMap}
-                      crewChipsByTeamIndex={crewChipsByTeamIndex}
-                      rankEnabled={stakes.data?.rankEnabled ?? true}
-                      viewerName={stakes.data?.viewerName}
-                      onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
-                        if (teamIdx === 0) {
-                          setTeamOneName(newName);
-                          handleTeamNameSave(newName, teamTwoName);
-                        } else {
-                          setTeamTwoName(newName);
-                          handleTeamNameSave(teamOneName, newName);
-                        }
-                      } : undefined}
-                    />
-                  ) : (
-                    <TeamField
-                      matches={displayMatches ?? []}
-                      onResultChange={handleTeamChange}
-                      shuffleKey={shuffleVersion}
-                      ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
-                      sport={event.sport}
-                      canEdit={canEditTeams}
-                      crewMap={stakeLineups ? crewMap : undefined}
-                      crewChipsByTeamIndex={crewChipsByTeamIndex}
-                    />
-                  )}
-                  {stakes.data && (
-                    <StakesPreview
-                      seasonName={stakes.data.seasonName}
-                      roundAvailable={stakes.data.roundAvailable}
-                      roundsCounted={stakes.data.roundsCounted}
-                      scenario={stakeScenario}
-                      liveRoundScore={liveCrewScore}
-                    />
-                  )}
-                </Stack>
-              </Paper>
+            {/* #457 Push prompt — the last, quietest thing on the page: one row after the next game, and only once the recap has
+                nothing left for the viewer. #463 high-intent (a pending RSVP within 48h) is still a modal, which asks at once. */}
+            {(!recapBlocking || highIntentPush) && (
+              <PushPromptBanner quiet followCount={0} forceOnEventDetail={isAuthenticated} highIntent={highIntentPush} />
             )}
 
           </Stack>
         </Container>
 
         <EventDialogs
-          confirmOpen={confirmOpen}
-          onConfirmClose={() => setConfirmOpen(false)}
-          onConfirmRandomize={doRandomize}
-          earlyDrawOpen={earlyDrawOpen}
-          onEarlyDrawClose={() => setEarlyDrawOpen(false)}
-          onEarlyDrawConfirm={doRandomize}
-          earlyDrawCount={{ n: Math.min(event.players.length, event.maxPlayers), max: event.maxPlayers }}
           relinquishConfirmOpen={relinquishConfirmOpen}
           onRelinquishClose={() => setRelinquishConfirmOpen(false)}
           onRelinquishConfirm={handleRelinquishOwnership}

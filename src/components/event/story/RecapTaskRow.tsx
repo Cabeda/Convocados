@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
 import { Box, Button, Link, Typography } from "@mui/material";
-import { ACTION_HEIGHT, EASE, focusRing, tappable } from "./styles";
+import { ACTION_HEIGHT, DEEP_LINK_MARGIN, EASE, focusRing, tappable } from "./styles";
 
 export interface RecapTaskRowProps {
   title: string;
@@ -83,7 +83,7 @@ export function RecapTaskRow({
       ref={rootRef}
       data-testid={testId ?? (done ? "recap-task-done" : "recap-task")}
       sx={{
-        borderTop: 1, borderColor: "divider",
+        borderTop: 1, borderColor: "divider", scrollMarginTop: DEEP_LINK_MARGIN,
         ...(highlight ? {
           animation: `recapPulse 1200ms ${EASE}`,
           "@keyframes recapPulse": { "0%,100%": { backgroundColor: "transparent" }, "35%": { backgroundColor: "action.selected" } },

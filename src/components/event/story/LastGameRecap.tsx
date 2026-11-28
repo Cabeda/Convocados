@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Box, Button, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
@@ -53,6 +53,9 @@ type Panel = "score" | "mvp";
 interface Restore { score?: [number, number]; pick?: string; error?: Panel }
 interface DoneRow { kind: string; title: string }
 
+/** A task and the row that replaces it when it is finished share one slot. */
+const slotOf = (kind: string) => (kind === "addScore" ? "score" : kind);
+
 const CALM = "@media (prefers-reduced-motion: reduce)";
 const fadeIn = {
   animation: `recapFade 200ms ${EASE}`,
@@ -88,6 +91,8 @@ export function LastGameRecap(p: LastGameRecapProps) {
   const mvpPanelId = `recap-panel-mvp-${eventId}`;
   const hasScore = status.scoreOne !== null && status.scoreTwo !== null;
   const historyId = status.latestHistoryId;
+  // A one-off that ended has no history row until its first score: that save goes to its live game, which creates the row.
+  const scoreTargetId = historyId ?? status.pendingGameId ?? null;
   const pending = pendingTaskCount(tasks);
   const allDoneNow = done.length > 0 && pending === 0;
   const scoreTask = tasks.find((x) => x.kind === "addScore");
@@ -96,9 +101,20 @@ export function LastGameRecap(p: LastGameRecapProps) {
   // After something is finished the button that did it is gone: the live line is where focus goes.
   const doneCountRef = useRef(0);
   useEffect(() => {
-    if (done.length > doneCountRef.current) statusRef.current?.focus();
+    if (done.length > doneCountRef.current) {
+      const row = statusRef.current;
+      row?.focus({ preventScroll: true });
+      // The card just got shorter: keep the line that says what happened (and the card around it) on screen.
+      const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      row?.scrollIntoView?.({ block: "nearest", behavior: calm ? "auto" : "smooth" });
+    }
     doneCountRef.current = done.length;
-  }, [done.length]);
+  }, [done]);
+
+  // A finished row keeps the place its task had for the rest of the visit: nothing under it jumps up.
+  const [slotOrder, setSlotOrder] = useState<string[]>(() => tasks.map((x) => slotOf(x.kind)));
+  const unseen = tasks.map((x) => slotOf(x.kind)).filter((k) => !slotOrder.includes(k));
+  if (unseen.length > 0) setSlotOrder([...slotOrder, ...unseen]);
 
   // After Not now, focus goes back to the button that opened the panel.
   useEffect(() => {
@@ -112,10 +128,10 @@ export function LastGameRecap(p: LastGameRecapProps) {
   const toggle = (panel: Panel) => (openPanel === panel ? cancel(panel) : (setRestore(null), setOpenPanel(panel)));
 
   const saveScore = (a: number, b: number) => {
-    if (!historyId) return;
+    if (!scoreTargetId) return;
     void scoreAction.run({
       apply: () => { onOptimistic?.({ score: [a, b] }); setRestore(null); setOpenPanel(null); addDone({ kind: "score", title: t("recapScoreSaved") }); onCompleted?.(); },
-      request: () => apiRequest("PATCH /api/events/{id}/history/{historyId}", { params: { id: eventId, historyId }, body: { scoreOne: a, scoreTwo: b } }),
+      request: () => apiRequest("PATCH /api/events/{id}/history/{historyId}", { params: { id: eventId, historyId: scoreTargetId }, body: { scoreOne: a, scoreTwo: b } }),
       revert: () => { onRollback?.("score"); removeDone("score"); setRestore({ score: [a, b], error: "score" }); setOpenPanel("score"); },
     }).then((ok) => { if (ok) p.onChanged(); });
   };
@@ -137,11 +153,11 @@ export function LastGameRecap(p: LastGameRecapProps) {
     }).then((ok) => { if (ok) p.onChanged(); });
   };
 
-  const rows = tasks.map((task) => {
+  const rowFor = (task: RecapTask): ReactNode => {
     const key = task.kind;
     switch (task.kind) {
       case "addScore":
-        return task.inline && historyId ? (
+        return task.inline && scoreTargetId ? (
           <RecapTaskRow
             key={key} needsYou={task.needsYou} title={t("recapAddScoreTitle")} sub={t("recapAddScoreSub")} action={t("recapAddScoreAction")}
             expanded={scoreOpen} panelId={scorePanelId} actionRef={(el) => { triggerElsRef.current.score = el; }} onAction={() => toggle("score")}
@@ -191,6 +207,25 @@ export function LastGameRecap(p: LastGameRecapProps) {
           />
         );
     }
+  };
+  const taskBySlot = new Map(tasks.map((task) => [slotOf(task.kind), task] as const));
+  const slots = [...slotOrder, ...done.map((d) => d.kind).filter((k) => !slotOrder.includes(k))];
+  const latestDone = done[done.length - 1]?.kind;
+  const rows = slots.map((slot) => {
+    const finished = done.find((d) => d.kind === slot);
+    if (finished) {
+      return (
+        <Box
+          key={slot} role="status" data-testid="recap-live" tabIndex={-1}
+          ref={slot === latestDone ? statusRef : undefined}
+          sx={{ outline: "none", ...focusRing, "&:focus-visible": { outline: "none" } }}
+        >
+          <RecapTaskRow done title={finished.title} />
+        </Box>
+      );
+    }
+    const task = taskBySlot.get(slot);
+    return task ? rowFor(task) : null;
   });
 
   const showPayments = status.hasCost && role !== "signedOut";
@@ -204,22 +239,22 @@ export function LastGameRecap(p: LastGameRecapProps) {
 
   return (
     <Box
-      data-testid="last-game-recap"
-      sx={{ bgcolor: "background.paper", border: 1, borderColor: "divider", borderRadius: "20px", overflow: "hidden" }}
+      component="section" aria-labelledby="recap-heading" data-testid="last-game-recap"
+      sx={{ bgcolor: "background.paper", border: 1, borderColor: "divider", borderRadius: "20px", overflow: "clip" }}
     >
       <Box
         data-testid="recap-scoreboard"
         onClick={expanded ? undefined : p.onToggle}
         sx={{
           px: 2, pt: expanded ? 1.5 : 1, pb: expanded ? 2.5 : 1, cursor: expanded ? "default" : "pointer",
-          display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: 1, alignItems: "center",
+          display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: 1, rowGap: expanded ? 0.5 : 0, alignItems: "center",
           gridTemplateAreas: expanded ? '"label toggle" "board board" "summary summary"' : '"board toggle" "label toggle"',
           ...motion("padding"),
         }}
       >
         <Typography
-          key={allDoneNow ? "done" : "label"} data-testid="recap-header-label"
-          sx={{ gridArea: "label", fontSize: expanded ? "0.9375rem" : "0.8125rem", color: allDoneNow ? "primary.main" : "text.secondary", fontWeight: allDoneNow ? 700 : 400, minHeight: expanded ? 44 : undefined, display: "flex", alignItems: "center", ...(allDoneNow ? fadeIn : {}) }}
+          id="recap-heading" component="h2" key={allDoneNow ? "done" : "label"} data-testid="recap-header-label"
+          sx={{ gridArea: "label", fontSize: expanded ? "0.9375rem" : "0.8125rem", color: allDoneNow ? "primary.main" : "text.secondary", fontWeight: allDoneNow ? 700 : 400, minHeight: expanded ? 44 : undefined, display: "flex", alignItems: "center", py: expanded ? 0.5 : 0, lineHeight: 1.3, ...(allDoneNow ? fadeIn : {}) }}
         >
           {headerText}
         </Typography>
@@ -263,11 +298,8 @@ export function LastGameRecap(p: LastGameRecapProps) {
         id={detailsId} aria-hidden={!expanded} inert={!expanded}
         sx={{ display: "grid", gridTemplateRows: expanded ? "1fr" : "0fr", opacity: expanded ? 1 : 0, ...motion("grid-template-rows, opacity") }}
       >
-        <Box sx={{ overflow: "hidden", minHeight: 0 }}>
+        <Box sx={{ overflow: "clip", minHeight: 0 }}>
           {rows}
-          <Box ref={statusRef} role="status" data-testid="recap-live" tabIndex={-1} sx={{ outline: "none", ...focusRing, "&:focus-visible": { outline: "none" } }}>
-            {done.map((d) => <RecapTaskRow key={d.kind} done title={d.title} />)}
-          </Box>
           {showAllDoneRow && <RecapTaskRow done title={t("recapAllDone")} />}
           {role === "signedOut" && (
             <RecapTaskRow testId="recap-signin" title={t("recapSignInRow")} needsYou={false}>

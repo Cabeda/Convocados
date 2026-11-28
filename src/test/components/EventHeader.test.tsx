@@ -5,6 +5,7 @@ import { screen, cleanup, fireEvent, waitFor, within } from "@testing-library/re
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
+import { cssFor } from "../emotionCss";
 import { EventHeader } from "~/components/event/EventHeader";
 import type { EventData } from "~/components/event/types";
 
@@ -42,7 +43,7 @@ function renderHeader(o: Overrides = {}) {
     <EventHeader
       eventId="evt-1" event={event} sport={event.sport} gameDate={new Date(event.dateTime)}
       canEditSettings={o.canEditSettings ?? false} isAuthenticated={o.isAuthenticated ?? true}
-      isOwnerless={o.isOwnerless ?? false} localMatches={null} gameStatus={o.gameStatus ?? null}
+      isOwnerless={o.isOwnerless ?? false} hasTeams={false} gameStatus={o.gameStatus ?? null}
       isParticipant={o.isParticipant ?? true} onSignedIn={o.onSignedIn}
       onSaveTitle={props.onSaveTitle} onSaveLocation={props.onSaveLocation} onSaveDateTime={props.onSaveDateTime}
       onSaveSport={props.onSaveSport} onClaimOwnership={props.onClaimOwnership} onCancelGame={props.onCancelGame}
@@ -246,9 +247,28 @@ describe("EventHeader — when and where", () => {
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/cost"), expect.anything());
   });
 
-  it("says Ended and the date once a one-off is over, so the recap keeps the result and the header the day", () => {
+  it("cuts a very long title at three lines at normal text size, and shows it whole at 200% text", () => {
+    const title = "A very long title ".repeat(12);
+    renderHeader({ event: { title } });
+    expect(cssFor(screen.getByRole("heading", { level: 1 }))).toMatch(/-webkit-line-clamp:\s*3/);
+    cleanup();
+    const root = document.documentElement;
+    root.style.fontSize = "32px";
+    try {
+      renderHeader({ event: { title } });
+      expect(cssFor(screen.getByRole("heading", { level: 1 }))).not.toMatch(/line-clamp/);
+    } finally { root.style.fontSize = ""; }
+  });
+
+  it("leaves the time out of the info line on game day: the next-game block says it once", () => {
+    renderHeader({ event: { dateTime: new Date(Date.now() + 60_000).toISOString(), durationMinutes: 90 } });
+    expect(screen.getByText(/· 90 min$/)).toBeInTheDocument();
+    expect(screen.queryByText(/\d\d:\d\d/)).not.toBeInTheDocument();
+  });
+
+  it("says just Ended once a one-off is over: the recap card keeps the day, so it is not said twice", () => {
     renderHeader({ event: { dateTime: new Date(Date.now() - 5 * 86400_000).toISOString() } });
-    expect(screen.getByText(/^Ended \w{3} \d+ \w+$/)).toBeInTheDocument();
+    expect(screen.getByText("Ended")).toBeInTheDocument();
   });
 
   it("looks cancelled: the word Cancelled, the date struck through, no Share and no Follow", async () => {
@@ -331,7 +351,7 @@ describe("EventHeader — the More sheet", () => {
     expect(within(sheet).getByRole("link", { name: "History and results" })).toHaveAttribute("href", "/events/evt-1/history");
     expect(within(sheet).getByRole("link", { name: "Payments" })).toHaveAttribute("href", "/events/evt-1/payments");
     expect(within(sheet).getByRole("link", { name: "Event settings" })).toHaveAttribute("href", "/events/evt-1/settings");
-    expect(within(sheet).getByRole("link", { name: "Add to calendar (Apple, Outlook)" })).toHaveAttribute("href", "/api/events/evt-1/calendar");
+    expect(within(sheet).getByRole("link", { name: "Add to calendar Apple or Outlook" })).toHaveAttribute("href", "/api/events/evt-1/calendar");
   });
 
   it("says who manages the game, linking to their profile, at the top", async () => {
@@ -378,7 +398,7 @@ describe("EventHeader — the More sheet", () => {
     const user = userEvent.setup();
     renderHeader({ event: { dateTime: new Date(Date.now() - 5 * 86400_000).toISOString() } });
     const sheet = await openSheet(user);
-    expect(within(sheet).queryByRole("link", { name: "Add to calendar (Apple, Outlook)" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("link", { name: "Add to calendar Apple or Outlook" })).not.toBeInTheDocument();
     expect(within(sheet).getByRole("link", { name: "Attendance" })).toBeInTheDocument();
   });
 
@@ -408,9 +428,13 @@ describe("EventHeader — the More sheet", () => {
     const user = userEvent.setup();
     renderHeader({ canEditSettings: true });
     const sheet = await openSheet(user);
-    for (const name of ["Event settings", "Ratings", "Add to calendar (Apple, Outlook)", "Add to Google Calendar", "My notifications"]) {
+    for (const name of ["Event settings", "Ratings", "My notifications"]) {
       expect(within(sheet).getByText(name)).toBeInTheDocument();
     }
+    // One plain name for the calendar, then who each way is for: no brackets, no brand lists in a label.
+    expect(within(sheet).getAllByText("Add to calendar")).toHaveLength(2);
+    expect(within(sheet).getByText("Apple or Outlook")).toBeInTheDocument();
+    expect(within(sheet).getByText("Google")).toBeInTheDocument();
     expect(within(sheet).queryByText(/Event Settings|Skill Rating|Download/)).not.toBeInTheDocument();
   });
 

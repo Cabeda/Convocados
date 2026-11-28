@@ -87,6 +87,10 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
               all: pressable_ ? "unset" : undefined, ...at(i), boxSizing: "border-box", position: "relative", aspectRatio: "1", borderRadius: "50%",
               display: "grid", placeItems: "center", minWidth: 0, fontSize: "0.8125rem", fontWeight: 700, lineHeight: 1, letterSpacing: "0.01em",
               bgcolor: me ? "primary.main" : "action.selected", color: me ? "primary.contrastText" : "text.primary",
+              // Windows high contrast drops background colours: a filled slot keeps an outline, and yours the system highlight.
+              "@media (forced-colors: active)": me
+                ? { forcedColorAdjust: "none", backgroundColor: "Highlight", color: "HighlightText", border: "2px solid CanvasText" }
+                : { border: "2px solid CanvasText" },
               outline: selected ? "2px solid" : "none", outlineColor: "primary.main", outlineOffset: "2px",
               ...(pressable_ ? { cursor: "pointer", ...pressable, ...focusRing, "&::after": { content: '""', position: "absolute", inset: -4, borderRadius: "50%" } } : {}),
               ...(fresh.has(player.name) ? {

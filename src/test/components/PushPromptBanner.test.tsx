@@ -39,6 +39,43 @@ describe("PushPromptBanner — iOS Safari tab", () => {
   });
 });
 
+describe("PushPromptBanner — quiet row (the event page)", () => {
+  it("is one plain row, not a coloured box, and not an alert: it is static text", async () => {
+    stubPushBrowser({ permission: "default", standalone: false, hasSubscription: false });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+    const { container } = renderWithTheme(<PushPromptBanner followCount={1} forceOnEventDetail quiet />);
+    expect(await screen.findByText(/enable notifications to get game reminders/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(container.querySelector(".MuiAlert-root")).toBeNull();
+    expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
+  });
+
+  it("takes no room at all while there is nothing to say", async () => {
+    stubPushBrowser({ permission: "granted", standalone: false, hasSubscription: true });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+    const { container } = renderWithTheme(<PushPromptBanner followCount={1} forceOnEventDetail quiet />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("says plainly that notifications are blocked, with the way to fix it, and is no alert either", async () => {
+    stubPushBrowser({ permission: "denied", standalone: false, hasSubscription: false });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+    renderWithTheme(<PushPromptBanner followCount={1} forceOnEventDetail quiet />);
+    expect(await screen.findByText(/notifications are blocked/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Enable" })).toBeInTheDocument();
+  });
+
+  it("still asks high-intent people in a dialog", async () => {
+    stubPushBrowser({ permission: "default", standalone: false, hasSubscription: false });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+    renderWithTheme(<PushPromptBanner followCount={1} forceOnEventDetail highIntent quiet />);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+});
+
 describe("PushPromptBanner — desktop", () => {
   it("still shows the regular enable prompt", async () => {
     stubPushBrowser({ permission: "default", standalone: false, hasSubscription: false });

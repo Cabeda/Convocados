@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import type { GameHistory } from "../../../../../lib/__generated__/prisma/client";
 import { prisma } from "../../../../../lib/db.server";
 import { processGame, recalculateAllRatings } from "../../../../../lib/elo.server";
 import { computeSkillUpdates } from "../../../../../lib/skill";
@@ -8,11 +9,14 @@ import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
+import { isOnLiveRoster, viewerRosterNames } from "../../../../../lib/viewerIdentity.server";
+import { withKeyedLock } from "../../../../../lib/keyedLock";
 import { getGameSettlement, syncGamePayments, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
 import { perPlayerShare } from "../../../../../lib/gameCost";
 import { postLedgerEntry } from "../../../../../lib/ledger.server";
 import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
+import { isGameEnded } from "../../../../../lib/gameStatus";
 import { resolveMirrorGame, applyTeamsSnapshotToGame, mirrorPaymentsSnapshotToGame } from "../../../../../lib/gameDualWrite.server";
 
 const log = createLogger("history-patch");
@@ -188,6 +192,24 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({ error: "Not found." }, { status: 404 });
 };
 
+/** The columns a history PATCH may set, so the first save can write them into the row it creates. */
+type HistoryPatch = Partial<Pick<GameHistory, "status" | "scoreOne" | "scoreTwo" | "scoreSets" | "teamsSnapshot" | "paymentsSnapshot" | "isFriendly">>;
+
+/**
+ * The occurrence's history row, created with `data` when it has none. One step per occurrence: the
+ * check and the create run in one transaction behind a per-occurrence lock, so two saves at once make
+ * one row, and a failed write leaves none.
+ */
+function createHistoryOnce(eventId: string, data: Omit<GameHistory, "id" | "createdAt">): Promise<{ row: GameHistory; created: boolean }> {
+  return withKeyedLock(`history:${eventId}:${data.dateTime.getTime()}`, () =>
+    prisma.$transaction(async (tx) => {
+      const existing = await tx.gameHistory.findFirst({ where: { eventId, dateTime: data.dateTime } });
+      if (existing) return { row: existing, created: false };
+      return { row: await tx.gameHistory.create({ data }), created: true };
+    }),
+  );
+}
+
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
@@ -201,28 +223,76 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
 
-  let entry = await prisma.gameHistory.findUnique({
+  let entry: GameHistory | null = await prisma.gameHistory.findUnique({
     where: { id: params.historyId, eventId: params.id },
   });
 
   // ADR 0016: a "played" live Game may not yet have a GameHistory snapshot
   // (e.g. the game just ended but the recurrence reset hasn't run, or the
-  // history entry was loaded directly). Materialise one so the score/teams
-  // can be edited through the same path.
+  // history entry was loaded directly). The score/teams are edited through the same path, on a row
+  // made from that Game. The row is NOT made here: `lazyGame` marks it as still to create, `entry` is
+  // what it will hold, and `ensureEntry` writes it only once the caller is authorized and the body valid.
   let historyId = params.historyId;
+  let lazyGame: { id: string; dateTime: Date } | null = null;
   if (!entry) {
     const game = await prisma.game.findUnique({
       where: { id: params.historyId, eventId: params.id },
     });
-    if (game && game.status === "played") {
-      const snap = await buildSnapshotForGame(params.id ?? "", game);
-      entry = await prisma.gameHistory.create({ data: snap });
-      historyId = entry.id;
+    // A one-off that has ended never gets a reset, so its live Game stays "upcoming" and no history row is ever made.
+    // The first score creates it (the recap's inline "Add the score" saves on the live Game's id).
+    const endedOneOff = !!game && !event.isRecurring && event.currentGameId === game.id && isGameEnded(event.dateTime, event.durationMinutes);
+    if (game && (game.status === "played" || endedOneOff)) {
+      // The occurrence may already have its row (a second save on the same live Game id): edit that one.
+      entry = await prisma.gameHistory.findFirst({ where: { eventId: params.id, dateTime: game.dateTime } });
+      if (entry) {
+        historyId = entry.id;
+      } else {
+        lazyGame = game;
+        entry = { id: "", createdAt: new Date(), ...(await buildSnapshotForGame(params.id ?? "", game)) };
+      }
     }
   }
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const body = await request.json();
+  // The row as it stood before this save: the first-score notification fires on the no-score → score transition.
+  let before: GameHistory = entry;
+  /** Make the row if it is still to be made (idempotent), writing `patch` into it in the same step. */
+  const ensureEntry = async (patch: HistoryPatch = {}) => {
+    if (!lazyGame || !entry) return;
+    const { id: _id, createdAt: _createdAt, ...snap } = entry;
+    const { row, created } = await createHistoryOnce(params.id ?? "", { ...snap, ...patch });
+    if (!created) before = row; // another save made it first: this one edits theirs
+    entry = row;
+    historyId = row.id;
+    lazyGame = null;
+  };
+
+  // Allow owner, admin, or any player who participated in the settled game.
+  // Participants are matched against this game's teams AND payment roll (the
+  // same rule the post-game banner uses), with a fallback to the played Game's
+  // participants when no snapshot has materialised yet. Claiming a spot in a
+  // later game does NOT grant edit rights (issue #658).
+  // The FIRST save of a game with no row yet also counts the live roster (the recap offers the score
+  // to exactly those players, drawn into a team or not), read through the same viewer identity.
+  const viewerNames = isOwner || isAdmin ? [] : await viewerRosterNames(event.id, session.user);
+  const isParticipant = (await isSettledGameParticipant({
+    sessionUser: session.user,
+    event,
+    latestHistory: entry,
+    viewerNames,
+  })) || (!!lazyGame && !isOwner && !isAdmin && await isOnLiveRoster(lazyGame.id, viewerNames));
+
+  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic) && !isParticipant) {
+    return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
+  }
+
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  if (!body || typeof body !== "object") return Response.json({ error: "Invalid JSON body." }, { status: 400 });
 
   // Dual-write target: the occurrence Game (ADR 0016). Resolved once so the
   // isFriendly early-return and the main score/status/teams path below both
@@ -234,6 +304,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     if (!isOwner && !isAdmin) {
       return Response.json({ error: "Only the event owner or admin can toggle friendly." }, { status: 403 });
     }
+    await ensureEntry({ isFriendly: body.isFriendly });
     const updated = await prisma.gameHistory.update({
       where: { id: historyId },
       data: { isFriendly: body.isFriendly },
@@ -267,21 +338,6 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     });
   }
 
-  // Allow owner, admin, or any player who participated in the settled game.
-  // Participants are matched against this game's teams AND payment roll (the
-  // same rule the post-game banner uses), with a fallback to the played Game's
-  // participants when no snapshot has materialised yet. Claiming a spot in a
-  // later game does NOT grant edit rights (issue #658).
-  const isParticipant = await isSettledGameParticipant({
-    sessionUser: session.user,
-    event,
-    latestHistory: entry,
-  });
-
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic) && !isParticipant) {
-    return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
-  }
-
   // Settling the game (score, who paid) is shared between admins and the
   // players who played in it — participants may record payments like they may
   // set the score. Unrelated users are still blocked.
@@ -307,6 +363,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       return Response.json({ error: "costTotalAmount must be a positive number." }, { status: 400 });
     }
     const costCurrency = String(body.costCurrency ?? "EUR").trim().slice(0, 10) || "EUR";
+    await ensureEntry();
 
     // Try to find the corresponding Game for this history entry
     const game = await prisma.game.findUnique({ where: { id: params.historyId } });
@@ -472,18 +529,19 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     ? (body.paymentsSnapshot === null ? null : JSON.stringify(body.paymentsSnapshot))
     : undefined;
 
-  const updated = await prisma.gameHistory.update({
-    where: { id: historyId },
-    data: {
-      ...(status !== undefined && { status }),
-      ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
-      ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
-      ...(scoreSetsProvided && { scoreSets }),
-      ...(clearStructuredScore && { scoreSets: null }),
-      ...(teamsSnapshot !== undefined && { teamsSnapshot }),
-      ...(paymentsSnapshot !== undefined && { paymentsSnapshot }),
-    },
-  });
+  const patch: HistoryPatch = {
+    ...(status !== undefined && { status }),
+    ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
+    ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
+    ...(scoreSetsProvided && { scoreSets }),
+    ...(clearStructuredScore && { scoreSets: null }),
+    ...(teamsSnapshot !== undefined && { teamsSnapshot }),
+    ...(paymentsSnapshot !== undefined && { paymentsSnapshot }),
+  };
+
+  // Everything above is checked: only now does the first save make the row, with the patch in it.
+  await ensureEntry(patch);
+  const updated = await prisma.gameHistory.update({ where: { id: historyId }, data: patch });
 
   // Dual-write the occurrence data to the Game model (ADR 0016) so readers
   // that migrated off GameHistory never see a stale score/status/roster.
@@ -663,7 +721,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   // movement. The transition is the de-dup guard: re-saving a score leaves it
   // set, so a Game notifies a player at most once. Fire-and-forget: never
   // blocks the response and never throws.
-  const hadNoScore = entry.scoreOne === null || entry.scoreTwo === null;
+  const hadNoScore = before.scoreOne === null || before.scoreTwo === null;
   const nowScored = updated.scoreOne !== null && updated.scoreTwo !== null;
   if (hadNoScore && nowScored && updated.status === "played") {
     void notifySeasonRankChanges(params.id ?? "", {

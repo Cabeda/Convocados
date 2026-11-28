@@ -70,6 +70,8 @@ export interface RecapTasksInput {
   canManage: boolean;
   hasLastGame: boolean;
   latestHistoryId: string | null;
+  /** An ended one-off with no history row yet: the live game the first score is saved on. */
+  pendingGameId?: string | null;
   hasScore: boolean;
   hasCost: boolean;
   mvpEnabled: boolean;
@@ -151,7 +153,7 @@ export function recapTasks(input: RecapTasksInput): RecapTask[] {
 
   // Anyone who played can add the score, and so can the owner and admins.
   if (!input.hasScore && (input.role === "played" || input.canManage)) {
-    out.push({ kind: "addScore", needsYou: true, inline: !!input.latestHistoryId && !input.setsScoring });
+    out.push({ kind: "addScore", needsYou: true, inline: !!(input.latestHistoryId ?? input.pendingGameId) && !input.setsScoring });
   }
 
   // MVP is for players only, and only once there is a result to vote on.

@@ -7,8 +7,9 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useLocale } from "~/lib/useT";
 import { googleCalendarUrl } from "~/lib/calendar";
 import { isGameEnded } from "~/lib/gameStatus";
+import { isGameDayNow } from "~/lib/nextGame";
+import { useLargeText } from "./story/useLargeText";
 import { canViewPrice, menuGroups } from "~/lib/eventHeader";
-import type { Imatch } from "~/lib/random";
 import type { EventData } from "./types";
 import { MyNotificationsDialog } from "./MyNotificationsDialog";
 import { SignInButton } from "../SignInButton";
@@ -34,7 +35,7 @@ interface Props {
   isOwnerless: boolean;
   /** A linked player on the roster: the server lets them read the price. */
   isParticipant: boolean;
-  localMatches: Imatch[] | null;
+  hasTeams: boolean;
   gameStatus?: string | null;
   onSaveTitle: (title: string) => Promise<void>;
   onSaveLocation: (location: string) => Promise<void>;
@@ -53,7 +54,7 @@ interface Props {
  * Everything else lives in the ⋮ sheet.
  */
 export function EventHeader({
-  eventId, event, sport, gameDate, canEditSettings, isAuthenticated, isOwnerless, isParticipant, localMatches, gameStatus,
+  eventId, event, sport, gameDate, canEditSettings, isAuthenticated, isOwnerless, isParticipant, hasTeams, gameStatus,
   onSaveTitle, onSaveLocation, onSaveDateTime, onSaveSport, onClaimOwnership, onCancelGame, onSignedIn,
 }: Props) {
   const { t } = useLocale();
@@ -111,7 +112,7 @@ export function EventHeader({
     ratingsOn: event.eloEnabled ?? true,
     calendarOpen: !cancelled && !gameEnded,
     showAttendance: gameDate < new Date() || !!event.isRecurring,
-    canWatch: isMobile && !!localMatches?.length,
+    canWatch: isMobile && hasTeams,
     isCancelled: cancelled,
     paymentsReachable: isAuthenticated || (isOwnerless && !event.isPublic),
   });
@@ -120,6 +121,8 @@ export function EventHeader({
     url: typeof window !== "undefined" ? window.location.href : undefined,
     recurrence: event.isRecurring && event.recurrenceRule ? JSON.parse(event.recurrenceRule) : undefined,
   });
+
+  const largeText = useLargeText();
 
   return (
     <Box component="header">
@@ -130,8 +133,8 @@ export function EventHeader({
             sx={{
               fontSize: { xs: "1.5rem", sm: "1.75rem" }, fontWeight: 700, lineHeight: 1.15, m: 0,
               overflowWrap: "anywhere", textWrap: "balance",
-              // Three lines at most; the whole title is in the edit form and the tooltip.
-              display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 3, overflow: "hidden",
+              // Three lines at most; the whole title is in the edit form and the tooltip. Not for large text: it is shown whole.
+              ...(largeText ? {} : { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 3, overflow: "hidden" }),
             }}
           >
             {event.title}
@@ -167,6 +170,7 @@ export function EventHeader({
             eventId={eventId} event={event} gameDate={gameDate} canEdit={canEditSettings} cancelled={cancelled}
             canViewPrice={canViewPrice({ canEdit: canEditSettings, isParticipant, isOwnerless, isPublic: !!event.isPublic })}
             ended={gameEnded}
+            gameDay={isGameDayNow(gameDate.getTime(), event.timezone)}
           />
         )}
 

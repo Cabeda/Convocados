@@ -93,6 +93,8 @@
 | View Teams | ✅ | ✅ | ✅ |
 | Field View | ✅ | ✅ | ❌ |
 | Player Positions | ✅ | ✅ | ❌ |
+| Flat Teams Block | ✅ | ❌ | ❌ |
+| Play Again One Off | ✅ | ❌ | ❌ |
 
 ### Score Tracking
 

@@ -33,6 +33,7 @@ const CALM = "@media (prefers-reduced-motion: reduce)";
 function Numeral({ testId, value, color, compact, animate, roll, align }: {
   testId: string; value: number | null; color: string; compact: boolean; animate: boolean; roll: boolean; align: "left" | "right";
 }) {
+  // No score yet: two small dashes in the numeral face. At full size a dash is a fat grey bar.
   const name = compact ? "recapNumeralShrink" : "recapNumeralGrow";
   return (
     <Typography
@@ -40,8 +41,8 @@ function Numeral({ testId, value, color, compact, animate, roll, align }: {
       data-testid={testId}
       sx={{
         display: "block", color, whiteSpace: "nowrap",
-        fontFamily: NUMERAL_FONT, fontWeight: 700, lineHeight: 0.95, fontVariantNumeric: "tabular-nums",
-        fontSize: `${compact ? SMALL : BIG}rem`,
+        fontFamily: NUMERAL_FONT, fontWeight: value === null ? 600 : 700, lineHeight: 0.95, fontVariantNumeric: "tabular-nums",
+        fontSize: `${compact || value === null ? SMALL : BIG}rem`,
         transformOrigin: `${align} bottom`,
         ...(animate ? {
           animation: `${name} 280ms ${EASE}`,
@@ -105,7 +106,7 @@ export function Scoreboard({ teamOneName, teamTwoName, scoreOne, scoreTwo, compa
       <Typography
         aria-hidden
         sx={{ gridArea: "d", fontFamily: NUMERAL_FONT, fontSize: compact ? "1.25rem" : "3rem", lineHeight: 0.95, color: "text.secondary", pb: compact ? 0.25 : 0.5 }}
-      >–</Typography>
+      >{missing ? "" : "–"}</Typography>
       <Box sx={{ gridArea: "s2", minWidth: 0, textAlign: compact ? "left" : "right" }}>
         <Numeral testId="score-two" value={scoreTwo} color={colour(b >= a)} compact={compact} animate={animate} roll={rollOnChange} align={compact ? "left" : "right"} />
       </Box>

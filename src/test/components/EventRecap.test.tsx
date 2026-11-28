@@ -106,22 +106,8 @@ describe("EventRecap", () => {
     expect(await screen.findByRole("button", { name: "One more for Foxes" })).toBeInTheDocument();
   });
 
-  it("lets the owner of a one-off see the recurrence offer once everything is done — flat, not as a second card", async () => {
+  it("carries no recurrence offer of its own: a one-off's next step is the Play again block", async () => {
     mount({ ...paid, isRecurring: false }, { canManage: true, isRecurring: false });
-    const prompt = await screen.findByTestId("recurrence-prompt");
-    expect(prompt.closest(".MuiPaper-root")).toBeNull();
-  });
-
-  it("does not show the Weekly card on an event that already repeats", async () => {
-    mount({ ...paid, isRecurring: true }, { canManage: true, isRecurring: true });
-    await screen.findByTestId("last-game-recap");
-    expect(screen.queryByTestId("recurrence-already")).toBeNull();
-    expect(screen.queryByTestId("recurrence-prompt")).toBeNull();
-    expect(screen.queryByText(/repeats every week/i)).toBeNull();
-  });
-
-  it("does not offer the recurrence to a viewer who cannot manage the event", async () => {
-    mount({ ...paid, isRecurring: false }, { canManage: false, isRecurring: false });
     await screen.findByTestId("last-game-recap");
     expect(screen.queryByTestId("recurrence-prompt")).toBeNull();
   });
@@ -187,6 +173,12 @@ describe("EventRecap", () => {
     it("sends a game with no history row yet to History, where the score can be saved", async () => {
       mount({ ...missing, latestHistoryId: null }, { deepLinkAction: "add-score" });
       await waitFor(() => expect(assign).toHaveBeenCalledWith("/events/e1/history"));
+    });
+
+    it("an ended one-off with no history row yet is scored in place (its live game takes the score): no redirect", async () => {
+      mount({ ...missing, latestHistoryId: null, pendingGameId: "g-live", isRecurring: false }, { deepLinkAction: "add-score", isRecurring: false, nextKickoff: hours(-2) });
+      expect(await screen.findByRole("button", { name: "One more for Foxes" })).toBeInTheDocument();
+      expect(assign).not.toHaveBeenCalled();
     });
 
     it("stays on the page and opens the steppers for a game that can be scored in place", async () => {

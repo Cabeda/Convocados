@@ -35,7 +35,7 @@ export function NextGameHeader({ phase, date, timezone, now, startMs }: Props) {
 
   return (
     <Box>
-      <Typography component="h2" sx={{ fontSize: "1rem", lineHeight: 1.4, color: "text.secondary" }}>
+      <Typography id="next-game-heading" component="h2" tabIndex={-1} sx={{ fontSize: "1rem", lineHeight: 1.4, color: "text.secondary", outline: "none", textWrap: "balance" }}>
         {gameDay ? t("ngGameDay") : t("nextGame")}
       </Typography>
       <Typography

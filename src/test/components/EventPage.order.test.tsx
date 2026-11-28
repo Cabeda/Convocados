@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck -- component test type suppression for @testing-library/react screen exports
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import EventPage from "~/components/EventPage";
@@ -9,7 +9,7 @@ import { cssFor } from "../emotionCss";
 
 const mockSession = { data: { user: { id: "u-1", name: "Jose Silva" } }, isPending: false, refetch: vi.fn() };
 vi.mock("~/lib/auth.client", () => ({ useSession: () => mockSession, signOut: vi.fn() }));
-vi.mock("~/components/PushPromptBanner", () => ({ PushPromptBanner: () => <div data-testid="push-banner">Turn on reminders</div> }));
+vi.mock("~/components/PushPromptBanner", () => ({ PushPromptBanner: (p: { quiet?: boolean }) => <div data-testid="push-banner" data-quiet={String(!!p.quiet)}>Turn on reminders</div> }));
 
 const HOUR = 3_600_000;
 const status = {
@@ -50,13 +50,23 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 describe("EventPage — what sits above the title", () => {
-  it("puts nothing above the title: the push reminder is a later prompt and comes after the recap", async () => {
+  it("puts nothing above the title: the push reminder is a later prompt, a quiet row at the end of the next game", async () => {
     renderWithTheme(<EventPage eventId="evt-1" />);
     const title = await screen.findByRole("heading", { level: 1, name: "Monday Football" });
     const recap = await screen.findByTestId("last-game-recap");
+    const next = await screen.findByTestId("next-game");
     const banner = await screen.findByTestId("push-banner");
     expect(before(title, recap)).toBe(true);
-    expect(before(recap, banner)).toBe(true);
+    expect(before(recap, next)).toBe(true);
+    expect(before(next, banner)).toBe(true);
+    expect(banner).toHaveAttribute("data-quiet", "true");
+  });
+
+  it("does not ask for anything else while the recap still has something for the viewer to do", async () => {
+    overrides = { postGameStatus: { ...status, hasScore: false, scoreOne: null, scoreTwo: null, allComplete: false } };
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    await screen.findByRole("button", { name: /Add score/ });
+    expect(screen.queryByTestId("push-banner")).not.toBeInTheDocument();
   });
 
   it("no longer announces that the list was cleared: the recap strip tells the story", async () => {
@@ -64,6 +74,25 @@ describe("EventPage — what sits above the title", () => {
     renderWithTheme(<EventPage eventId="evt-1" />);
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByText(/player list has been cleared|was reset for the next occurrence/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("EventPage — the tab title", () => {
+  it("says the result after a game the viewer played, and gives the server's title back when the page closes", async () => {
+    document.title = "Server title for search";
+    overrides = { postGameStatus: { ...status, viewerTeam: 0, scoreOne: 7, scoreTwo: 6 } };
+    const { unmount } = renderWithTheme(<EventPage eventId="evt-1" />);
+    await screen.findByTestId("last-game-recap");
+    await waitFor(() => expect(document.title).toBe("Won 7–6 · Monday Football"));
+    unmount();
+    expect(document.title).toBe("Server title for search");
+  });
+
+  it("says the next day when the viewer has no result to show", async () => {
+    overrides = { hasLastGame: false, postGameStatus: null };
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    await screen.findByRole("heading", { level: 1, name: "Monday Football" });
+    await waitFor(() => expect(document.title).toMatch(/^Monday Football · \w{3} \d{1,2} \w{3}$/));
   });
 });
 

@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Box, Button, IconButton, MenuItem, TextField, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ContactsIcon from "@mui/icons-material/Contacts";
@@ -14,6 +14,8 @@ const POSITIONS = [["", "positionNone"], ["GK", "positionGk"], ["DEF", "position
 const COLLAPSED_PILLS = 8;
 
 interface Props {
+  /** "friend": add someone else. "self": a signed-out visitor adding just their own name. */
+  variant?: "friend" | "self";
   /** The list is full: a new person goes on the bench. */
   full: boolean;
   positionsEnabled: boolean;
@@ -41,7 +43,7 @@ const toInput = (line: string): FriendInput => (isEmailLike(line) ? { email: lin
  * and one primary action. An invite link and "add several" are quiet text actions underneath.
  * It stays open after an add so the next person is one tap away; the close button is the only way out.
  */
-export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSubmit, onAddNamedEmail, onSubmitMany, onLink, onClose }: Props) {
+export function AddFriendPanel({ variant = "friend", full, positionsEnabled, suggestions, busy, onSubmit, onAddNamedEmail, onSubmitMany, onLink, onClose }: Props) {
   const t = useT();
   const id = useId();
   const [several, setSeveral] = useState(false);
@@ -54,7 +56,26 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
   const [namingEmail, setNamingEmail] = useState<string | null>(null);
   const [theirName, setTheirName] = useState("");
   const fieldRef = useRef<HTMLInputElement>(null);
-  const contacts = contactsApi();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const self = variant === "self";
+  const contacts = self ? null : contactsApi();
+
+  // The on-screen keyboard takes half of a phone: when the room changes, the field and its button must both stay in sight
+  // (the whole panel if it fits, otherwise at least the button that finishes it).
+  useEffect(() => {
+    const keepInSight = () => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const room = window.visualViewport?.height ?? window.innerHeight;
+      (panel.getBoundingClientRect().height <= room ? panel : submitRef.current)?.scrollIntoView?.({ block: "nearest" });
+    };
+    keepInSight();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", keepInSight);
+    window.addEventListener("resize", keepInSight);
+    return () => { vv?.removeEventListener("resize", keepInSight); window.removeEventListener("resize", keepInSight); };
+  }, []);
 
   const refocus = () => setTimeout(() => fieldRef.current?.focus(), 0);
   const value = several ? list : text;
@@ -66,7 +87,11 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
   const addOne = async (raw: string) => {
     const out = await onSubmit(raw, position || undefined);
     if (!out) return;
-    if (out.ok) { setText(""); setPosition(""); setError(""); refocus(); }
+    if (out.ok) {
+      setText(""); setPosition(""); setError("");
+      // One person, themselves: done. A friend's panel stays open for the next one.
+      if (self) onClose(); else refocus();
+    }
     else if (out.needsName) { setNamingEmail(out.needsName.email); setTheirName(""); setError(""); }
     else setError(out.message);
   };
@@ -107,12 +132,13 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
     } catch { /* cancelled, or the browser said no: the typed way is still there */ }
   };
 
-  const label = several ? t("ngAddSeveralLabel") : t("ngFriendField");
+  const label = several ? t("ngAddSeveralLabel") : t(self ? "ngYourNameField" : "ngFriendField");
+  const title = t(self ? "ngAddYourName" : "ngAddFriend");
   const naming = namingEmail !== null;
   const canSubmit = naming ? !!theirName.trim() : !!value.trim();
   return (
     <Box
-      id={id} role="group" aria-label={t("ngAddFriend")} data-testid="add-friend-panel"
+      ref={panelRef} id={id} role="group" aria-label={title} data-testid="add-friend-panel"
       onKeyDown={(e) => {
         if (e.key !== "Escape") return;
         e.stopPropagation();
@@ -121,7 +147,7 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
       sx={{ mt: 1.5, border: 1, borderColor: "divider", borderRadius: "12px", p: 2 }}
     >
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Typography component="h3" sx={{ fontSize: "1.125rem", fontWeight: 700 }}>{t("ngAddFriend")}</Typography>
+        <Typography component="h3" sx={{ fontSize: "1.125rem", fontWeight: 700 }}>{title}</Typography>
         <IconButton aria-label={t("ngCloseAria")} onClick={onClose} sx={{ width: 44, height: 44, mr: -1, color: "text.secondary", ...tappable }}><CloseIcon /></IconButton>
       </Box>
 
@@ -142,13 +168,13 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
       ) : (
         <TextField
           inputRef={fieldRef} autoFocus fullWidth multiline={several} minRows={several ? 4 : undefined}
-          label={label} value={value} error={!!error} sx={{ mt: 1.5 }}
+          label={label} placeholder={self ? label : undefined} value={value} error={!!error} sx={{ mt: 1.5 }}
           onChange={(e) => { (several ? setList : setText)(e.target.value); setError(""); setShowAll(false); }}
           onKeyDown={(e) => { if (e.key === "Enter" && !several && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
           onPaste={(e) => {
             // A pasted list becomes "add several" with the list in it.
             const pasted = e.clipboardData.getData("Text");
-            if (!several && pasted.includes("\n") && pasted.split("\n").filter((l) => l.trim()).length > 1) {
+            if (!self && !several && pasted.includes("\n") && pasted.split("\n").filter((l) => l.trim()).length > 1) {
               e.preventDefault();
               setList(pasted.trim());
               setSeveral(true);
@@ -156,7 +182,8 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
           }}
           helperText={error || " "}
           slotProps={{
-            htmlInput: { maxLength: several ? 2000 : 120, ...playerInputPasswordManagerProps },
+            // Enter adds one name; in the list it starts the next line.
+            htmlInput: { maxLength: several ? 2000 : 120, ...playerInputPasswordManagerProps, enterKeyHint: several ? "enter" : "done" },
             formHelperText: error ? { role: "alert" } : undefined,
           }}
         />
@@ -168,7 +195,7 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
         </TextField>
       )}
 
-      {!several && !naming && shown.length > 0 && (
+      {!self && !several && !naming && shown.length > 0 && (
         <>
           <Typography sx={{ fontSize: "0.9375rem", color: "text.secondary", mb: 0.75 }}>{t("ngPlayedBefore")}</Typography>
           <Box data-testid="friend-chips" sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
@@ -195,16 +222,16 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
       )}
 
       <Button
-        variant="contained" fullWidth disableElevation disabled={!canSubmit || busy} onClick={submit}
+        ref={submitRef} variant="contained" fullWidth disableElevation disabled={!canSubmit || busy} onClick={submit}
         sx={{ minHeight: 56, borderRadius: 999, fontSize: "1.125rem", fontWeight: 700, textTransform: "none", ...tappable }}
       >
-        {several ? t("ngAddAll") : full ? t("ngAddToBench") : t("ngAddToGame")}
+        {several ? t("ngAddAll") : self ? t("ngAddMe") : full ? t("ngAddToBench") : t("ngAddToGame")}
       </Button>
       {full && (
         <Typography sx={{ mt: 1, fontSize: "0.9375rem", color: "text.secondary", textWrap: "pretty" }}>{t("ngBenchExplain")}</Typography>
       )}
 
-      {!naming && (
+      {!naming && !self && (
         <Box sx={{ mt: 1, display: "flex", flexWrap: "wrap", justifyContent: "space-between", columnGap: 1 }}>
           {!several && (
             // Never disabled: an empty field answers with what to do, instead of looking dead.

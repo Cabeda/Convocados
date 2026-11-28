@@ -60,15 +60,22 @@ describe("MvpPicker", () => {
     expect(screen.getByRole("radio", { name: "Player 17" })).toBeChecked();
   });
 
-  it("scrolls inside the card, and keeps Confirm and Not now in sight", async () => {
-    mount(19);
-    const first = await screen.findAllByRole("radio");
-    const scroller = first[0].closest("[class*='MuiBox']")?.parentElement?.closest("[class*='MuiBox']") ?? first[0].closest("div");
-    const css = [...document.querySelectorAll("div")].map(cssFor).join("\n");
-    expect(css).toMatch(/max-height:\s*17rem/);
-    expect(css).toMatch(/overflow-y:\s*auto/);
-    expect(cssFor(screen.getByRole("button", { name: "Confirm vote" }).parentElement)).toMatch(/position:\s*sticky/);
-    expect(scroller).toBeTruthy();
+  // Where Confirm sits on a phone is layout, which jsdom cannot see: e2e/event-recap-layout.spec.ts
+  // proves it in a real browser at 390 x 667. What jsdom can prove is the behaviour that spec relies on.
+  it("brings Confirm into view when a name is picked, and not before", async () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      mount(19);
+      const radios = await screen.findAllByRole("radio");
+      expect(scroll).not.toHaveBeenCalled();
+      fireEvent.click(radios[1]);
+      await waitFor(() => expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ block: "nearest" })));
+      expect(scroll.mock.contexts.at(-1)).toBe(screen.getByRole("button", { name: "Confirm vote" }));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it("moves focus to the first player when it opens", async () => {

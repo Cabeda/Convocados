@@ -89,8 +89,15 @@ describe("scheduleLabel", () => {
     expect(label()).toBe("Fri 4 Dec · 20:49 · 90 min");
   });
 
-  it("says Ended and the date for a one-off whose game is over, and no time or length", () => {
-    expect(label({ ended: true })).toBe("Ended Fri 4 Dec");
+  it("says just Ended for a one-off whose game is over: the date is on the recap below, and not said twice", () => {
+    expect(label({ ended: true })).toBe("Ended");
+  });
+
+  it("leaves the time out on game day, because the next-game block right below says it", () => {
+    expect(label({ gameDay: true })).toBe("Fri 4 Dec · 90 min");
+    expect(label({ gameDay: true, rule: { freq: "weekly", interval: 1, byDay: "FR" } })).toBe("Weekly · Fri · 90 min");
+    expect(label({ gameDay: true, rule: { freq: "monthly", interval: 1 } })).toBe("Every month · 4 Dec · 90 min");
+    expect(label({ gameDay: false })).toBe("Fri 4 Dec · 20:49 · 90 min");
   });
 
   it("leaves the length out when there is none", () => {

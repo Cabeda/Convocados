@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import ShuffleIcon from "@mui/icons-material/Shuffle";
 import { useLocale } from "~/lib/useT";
 import { nextOccurrence, parseRecurrenceRule } from "~/lib/recurrence";
-import { benchLabelNames, canUndoRemoval, nextGamePhase, removeRule, rsvpView, slotLabels, type RemoveRule } from "~/lib/nextGame";
+import { benchLabelNames, canUndoRemoval, isGameDay, nextGamePhase, removeRule, rsvpView, slotLabels, type RemoveRule } from "~/lib/nextGame";
+import { teamTitle } from "~/lib/teamsView";
 import { splitRoster } from "~/lib/rosterCapacity";
 import { findSelfRosterRow, type EventPermissions } from "~/lib/eventView";
 import { apiRequest } from "~/lib/api/client";
@@ -17,10 +17,13 @@ import { PaymentNudgeDialog } from "../PaymentNudgeDialog";
 import { AddFriendPanel } from "./AddFriendPanel";
 import { LineupSlots } from "./LineupSlots";
 import { NextGameHeader } from "./NextGameHeader";
+import { PageSection } from "./PageSection";
+import { PlayAgain } from "./PlayAgain";
 import { PlayerOptions } from "./PlayerOptions";
 import { RsvpRow } from "./RsvpRow";
 import { UndoToast } from "./UndoToast";
 import { WaitingRow } from "./WaitingRow";
+import { TeamsBlock } from "./TeamsBlock";
 import { WhosIn } from "./WhosIn";
 import { controlBorder, srOnly, tappable } from "./styles";
 import { useFriendActions } from "./useFriendActions";
@@ -28,19 +31,12 @@ import { useFriendSuggestions } from "./useFriendSuggestions";
 import { useInviteActions } from "./useInviteActions";
 import type { MyRsvp } from "./useMyRsvp";
 import { useNextGameClock } from "./useNextGameClock";
+import { usePlayAgain } from "./usePlayAgain";
 import { usePaymentGate } from "./usePaymentGate";
 import { useRosterActions } from "./useRosterActions";
 import { useRosterAnnouncements } from "./useRosterAnnouncements";
 import { useRosterRemoval } from "./useRosterRemoval";
-
-export interface DrawControls {
-  hasTeams: boolean;
-  isDrawing: boolean;
-  /** Draw now: the roster is full, or the organizer has already agreed to an early draw. */
-  onDraw: () => void;
-  onConfirmRedraw: () => void;
-  onConfirmEarlyDraw: () => void;
-}
+import { useWhosInOpen } from "./useWhosInOpen";
 
 export interface NextGameProps {
   eventId: string;
@@ -57,7 +53,6 @@ export interface NextGameProps {
   deepLinkAction: string | null;
   notify: (message: string) => void;
   onSignedIn: () => void;
-  draw: DrawControls;
 }
 
 /**
@@ -93,6 +88,17 @@ export function NextGame(p: NextGameProps) {
   const gate = usePaymentGate(p.eventId);
   const removal = useRosterRemoval({ eventId: p.eventId, players: event.players, setEvent: p.setEvent, refetch: p.refetch, beginWrite, perms, notify: p.notify });
 
+  const playAgain = usePlayAgain({
+    event, setEvent: p.setEvent, refetch: p.refetch, beginWrite, notify: p.notify, locale,
+    words: useMemo(() => ({ failed: t("paFailed"), now: (day: string) => t("paNowEvery", { day }) }), [t]),
+  });
+  // When "Make it weekly" worked, the next game is on the page: it takes focus, so the button that went away is not missed.
+  const { worked, ack } = playAgain;
+  useEffect(() => {
+    if (worked && phase === "signupsSoon") { ack(); document.getElementById("next-game-heading")?.focus(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `ack` only clears the flag
+  }, [worked, phase]);
+
   const [nudgeOpen, setNudgeOpen] = useState(false);
   // The warnings the leave dialog shows are worked out when it opens, not on every render.
   const [leaving, setLeaving] = useState<{ player: Player; benchEmptyAfter: boolean; within48h: boolean } | null>(null);
@@ -112,10 +118,16 @@ export function NextGame(p: NextGameProps) {
   const focusRow = () => rowRef.current?.focus();
 
   const { active, bench } = splitRoster(event.players, event.maxPlayers);
+  const [whosInOpen, setWhosInOpen] = useWhosInOpen(
+    p.eventId, perms.canEditSettings || bench.length > 0 || slotLabels(active.map((x) => x.name)).collides,
+  );
   const myRow = viewer ? event.players.find((x) => x.userId === viewer.id) ?? null : null;
   // A row an organizer added under the viewer's name before they signed in: theirs to leave or claim, never linked by guesswork (#1331).
   const nameRow = viewer && !myRow ? findSelfRosterRow(event.players, viewer) : null;
-  const teamName = myRow ? event.teamResults.find((tr) => tr.members.some((m) => m.name === myRow.name))?.name ?? null : null;
+  // The team is called what the teams block calls it: "Team 2" until a group renames it.
+  const teamIndex = myRow ? event.teamResults.findIndex((tr) => tr.members.some((m) => m.name === myRow.name)) : -1;
+  const myTeam = teamIndex >= 0 ? teamTitle(event.teamResults[teamIndex].name, teamIndex) : null;
+  const teamName = myTeam ? (myTeam.custom ? myTeam.name : t(teamIndex === 0 ? "tbTeam1" : "tbTeam2")) : null;
   const takenNames = [...event.players.map((x) => x.name), ...(event.invited ?? []).map((x) => x.name)];
   const takenKey = takenNames.join("\u0000");
   const takenStable = useMemo(() => (takenKey ? takenKey.split("\u0000") : []), [takenKey]);
@@ -209,13 +221,20 @@ export function NextGame(p: NextGameProps) {
     }
   }, [canAct, hasViewer, view.kind, p.deepLinkAction]);
 
-  if (phase === "none") return null;
+  if (phase === "none") {
+    return (
+      <PlayAgain
+        canManage={perms.canEditSettings} ownerName={event.ownerName} busy={playAgain.busy} error={playAgain.error}
+        onMakeWeekly={() => void playAgain.makeWeekly()} onDismissError={playAgain.clearError}
+      />
+    );
+  }
   // A cancelled game keeps its list for reading — who was in — and nothing to press.
   if (phase === "cancelled") {
     return (
-      <Box component="section" aria-label={t("ngWhosIn")} data-testid="cancelled-roster" sx={{ maxWidth: "32rem" }}>
+      <PageSection gap="major" aria-label={t("ngWhosIn")} data-testid="cancelled-roster">
         <WhosIn autoOpen playing={active} bench={bench} viewerId={viewer?.id ?? null} positionsEnabled={!!event.positionsEnabled} />
-      </Box>
+      </PageSection>
     );
   }
 
@@ -223,22 +242,49 @@ export function NextGame(p: NextGameProps) {
   const spotsLeft = Math.max(0, event.maxPlayers - active.length);
   const summary = spotsLeft === 0 ? t("ngLineupFull", { max: event.maxPlayers })
     : t(spotsLeft === 1 ? "ngLineupOpenOne" : "ngLineupOpen", { n: active.length, max: event.maxPlayers, left: spotsLeft });
-  const benchNames = benchLabelNames(bench.map((x) => x.name));
+  // Whoever the drawn teams already name is playing, wherever the roster says they are: they are not "next up".
+  const inTeams = new Set(event.teamResults.flatMap((tr) => tr.members.map((m) => normalizeForMatch(m.name))));
+  const waiting = bench.filter((x) => !inTeams.has(normalizeForMatch(x.name)));
+  const benchNames = benchLabelNames(waiting.map((x) => x.name));
   // "Next up: Kátia L., Luís F., Marta S. and 1 more" — a list of names, then how many more.
   const nextUp = benchNames.more > 0
     ? t(benchNames.more === 1 ? "ngNextUpMoreOne" : "ngNextUpMore", { names: benchNames.names.join(", "), n: benchNames.more })
     : t("ngNextUp", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format(benchNames.names) });
-  const canDraw = perms.canEditSettings && active.length >= 2;
   const error = roster.error ?? invites.error ?? removal.error;
 
-  const drawNow = () => {
-    if (p.draw.hasTeams) p.draw.onConfirmRedraw();
-    else if (active.length < event.maxPlayers) p.draw.onConfirmEarlyDraw();
-    else p.draw.onDraw();
-  };
+  // Adding people. A signed-in viewer adds a friend; a signed-out one may add just their own name (an old, real path
+  // for people without an account), offered quietly under the one primary action, Sign in.
+  const anonName = !viewer && event.players.some((x) => !x.userId && addedHere.has(normalizeForMatch(x.name)));
+  const addPanel = adding && (
+    <Box id="add-friend">
+      <AddFriendPanel
+        variant={viewer ? "friend" : "self"}
+        full={event.players.length >= event.maxPlayers} positionsEnabled={!!event.positionsEnabled} suggestions={suggestions} busy={friends.busy || roster.busy}
+        onSubmit={viewer ? friends.submit : friends.submitName} onAddNamedEmail={friends.submitNamedEmail} onSubmitMany={friends.submitMany} onLink={friends.linkFor}
+        onClose={() => { setAdding(false); setTimeout(() => addButtonRef.current?.focus(), 0); }}
+      />
+    </Box>
+  );
+  const addControl = (
+    <>
+      {!adding && (
+        <Button
+          ref={addButtonRef} aria-controls="add-friend" aria-expanded={false}
+          variant={viewer ? "outlined" : "text"} startIcon={viewer ? <PersonAddIcon /> : undefined}
+          onClick={() => { setAdding(true); setAddingEver(true); }}
+          sx={viewer
+            ? { mt: 1, mr: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, color: "text.primary", borderColor: controlBorder, ...tappable }
+            : { mt: 0.5, minHeight: 44, px: 1.5, borderRadius: 999, textTransform: "none", fontWeight: 600, fontSize: "1rem", color: "text.secondary", ...tappable }}
+        >
+          {t(viewer ? "ngAddFriend" : "ngAddJustName")}
+        </Button>
+      )}
+      {addPanel}
+    </>
+  );
 
   return (
-    <Box component="section" aria-label={t("nextGame")} data-testid="next-game" sx={{ maxWidth: "32rem" }}>
+    <PageSection gap="major" aria-label={t("nextGame")} data-testid="next-game">
       {/* Other people joining or leaving, read out politely by a screen reader; never shown. */}
       <Box role="status" aria-live="polite" aria-atomic data-testid="roster-announcement" sx={srOnly}>{announcement}</Box>
       <NextGameHeader phase={phase} date={date} timezone={event.timezone} now={now} startMs={startMs} />
@@ -250,6 +296,8 @@ export function NextGame(p: NextGameProps) {
             highlight={p.deepLinkAction === "rsvp"} onSignedIn={p.onSignedIn}
             onJoin={() => void join()} onDecline={() => void decline()} onLeave={() => askToLeave()}
           />
+
+          {!viewer && !anonName && addControl}
 
           {thatsYou && nameRow && (
             <Typography data-testid="thats-you" role="status" sx={{ mt: 1.5, fontSize: "1rem", lineHeight: 1.45, textWrap: "pretty" }}>{t("ngThatsYou")}</Typography>
@@ -271,13 +319,14 @@ export function NextGame(p: NextGameProps) {
                 })()}
               />
               <Typography data-testid="lineup-summary" sx={{ mt: 1.25, fontSize: "0.9375rem", lineHeight: 1.45, color: "text.secondary", textWrap: "pretty" }}>{summary}</Typography>
-              {bench.length > 0 && (
+              {/* The names are said once: while "Who's in" is open it lists the bench, numbered. */}
+              {waiting.length > 0 && !whosInOpen && (
                 <Typography data-testid="bench-line" sx={{ mt: 1, fontSize: "0.9375rem", lineHeight: 1.45, textWrap: "pretty" }}>
                   {nextUp}
                 </Typography>
               )}
               <WhosIn
-                autoOpen={slotLabels(active.map((x) => x.name)).collides}
+                open={whosInOpen || selection?.from === "row"} onOpenChange={setWhosInOpen}
                 trailing={perms.canEditSettings && (
                   <Button href={`/events/${p.eventId}/lineup`} sx={{ minHeight: 44, px: 1.25, textTransform: "none", fontSize: "1rem", fontWeight: 600, color: "text.secondary", borderRadius: 999, ...tappable }}>
                     {t("menuManageLineup")}
@@ -291,34 +340,14 @@ export function NextGame(p: NextGameProps) {
                 invited={event.invited ?? []} declined={event.declined ?? []} canManage={perms.canManageInvites}
                 resendingId={invites.resendingId} retractingId={invites.retractingId} onResend={invites.resend} onRetract={invites.retract}
               />
-              <Button
-                ref={addButtonRef} variant="outlined" startIcon={<PersonAddIcon />} aria-expanded={adding} aria-controls="add-friend"
-                onClick={() => { setAdding((a) => !a); setAddingEver(true); }}
-                sx={{ mt: 1, mr: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, color: "text.primary", borderColor: controlBorder, ...tappable }}
-              >
-                {t("ngAddFriend")}
-              </Button>
-              {adding && (
-                <Box id="add-friend">
-                  <AddFriendPanel
-                    full={event.players.length >= event.maxPlayers} positionsEnabled={!!event.positionsEnabled} suggestions={suggestions} busy={friends.busy || roster.busy}
-                    onSubmit={friends.submit} onAddNamedEmail={friends.submitNamedEmail} onSubmitMany={friends.submitMany} onLink={friends.linkFor}
-                    onClose={() => { setAdding(false); setTimeout(() => addButtonRef.current?.focus(), 0); }}
-                  />
-                </Box>
-              )}
+              {viewer && addControl}
               {removal.undo && <UndoToast message={t("undoRemoveDesc", { name: removal.undo.name })} onUndo={() => void removal.runUndo()} onDismiss={removal.dismissUndo} />}
-              {canDraw && !cancelled && (
-                <Button
-                  startIcon={<ShuffleIcon />} variant={p.draw.hasTeams ? "text" : "outlined"} disabled={p.draw.isDrawing} aria-busy={p.draw.isDrawing || undefined}
-                  onClick={drawNow}
-                  sx={{ mt: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, ...(p.draw.hasTeams ? { color: "text.secondary" } : { color: "text.primary", borderColor: controlBorder }), ...tappable }}
-                >
-                  {p.draw.hasTeams ? t("ngDrawAgain") : t("ngDrawNow")}
-                </Button>
-              )}
             </Box>
           )}
+          <TeamsBlock
+            event={event} perms={perms} viewer={viewer} refetch={p.refetch} notify={p.notify}
+            date={date} gameDay={isGameDay(now, startMs, event.timezone)} count={active.length}
+          />
         </>
       )}
 
@@ -354,6 +383,6 @@ export function NextGame(p: NextGameProps) {
           } finally { setLeaveBusy(false); setLeaving(null); }
         }}
       />
-    </Box>
+    </PageSection>
   );
 }

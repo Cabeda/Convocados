@@ -3,7 +3,7 @@ import { Box, Button, Stack, Typography } from "@mui/material";
 import { useT } from "~/lib/useT";
 import type { RsvpView } from "~/lib/nextGame";
 import { SignInButton } from "../../SignInButton";
-import { EASE, focusRing, tappable } from "./styles";
+import { DEEP_LINK_MARGIN, EASE, focusRing, tappable } from "./styles";
 
 interface Props {
   view: RsvpView;
@@ -90,7 +90,7 @@ export function RsvpRow({ view, emphasis, busy, eventId, onSignedIn, onJoin, onD
     const panelId = "rsvp-change-panel";
     body = (
       <>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", minHeight: 56, columnGap: 1 }}>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", minHeight: 56, columnGap: 1 }}>
           <Typography data-testid="rsvp-status" sx={{ fontSize: "1.1875rem", lineHeight: 1.3, fontWeight: 700, color: view.kind === "out" ? "text.secondary" : "text.primary", textWrap: "balance" }}>{text}</Typography>
           <Button ref={changeRef} aria-expanded={changing} aria-controls={panelId} disabled={busy} onClick={() => setChanging((c) => !c)} sx={{ ...quiet, flexShrink: 0, color: "primary.main" }}>
             {t("ngChange")}
@@ -120,7 +120,7 @@ export function RsvpRow({ view, emphasis, busy, eventId, onSignedIn, onJoin, onD
       ref={rowRef}
       tabIndex={-1} data-testid="rsvp-row"
       sx={{
-        mt: 2, outline: "none", borderRadius: 2, ...focusRing,
+        mt: 2, outline: "none", borderRadius: 2, scrollMarginTop: DEEP_LINK_MARGIN, ...focusRing,
         ...(highlight ? {
           animation: `ngRsvpPulse 1200ms ${EASE}`,
           "@keyframes ngRsvpPulse": { "0%,100%": { backgroundColor: "transparent" }, "35%": { backgroundColor: "action.selected" } },

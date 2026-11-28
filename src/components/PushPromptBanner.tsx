@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Alert, Button, Collapse, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Link, Snackbar } from "@mui/material";
+import { Alert, Box, Button, Collapse, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Link, Snackbar } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import BlockIcon from "@mui/icons-material/Block";
 import AddToHomeScreenIcon from "@mui/icons-material/AddToHomeScreen";
@@ -22,6 +22,21 @@ interface Props {
    *  dashboard-level Snackbar. Receives `{ delivered, total }` from the
    *  server's test-push response. */
   onEnabled?: (result: { delivered: number; total: number }) => void;
+  /** One quiet line (no box, no alert role, no room while it has nothing to say): for pages where it must not compete with the content. */
+  quiet?: boolean;
+}
+
+const quietButton = { minHeight: 44, px: 1.5, textTransform: "none", fontWeight: 700, fontSize: "1rem", borderRadius: 999, color: "primary.main", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" } as const;
+
+/** The quiet form: an icon, a sentence in the secondary colour, and plain text actions. Static text, so no live region. */
+function QuietRow({ icon, children, actions }: { icon: React.ReactNode; children: React.ReactNode; actions: React.ReactNode }) {
+  return (
+    <Box data-testid="push-quiet-row" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 1, color: "text.secondary", "& svg": { fontSize: 20, flexShrink: 0 } }}>
+      {icon}
+      <Box sx={{ flex: "1 1 14rem", minWidth: 0, py: 0.75, fontSize: "0.9375rem", lineHeight: 1.45, textWrap: "pretty" }}>{children}</Box>
+      <Box sx={{ display: "flex", ml: "auto" }}>{actions}</Box>
+    </Box>
+  );
 }
 
 /**
@@ -32,7 +47,7 @@ interface Props {
  * #136: on successful enable, fires a test push so the user gets an instant
  *   "it works" moment, and surfaces the result via Snackbar.
  */
-export function PushPromptBanner({ followCount, forceOnEventDetail = false, highIntent = false, onEnabled }: Props) {
+export function PushPromptBanner({ followCount, forceOnEventDetail = false, highIntent = false, onEnabled, quiet = false }: Props) {
   const t = useT();
   const [visible, setVisible] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -151,6 +166,7 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
   if (!granted) return null;
 
   if (needsInstall) {
+    if (quiet) return <QuietRow icon={<AddToHomeScreenIcon />} actions={null}>{t("notifyDeviceNeedsInstall")}</QuietRow>;
     return (
       <Alert severity="info" icon={<AddToHomeScreenIcon />} sx={{ mb: 2 }}>
         {t("notifyDeviceNeedsInstall")}
@@ -162,6 +178,13 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
     const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
     const helpHref = resolveIosHelpLink(ua);
     const isIos = /iPhone|iPad|iPod/.test(ua) && !/MSStream/.test(ua);
+    if (quiet) {
+      return (
+        <QuietRow icon={<BlockIcon />} actions={<Button component="a" href={helpHref} target="_blank" rel="noopener" sx={quietButton}>{t("enable")}</Button>}>
+          {isIos ? t("pushBlockedIosHint") : t("pushBlockedHint")}
+        </QuietRow>
+      );
+    }
     return (
       <>
         <Alert severity="warning" icon={<BlockIcon />} sx={{ mb: 2 }}>
@@ -204,6 +227,21 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
           onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
           message={snackbar.message}
         />
+      </>
+    );
+  }
+
+  if (quiet) {
+    if (!visible) return null;
+    return (
+      <>
+        <QuietRow
+          icon={<NotificationsIcon />}
+          actions={<><Button onClick={handleEnable} sx={quietButton}>{t("enable")}</Button><Button onClick={handleDismiss} sx={{ ...quietButton, color: "text.secondary" }}>{t("dismiss")}</Button></>}
+        >
+          {t("pushPromptBanner")}
+        </QuietRow>
+        <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((s) => ({ ...s, open: false }))} message={snackbar.message} />
       </>
     );
   }

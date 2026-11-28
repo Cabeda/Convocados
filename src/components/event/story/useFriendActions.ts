@@ -105,6 +105,11 @@ export function useFriendActions({ add, invites, signedIn, takenNames, notify }:
     return addOne(isEmailLike(value) ? { email: value } : { name: value }, { position, ask: true });
   }), [addOne, exclusive]);
 
+  /** A signed-out visitor adding themselves: whatever is typed is a name, never an address to invite. */
+  const submitName = useCallback((text: string, position?: string) => exclusive(
+    () => addOne({ name: text.trim() }, { position }),
+  ), [addOne, exclusive]);
+
   /** An email nobody has registered, now with the name the person gave for them. */
   const submitNamedEmail = useCallback((email: string, name: string, position?: string) => exclusive(
     () => addOne({ email, name: name.trim() }, { position, skipInvite: true }),
@@ -137,5 +142,5 @@ export function useFriendActions({ add, invites, signedIn, takenNames, notify }:
     return made === true ? { ok: true } : { ok: false, message: made.failed };
   }), [exclusive, invites, signedIn, t]);
 
-  return { busy, submit, submitNamedEmail, submitMany, linkFor };
+  return { busy, submit, submitName, submitNamedEmail, submitMany, linkFor };
 }

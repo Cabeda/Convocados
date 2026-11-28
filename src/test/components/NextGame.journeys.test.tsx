@@ -27,6 +27,7 @@ function serverJoins(row: Row = me) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
   window.history.pushState({}, "", "/events/evt-1");
 });
@@ -82,27 +83,50 @@ describe("Next game — what the block says", () => {
     expect(screen.queryByText("Goalkeeper")).not.toBeInTheDocument();
   });
 
-  it("puts the bench in one plain line and numbers it inside 'Who's in'", async () => {
+  const BENCH = { maxPlayers: 2, players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Bia", userId: null }, { id: "c", name: "Carlos Dias", userId: null }, { id: "d", name: "Duda Lima", userId: null }] };
+  const closeWhosIn = async (user: ReturnType<typeof userEvent.setup>) => user.click(await screen.findByRole("button", { name: "Who's in", expanded: true }));
+
+  it("says the bench once: numbered in 'Who's in' while it is open, in one plain line once it is closed", async () => {
     const user = userEvent.setup();
-    renderPage({ maxPlayers: 2, players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Bia", userId: null }, { id: "c", name: "Carlos Dias", userId: null }, { id: "d", name: "Duda Lima", userId: null }] });
-    const line = await screen.findByTestId("bench-line");
-    expect(line).toHaveTextContent(/^Next up: Carlos D. and Duda L.$/);
-    await user.click(screen.getByRole("button", { name: "Who's in" }));
-    expect(screen.getByText("1. Carlos Dias")).toBeInTheDocument();
+    renderPage(BENCH);
+    // A bench is a reason to see the names: the list starts open, and the bench is in it, numbered.
+    expect(await screen.findByText("1. Carlos Dias")).toBeInTheDocument();
     expect(screen.getByText("2. Duda Lima")).toBeInTheDocument();
+    expect(screen.queryByTestId("bench-line")).not.toBeInTheDocument();
+    await closeWhosIn(user);
+    expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Carlos D. and Duda L.$/);
+    expect(screen.queryByText("1. Carlos Dias")).not.toBeInTheDocument();
   });
 
   it("names the first three on the bench and counts the rest: 'and 1 more', 'and 2 more'", async () => {
+    const user = userEvent.setup();
     const bench = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `b${i}`, name: ["Kátia Lima", "Luís Faria", "Marta Santos", "Nuno Reis", "Olga Pinto"][i], userId: null }));
     renderPage({ maxPlayers: 2, players: [...rows(2), ...bench(4)] });
+    await closeWhosIn(user);
     expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Kátia L., Luís F., Marta S. and 1 more$/);
     cleanup();
+    localStorage.clear();
     renderPage({ maxPlayers: 2, players: [...rows(2), ...bench(5)] });
+    await closeWhosIn(user);
     expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Kátia L., Luís F., Marta S. and 2 more$/);
   });
 
+  it("never calls somebody 'next up' while the drawn teams already name them", async () => {
+    const user = userEvent.setup();
+    const players = [...rows(2), { id: "b1", name: "Kátia Lima", userId: null }, { id: "b2", name: "Luís Faria", userId: null }];
+    const teamResults = [
+      { id: "t1", name: "Ninjas", members: [{ name: "Player 0", order: 0 }, { name: "Kátia Lima", order: 1 }] },
+      { id: "t2", name: "Gunas", members: [{ name: "Player 1", order: 0 }] },
+    ];
+    renderPage({ maxPlayers: 2, players, teamResults });
+    await closeWhosIn(user);
+    expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Luís F\.$/);
+  });
+
   it("uses the singular verb for a bench of one", async () => {
+    const user = userEvent.setup();
     renderPage({ maxPlayers: 1, players: [{ id: "a", name: "Ana", userId: null }, { id: "c", name: "Carlos", userId: null }] });
+    await closeWhosIn(user);
     expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Carlos$/);
   });
 });
@@ -257,9 +281,12 @@ describe("Next game — the RSVP row", () => {
     expect(server.sent("POST", "/players")).toHaveLength(0);
   });
 
-  it("says 'You're in' with the team once teams are drawn", async () => {
+  it("says 'You're in' with the team once teams are drawn: a chosen name as it is, a stock one as 'Team 1' / 'Team 2'", async () => {
     renderPage({ players: [me, ...rows(1)], teamResults: [{ id: "t1", name: "Gunas", members: [{ name: "Jose Silva", order: 0 }] }, { id: "t2", name: "Ninjas", members: [{ name: "Player 0", order: 0 }] }] });
     expect(await screen.findByTestId("rsvp-status")).toHaveTextContent("You're in · Gunas");
+    cleanup();
+    renderPage({ players: [me, ...rows(1)], teamResults: [{ id: "t1", name: "Ninjas", members: [{ name: "Player 0", order: 0 }] }, { id: "t2", name: "Gunas", members: [{ name: "Jose Silva", order: 0 }] }] });
+    expect(await screen.findByTestId("rsvp-status")).toHaveTextContent("You're in · Team 2");
   });
 
   it("says where on the bench the viewer is", async () => {
@@ -293,7 +320,7 @@ describe("Next game — changing your answer", () => {
     const call = server.sent("POST", "/rsvp")[0];
     expect(call.body).toEqual({ status: "no" });
     expect(server.sent("POST", "/leave")).toHaveLength(0);
-    await user.click(screen.getByRole("button", { name: "Change" }));
+    await user.click(screen.getByRole("button", { name: "Change my answer" }));
     serverJoins();
     await user.click(screen.getByRole("button", { name: "I'm in" }));
     expect(await screen.findByText("You're in")).toBeInTheDocument();
@@ -312,7 +339,7 @@ describe("Next game — changing your answer", () => {
     const user = userEvent.setup();
     renderPage({ players: [me, ...rows(3)] });
     server.on("POST", "/leave", () => { server.state.event.players = server.state.event.players.filter((p: Row) => p.id !== "me"); return { ok: true }; });
-    await user.click(await screen.findByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("button", { name: "Change my answer" }));
     // Focus moves into the panel.
     const cant = screen.getByRole("button", { name: "Can't make it" });
     expect(cant).toHaveFocus();
@@ -328,10 +355,10 @@ describe("Next game — changing your answer", () => {
   it("'Keep my spot' closes the panel and puts focus back on 'Change'", async () => {
     const user = userEvent.setup();
     renderPage({ players: [me] });
-    await user.click(await screen.findByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("button", { name: "Change my answer" }));
     await user.click(screen.getByRole("button", { name: "Keep my spot" }));
     expect(screen.queryByRole("button", { name: "Keep my spot" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Change my answer" })).toHaveFocus();
     expect(server.sent("POST", "/leave")).toHaveLength(0);
   });
 
@@ -339,7 +366,7 @@ describe("Next game — changing your answer", () => {
     const user = userEvent.setup();
     renderPage({ players: [...rows(2), me, ...rows(1, 5)] });
     server.on("POST", "/leave", () => respond(500, { error: "x" }));
-    await user.click(await screen.findByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("button", { name: "Change my answer" }));
     await user.click(screen.getByRole("button", { name: "Can't make it" }));
     await user.click(await screen.findByTestId("leave-dialog-confirm"));
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't save your answer");
@@ -351,7 +378,7 @@ describe("Next game — changing your answer", () => {
   it("warns about no replacement when it is within 48 hours and nobody is on the bench", async () => {
     const user = userEvent.setup();
     renderPage({ dateTime: new Date(Date.now() + 20 * HOUR).toISOString(), players: [me, ...rows(3)] });
-    await user.click(await screen.findByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("button", { name: "Change my answer" }));
     await user.click(screen.getByRole("button", { name: "Can't make it" }));
     expect(await screen.findByTestId("leave-dialog-no-replacement")).toBeInTheDocument();
   });
@@ -467,36 +494,6 @@ describe("Next game — who we are still waiting for", () => {
   });
 });
 
-describe("Next game — drawing teams", () => {
-  it("gives the organizer one quiet button; below full it asks first", async () => {
-    const user = userEvent.setup();
-    mockSession.data = { user: { id: "owner-9", name: "Sam" } };
-    renderPage({ players: rows(4) });
-    await user.click(await screen.findByRole("button", { name: "Draw teams now" }));
-    expect(await screen.findByText("Randomize with missing players?")).toBeInTheDocument();
-    expect(server.sent("POST", "/randomize")).toHaveLength(0);
-  });
-
-  it("draws at once when the list is full", async () => {
-    const user = userEvent.setup();
-    mockSession.data = { user: { id: "owner-9", name: "Sam" } };
-    renderPage({ maxPlayers: 4, players: rows(4) });
-    await user.click(await screen.findByRole("button", { name: "Draw teams now" }));
-    await waitFor(() => expect(server.sent("POST", "/randomize")).toHaveLength(1));
-  });
-
-  it("is not offered to a player, nor with fewer than two names", async () => {
-    renderPage({ players: rows(4) });
-    await screen.findByTestId("lineup-slots");
-    expect(screen.queryByRole("button", { name: /Draw/ })).not.toBeInTheDocument();
-    cleanup();
-    mockSession.data = { user: { id: "owner-9", name: "Sam" } };
-    renderPage({ players: rows(1) });
-    await screen.findByTestId("lineup-slots");
-    expect(screen.queryByRole("button", { name: /Draw/ })).not.toBeInTheDocument();
-  });
-});
-
 describe("Next game — the page around it", () => {
   it("keeps a polled list from undoing what the viewer just did", async () => {
     const user = userEvent.setup();
@@ -526,15 +523,46 @@ describe("Next game — telling people apart in the lineup", () => {
     expect(letters).toEqual(["JoW", "JaW", "RC"]);
   });
 
-  it("stays collapsed when every slot is clear on its own, and a person's choice to close it sticks", async () => {
-    const user = userEvent.setup();
+  it("starts closed when every slot is clear on its own, for someone who runs nothing", async () => {
     renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Beto Santos", userId: null }] });
     await screen.findByTestId("lineup-slots");
     expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
-    cleanup();
-    renderPage({ players: [{ id: "a", name: "Joana Weiss", userId: null }, { id: "b", name: "Jack Weiss", userId: null }] });
+    expect(screen.getByRole("button", { name: "Who's in" })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("starts open for the organizer, who has people to manage", async () => {
+    mockSession.data = { user: { id: "owner-9", name: "Sam" } };
+    renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Beto Santos", userId: null }] });
+    expect(await screen.findByTestId("whos-in")).toBeInTheDocument();
+  });
+
+  it("remembers what the viewer chose for this event, both ways, over the default", async () => {
+    const user = userEvent.setup();
+    const two = [{ id: "a", name: "Joana Weiss", userId: null }, { id: "b", name: "Jack Weiss", userId: null }];
+    renderPage({ players: two });
     await user.click(await screen.findByRole("button", { name: "Who's in" }));
     expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
+    expect(localStorage.getItem("whos-in:evt-1")).toBe("closed");
+    cleanup();
+    renderPage({ players: two });
+    await screen.findByTestId("lineup-slots");
+    expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
+    cleanup();
+    localStorage.clear();
+    renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }] });
+    await user.click(await screen.findByRole("button", { name: "Who's in" }));
+    expect(localStorage.getItem("whos-in:evt-1")).toBe("open");
+    cleanup();
+    renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }] });
+    expect(await screen.findByTestId("whos-in")).toBeInTheDocument();
+  });
+
+  it("marks the viewer's own name by weight and by the slot, not with a third '(you)'", async () => {
+    mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
+    renderPage({ players: [{ id: "a", name: "Jose Silva", userId: "u-1" }, { id: "b", name: "Joana Weiss", userId: null }, { id: "c", name: "Jack Weiss", userId: null }] });
+    const list = await screen.findByTestId("whos-in");
+    expect(list).not.toHaveTextContent("(you)");
+    expect(within(list).getByRole("link", { name: "Jose Silva" })).toBeInTheDocument();
   });
 });
 
@@ -545,20 +573,20 @@ describe("Next game — the finished game's teams are never the next game's", ()
   ];
   const ended = { isRecurring: true, recurrenceRule: WEEKLY, dateTime: new Date(Date.now() - 3 * HOUR).toISOString(), players: rows(4), teamResults };
 
-  it("shows the Teams card for an open game", async () => {
+  it("shows the teams for an open game", async () => {
     renderPage({ players: rows(4), teamResults });
-    expect(await screen.findByRole("heading", { level: 6, name: "Teams" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 3, name: /^Teams for / })).toBeInTheDocument();
   });
 
-  it("shows the Teams card while the game is being played", async () => {
+  it("shows the teams while the game is being played", async () => {
     renderPage({ players: rows(4), teamResults, dateTime: new Date(Date.now() - HOUR / 2).toISOString() });
-    expect(await screen.findByRole("heading", { level: 6, name: "Teams" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 3, name: /^Teams for / })).toBeInTheDocument();
   });
 
   it("hides them between the end of a weekly game and its reset (signups soon), with the frozen roster", async () => {
     renderPage(ended);
     await screen.findByText("Sign-ups open in a moment");
-    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Teams/ })).not.toBeInTheDocument();
     expect(screen.queryByText("Ninjas")).not.toBeInTheDocument();
     expect(screen.queryByText("Player 0")).not.toBeInTheDocument();
   });
@@ -566,13 +594,13 @@ describe("Next game — the finished game's teams are never the next game's", ()
   it("hides them after a one-off game ends: its result lives in the recap", async () => {
     renderPage({ ...ended, isRecurring: false, recurrenceRule: null });
     await screen.findByRole("heading", { level: 1 });
-    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Teams/ })).not.toBeInTheDocument();
   });
 
   it("hides them on a cancelled game", async () => {
     renderPage({ players: rows(4), teamResults, gameStatus: "cancelled" });
     await screen.findByRole("heading", { level: 2, name: "This game was cancelled" });
-    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Teams/ })).not.toBeInTheDocument();
   });
 });
 
