@@ -1,0 +1,35 @@
+---
+/**
+ * PROTOTYPE (sub-shape B — new throwaway route) — THROWAWAY: delete or move to a prototype branch.
+ *
+ * Question: what should the event page look like AFTER a game has ended, for
+ * non-tech-savvy players who today find it confusing?
+ *
+ * One route, switched by ?variant= (default "compare"):
+ *   compare → all three in phone frames, side by side
+ *   A  Current      — iframe of the REAL /events/<id> page
+ *   B  Result first — one column: result → your to-do (max 2) → 3 links → quiet next game
+ *   C  Tabs / story — Result · Teams · Money · Next game
+ *
+ * Reads the real API with the same session cookie; every write is a local stub.
+ */
+import PrototypePostGameApp from "../../../components/prototype-postgame/PrototypePostGameApp";
+
+const { id } = Astro.params;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Prototype · post-game event page</title>
+    <style is:inline>
+      html, body { background-color: #d9dde3; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <PrototypePostGameApp client:only="react" eventId={id!} />
+  </body>
+</html>
