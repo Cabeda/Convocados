@@ -1,5 +1,5 @@
 import { prisma } from "./db.server";
-import { findViewerName, normalizeName } from "./snapshotParticipants";
+import { findViewerName, isNameInList, normalizeName } from "./snapshotParticipants";
 
 /**
  * Who the viewer is on an event: the ONE answer the recap's status and every write behind the recap's
@@ -36,4 +36,17 @@ export async function viewerRosterNames(eventId: string, user: ViewerUser): Prom
 /** The name on `roster` the viewer is known by (the roster's own spelling), or null when they are not on it. */
 export async function viewerNameOnRoster(eventId: string, user: ViewerUser, roster: readonly string[]): Promise<string | null> {
   return findViewerName(await viewerRosterNames(eventId, user), roster);
+}
+
+/**
+ * Is one of these names on a live game's roster (pending invitations and archived rows do not count)?
+ * An ended one-off has no history row until its first score, so who played is who was on this roster:
+ * the recap's status and the first-score save both ask this, with the names from `viewerRosterNames`.
+ */
+export async function isOnLiveRoster(gameId: string, names: readonly string[]): Promise<boolean> {
+  const rows = await prisma.gameParticipant.findMany({
+    where: { gameId, archivedAt: null, status: { not: "pending" } },
+    select: { eventPlayer: { select: { name: true } } },
+  });
+  return rows.some((r) => isNameInList(names, r.eventPlayer.name));
 }

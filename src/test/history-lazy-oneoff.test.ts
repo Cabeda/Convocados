@@ -61,19 +61,38 @@ describe("an ended one-off with no history row: the score creates it", () => {
     expect(after.scoreOne).toBe(3);
   });
 
-  it("counts somebody on the live game's roster as a player, so they may add the first score too", async () => {
+  it.each([
+    ["linked to the roster row, not on any team", { id: "u-ana", name: "Ana Account" }, 200],
+    ["named like the roster row, not linked, not on any team", { id: "u-cleo", name: "Cleo" }, 200],
+    ["not on the roster", { id: "u-zed", name: "Zed" }, 403],
+  ])("somebody on the live roster who was not drawn into a team may add the first score: %s", async (_label, user, expected) => {
     const { event, game } = await seedEnded();
     await prisma.user.create({ data: { id: "u-ana", name: "Ana Account", email: "ana@test.com", emailVerified: true } });
-    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana Lopes", userId: "u-ana" } });
-    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, status: "active", order: 0 } });
-    mockGetSession.mockResolvedValue({ user: { id: "u-ana", name: "Ana Account" } } as any);
+    for (const [name, userId] of [["Ana Lopes", "u-ana"], ["Cleo", null]] as const) {
+      const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name, userId } });
+      await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, status: "active", order: 0 } });
+    }
+    mockGetSession.mockResolvedValue({ user } as any);
     mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+
     const status = await (await getStatus(getCtx({ id: event.id }))).json();
-    expect(status.isPlayer).toBe(true);
+    expect(status.isPlayer).toBe(expected === 200);
     expect(status.pendingGameId).toBe(game.id);
-    // A stranger is not.
-    mockGetSession.mockResolvedValue({ user: { id: "u-zed", name: "Zed" } } as any);
-    expect((await (await getStatus(getCtx({ id: event.id }))).json()).isPlayer).toBe(false);
+
+    const save = await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 2, scoreTwo: 1 }));
+    expect(save.status).toBe(expected);
+    expect(await prisma.gameHistory.count({ where: { eventId: event.id } })).toBe(expected === 200 ? 1 : 0);
+  });
+
+  it("a roster player saves the first score, but a later edit by a player not in the drawn teams follows the normal rule", async () => {
+    const { event, game } = await seedEnded();
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Cleo" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, status: "active", order: 0 } });
+    mockGetSession.mockResolvedValue({ user: { id: "u-cleo", name: "Cleo" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+    expect((await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 2, scoreTwo: 1 }))).status).toBe(200);
+    const row = await prisma.gameHistory.findFirstOrThrow({ where: { eventId: event.id } });
+    expect((await patchHistory(patchCtx({ id: event.id, historyId: row.id }, { scoreOne: 3, scoreTwo: 1 }))).status).toBe(403);
   });
 
   it.each([
@@ -131,6 +150,87 @@ describe("an ended one-off with no history row: the score creates it", () => {
     expect(res.status).toBe(404);
     expect(await prisma.gameHistory.count({ where: { eventId: event.id } })).toBe(0);
     expect((await (await getStatus(getCtx({ id: event.id }))).json()).pendingGameId).toBeNull();
+  });
+
+  describe("nothing is created unless the save is authorized and valid", () => {
+    const asStranger = () => {
+      mockGetSession.mockResolvedValue({ user: { id: "u-zed", name: "Zed" } } as any);
+      mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+    };
+    const rawCtx = (params: Record<string, string>, raw: string) =>
+      ({ request: new Request("http://localhost/api/test", { method: "PATCH", headers: { "content-type": "application/json" }, body: raw }), params }) as any;
+    const stillPending = async (eventId: string, gameId: string) => {
+      expect(await prisma.gameHistory.count({ where: { eventId } })).toBe(0);
+      expect((await (await getStatus(getCtx({ id: eventId }))).json()).pendingGameId).toBe(gameId);
+    };
+
+    it("a signed-in stranger is refused (403) and leaves no row; the live game stays pending", async () => {
+      const { event, game } = await seedEnded();
+      asStranger();
+      const res = await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 1, scoreTwo: 0 }));
+      expect(res.status).toBe(403);
+      await stillPending(event.id, game.id);
+    });
+
+    it("a stranger sending any other field (friendly, cost, teams, payments) is refused and leaves no row", async () => {
+      const { event, game } = await seedEnded();
+      asStranger();
+      for (const body of [{ isFriendly: true }, { costTotalAmount: 10 }, { teamsSnapshot: [] }, { paymentsSnapshot: [] }]) {
+        expect((await patchHistory(patchCtx({ id: event.id, historyId: game.id }, body))).status).toBe(403);
+      }
+      await stillPending(event.id, game.id);
+    });
+
+    it("a body that is not JSON is a 400 and leaves no row", async () => {
+      const { event, game } = await seedEnded();
+      const res = await patchHistory(rawCtx({ id: event.id, historyId: game.id }, "{not json"));
+      expect(res.status).toBe(400);
+      await stillPending(event.id, game.id);
+    });
+
+    it.each([
+      ["a negative score", { scoreOne: -1, scoreTwo: 0 }],
+      ["a fractional score", { scoreOne: 1.5, scoreTwo: 0 }],
+      ["scoreSets on a sport without sets", { scoreSets: [{ teamOne: 6, teamTwo: 3 }] }],
+    ])("%s is a 400 and leaves no row", async (_label, body) => {
+      const { event, game } = await seedEnded();
+      const res = await patchHistory(patchCtx({ id: event.id, historyId: game.id }, body));
+      expect(res.status).toBe(400);
+      await stillPending(event.id, game.id);
+    });
+
+    it("an owner's invalid cost is a 400 and leaves no row", async () => {
+      const { event, game } = await seedEnded();
+      const res = await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { costTotalAmount: -5 }));
+      expect(res.status).toBe(400);
+      await stillPending(event.id, game.id);
+    });
+
+    it("signed out is a 401 and leaves no row", async () => {
+      const { event, game } = await seedEnded();
+      mockGetSession.mockResolvedValue(null);
+      const res = await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 1, scoreTwo: 0 }));
+      expect(res.status).toBe(401);
+      await stillPending(event.id, game.id);
+    });
+
+    it("the first save writes the row and its score in one step, so the status never sees an unscored row", async () => {
+      const { event, game } = await seedEnded();
+      expect((await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 3, scoreTwo: 1 }))).status).toBe(200);
+      const rows = await prisma.gameHistory.findMany({ where: { eventId: event.id } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ scoreOne: 3, scoreTwo: 1 });
+    });
+
+    it("two saves at once make one row", async () => {
+      const { event, game } = await seedEnded();
+      const [a, b] = await Promise.all([
+        patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 3, scoreTwo: 1 })),
+        patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 2, scoreTwo: 2 })),
+      ]);
+      expect([a.status, b.status]).toEqual([200, 200]);
+      expect(await prisma.gameHistory.count({ where: { eventId: event.id } })).toBe(1);
+    });
   });
 
   it("still needs a signed-in player, owner or admin", async () => {

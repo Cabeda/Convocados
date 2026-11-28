@@ -9,7 +9,7 @@ import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type Vie
 import { summarizePayments } from "./paymentSummary";
 import { parseTeamsSnapshot } from "./gameSnapshot";
 import { findViewerName, isNameInList, namesFromTeamsSnapshot } from "./snapshotParticipants";
-import { viewerRosterNames } from "./viewerIdentity.server";
+import { isOnLiveRoster, viewerRosterNames } from "./viewerIdentity.server";
 import { countEligibleVoters, viewerHasVoted } from "./mvp.server";
 import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 
@@ -467,15 +467,6 @@ async function collectorHasPaymentDetails(
   } catch {
     return false;
   }
-}
-
-/** Is one of these names on the live game's roster (pending invitations and archived rows do not count)? */
-async function isOnLiveRoster(gameId: string, names: readonly string[]): Promise<boolean> {
-  const rows = await prisma.gameParticipant.findMany({
-    where: { gameId, archivedAt: null, status: { not: "pending" } },
-    select: { eventPlayer: { select: { name: true } } },
-  });
-  return rows.some((r) => isNameInList(names, r.eventPlayer.name));
 }
 
 /** The index of the team (0 = score one) whose snapshot lineup contains any of `names`, or null. */

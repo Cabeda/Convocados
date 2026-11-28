@@ -135,6 +135,103 @@ describe("status and write endpoints agree on who the viewer is", () => {
   });
 });
 
+/**
+ * An ended one-off has no history row until its first score, so who may save it is who is on the LIVE
+ * roster: the status's `isPlayer` and the first-score PATCH read that same roster, whether or not the
+ * player was drawn into a team.
+ */
+async function seedEndedOneOff() {
+  await seedUser("owner-1", "Olga Owner");
+  const dateTime = new Date(Date.now() - 3 * 3_600_000);
+  const event = await prisma.event.create({
+    data: { title: "One-off", location: "Pitch", ownerId: "owner-1", isRecurring: false, dateTime, durationMinutes: 60, teamOneName: "Foxes", teamTwoName: "Lions" },
+  });
+  const game = await prisma.game.create({ data: { eventId: event.id, dateTime, status: "upcoming" } });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  // Two drawn teams; neither includes the roster players below.
+  const a = await prisma.teamResult.create({ data: { name: "Foxes", eventId: event.id } });
+  await prisma.teamMember.create({ data: { name: "Bob", order: 0, teamResultId: a.id } });
+  const b = await prisma.teamResult.create({ data: { name: "Lions", eventId: event.id } });
+  await prisma.teamMember.create({ data: { name: "Charlie", order: 0, teamResultId: b.id } });
+  return { eventId: event.id, gameId: game.id };
+}
+
+const onRoster = async (gameId: string, eventPlayerId: string, status = "active", archivedAt: Date | null = null) =>
+  prisma.gameParticipant.create({ data: { gameId, eventPlayerId, order: 0, status, archivedAt } });
+
+interface EndedCase {
+  label: string;
+  account: string;
+  seat?: (eventId: string, gameId: string, userId: string) => Promise<unknown>;
+  allowed: boolean;
+}
+
+const ENDED_CASES: EndedCase[] = [
+  {
+    label: "a linked roster player who was not drawn into a team",
+    account: ACCOUNT,
+    seat: async (e, g, u) => onRoster(g, (await linkEventPlayer(e, u)).id),
+    allowed: true,
+  },
+  {
+    label: "a roster player known only by the account name (nothing linked)",
+    account: "Dina",
+    seat: async (e, g) => onRoster(g, (await prisma.eventPlayer.create({ data: { eventId: e, name: "Dina" } })).id),
+    allowed: true,
+  },
+  {
+    label: "a roster seat whose name matches a linked Player row",
+    account: ACCOUNT,
+    seat: async (e, g, u) => {
+      await linkPlayer(e, u);
+      return onRoster(g, (await prisma.eventPlayer.create({ data: { eventId: e, name: LEDGER } })).id);
+    },
+    allowed: true,
+  },
+  {
+    label: "a linked row that is not on the live roster",
+    account: ACCOUNT,
+    seat: async (e, _g, u) => { await linkEventPlayer(e, u); },
+    allowed: false,
+  },
+  {
+    label: "a roster seat that is someone else's and unlinked",
+    account: ACCOUNT,
+    seat: async (e, g) => onRoster(g, (await prisma.eventPlayer.create({ data: { eventId: e, name: "Zed" } })).id),
+    allowed: false,
+  },
+  {
+    label: "a pending invitation",
+    account: ACCOUNT,
+    seat: async (e, g, u) => onRoster(g, (await linkEventPlayer(e, u)).id, "pending"),
+    allowed: false,
+  },
+  {
+    label: "an archived roster seat",
+    account: ACCOUNT,
+    seat: async (e, g, u) => onRoster(g, (await linkEventPlayer(e, u)).id, "active", new Date()),
+    allowed: false,
+  },
+  { label: "a stranger", account: "Stranger", allowed: false },
+];
+
+describe("an ended one-off: status and the first-score save agree on who the viewer is", () => {
+  it.each(ENDED_CASES)("$label → allowed: $allowed", async ({ account, seat, allowed }) => {
+    const { eventId, gameId } = await seedEndedOneOff();
+    await seedUser("viewer", account);
+    await seat?.(eventId, gameId, "viewer");
+    signIn("viewer", account);
+
+    const status = await (await getStatus(ctx({ id: eventId }))).json();
+    expect(status.isPlayer).toBe(allowed);
+    expect(status.pendingGameId).toBe(gameId);
+
+    const save = await patchHistory(ctx({ id: eventId, historyId: gameId }, "PATCH", { scoreOne: 2, scoreTwo: 1 }));
+    expect(save.status).toBe(allowed ? 200 : 403);
+    expect(await prisma.gameHistory.count({ where: { eventId } })).toBe(allowed ? 1 : 0);
+  });
+});
+
 describe("a ledger name that differs from the account name", () => {
   it("records the vote under the linked name and clears the viewer's MVP task", async () => {
     const { eventId, historyId } = await seedGame();
