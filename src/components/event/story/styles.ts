@@ -41,6 +41,9 @@ export const PANEL_ACTION_HEIGHT = 56;
 /** The scoreboard, steppers and panels sit together on a wide screen instead of stretching. */
 export const BOARD_MAX_WIDTH = "28rem";
 
+/** A deep link scrolls its row into view: this keeps it clear of the sticky app bar (57px) with a little air. */
+export const DEEP_LINK_MARGIN = "5rem";
+
 /** One quiet buzz when something is done. Not every device has a vibration motor. */
 export const cheer = () => {
   try { navigator.vibrate?.(10); } catch { /* not supported */ }

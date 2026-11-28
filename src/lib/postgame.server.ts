@@ -170,7 +170,11 @@ export async function computePostGameStatus(
   // the roster rows linked to the account count too (falling back to the name).
   const viewerNames = session?.user ? await resolveViewerNames(event.id, session.user.id, session.user.name) : [];
   const playedAs = viewerNames.find((n) => isHistoryParticipant(latestHistory, n)) ?? null;
-  const isPlayer = playedAs !== null;
+  // An ended one-off has no history row until its first score: who played is who was on the live game's roster.
+  const onLiveRoster = !latestHistory && gameEnded && !event.isRecurring && !!session?.user && event.currentGameId
+    ? await isOnLiveRoster(event.currentGameId, viewerNames)
+    : false;
+  const isPlayer = playedAs !== null || onLiveRoster;
 
   // ─── MVP voting completion ──────────────────────────────────────────
   let mvpComplete = true;
@@ -444,6 +448,15 @@ async function collectorHasPaymentDetails(
   } catch {
     return false;
   }
+}
+
+/** Is one of these names on the live game's roster (pending invitations and archived rows do not count)? */
+async function isOnLiveRoster(gameId: string, names: readonly string[]): Promise<boolean> {
+  const rows = await prisma.gameParticipant.findMany({
+    where: { gameId, archivedAt: null, status: { not: "pending" } },
+    select: { eventPlayer: { select: { name: true } } },
+  });
+  return rows.some((r) => isNameInList(names, r.eventPlayer.name));
 }
 
 /** The account name plus the names of roster rows (Player, EventPlayer) linked to this account on the event. */

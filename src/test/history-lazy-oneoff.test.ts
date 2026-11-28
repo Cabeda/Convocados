@@ -61,6 +61,21 @@ describe("an ended one-off with no history row: the score creates it", () => {
     expect(after.scoreOne).toBe(3);
   });
 
+  it("counts somebody on the live game's roster as a player, so they may add the first score too", async () => {
+    const { event, game } = await seedEnded();
+    await prisma.user.create({ data: { id: "u-ana", name: "Ana Account", email: "ana@test.com", emailVerified: true } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana Lopes", userId: "u-ana" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, status: "active", order: 0 } });
+    mockGetSession.mockResolvedValue({ user: { id: "u-ana", name: "Ana Account" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+    const status = await (await getStatus(getCtx({ id: event.id }))).json();
+    expect(status.isPlayer).toBe(true);
+    expect(status.pendingGameId).toBe(game.id);
+    // A stranger is not.
+    mockGetSession.mockResolvedValue({ user: { id: "u-zed", name: "Zed" } } as any);
+    expect((await (await getStatus(getCtx({ id: event.id }))).json()).isPlayer).toBe(false);
+  });
+
   it("PATCH on the live game id creates the history row with the score and the teams", async () => {
     const { event, game, dateTime } = await seedEnded();
     const res = await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 3, scoreTwo: 1 }));
