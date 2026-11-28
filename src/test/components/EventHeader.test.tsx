@@ -25,7 +25,7 @@ const baseEvent = {
 
 type Overrides = Partial<{
   event: Partial<EventData>; canEditSettings: boolean; isAuthenticated: boolean; isOwnerless: boolean;
-  gameStatus: string | null; onCancelGame: () => void; onClaimOwnership: () => Promise<void>;
+  gameStatus: string | null; isParticipant: boolean; onSignedIn: () => void; onCancelGame: () => void; onClaimOwnership: () => Promise<void>;
   onSaveTitle: (t: string) => Promise<void>; onSaveLocation: (l: string) => Promise<void>;
   onSaveDateTime: (d: string, tz: string) => Promise<void>; onSaveSport: (s: string) => Promise<void>;
 }>;
@@ -43,6 +43,7 @@ function renderHeader(o: Overrides = {}) {
       eventId="evt-1" event={event} sport={event.sport} gameDate={new Date(event.dateTime)}
       canEditSettings={o.canEditSettings ?? false} isAuthenticated={o.isAuthenticated ?? true}
       isOwnerless={o.isOwnerless ?? false} localMatches={null} gameStatus={o.gameStatus ?? null}
+      isParticipant={o.isParticipant ?? true} onSignedIn={o.onSignedIn}
       onSaveTitle={props.onSaveTitle} onSaveLocation={props.onSaveLocation} onSaveDateTime={props.onSaveDateTime}
       onSaveSport={props.onSaveSport} onClaimOwnership={props.onClaimOwnership} onCancelGame={props.onCancelGame}
     />,
@@ -84,17 +85,60 @@ describe("EventHeader — the line-up of actions", () => {
     expect(screen.getByRole("button", { name: "Share with players" })).toBeInTheDocument();
   });
 
-  it("a signed-out header has Share and More but no Follow and no Edit", () => {
+  it("a signed-out header has Share and More, no Edit, and offers to sign in to follow", () => {
     renderHeader({ isAuthenticated: false });
     expect(screen.getByRole("button", { name: "Share with players" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Follow game" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in to follow" })).toBeInTheDocument();
   });
 
-  it("gives a signed-in viewer a Follow toggle and an admin the pencil", () => {
+  it("puts Follow and Edit as words in a quiet row under the info, and only Share and More beside the title", async () => {
     renderHeader({ canEditSettings: true });
-    expect(screen.getByRole("button", { name: "Follow game" })).toHaveAttribute("aria-pressed");
-    expect(screen.getByRole("button", { name: "Edit details" })).toBeInTheDocument();
+    const follow = await screen.findByRole("button", { name: "Follow game" });
+    const edit = screen.getByRole("button", { name: "Edit details" });
+    expect(follow).toHaveTextContent("Follow game");
+    expect(edit).toHaveTextContent("Edit details");
+    const titleRow = screen.getByRole("heading", { level: 1 }).parentElement.parentElement;
+    expect(titleRow).toContainElement(screen.getByRole("button", { name: "Share with players" }));
+    expect(titleRow).toContainElement(screen.getByRole("button", { name: "More" }));
+    expect(titleRow).not.toContainElement(follow);
+    expect(titleRow).not.toContainElement(edit);
+  });
+
+  it("keeps a very long title whole for readers: the full text is the heading name and the tooltip", () => {
+    const long = "Quinta-feira à noite no pavilhão da escola secundária com muitos amigos e convidados de outras equipas";
+    renderHeader({ event: { title: long } });
+    expect(screen.getByRole("heading", { level: 1, name: long })).toHaveAttribute("title", long);
+  });
+
+  it("names Share and More for pointer users with a tooltip, and More is a word on wide screens", () => {
+    renderHeader();
+    expect(screen.getByRole("button", { name: "Share with players" })).toHaveAttribute("aria-label", "Share with players");
+    const more = screen.getByRole("button", { name: "More" });
+    expect(more).toHaveTextContent("More");
+  });
+
+  it("gives the Edit and More triggers aria-expanded and aria-controls", async () => {
+    const user = userEvent.setup();
+    renderHeader({ canEditSettings: true });
+    const edit = screen.getByRole("button", { name: "Edit details" });
+    expect(edit).toHaveAttribute("aria-expanded", "false");
+    await user.click(edit);
+    expect(edit).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById(edit.getAttribute("aria-controls"))).toContainElement(screen.getByLabelText("Name"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    const more = screen.getByRole("button", { name: "More" });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+    await user.click(more);
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById(more.getAttribute("aria-controls"))).toBe(await screen.findByRole("dialog", { name: "More" }));
+  });
+
+  it("gives a signed-in viewer a Follow button that says what it does", async () => {
+    renderHeader({ canEditSettings: true });
+    expect(await screen.findByRole("button", { name: "Follow game" })).toBeInTheDocument();
   });
 
   it("copies the link when the phone has no share sheet, and says so politely", async () => {
@@ -196,7 +240,7 @@ describe("EventHeader — chips", () => {
     expect(screen.getByText("Archived")).toBeInTheDocument();
   });
 
-  it("lets a signed-in viewer claim an ownerless game, once per tap", async () => {
+  it("lets a signed-in viewer claim an ownerless game, once per tap, and says so", async () => {
     let release;
     const onClaimOwnership = vi.fn(() => new Promise<void>((r) => { release = r; }));
     renderHeader({ isOwnerless: true, onClaimOwnership });
@@ -205,6 +249,15 @@ describe("EventHeader — chips", () => {
     fireEvent.click(chip);
     expect(onClaimOwnership).toHaveBeenCalledTimes(1);
     release();
+    expect(await screen.findByRole("status")).toHaveTextContent("You now manage this game");
+  });
+
+  it("says plainly when the claim did not go through", async () => {
+    const user = userEvent.setup();
+    renderHeader({ isOwnerless: true, onClaimOwnership: vi.fn(async () => { throw new Error("no"); }) });
+    await user.click(screen.getByRole("button", { name: "Claim this game" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't claim this game. Check your connection and try again.");
+    expect(screen.queryByText("You now manage this game")).not.toBeInTheDocument();
   });
 
   it("does not offer the claim to a signed-out viewer or on an owned game", () => {

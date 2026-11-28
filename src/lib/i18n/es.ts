@@ -313,7 +313,7 @@ const es: TranslationKeys = {
   notifyDenied: "Notificaciones bloqueadas — revisa la configuración del navegador",
   followGame: "Seguir partido",
   unfollowGame: "Dejar de seguir",
-  followedToast: "Añadido a Mis Partidos",
+  followedToast: "Recibirás avisos de este partido",
   unfollowedToast: "Eliminado de Mis Partidos",
   followSettingsTitle: "Siguiendo este partido",
   followSettingsDesc: "Este partido aparece en tu panel Mis Partidos. Configura las notificaciones abajo.",
@@ -1700,6 +1700,14 @@ statsGoals: "Goles",
   editNameRequired: "Ponle un nombre al partido.",
   editDateRequired: "Elige la fecha y la hora.",
   shareCopyFailed: "No se pudo copiar el enlace. Mantén pulsada la barra de direcciones para copiarlo.",
+  followingGame: "Siguiendo",
+  followFailed: "No se pudo seguir. Revisa la conexión e inténtalo otra vez.",
+  unfollowFailed: "No se pudo dejar de seguir. Revisa la conexión e inténtalo otra vez.",
+  followLoadFailed: "No se pudo comprobar si sigues este partido. Recarga la página e inténtalo otra vez.",
+  signInToFollow: "Inicia sesión para seguir",
+  claimedToast: "Ahora gestionas este partido",
+  claimFailed: "No se pudo reclamar este partido. Revisa la conexión e inténtalo otra vez.",
+  priceTotal: "{amount} en total",
 };
 
 export default es;

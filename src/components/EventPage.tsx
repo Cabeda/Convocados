@@ -1014,12 +1014,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Ownership ───────────────────────────────────────────────────────────────
 
+  // Throws when the server says no: the header says so, and confirms a success in its own toast.
   const handleClaimOwnership = async () => {
-    try {
-      await apiRequest("POST /api/events/{id}/claim", { params: { id: eventId } });
-      fetchEvent();
-      setSnackbar(t("claimOwnership"));
-    } catch { /* the old code ignored a failed claim */ }
+    await apiRequest("POST /api/events/{id}/claim", { params: { id: eventId } });
+    fetchEvent();
   };
 
   const handleRelinquishOwnership = async () => {
@@ -1205,6 +1203,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSaveDateTime={handleSaveDateTime}
               onSaveSport={handleSaveSport}
               onClaimOwnership={handleClaimOwnership}
+              onSignedIn={() => { refetchSession?.(); fetchEvent(); }}
               onCancelGame={() => setCancelConfirmOpen(true)}
             />
 

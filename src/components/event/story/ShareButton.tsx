@@ -1,4 +1,4 @@
-import { IconButton } from "@mui/material";
+import { IconButton, Tooltip } from "@mui/material";
 import ShareIcon from "@mui/icons-material/Share";
 import { useLocale } from "~/lib/useT";
 import { buildEventShareText, shareableUrl, shareEvent } from "../shareEvent";
@@ -32,8 +32,10 @@ export function ShareButton({ title, dateTime, timezone, location, maxPlayers, p
   };
 
   return (
-    <IconButton onClick={handleShare} aria-label={t("shareGame")} sx={iconAction}>
-      <ShareIcon />
-    </IconButton>
+    <Tooltip title={t("shareGame")}>
+      <IconButton onClick={handleShare} aria-label={t("shareGame")} sx={iconAction}>
+        <ShareIcon />
+      </IconButton>
+    </Tooltip>
   );
 }

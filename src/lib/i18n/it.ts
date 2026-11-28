@@ -313,7 +313,7 @@ const it: TranslationKeys = {
   notifyDenied: "Notifiche bloccate — controlla le impostazioni del browser",
   followGame: "Segui partita",
   unfollowGame: "Smetti di seguire",
-  followedToast: "Aggiunta a Le Mie Partite",
+  followedToast: "Riceverai i promemoria per questa partita",
   unfollowedToast: "Rimossa da Le Mie Partite",
   followSettingsTitle: "Stai seguendo questa partita",
   followSettingsDesc: "Questa partita appare nel tuo pannello Le Mie Partite. Configura le notifiche sotto.",
@@ -1700,6 +1700,14 @@ statsGoals: "Goal",
   editNameRequired: "Dai un nome alla partita.",
   editDateRequired: "Scegli data e ora.",
   shareCopyFailed: "Impossibile copiare il link. Tieni premuta la barra degli indirizzi per copiarlo.",
+  followingGame: "Seguendo",
+  followFailed: "Impossibile seguire. Controlla la connessione e riprova.",
+  unfollowFailed: "Impossibile smettere di seguire. Controlla la connessione e riprova.",
+  followLoadFailed: "Impossibile verificare se segui questa partita. Ricarica la pagina e riprova.",
+  signInToFollow: "Accedi per seguire",
+  claimedToast: "Ora gestisci tu questa partita",
+  claimFailed: "Impossibile prendere in carico la partita. Controlla la connessione e riprova.",
+  priceTotal: "{amount} in totale",
 };
 
 export default it;

@@ -49,3 +49,9 @@ export const hitArea = {
   position: "relative",
   "&::after": { content: '""', position: "absolute", inset: "-10px -6px" },
 } as const;
+
+/** A small labelled action in the quiet row under the info lines: the words are visible, 44px tall. */
+export const textAction = {
+  minHeight: 44, px: 1.25, gap: 0.75, borderRadius: 999, textTransform: "none", fontSize: "1rem", fontWeight: 600,
+  color: "text.secondary", ...tappable,
+} as const;

@@ -85,7 +85,7 @@ export function EventEditForm({ event, sport, onSave, onCancel }: Props) {
   const busy = saving;
   return (
     <Stack
-      component="form" ref={formRef} spacing={1.5} sx={{ mt: 1.5 }} noValidate aria-busy={busy}
+      component="form" id="event-edit-form" ref={formRef} spacing={1.5} sx={{ mt: 1.5 }} noValidate aria-busy={busy}
       onSubmit={(e) => { e.preventDefault(); void save(); }}
       onKeyDown={(e) => { if (e.key === "Escape" && !e.defaultPrevented && !busy) onCancel(); }}
     >

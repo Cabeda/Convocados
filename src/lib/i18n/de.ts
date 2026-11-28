@@ -313,7 +313,7 @@ const de: TranslationKeys = {
   notifyDenied: "Benachrichtigungen blockiert — Browsereinstellungen prüfen",
   followGame: "Spiel folgen",
   unfollowGame: "Entfolgen",
-  followedToast: "Zu Meine Spiele hinzugefügt",
+  followedToast: "Du bekommst Erinnerungen für dieses Spiel",
   unfollowedToast: "Aus Meine Spiele entfernt",
   followSettingsTitle: "Du folgst diesem Spiel",
   followSettingsDesc: "Dieses Spiel erscheint in deinem Meine Spiele-Dashboard. Benachrichtigungen unten konfigurieren.",
@@ -1700,6 +1700,14 @@ statsGoals: "Tore",
   editNameRequired: "Gib dem Spiel einen Namen.",
   editDateRequired: "Wähle Datum und Uhrzeit.",
   shareCopyFailed: "Der Link konnte nicht kopiert werden. Halte die Adressleiste gedrückt, um ihn zu kopieren.",
+  followingGame: "Folge ich",
+  followFailed: "Folgen hat nicht geklappt. Prüfe die Verbindung und versuche es erneut.",
+  unfollowFailed: "Entfolgen hat nicht geklappt. Prüfe die Verbindung und versuche es erneut.",
+  followLoadFailed: "Es konnte nicht geprüft werden, ob du diesem Spiel folgst. Lade die Seite neu und versuche es erneut.",
+  signInToFollow: "Zum Folgen anmelden",
+  claimedToast: "Du verwaltest jetzt dieses Spiel",
+  claimFailed: "Das Spiel konnte nicht übernommen werden. Prüfe die Verbindung und versuche es erneut.",
+  priceTotal: "{amount} insgesamt",
 };
 
 export default de;

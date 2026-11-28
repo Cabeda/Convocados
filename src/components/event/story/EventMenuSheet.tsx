@@ -22,6 +22,8 @@ interface Props {
   onClose: () => void;
   groups: MenuGroup[];
   eventId: string;
+  /** The id of the sheet, for the trigger's aria-controls. */
+  menuId: string;
   owner: { id: string; name: string } | null;
   googleCalendarHref: string;
   onCancelGame: () => void;
@@ -53,7 +55,7 @@ const row = {
 } as const;
 
 /** The ⋮ menu as a bottom sheet: groups of 48px rows, closes on Esc, swipe or a tap outside. */
-export function EventMenuSheet({ open, onClose, groups, eventId, owner, googleCalendarHref, onCancelGame, onOpenNotifications }: Props) {
+export function EventMenuSheet({ open, onClose, groups, eventId, menuId, owner, googleCalendarHref, onCancelGame, onOpenNotifications }: Props) {
   const t = useT();
   const calm = useMediaQuery("(prefers-reduced-motion: reduce)");
 
@@ -84,7 +86,7 @@ export function EventMenuSheet({ open, onClose, groups, eventId, owner, googleCa
       sx={{ zIndex: (th) => th.zIndex.snackbar + 2 }}
       slotProps={{
         paper: {
-          role: "dialog", "aria-modal": true, "aria-label": t("moreActions"),
+          id: menuId, role: "dialog", "aria-modal": true, "aria-label": t("moreActions"),
           sx: {
             left: 0, right: 0, mx: "auto", maxWidth: "32rem", maxHeight: "calc(100dvh - 3rem)", overflowY: "auto",
             borderRadius: "20px 20px 0 0", pb: "calc(env(safe-area-inset-bottom) + 8px)",

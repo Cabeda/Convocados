@@ -335,7 +335,7 @@ const en = {
   notifyDenied: "Notifications blocked — check browser settings",
   followGame: "Follow game",
   unfollowGame: "Unfollow",
-  followedToast: "Added to My Games",
+  followedToast: "You'll get reminders for this game",
   unfollowedToast: "Removed from My Games",
   followSettingsTitle: "Following this game",
   followSettingsDesc: "This game appears in your My Games dashboard. Configure notifications below.",
@@ -1760,6 +1760,14 @@ statsGoals: "Goals",
   editNameRequired: "Give the game a name.",
   editDateRequired: "Pick a date and time.",
   shareCopyFailed: "Couldn't copy the link. Press and hold the address bar to copy it.",
+  followingGame: "Following",
+  followFailed: "Couldn't follow. Check your connection and try again.",
+  unfollowFailed: "Couldn't unfollow. Check your connection and try again.",
+  followLoadFailed: "Couldn't check whether you follow this game. Reload the page to try again.",
+  signInToFollow: "Sign in to follow",
+  claimedToast: "You now manage this game",
+  claimFailed: "Couldn't claim this game. Check your connection and try again.",
+  priceTotal: "{amount} total",
 } as const;
 
 export default en;

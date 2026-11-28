@@ -313,7 +313,7 @@ const fr: TranslationKeys = {
   notifyDenied: "Notifications bloquées — vérifie les paramètres du navigateur",
   followGame: "Suivre le match",
   unfollowGame: "Ne plus suivre",
-  followedToast: "Ajouté à Mes Matchs",
+  followedToast: "Tu recevras des rappels pour ce match",
   unfollowedToast: "Retiré de Mes Matchs",
   followSettingsTitle: "Vous suivez ce match",
   followSettingsDesc: "Ce match apparaît dans votre tableau Mes Matchs. Configurez les notifications ci-dessous.",
@@ -1700,6 +1700,14 @@ statsGoals: "Buts",
   editNameRequired: "Donne un nom au match.",
   editDateRequired: "Choisis la date et l'heure.",
   shareCopyFailed: "Impossible de copier le lien. Appuie longuement sur la barre d'adresse pour le copier.",
+  followingGame: "Suivi",
+  followFailed: "Impossible de suivre. Vérifie ta connexion et réessaie.",
+  unfollowFailed: "Impossible de ne plus suivre. Vérifie ta connexion et réessaie.",
+  followLoadFailed: "Impossible de savoir si tu suis ce match. Recharge la page et réessaie.",
+  signInToFollow: "Connecte-toi pour suivre",
+  claimedToast: "Tu gères maintenant ce match",
+  claimFailed: "Impossible de prendre ce match en main. Vérifie ta connexion et réessaie.",
+  priceTotal: "{amount} au total",
 };
 
 export default fr;

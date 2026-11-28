@@ -44,18 +44,36 @@ function stubPushBrowser(opts: { userAgent?: string; permission?: "default" | "g
 const setup = async (toasts: string[] = []) => {
   const user = userEvent.setup();
   renderWithTheme(<FollowToggle eventId="e1" onToast={(m) => toasts.push(m)} />);
-  const button = screen.getByRole("button", { name: "Follow game" });
   // The toggle waits for the server's answer so a tap never goes the wrong way.
-  await waitFor(() => expect(fetch).toHaveBeenCalled());
-  await new Promise((r) => setTimeout(r, 0));
+  const button = await screen.findByRole("button", { name: /^(Follow game|Following)$/ });
+  await waitFor(() => expect(button).toBeEnabled());
   return { user, button };
 };
 
 describe("FollowToggle", () => {
+  it("is disabled until the server has said whether you follow, instead of guessing \"not following\"", async () => {
+    let answer;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((r) => { answer = () => r(json({ following: true })); })));
+    renderWithTheme(<FollowToggle eventId="e1" onToast={() => {}} />);
+    const button = screen.getByRole("button", { name: "Follow game" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+    answer();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Following" })).toBeEnabled());
+  });
+
+  it("stays disabled and says why when the first lookup fails, rather than offering a wrong Follow", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ error: "no" }, 500)));
+    renderWithTheme(<FollowToggle eventId="e1" onToast={() => {}} />);
+    const button = screen.getByRole("button", { name: "Follow game" });
+    await waitFor(() => expect(button).toHaveAttribute("title", "Couldn't check whether you follow this game. Reload the page to try again."));
+    expect(button).toBeDisabled();
+  });
+
   it("shows the state the server holds, for a player added by an organiser and for a follower alike", async () => {
     stubFetch({ following: true });
     const { button } = await setup();
-    await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(button).toHaveTextContent("Following"));
   });
 
   it("flips at once on tap, then sticks when the server agrees", async () => {
@@ -65,10 +83,10 @@ describe("FollowToggle", () => {
     const toasts: string[] = [];
     const { user, button } = await setup(toasts);
     await user.click(button);
-    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(button).toHaveTextContent("Following");
     release();
-    await waitFor(() => expect(toasts).toContain("Added to My Games"));
-    expect(button).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(toasts).toContain("You'll get reminders for this game"));
+    expect(button).toHaveTextContent("Following");
   });
 
   it("flips back and says so when the server refuses", async () => {
@@ -76,17 +94,17 @@ describe("FollowToggle", () => {
     const toasts: string[] = [];
     const { user, button } = await setup(toasts);
     await user.click(button);
-    await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "false"));
-    expect(toasts).toContain("Something went wrong.");
+    await waitFor(() => expect(button).toHaveTextContent("Follow game"));
+    expect(toasts).toContain("Couldn't follow. Check your connection and try again.");
   });
 
   it("unfollows with the same button and a plain toast", async () => {
     stubFetch({ following: true });
     const toasts: string[] = [];
     const { user, button } = await setup(toasts);
-    await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(button).toHaveTextContent("Following"));
     await user.click(button);
-    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(button).toHaveTextContent("Follow game");
     await waitFor(() => expect(toasts).toContain("Removed from My Games"));
   });
 
@@ -99,7 +117,7 @@ describe("FollowToggle", () => {
     await user.click(button);
     await user.click(button);
     release();
-    await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(button).toHaveTextContent("Following"));
     expect(f.mock.calls.filter(([url, init]) => String(url).endsWith("/follow") && init?.method !== "GET")).toHaveLength(1);
   });
 
