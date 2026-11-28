@@ -104,6 +104,11 @@ import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
       @view-transition { navigation: auto; }
       ::view-transition-old(root),
       ::view-transition-new(root) { animation-duration: 200ms; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+      /* Less motion means none: every transition and animation on the page (the app's own and MUI's ripples, toasts and
+         dialogs) finishes in one frame. Each component also switches its own off; this is the net under them. */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+      }
       @media (prefers-reduced-motion: reduce) {
         ::view-transition-old(root),
         ::view-transition-new(root) { animation: none !important; }

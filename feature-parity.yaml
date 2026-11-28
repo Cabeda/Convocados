@@ -77,6 +77,11 @@ teams:
     view-teams: { web: true, android: true, wearos: true }
     field-view: { web: true, android: true, wearos: false }
     player-positions: { web: true, android: true, wearos: false }
+    # Slice 4 of the event-page redesign. Android keeps its teams card; follow-up: the flat two-column teams section
+    # (viewer's team marked, one-tap move, early draw with a plain confirm, "What's at stake" behind one button) and the
+    # "Play again?" block for a one-off game that has ended (make it weekly / plan another / ask the organizer).
+    flat-teams-block: { web: true, android: false, wearos: false }
+    play-again-one-off: { web: true, android: false, wearos: false }
 
 score-tracking:
   web: true
