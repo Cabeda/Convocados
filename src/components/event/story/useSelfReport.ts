@@ -1,28 +1,40 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { apiRequest } from "~/lib/api/client";
-import type { PostGameStatus } from "./postGameStatus";
+import type { Optimistic, PostGameStatus } from "./postGameStatus";
+import { useOptimisticAction } from "./useOptimisticAction";
 
-/** "I paid": the viewer reports their own share of the last game (the payer confirms it). */
-export function useSelfReport(eventId: string, status: PostGameStatus) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+export interface SelfReportHooks {
+  onOptimistic?: (patch: Optimistic) => void;
+  onRollback?: (key: keyof Optimistic) => void;
+}
 
-  const report = useCallback(async (eventPlayerId: string): Promise<boolean> => {
-    if (!status.gameConfig) return false;
-    setBusy(true);
-    setFailed(false);
-    try {
-      await apiRequest("POST /api/events/{id}/payments/settlement/self-report", {
-        params: { id: eventId }, body: { gameId: status.gameConfig.gameId, eventPlayerId },
-      });
-      setBusy(false);
-      return true;
-    } catch {
-      setFailed(true);
-      setBusy(false);
-      return false;
-    }
-  }, [eventId, status.gameConfig]);
+export interface SelfReportCallbacks {
+  /** The row is hidden (before the server answers). */
+  applied?: () => void;
+  /** The server refused: the row is back. */
+  reverted?: () => void;
+}
 
-  return { report, busy, failed };
+/**
+ * "I've paid": the viewer tells the collector they sent their share (the
+ * collector confirms it). The row hides at once; if the server refuses it comes
+ * back with an error. Tapping again while the first is in flight does nothing.
+ */
+export function useSelfReport(eventId: string, status: PostGameStatus | null, hooks: SelfReportHooks = {}) {
+  const { run, failed, clearFailed } = useOptimisticAction();
+  const { onOptimistic, onRollback } = hooks;
+
+  const report = useCallback((eventPlayerId: string, cb: SelfReportCallbacks = {}): Promise<boolean> => {
+    if (!status?.gameConfig) return Promise.resolve(false);
+    const gameId = status.gameConfig.gameId;
+    return run({
+      apply: () => { onOptimistic?.({ paidIds: [eventPlayerId] }); cb.applied?.(); },
+      request: () => apiRequest("POST /api/events/{id}/payments/settlement/self-report", {
+        params: { id: eventId }, body: { gameId, eventPlayerId },
+      }),
+      revert: () => { onRollback?.("paidIds"); cb.reverted?.(); },
+    });
+  }, [run, eventId, status, onOptimistic, onRollback]);
+
+  return { report, failed, clearFailed };
 }

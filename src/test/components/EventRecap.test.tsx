@@ -48,9 +48,9 @@ function mount(status: PostGameStatus, over: Partial<EventRecapProps> = {}) {
 describe("EventRecap", () => {
   it("shows the full card with what is left to a player who owes", async () => {
     mount(base);
-    expect(await screen.findByText("Pay 5.00€")).toBeInTheDocument();
+    expect(await screen.findByText("You owe €5")).toBeInTheDocument();
     expect(screen.getByText("You won")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pay" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I've paid" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Hide details of the last game" })).toBeNull(); // a task is left
   });
 
@@ -68,9 +68,9 @@ describe("EventRecap", () => {
     mount({ ...base, isPlayer: false, viewerTeam: null, isParticipant: false, gamePayments: null },
       { viewerName: "Zed" });
     expect(await screen.findByRole("button", { name: "Show details of the last game" })).toBeInTheDocument();
-    expect(screen.getByText("Foxes won")).toBeInTheDocument();
+    expect(screen.getByTestId("recap-header-label")).toHaveTextContent("Foxes won");
     fireEvent.click(screen.getByRole("button", { name: "Show details of the last game" }));
-    expect(screen.queryByRole("button", { name: "Pay" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "I've paid" })).toBeNull();
   });
 
   it("gives a signed-out visitor the result and a sign-in row", async () => {
@@ -86,7 +86,7 @@ describe("EventRecap", () => {
 
   it("drops the recap on game day but keeps a reminder for an unpaid share", async () => {
     mount(base, { nextKickoff: hours(2) });
-    expect(await screen.findByText("You still owe 5.00€")).toBeInTheDocument();
+    expect(await screen.findByText("You still owe €5")).toBeInTheDocument();
     expect(screen.queryByTestId("last-game-recap")).toBeNull();
   });
 
@@ -103,11 +103,37 @@ describe("EventRecap", () => {
   it("opens the score steppers for ?action=add-score without leaving the page", async () => {
     mount({ ...base, hasScore: false, scoreOne: null, scoreTwo: null, hasPendingPastPayments: false, allPaid: true },
       { deepLinkAction: "add-score" });
-    expect(await screen.findByRole("button", { name: "One more goal for Foxes" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "One more for Foxes" })).toBeInTheDocument();
   });
 
-  it("lets the owner see the recurrence offer once everything is done", async () => {
+  it("lets the owner of a one-off see the recurrence offer once everything is done — flat, not as a second card", async () => {
     mount({ ...paid, isRecurring: false }, { canManage: true, isRecurring: false });
-    expect(await screen.findByTestId("recurrence-prompt")).toBeInTheDocument();
+    const prompt = await screen.findByTestId("recurrence-prompt");
+    expect(prompt.closest(".MuiPaper-root")).toBeNull();
+  });
+
+  it("does not show the Weekly card on an event that already repeats", async () => {
+    mount({ ...paid, isRecurring: true }, { canManage: true, isRecurring: true });
+    await screen.findByTestId("last-game-recap");
+    expect(screen.queryByTestId("recurrence-already")).toBeNull();
+    expect(screen.queryByTestId("recurrence-prompt")).toBeNull();
+    expect(screen.queryByText(/repeats every week/i)).toBeNull();
+  });
+
+  it("does not offer the recurrence to a viewer who cannot manage the event", async () => {
+    mount({ ...paid, isRecurring: false }, { canManage: false, isRecurring: false });
+    await screen.findByTestId("last-game-recap");
+    expect(screen.queryByTestId("recurrence-prompt")).toBeNull();
+  });
+
+  it("finds the linked player when the account name is not the roster name", async () => {
+    mount({ ...base, viewerNames: ["anab99", "Ana"] }, { viewerName: "anab99" });
+    expect(await screen.findByRole("button", { name: "I've paid" })).toBeInTheDocument();
+  });
+
+  it("does not show the amber dot for information the viewer cannot act on", async () => {
+    mount({ ...base, gameConfig: { ...base.gameConfig, payerName: null } });
+    expect(await screen.findByText("You owe €5")).toBeInTheDocument();
+    expect(screen.queryByTestId("needs-you-dot")).toBeNull();
   });
 });

@@ -397,12 +397,7 @@ export async function computePostGameStatus(
   }
 
   // Whether the collector has somewhere to send money to: drives the card's "How to pay" link.
-  let payerHasPaymentDetails = false;
-  if (wrapUpSettlement && wrapUpSettlement.mode === "tracked" && wrapUpSettlement.payerName) {
-    try {
-      payerHasPaymentDetails = (await resolvePaymentDetails(event.id, wrapUpSettlement.gameId)).methods.length > 0;
-    } catch { /* details are a courtesy: never fail the status for them */ }
-  }
+  const payerHasPaymentDetails = await collectorHasPaymentDetails(event.id, wrapUpSettlement);
 
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
@@ -430,6 +425,19 @@ export async function computePostGameStatus(
     lastGamePlayerCount: namesFromTeamsSnapshot(latestHistory?.teamsSnapshot).length || null,
     payerHasPaymentDetails,
   };
+}
+
+/** Whether the collector of a tracked game has somewhere to send money to. A courtesy: it never fails the status. */
+async function collectorHasPaymentDetails(
+  eventId: string,
+  settlement: { mode: string; payerName: string | null; gameId: string } | null,
+): Promise<boolean> {
+  if (!settlement || settlement.mode !== "tracked" || !settlement.payerName) return false;
+  try {
+    return (await resolvePaymentDetails(eventId, settlement.gameId)).methods.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /** The account name plus the names of roster rows (Player, EventPlayer) linked to this account on the event. */
