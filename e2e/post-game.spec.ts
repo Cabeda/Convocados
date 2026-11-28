@@ -84,15 +84,15 @@ async function createVerifiedUser(
  * 2. Create event (owned by user) with future date
  * 3. Add players
  * 4. Move event to the past (simulate time passing)
- * 5. Verify post-game banner appears
+ * 5. Verify the last-game recap appears with the score still to add
  * 6. Set up cost/payments
- * 7. Verify banner shows both tasks pending
+ * 7. Verify the recap still asks for the score
  * 8. Add score via history API (authenticated)
- * 9. Verify banner shows score done, payments pending
+ * 9. Verify the recap shows the score
  * 10. Mark all payments as paid
- * 11. Verify banner disappears
+ * 11. Verify the recap folds into a one-line strip
  */
-test.describe("Post-game experience — banner, score, payments", () => {
+test.describe("Post-game experience — last-game recap, score, payments", () => {
   test.setTimeout(60_000);
 
   test("full post-game lifecycle with auth", async ({ page }) => {
@@ -124,7 +124,7 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(createRes.status()).toBe(200);
     const { id: eventId } = await createRes.json();
 
-    // Disable MVP so bannerMvpComplete doesn't block allComplete
+    // Disable MVP so bannerMvpComplete (the server's "all done" flag) doesn't block allComplete
     const mvpRes = await api.put(`/api/events/${eventId}/mvp-enabled`, {
       data: { mvpEnabled: false },
     });
@@ -174,9 +174,10 @@ test.describe("Post-game experience — banner, score, payments", () => {
 
     // ── Step 7: Visit event page — recap should be visible ──
     await page.goto(`/events/${eventId}`);
-    await expect(page.locator('[data-testid="last-game-recap"]')).toBeVisible({
-      timeout: 10_000,
-    });
+    const recap = page.getByTestId("last-game-recap");
+    await expect(recap).toBeVisible({ timeout: 10_000 });
+    // No score yet: the recap's own row asks for it.
+    await expect(recap.getByText("Add the score")).toBeVisible();
 
     // ── Step 8: Set up cost and payments ──
     const costRes = await api.put(`/api/events/${eventId}/cost`, {
@@ -190,11 +191,10 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(paymentsData.payments.length).toBe(4);
     expect(paymentsData.summary.pendingCount).toBe(4);
 
-    // ── Step 9: Verify recap still visible (both tasks pending) ──
+    // ── Step 9: Verify recap still visible, still asking for the score ──
     await page.reload();
-    await expect(page.locator('[data-testid="last-game-recap"]')).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(recap).toBeVisible({ timeout: 10_000 });
+    await expect(recap.getByText("Add the score")).toBeVisible();
 
     // ── Step 10: Add score via history API (authenticated) ──
     const historyRes = await api.post(`/api/events/${eventId}/history`, {
@@ -216,11 +216,12 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(status2.allPaid).toBe(false); // payments still pending
     expect(status2.allComplete).toBe(false);
 
-    // ── Step 11: Reload — recap should show score done, payments pending ──
+    // ── Step 11: Reload — the recap shows the score and no longer asks for it ──
     await page.reload();
-    await expect(page.locator('[data-testid="last-game-recap"]')).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(recap).toBeVisible({ timeout: 10_000 });
+    await expect(recap.getByTestId("recap-scoreboard")).toContainText("3");
+    await expect(recap.getByTestId("recap-scoreboard")).toContainText("2");
+    await expect(recap.getByText("Add the score")).toHaveCount(0);
 
     // ── Step 12: Mark all payments as paid ──
     for (const name of players) {
@@ -240,12 +241,10 @@ test.describe("Post-game experience — banner, score, payments", () => {
     // ── Step 13: Reload — the recap folds into a one-line strip (nothing left to do) ──
     await page.reload();
     await page.waitForLoadState("networkidle");
-    await expect(page.locator('[data-testid="last-game-recap"] button[aria-expanded="false"]')).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(recap.locator('button[aria-expanded="false"]')).toBeVisible({ timeout: 10_000 });
   });
 
-  test("post-game banner does NOT appear for future events", async ({ page, request }) => {
+  test("last-game recap does NOT appear for future events", async ({ page, request }) => {
     const ip = uniqueIp();
     const api = withIp(request, ip);
 
