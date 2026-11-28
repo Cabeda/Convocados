@@ -1851,6 +1851,7 @@ statsGoals: "Golos",
   paAskNobody: "Pede a quem organiza para marcar o próximo.",
   paNowEvery: "Agora repete todas as semanas · {day}",
   paFailed: "Não foi possível torná-lo semanal. Tenta outra vez.",
+  skipToContent: "Saltar para o conteúdo",
 };
 
 export default pt;

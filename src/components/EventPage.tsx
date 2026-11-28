@@ -264,7 +264,7 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
       <ResponsiveLayout>
         {/* One viewport tall at least, in this state and the next, so the footer is below the fold in both and never jumps into view. */}
         <Container maxWidth="md" sx={{ py: 4, minHeight: "100dvh" }}>
-          <Stack spacing={3}>
+          <Stack sx={{ gap: 3 }}>
             <HeaderSkeleton />
             {/* Only when a last game is known to exist (the page was told so, or this viewer has seen its recap here). */}
             {(hasLastGame || lastRecapShape(eventId) !== null) && <RecapSkeleton strip={lastRecapShape(eventId) === "strip"} />}
@@ -305,7 +305,7 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
     <ThemeModeProvider>
       <ResponsiveLayout>
         <Container maxWidth="md" sx={{ py: 4, minHeight: "100dvh" }}>
-          <Stack spacing={3}>
+          <Stack sx={{ gap: 3 }}>
 
             {inviteToken && event && (
               <InviteBanner token={inviteToken} eventId={event.id} onAccepted={fetchEvent} />

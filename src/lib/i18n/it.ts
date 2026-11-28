@@ -1803,6 +1803,7 @@ statsGoals: "Goal",
   paAskNobody: "Chiedi a chi organizza di pianificare la prossima.",
   paNowEvery: "Ora ogni {day}",
   paFailed: "Non è stato possibile renderla settimanale. Riprova.",
+  skipToContent: "Vai al contenuto",
 };
 
 export default it;

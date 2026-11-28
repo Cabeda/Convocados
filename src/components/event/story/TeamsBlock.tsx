@@ -8,6 +8,7 @@ import { findSelfRosterRow, type EventPermissions } from "~/lib/eventView";
 import { TeamField } from "../../TeamField";
 import type { EventData } from "../types";
 import { DrawDialog } from "./DrawDialog";
+import { PageSection } from "./PageSection";
 import { StakesSheet } from "./StakesSheet";
 import { TeamColumns } from "./TeamColumns";
 import { EASE, controlBorder, motion, srOnly, tappable } from "./styles";
@@ -89,9 +90,9 @@ export function TeamsBlock({ event, perms, viewer, refetch, notify, date, gameDa
       {/* Always there, so a screen reader hears the text when it arrives: a region that appears with its text is often missed. */}
       <Box role="status" aria-live="polite" data-testid="teams-announcement" sx={srOnly}>{status}</Box>
       {(hasTeams || canDraw) && (
-      <Box
-        component="section" aria-labelledby={hasTeams ? "teams-heading" : undefined} aria-label={hasTeams ? undefined : t("tbTeams")}
-        data-testid="teams" data-reveal={reveal ? "true" : undefined} sx={{ mt: 3 }}
+      <PageSection
+        gap="nested" aria-labelledby={hasTeams ? "teams-heading" : undefined} aria-label={hasTeams ? undefined : t("tbTeams")}
+        data-testid="teams" data-reveal={reveal ? "true" : undefined}
       >
 
         {hasTeams && (
@@ -174,7 +175,7 @@ export function TeamsBlock({ event, perms, viewer, refetch, notify, date, gameDa
           open={stakesOpen} onClose={() => setStakesOpen(false)} stakes={stakes} teamNames={outcomeTeams} viewerName={stakes.data?.viewerName ?? null}
           crewOf={(name) => crews?.[name]} stakeOf={(name) => stakes.stakeMap?.[name]}
         />
-      </Box>
+      </PageSection>
       )}
     </>
   );

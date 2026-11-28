@@ -1863,6 +1863,7 @@ statsGoals: "Goals",
   paAskNobody: "Ask the organizer to plan the next one.",
   paNowEvery: "Now every {day}",
   paFailed: "Couldn't make it weekly. Try again.",
+  skipToContent: "Skip to content",
 } as const;
 
 export default en;

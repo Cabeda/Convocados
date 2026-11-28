@@ -204,7 +204,7 @@ export function LastGameRecap(p: LastGameRecapProps) {
 
   return (
     <Box
-      data-testid="last-game-recap"
+      component="section" aria-labelledby="recap-heading" data-testid="last-game-recap"
       sx={{ bgcolor: "background.paper", border: 1, borderColor: "divider", borderRadius: "20px", overflow: "hidden" }}
     >
       <Box
@@ -218,7 +218,7 @@ export function LastGameRecap(p: LastGameRecapProps) {
         }}
       >
         <Typography
-          key={allDoneNow ? "done" : "label"} data-testid="recap-header-label"
+          id="recap-heading" component="h2" key={allDoneNow ? "done" : "label"} data-testid="recap-header-label"
           sx={{ gridArea: "label", fontSize: expanded ? "0.9375rem" : "0.8125rem", color: allDoneNow ? "primary.main" : "text.secondary", fontWeight: allDoneNow ? 700 : 400, minHeight: expanded ? 44 : undefined, display: "flex", alignItems: "center", ...(allDoneNow ? fadeIn : {}) }}
         >
           {headerText}

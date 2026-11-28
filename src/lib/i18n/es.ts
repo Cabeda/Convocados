@@ -1803,6 +1803,7 @@ statsGoals: "Goles",
   paAskNobody: "Pide a quien organiza que planifique el siguiente.",
   paNowEvery: "Ahora cada {day}",
   paFailed: "No se pudo hacerlo semanal. Inténtalo de nuevo.",
+  skipToContent: "Saltar al contenido",
 };
 
 export default es;

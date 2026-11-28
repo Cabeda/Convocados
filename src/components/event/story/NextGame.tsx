@@ -17,6 +17,7 @@ import { PaymentNudgeDialog } from "../PaymentNudgeDialog";
 import { AddFriendPanel } from "./AddFriendPanel";
 import { LineupSlots } from "./LineupSlots";
 import { NextGameHeader } from "./NextGameHeader";
+import { PageSection } from "./PageSection";
 import { PlayAgain } from "./PlayAgain";
 import { PlayerOptions } from "./PlayerOptions";
 import { RsvpRow } from "./RsvpRow";
@@ -227,9 +228,9 @@ export function NextGame(p: NextGameProps) {
   // A cancelled game keeps its list for reading — who was in — and nothing to press.
   if (phase === "cancelled") {
     return (
-      <Box component="section" aria-label={t("ngWhosIn")} data-testid="cancelled-roster" sx={{ maxWidth: "32rem" }}>
+      <PageSection gap="major" aria-label={t("ngWhosIn")} data-testid="cancelled-roster">
         <WhosIn autoOpen playing={active} bench={bench} viewerId={viewer?.id ?? null} positionsEnabled={!!event.positionsEnabled} />
-      </Box>
+      </PageSection>
     );
   }
 
@@ -245,7 +246,7 @@ export function NextGame(p: NextGameProps) {
   const error = roster.error ?? invites.error ?? removal.error;
 
   return (
-    <Box component="section" aria-label={t("nextGame")} data-testid="next-game" sx={{ maxWidth: "32rem" }}>
+    <PageSection gap="major" aria-label={t("nextGame")} data-testid="next-game">
       {/* Other people joining or leaving, read out politely by a screen reader; never shown. */}
       <Box role="status" aria-live="polite" aria-atomic data-testid="roster-announcement" sx={srOnly}>{announcement}</Box>
       <NextGameHeader phase={phase} date={date} timezone={event.timezone} now={now} startMs={startMs} />
@@ -356,6 +357,6 @@ export function NextGame(p: NextGameProps) {
           } finally { setLeaveBusy(false); setLeaving(null); }
         }}
       />
-    </Box>
+    </PageSection>
   );
 }

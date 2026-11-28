@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import { useLocale } from "~/lib/useT";
 import { playAgainView } from "~/lib/teamsView";
+import { PageSection } from "./PageSection";
 import { ACTION_HEIGHT, tappable } from "./styles";
 
 interface Props {
@@ -25,7 +26,7 @@ export function PlayAgain({ canManage, ownerName, busy, error, onMakeWeekly, onD
   useEffect(() => { if (error) weeklyRef.current?.focus(); }, [error]);
 
   return (
-    <Box component="section" aria-labelledby="play-again-heading" data-testid="play-again" sx={{ maxWidth: "32rem" }}>
+    <PageSection gap="major" aria-labelledby="play-again-heading" data-testid="play-again">
       <Typography id="play-again-heading" component="h2" sx={{ fontSize: "1.25rem", fontWeight: 700, lineHeight: 1.3, textWrap: "balance" }}>{t("paTitle")}</Typography>
       {view.kind === "manage" ? (
         <>
@@ -51,6 +52,6 @@ export function PlayAgain({ canManage, ownerName, busy, error, onMakeWeekly, onD
           {view.owner ? t("paAsk", { owner: view.owner }) : t("paAskNobody")}
         </Typography>
       )}
-    </Box>
+    </PageSection>
   );
 }

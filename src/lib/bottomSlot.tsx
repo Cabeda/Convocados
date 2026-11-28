@@ -69,3 +69,12 @@ export function useBottomSlotClaim(id: BottomBannerId, wants: boolean): boolean 
   if (!ctx) return true;
   return ctx.winner === id;
 }
+
+/**
+ * True while a banner fixed to the bottom edge (an update or the install pitch) is on screen — the page leaves
+ * room under its last line so the banner never covers it. The inline push prompt does not need it.
+ */
+export function useFixedBottomBanner(): boolean {
+  const ctx = useContext(BottomSlotContext);
+  return ctx?.winner === "update" || ctx?.winner === "install";
+}

@@ -356,3 +356,31 @@ describe("Teams — what is at stake", () => {
     expect(opener).toHaveFocus();
   });
 });
+
+describe("The page around the teams", () => {
+  it("keeps headings in order (title, then each section, then the teams inside the next game) and names every region", async () => {
+    renderPage(game());
+    await screen.findByTestId("team-columns");
+    const levels = screen.getAllByRole("heading").map((h) => Number(h.tagName.slice(1)));
+    expect(levels[0]).toBe(1);
+    levels.forEach((level, i) => { if (i > 0) expect(level - levels[i - 1]).toBeLessThanOrEqual(1); });
+    expect(screen.getByRole("region", { name: "Next game" })).toContainElement(screen.getByRole("heading", { level: 3, name: /^Teams for / }));
+    for (const region of screen.getAllByRole("region")) expect(region).toHaveAccessibleName();
+  });
+
+  it("has one live region for the teams and nothing else announces them", async () => {
+    renderPage(game());
+    await screen.findByTestId("team-columns");
+    expect(screen.getAllByTestId("teams-announcement")).toHaveLength(1);
+  });
+
+  it("starts with a skip link to the page, and the layout adds no second main landmark (the document has one)", async () => {
+    renderPage(game());
+    await screen.findByTestId("team-columns");
+    const skip = screen.getByTestId("skip-link");
+    expect(skip).toHaveAttribute("href", "#main-content");
+    expect(skip).toHaveTextContent("Skip to content");
+    expect(document.querySelector("a, button")).toBe(skip);
+    expect(screen.queryAllByRole("main")).toHaveLength(0);
+  });
+});

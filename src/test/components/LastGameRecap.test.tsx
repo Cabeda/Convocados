@@ -63,6 +63,11 @@ describe("LastGameRecap — full card", () => {
     expect(screen.getByText("You won · +143 points this season")).toBeInTheDocument();
   });
 
+  it("is a named region headed by an h2, like every other section of the page", () => {
+    show();
+    expect(screen.getByRole("region", { name: "Last game · Wed 4 Mar" })).toContainElement(screen.getByRole("heading", { level: 2, name: "Last game · Wed 4 Mar" }));
+  });
+
   it("uses no ranking jargon anywhere on the card", () => {
     const { container } = show();
     expect(container.textContent).not.toMatch(/\bRP\b|\bTier\b|\bCrew\b|Provisional|Wrap it up/);

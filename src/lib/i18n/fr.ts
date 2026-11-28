@@ -1803,6 +1803,7 @@ statsGoals: "Buts",
   paAskNobody: "Demandez à l'organisateur de planifier le prochain.",
   paNowEvery: "Désormais chaque {day}",
   paFailed: "Impossible de le rendre hebdomadaire. Réessayez.",
+  skipToContent: "Aller au contenu",
 };
 
 export default fr;

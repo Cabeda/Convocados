@@ -93,6 +93,7 @@ import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
     */}
     <style is:inline>
       html, body { background-color: #111412; }
+      main:focus { outline: none; }
       body { color: #e6e6e6; margin: 0; }
       /* ponytail: cross-document view transitions (browser-native, CSS-only).
          Works with client:only islands because navigation is a full page load.
@@ -111,6 +112,8 @@ import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
   </head>
   <body>
     <main
+      id="main-content"
+      tabindex="-1"
       class={mainClass}
       style={mainTransitionName ? `view-transition-name: ${mainTransitionName};` : undefined}
     >
