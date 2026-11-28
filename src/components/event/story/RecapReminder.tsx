@@ -21,6 +21,12 @@ export interface RecapReminderProps {
 
 const CALM = "@media (prefers-reduced-motion: reduce)";
 
+/** The flat game-day row: a tinted strip with the amber "needs you" bar down its left edge. Shared with the score reminder. */
+export const reminderSx = {
+  display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1.5, borderRadius: 2, bgcolor: "action.hover", pl: 2, pr: 1.5, py: 1, position: "relative",
+  "&::before": { content: '""', position: "absolute", left: 0, top: 0, bottom: 0, width: 5, bgcolor: "attention.main", borderRight: "1px solid", borderColor: "attention.ring" },
+} as const;
+
 /** On game day the recap is gone; an unpaid share lingers as this one small row. */
 export function RecapReminder({ eventId, currency, task, onPay, failed, reported, highlight }: RecapReminderProps) {
   const { locale, t } = useLocale();
@@ -37,8 +43,7 @@ export function RecapReminder({ eventId, currency, task, onPay, failed, reported
     <Box
       ref={ref} data-testid="recap-reminder"
       sx={{
-        display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1.5, borderRadius: 2, bgcolor: "action.hover", pl: 2, pr: 1.5, py: 1, position: "relative",
-        "&::before": { content: '""', position: "absolute", left: 0, top: 0, bottom: 0, width: 5, bgcolor: "attention.main", borderRight: "1px solid", borderColor: "attention.ring" },
+        ...reminderSx,
         ...(highlight ? {
           animation: `recapPulse 1200ms ${EASE}`,
           "@keyframes recapPulse": { "0%,100%": { opacity: 1 }, "35%": { opacity: 0.6 } },

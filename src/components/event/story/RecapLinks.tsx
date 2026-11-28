@@ -4,8 +4,24 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import { useT } from "~/lib/useT";
 import { summarizePayments } from "~/lib/paymentSummary";
+import { buildRankExplainerHref, outcomeFromScore, type RankOutcome } from "~/lib/rankExplainer";
 import type { PostGameStatus } from "./postGameStatus";
 import { tappable } from "./styles";
+
+/**
+ * Where the Ranking tile goes. The recap says "+143 points this season" in one plain line; the tile is
+ * where the why lives. When this game moved the viewer's points that is the rank explainer filled in with
+ * this game's numbers (the page the "your rank changed" push opens, and the one the Season page links to);
+ * otherwise the rankings page.
+ */
+export function rankingHref(eventId: string, status: PostGameStatus): string {
+  const move = status.seasonRank;
+  if (!move?.counted || status.viewerTeam === null || status.viewerTeam === undefined) return `/events/${eventId}/rankings`;
+  const teamOne = outcomeFromScore(status.scoreOne, status.scoreTwo);
+  // `outcomeFromScore` is team one's point of view; the explainer reads the viewer's.
+  const outcome: RankOutcome = status.viewerTeam === 0 ? teamOne : teamOne === 1 ? 0 : teamOne === 0 ? 1 : 0.5;
+  return buildRankExplainerHref(eventId, { seasonId: move.seasonId, rank: move.after, delta: move.delta, outcome });
+}
 
 /** Where the rest of the last game lives: its details, its money, the ranking. Every tile says what it holds. */
 export function RecapLinks({ eventId, status, showPayments }: { eventId: string; status: PostGameStatus; showPayments: boolean }) {
@@ -21,7 +37,7 @@ export function RecapLinks({ eventId, status, showPayments }: { eventId: string;
       key: "payments", label: t("recapLinkPayments"), icon: <PaymentsIcon fontSize="small" />, href: `/events/${eventId}/payments`,
       sub: status.gamePayments?.length ? t("recapLinkPaymentsSub", { paid: paid.paidCount, total: paid.totalCount }) : "\u00a0",
     }] : []),
-    { key: "ranking", label: t("recapLinkRanking"), icon: <LeaderboardIcon fontSize="small" />, href: `/events/${eventId}/rankings`, sub: t("recapLinkRankingSub") },
+    { key: "ranking", label: t("recapLinkRanking"), icon: <LeaderboardIcon fontSize="small" />, href: rankingHref(eventId, status), sub: t("recapLinkRankingSub") },
   ];
   return (
     <Box sx={{ display: "flex", flexWrap: "wrap", gap: "1px", bgcolor: "divider", borderTop: 1, borderColor: "divider" }}>

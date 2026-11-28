@@ -91,6 +91,74 @@ describe("usePostGameStatus polling", () => {
   });
 });
 
+describe("usePostGameStatus: static fields ride on the page load, the poll only carries what changes", () => {
+  const seeded: PostGameStatus = { ...base, viewerNames: ["anab99", "Ana"], payerHasPaymentDetails: true };
+  let urls: string[];
+  /** What the server sends: a poll leaves the static fields out (see post-game-status `?poll=1`). */
+  const serve = () => vi.stubGlobal("fetch", vi.fn((url: string) => {
+    urls.push(url);
+    const { viewerNames: _names, payerHasPaymentDetails: _details, ...dynamic } = live;
+    return Promise.resolve({ ok: true, status: 200, headers, json: async () => (url.includes("poll=1") ? dynamic : live) });
+  }));
+  beforeEach(() => { urls = []; live = { ...seeded }; serve(); });
+
+  it("asks the server for the light answer on every poll tick", async () => {
+    renderHook(() => usePostGameStatus("e1", seeded));
+    await advance(30_000);
+    expect(urls).toHaveLength(2);
+    expect(urls.every((u) => u.includes("/api/events/e1/post-game-status") && u.includes("poll=1"))).toBe(true);
+  });
+
+  it("asks for the light answer when the tab comes back too", async () => {
+    renderHook(() => usePostGameStatus("e1", seeded));
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); await Promise.resolve(); });
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain("poll=1");
+  });
+
+  it("keeps the names and the payment-details flag from the first payload between polls, while the rest updates", async () => {
+    const { result } = renderHook(() => usePostGameStatus("e1", seeded));
+    live = { ...seeded, scoreOne: 7, hasPendingPastPayments: true };
+    await advance(15_000);
+    expect(result.current.status).toMatchObject({ scoreOne: 7, viewerNames: ["anab99", "Ana"], payerHasPaymentDetails: true });
+    await advance(15_000);
+    expect(result.current.status).toMatchObject({ viewerNames: ["anab99", "Ana"], payerHasPaymentDetails: true });
+  });
+
+  it("a read the viewer asked for (after an action) is the full answer and replaces the static fields", async () => {
+    const { result } = renderHook(() => usePostGameStatus("e1", seeded));
+    live = { ...seeded, viewerNames: ["anab99", "Ana", "Zed"], payerHasPaymentDetails: false };
+    await act(async () => { await result.current.refresh(); });
+    expect(urls[0]).not.toContain("poll=1");
+    expect(result.current.status).toMatchObject({ viewerNames: ["anab99", "Ana", "Zed"], payerHasPaymentDetails: false });
+  });
+
+  it("the very first read of a page that was not seeded is a full one", async () => {
+    const { result } = renderHook(() => usePostGameStatus("e1", null));
+    await advance(10);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).not.toContain("poll=1");
+    expect(result.current.status?.viewerNames).toEqual(["anab99", "Ana"]);
+  });
+
+  it("when a poll shows a different last game, it follows up with one full read for that game's static fields", async () => {
+    const { result } = renderHook(() => usePostGameStatus("e1", seeded));
+    live = { ...seeded, latestHistoryId: "h2", payerHasPaymentDetails: false, viewerNames: ["anab99", "Ana", "Zed"] };
+    await advance(15_000);
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toContain("poll=1");
+    expect(urls[1]).not.toContain("poll=1");
+    expect(result.current.status).toMatchObject({ latestHistoryId: "h2", payerHasPaymentDetails: false, viewerNames: ["anab99", "Ana", "Zed"] });
+  });
+
+  it("a poll that fails keeps the last status, static fields included", async () => {
+    const { result } = renderHook(() => usePostGameStatus("e1", seeded));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("offline"))));
+    await advance(15_000);
+    expect(result.current.status).toMatchObject({ viewerNames: ["anab99", "Ana"], payerHasPaymentDetails: true });
+  });
+});
+
 describe("EventRecap clock", () => {
   const mount = (over = {}) => renderWithTheme(
     <EventRecap eventId="e1" initialStatus={base} viewerName="Ana" isAuthenticated canManage={false} isRecurring

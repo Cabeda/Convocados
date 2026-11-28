@@ -58,6 +58,7 @@ event-detail:
     contact-picker-invite: { web: true, android: true, wearos: false }
     # Slice 2 of the event-page redesign. Android keeps its own event screen for now;
     # follow-up: bring the flat header, the ⋮ bottom sheet and the cancelled banner to EventDetailScreen.
+    # The manifest has no note field, so the follow-up is named here: https://github.com/Cabeda/Convocados/issues/1910
     flat-header-actions: { web: true, android: false, wearos: false }
     more-sheet: { web: true, android: false, wearos: false }
     # Slice 3: the next-game block (date and countdown, RSVP row, slot lineup, bench line, waiting row) and the
@@ -87,6 +88,9 @@ score-tracking:
     edit-score: { web: true, android: true, wearos: false }
     live-score-sync: { web: false, android: false, wearos: true }
     interval-alarms: { web: false, android: false, wearos: true }
+    # Slice 1 of the event-page redesign: the last game's recap card on top of the event page (scoreboard, what is
+    # left for the viewer, in-place score entry). The manifest has no note field, so the follow-up is named here:
+    # https://github.com/Cabeda/Convocados/issues/1910
     last-game-recap: { web: true, android: false, wearos: false }
 
 quick-game:

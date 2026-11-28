@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Stack } from "@mui/material";
 import { useLocale } from "~/lib/useT";
 import { formatDateInTz } from "~/lib/timezones";
 import { formatMoneyCompact } from "~/lib/money";
 import {
-  isSetsScoringSport, nextRecapBoundary, pendingTaskCount, recapPhase, recapTasks, scoreSummary, type RecapRole,
+  addScoreDeepLinkTarget, isSetsScoringSport, nextRecapBoundary, pendingTaskCount, recapPhase, recapTasks, scoreSummary, type RecapRole,
 } from "~/lib/eventStory";
 import { RecurrencePrompt } from "../../RecurrencePrompt";
 import { applyOptimistic, usePostGameStatus, type Optimistic, type PostGameStatus } from "./postGameStatus";
 import { LastGameRecap } from "./LastGameRecap";
 import { RecapReminder } from "./RecapReminder";
+import { RecapScoreReminder } from "./RecapScoreReminder";
 import { RecapSkeleton } from "./RecapSkeleton";
 import { useSelfReport } from "./useSelfReport";
 
@@ -64,6 +65,8 @@ export function EventRecap(p: EventRecapProps) {
   // The viewer finished something this visit: the card stays open (and says so) until they hide it.
   const [justCompleted, setJustCompleted] = useState(false);
   const [reminderReported, setReminderReported] = useState<string | null>(null);
+  // The score was added from the game-day reminder this visit: the row stays to say so.
+  const [scoreSavedHere, setScoreSavedHere] = useState(false);
 
   const status = useMemo(() => (serverStatus ? applyOptimistic(serverStatus, optimistic) : null), [serverStatus, optimistic]);
   const lastGame = status?.lastGameDateTime ?? null;
@@ -99,10 +102,21 @@ export function EventRecap(p: EventRecapProps) {
   }, [boundary]);
 
   const payTask = tasks.find((x) => x.kind === "pay");
+  const scoreTask = tasks.find((x) => x.kind === "addScore");
   const phase = recapPhase({
     now, nextKickoff, hasLastGame: !!lastGame, weekly, cancelled: false,
-    role, taskCount: pending, seen, owesShare: !!payTask || !!reminderReported,
+    role, taskCount: pending, seen, owesShare: !!payTask || !!reminderReported, addScorePending: !!scoreTask || scoreSavedHere,
   });
+
+  // `?action=add-score` must reach score entry in every phase. Where it cannot open in place
+  // (sets-scored sports, a game with no history row yet) it goes to History, as it always did.
+  const addScoreTarget = addScoreDeepLinkTarget(tasks);
+  const deepLinkSentRef = useRef(false);
+  useEffect(() => {
+    if (p.deepLinkAction !== "add-score" || addScoreTarget !== "history" || deepLinkSentRef.current) return;
+    deepLinkSentRef.current = true;
+    window.location.assign(`/events/${p.eventId}/history`);
+  }, [p.deepLinkAction, p.eventId, addScoreTarget]);
   useEffect(() => { setPaused(phase === "hidden"); }, [phase, setPaused]);
   const blocking = pending > 0 && (phase === "full" || phase === "strip");
   const { onBlockingChange } = p;
@@ -131,7 +145,8 @@ export function EventRecap(p: EventRecapProps) {
     return expectRecap ? <RecapSkeleton strip={lastRecapShape(p.eventId) === "strip"} /> : null;
   }
   if (!status || !lastGame) return null;
-  if (phase === "hidden" || (phase === "reminder" && payTask?.kind !== "pay" && !reminderReported)) return null;
+  const showScoreReminder = phase === "reminder" && (!!scoreTask || scoreSavedHere);
+  if (phase === "hidden" || (phase === "reminder" && payTask?.kind !== "pay" && !reminderReported && !showScoreReminder)) return null;
 
   const result = {
     hasScore: status.hasScore, scoreOne: status.scoreOne, scoreTwo: status.scoreTwo,
@@ -145,6 +160,14 @@ export function EventRecap(p: EventRecapProps) {
 
   return (
     <Stack spacing={1.5}>
+      {showScoreReminder && (
+        <RecapScoreReminder
+          eventId={p.eventId} teamOneName={status.teamOneName} teamTwoName={status.teamTwoName}
+          task={scoreTask?.kind === "addScore" ? scoreTask : { kind: "addScore", needsYou: true, inline: true }}
+          targetId={status.latestHistoryId} saved={scoreSavedHere} onSavedChange={setScoreSavedHere}
+          autoOpen={p.deepLinkAction === "add-score"} onOptimistic={onOptimistic} onRollback={onRollback} onChanged={refresh}
+        />
+      )}
       {phase === "reminder" && (payTask?.kind === "pay" || reminderReported) && (
         <RecapReminder
           eventId={p.eventId} currency={status.costCurrency} highlight={p.deepLinkAction === "pay"}
@@ -165,7 +188,7 @@ export function EventRecap(p: EventRecapProps) {
           onToggle={onToggle} dateLabel={dateLabel} role={role} viewerName={p.viewerName} viewerNames={status.viewerNames}
           tasks={tasks} summary={summary} outcome={outcome} onChanged={refresh}
           onOptimistic={onOptimistic} onRollback={onRollback} onCompleted={() => setJustCompleted(true)}
-          autoOpenScore={p.deepLinkAction === "add-score"} highlightPay={p.deepLinkAction === "pay"}
+          autoOpenScore={p.deepLinkAction === "add-score" && addScoreTarget === "inline"} highlightPay={p.deepLinkAction === "pay"}
         />
       )}
       {offerWeekly && (
