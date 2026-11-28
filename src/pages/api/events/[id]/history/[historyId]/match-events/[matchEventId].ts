@@ -4,7 +4,8 @@ import { getSession } from "../../../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../../../lib/eventLog.server";
 import { deriveScoreFromGoals, type MatchEventTeam } from "../../../../../../../lib/matchEvents";
-import { isHistoryParticipant } from "../../../../../../../lib/snapshotParticipants";
+import { namesFromTeamsSnapshot } from "../../../../../../../lib/snapshotParticipants";
+import { viewerNameOnRoster } from "../../../../../../../lib/viewerIdentity.server";
 
 /**
  * DELETE — remove a Match Event and re-derive the game's score from what is
@@ -35,7 +36,8 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     : await prisma.eventAdmin.findUnique({
         where: { eventId_userId: { eventId: params.id ?? "", userId } },
       });
-  const isParticipant = isHistoryParticipant(history, session?.user?.name);
+  // A participant is known by any name their account has on this event (the post-game status reads the same).
+  const isParticipant = !!session?.user && !!(await viewerNameOnRoster(params.id ?? "", session.user, namesFromTeamsSnapshot(history.teamsSnapshot)));
   if (!isOwner && !admin && !isParticipant) {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }

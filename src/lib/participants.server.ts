@@ -1,6 +1,7 @@
 import { prisma } from "./db.server";
-import { namesFromTeamsSnapshot, normalizeName } from "./snapshotParticipants";
+import { isNameInList, namesFromTeamsSnapshot, normalizeName } from "./snapshotParticipants";
 import { occurrencePaymentNames } from "./paymentRoll.server";
+import { viewerRosterNames } from "./viewerIdentity.server";
 
 export interface SettledGameParticipantContext {
   sessionUser: { id?: string; name?: string | null } | null;
@@ -9,6 +10,8 @@ export interface SettledGameParticipantContext {
     teamsSnapshot: string | null;
     dateTime: Date;
   } | null;
+  /** The viewer's names when the caller already resolved them (`viewerRosterNames`); looked up otherwise. */
+  viewerNames?: readonly string[];
 }
 
 /**
@@ -18,13 +21,18 @@ export interface SettledGameParticipantContext {
  * has names yet for a just-ended game — on the played Game's participant list.
  * The live/next-game player list never counts on its own.
  *
+ * "Their name" is every name the viewer is known by on this event — the account name plus the roster
+ * rows linked to the account (`viewerRosterNames`) — the same identity the post-game status reads, so a
+ * ledger name ("Ana B") that differs from the account ("anab99") still counts.
+ *
  * Owner/Admin override is intentionally NOT handled here — callers decide
  * whether to grant settlement roles regardless of participation.
  */
 export async function isSettledGameParticipant(context: SettledGameParticipantContext): Promise<boolean> {
   const { sessionUser, event, latestHistory } = context;
-  const needle = normalizeName(sessionUser?.name);
-  if (!needle) return false;
+  const viewerNames = context.viewerNames
+    ?? (sessionUser ? await viewerRosterNames(event.id, sessionUser) : []);
+  if (viewerNames.length === 0) return false;
 
   // Payment names come from the occurrence's durable GamePayment roll, never
   // the frozen paymentsSnapshot (retarget: 5rhgs71k). Before a reset the
@@ -45,7 +53,7 @@ export async function isSettledGameParticipant(context: SettledGameParticipantCo
       ...paymentNames,
     ].map(normalizeName),
   );
-  if (snapshotNames.has(needle)) return true;
+  if (viewerNames.some((n) => snapshotNames.has(normalizeName(n)))) return true;
 
   // No names for the settled game yet (one-off just ended, or the reset hasn't
   // materialised teams) → fall back to the settled Game's own participants,
@@ -79,7 +87,7 @@ export async function isSettledGameParticipant(context: SettledGameParticipantCo
     }
 
     const fallbackNames = settledGame?.participants.map((p) => p.eventPlayer.name) ?? [];
-    return fallbackNames.some((n) => normalizeName(n) === needle);
+    return fallbackNames.some((n) => isNameInList(viewerNames, n));
   }
 
   return false;

@@ -280,13 +280,11 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   // same rule the post-game banner uses), with a fallback to the played Game's
   // participants when no snapshot has materialised yet. Claiming a spot in a
   // later game does NOT grant edit rights (issue #658).
-  const isParticipant = session.user.name
-    ? await isSettledGameParticipant({
-        sessionUser: session.user,
-        event,
-        latestHistory: entry,
-      })
-    : false;
+  const isParticipant = await isSettledGameParticipant({
+    sessionUser: session.user,
+    event,
+    latestHistory: entry,
+  });
 
   if (!isOwner && !isAdmin && (event.ownerId || event.isPublic) && !isParticipant) {
     return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
