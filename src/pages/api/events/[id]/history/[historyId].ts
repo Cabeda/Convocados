@@ -222,7 +222,11 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   const passwordHeld = event.accessPassword
     ? await hasEventPasswordAccess(request, event, session)
     : false;
-  const latestHistory = entry ?? (sourceGame ? { dateTime: sourceGame.dateTime, teamsSnapshot: null } : null);
+  // Build (but do not persist) the snapshot a just-ended live Game will get, so
+  // the participant check sees the same teamResults the materialised row will.
+  // The create stays behind the gate below.
+  const pendingSnapshot = !entry && sourceGame ? await buildSnapshotForGame(params.id ?? "", sourceGame) : null;
+  const latestHistory = entry ?? (pendingSnapshot ? { dateTime: pendingSnapshot.dateTime, teamsSnapshot: pendingSnapshot.teamsSnapshot } : null);
   const isParticipant = !isOwner && !isAdmin && !passwordHeld && session.user.name
     ? await isSettledGameParticipant({ sessionUser: session.user, event, latestHistory })
     : false;
@@ -239,9 +243,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   // history entry was loaded directly). Materialise one so the score/teams
   // can be edited through the same path.
   let historyId = params.historyId;
-  if (!entry && sourceGame) {
-    const snap = await buildSnapshotForGame(params.id ?? "", sourceGame);
-    entry = await prisma.gameHistory.create({ data: snap });
+  if (!entry && pendingSnapshot) {
+    entry = await prisma.gameHistory.create({ data: pendingSnapshot });
     historyId = entry.id;
   }
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });

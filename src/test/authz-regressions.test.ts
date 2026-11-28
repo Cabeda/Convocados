@@ -498,6 +498,59 @@ describe("password-locked Event mutations (#1727)", () => {
     expect(await prisma.gameHistory.count({ where: { eventId: event.id } })).toBe(0);
   });
 
+  it("PATCH history refuses a settled participant named in the snapshot on a locked Event", async () => {
+    // The strangers in the tests above are denied by either branch; this pins
+    // the password branch specifically. A settled participant would be admitted
+    // on an unlocked Event, so only the password lock can deny this write.
+    const event = await seedEvent({ ownerId, accessPassword: hashPassword("secret") });
+    const history = await seedHistoryEntry(
+      event.id,
+      JSON.stringify([
+        { team: "Ninjas", players: [{ name: "other", order: 0 }] },
+        { team: "Gunas", players: [] },
+      ]),
+    );
+    const res = await patchHistory(ctx({ id: event.id, historyId: history.id }, { scoreOne: 9, scoreTwo: 0 }, otherToken, "PATCH"));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ locked: true });
+    const row = await prisma.gameHistory.findUniqueOrThrow({ where: { id: history.id } });
+    expect(row.scoreOne).toBeNull();
+    expect(row.scoreTwo).toBeNull();
+    expect(row.teamsSnapshot).toBe(history.teamsSnapshot);
+    expect(row.paymentsSnapshot).toBeNull();
+  });
+
+  it("lets an invitee write on a locked Event without the password cookie", async () => {
+    // hasEventPasswordAccess grants through checkLinkAccess's isInvited, so an
+    // invited user is a password-holding caller on an otherwise locked Event.
+    const event = await seedEvent({ ownerId, accessPassword: hashPassword("secret") });
+    const history = await seedHistoryEntry(event.id);
+    await prisma.eventInvite.create({ data: { eventId: event.id, userId: otherUserId } });
+    const res = await patchHistory(ctx({ id: event.id, historyId: history.id }, { scoreOne: 1, scoreTwo: 0 }, otherToken, "PATCH"));
+    expect(res.status).toBe(200);
+    const row = await prisma.gameHistory.findUniqueOrThrow({ where: { id: history.id } });
+    expect(row.scoreOne).toBe(1);
+  });
+
+  it("still lets a settled participant edit a just-ended Game with no history snapshot on an UNLOCKED Event", async () => {
+    // A played Game with no GameHistory row is materialised on the first PATCH.
+    // The participant's only record is the Event's teamResults, which is what
+    // the materialised snapshot will contain — so the gate must read that same
+    // in-memory snapshot, not an empty one, or the edit is denied.
+    const event = await seedEvent({ ownerId });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "played" },
+    });
+    const team = await prisma.teamResult.create({ data: { eventId: event.id, name: "Ninjas" } });
+    await prisma.teamMember.create({ data: { teamResultId: team.id, name: "other", order: 0 } });
+
+    const res = await patchHistory(ctx({ id: event.id, historyId: game.id }, { scoreOne: 2, scoreTwo: 1 }, otherToken, "PATCH"));
+    expect(res.status).toBe(200);
+    const created = await prisma.gameHistory.findFirstOrThrow({ where: { eventId: event.id } });
+    expect(created.scoreOne).toBe(2);
+    expect(created.scoreTwo).toBe(1);
+  });
+
   it("PUT teams refuses a roster player who never unlocked the Event", async () => {
     const event = await seedEvent({ ownerId: null, isPublic: false, accessPassword: hashPassword("secret") });
     await prisma.player.create({ data: { eventId: event.id, name: "Other", order: 0, userId: otherUserId } });
