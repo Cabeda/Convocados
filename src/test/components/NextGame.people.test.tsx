@@ -32,6 +32,12 @@ const openPanel = async (user: ReturnType<typeof userEvent.setup>) => {
   return await screen.findByRole("textbox", { name: "Their name or email" });
 };
 
+const addJustMe = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+  await user.click(await screen.findByRole("button", { name: "Or add just your name" }));
+  await user.type(await screen.findByRole("textbox", { name: "Your name" }), `${name}{Enter}`);
+  await screen.findByText(`Added ${name} ✓`);
+};
+
 beforeEach(() => {
   mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
   window.history.pushState({}, "", "/events/evt-1");
@@ -47,13 +53,66 @@ describe("Add a friend — the panel", () => {
     expect(field).toHaveFocus();
     expect(field).toHaveAttribute("maxlength", "120");
     expect(screen.getByRole("button", { name: "Add to the game" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Add a friend" })).toHaveAttribute("aria-expanded", "true");
+    // The panel IS the add-a-friend control while it is open: its trigger steps aside rather than repeating it.
+    expect(screen.queryByRole("button", { name: "Add a friend" })).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Add a friend" })).toBeInTheDocument();
   });
 
-  it("is offered to a signed-out visitor too, as the server allows (they add anonymous names)", async () => {
-    mockSession.data = null;
+  describe("signed out", () => {
+    beforeEach(() => { mockSession.data = null; });
+
+    it("makes Sign in the one primary action and offers just your name quietly under it — not 'a friend'", async () => {
+      renderPage({ players: rows(3) });
+      const signIn = await screen.findByRole("button", { name: "Sign in to join" });
+      const quiet = screen.getByRole("button", { name: "Or add just your name" });
+      expect(signIn.compareDocumentPosition(quiet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Add a friend" })).not.toBeInTheDocument();
+    });
+
+    it("opens the same panel in a your-name form: no friend, email, invite or several-names wording", async () => {
+      const user = userEvent.setup();
+      renderPage({ players: rows(3) });
+      await user.click(await screen.findByRole("button", { name: "Or add just your name" }));
+      const panel = await screen.findByRole("group", { name: "Add your name" });
+      const field = within(panel).getByRole("textbox", { name: "Your name" });
+      expect(field).toHaveFocus();
+      expect(field).toHaveAttribute("placeholder", "Your name");
+      expect(within(panel).getByRole("button", { name: "Add me" })).toBeDisabled();
+      expect(panel.textContent).not.toMatch(/friend|email|invite|several|contacts|played with/i);
+      expect(screen.queryByRole("button", { name: "Or add just your name" })).not.toBeInTheDocument();
+    });
+
+    it("adds the name, remembers it as theirs in this browser so they can leave later, and closes", async () => {
+      const user = userEvent.setup();
+      renderPage({ players: rows(3) });
+      await user.click(await screen.findByRole("button", { name: "Or add just your name" }));
+      await user.type(await screen.findByRole("textbox", { name: "Your name" }), "Ana Lopes");
+      await user.click(screen.getByRole("button", { name: "Add me" }));
+      await waitFor(() => expect(server.sent("POST", "/players")).toHaveLength(1));
+      expect(server.sent("POST", "/players")[0].body).toMatchObject({ name: "Ana Lopes", linkToAccount: false });
+      expect(server.sent("POST", "/players")[0].body).not.toHaveProperty("email");
+      expect(localStorage.getItem("added-here:evt-1")).toContain("Ana Lopes");
+      await waitFor(() => expect(screen.queryByRole("group", { name: "Add your name" })).not.toBeInTheDocument());
+      // Theirs to take back: their slot opens the options with a Remove.
+      await user.click(await screen.findByRole("button", { name: /Ana Lopes/ }));
+      expect(await screen.findByRole("button", { name: /Remove|Take .* off|Leave/i })).toBeInTheDocument();
+    });
+
+    it("treats an email-looking entry as the name typed: no account to invite from here", async () => {
+      const user = userEvent.setup();
+      renderPage({ players: rows(3) });
+      await user.click(await screen.findByRole("button", { name: "Or add just your name" }));
+      await user.type(await screen.findByRole("textbox", { name: "Your name" }), "ana@x.pt");
+      await user.click(screen.getByRole("button", { name: "Add me" }));
+      await waitFor(() => expect(server.sent("POST", "/players")).toHaveLength(1));
+      expect(server.sent("POST", "/players")[0].body).not.toHaveProperty("email");
+    });
+  });
+
+  it("stays 'Add a friend' for a signed-in viewer", async () => {
     renderPage({ players: rows(3) });
     expect(await screen.findByRole("button", { name: "Add a friend" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Or add just your name" })).not.toBeInTheDocument();
   });
 
   it("is not offered on a cancelled game, or once the game has ended", async () => {
@@ -422,16 +481,6 @@ describe("Add a friend — position, email, link, several", () => {
     });
   });
 
-  it("asks a signed-out visitor to sign in, or type a name, instead of an email", async () => {
-    mockSession.data = null;
-    const user = userEvent.setup();
-    renderPage();
-    await user.type(await openPanel(user), "rui@example.com{Enter}");
-    expect(await screen.findByRole("alert")).toHaveTextContent("Sign in to invite by email, or type their name instead.");
-    expect(server.sent("POST", "/invites")).toHaveLength(0);
-    expect(server.sent("POST", "/players")).toHaveLength(0);
-  });
-
   it("makes an invite link without notifying anyone, and offers copy and share", async () => {
     const user = userEvent.setup();
     renderPage({}, (s) => s.on("POST", "/invites", () => ({ ok: true, inviteUrl: "https://x.test/i/link" })));
@@ -569,8 +618,7 @@ describe("Remove — from the slot or the name", () => {
     mockSession.data = null;
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.type(await openPanel(user), "Rui{Enter}");
-    await screen.findByText("Added Rui ✓");
+    await addJustMe(user, "Rui");
     await user.click(await screen.findByRole("button", { name: "Options for Rui" }));
     await user.click(screen.getByRole("button", { name: "Remove Rui" }));
     await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
@@ -585,8 +633,7 @@ describe("Remove — from the slot or the name", () => {
     mockSession.data = null;
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.type(await openPanel(user), "Rui{Enter}");
-    await screen.findByText("Added Rui ✓");
+    await addJustMe(user, "Rui");
     expect(screen.queryByRole("button", { name: "Options for Ana Maria" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Options for Rui" })).toBeInTheDocument();
   });

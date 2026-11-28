@@ -245,6 +245,37 @@ export function NextGame(p: NextGameProps) {
     : t("ngNextUp", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format(benchNames.names) });
   const error = roster.error ?? invites.error ?? removal.error;
 
+  // Adding people. A signed-in viewer adds a friend; a signed-out one may add just their own name (an old, real path
+  // for people without an account), offered quietly under the one primary action, Sign in.
+  const anonName = !viewer && event.players.some((x) => !x.userId && addedHere.has(normalizeForMatch(x.name)));
+  const addPanel = adding && (
+    <Box id="add-friend">
+      <AddFriendPanel
+        variant={viewer ? "friend" : "self"}
+        full={event.players.length >= event.maxPlayers} positionsEnabled={!!event.positionsEnabled} suggestions={suggestions} busy={friends.busy || roster.busy}
+        onSubmit={viewer ? friends.submit : friends.submitName} onAddNamedEmail={friends.submitNamedEmail} onSubmitMany={friends.submitMany} onLink={friends.linkFor}
+        onClose={() => { setAdding(false); setTimeout(() => addButtonRef.current?.focus(), 0); }}
+      />
+    </Box>
+  );
+  const addControl = (
+    <>
+      {!adding && (
+        <Button
+          ref={addButtonRef} aria-controls="add-friend" aria-expanded={false}
+          variant={viewer ? "outlined" : "text"} startIcon={viewer ? <PersonAddIcon /> : undefined}
+          onClick={() => { setAdding(true); setAddingEver(true); }}
+          sx={viewer
+            ? { mt: 1, mr: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, color: "text.primary", borderColor: controlBorder, ...tappable }
+            : { mt: 0.5, minHeight: 44, px: 1.5, borderRadius: 999, textTransform: "none", fontWeight: 600, fontSize: "1rem", color: "text.secondary", ...tappable }}
+        >
+          {t(viewer ? "ngAddFriend" : "ngAddJustName")}
+        </Button>
+      )}
+      {addPanel}
+    </>
+  );
+
   return (
     <PageSection gap="major" aria-label={t("nextGame")} data-testid="next-game">
       {/* Other people joining or leaving, read out politely by a screen reader; never shown. */}
@@ -258,6 +289,8 @@ export function NextGame(p: NextGameProps) {
             highlight={p.deepLinkAction === "rsvp"} onSignedIn={p.onSignedIn}
             onJoin={() => void join()} onDecline={() => void decline()} onLeave={() => askToLeave()}
           />
+
+          {!viewer && !anonName && addControl}
 
           {thatsYou && nameRow && (
             <Typography data-testid="thats-you" role="status" sx={{ mt: 1.5, fontSize: "1rem", lineHeight: 1.45, textWrap: "pretty" }}>{t("ngThatsYou")}</Typography>
@@ -299,22 +332,7 @@ export function NextGame(p: NextGameProps) {
                 invited={event.invited ?? []} declined={event.declined ?? []} canManage={perms.canManageInvites}
                 resendingId={invites.resendingId} retractingId={invites.retractingId} onResend={invites.resend} onRetract={invites.retract}
               />
-              <Button
-                ref={addButtonRef} variant="outlined" startIcon={<PersonAddIcon />} aria-expanded={adding} aria-controls="add-friend"
-                onClick={() => { setAdding((a) => !a); setAddingEver(true); }}
-                sx={{ mt: 1, mr: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, color: "text.primary", borderColor: controlBorder, ...tappable }}
-              >
-                {t("ngAddFriend")}
-              </Button>
-              {adding && (
-                <Box id="add-friend">
-                  <AddFriendPanel
-                    full={event.players.length >= event.maxPlayers} positionsEnabled={!!event.positionsEnabled} suggestions={suggestions} busy={friends.busy || roster.busy}
-                    onSubmit={friends.submit} onAddNamedEmail={friends.submitNamedEmail} onSubmitMany={friends.submitMany} onLink={friends.linkFor}
-                    onClose={() => { setAdding(false); setTimeout(() => addButtonRef.current?.focus(), 0); }}
-                  />
-                </Box>
-              )}
+              {viewer && addControl}
               {removal.undo && <UndoToast message={t("undoRemoveDesc", { name: removal.undo.name })} onUndo={() => void removal.runUndo()} onDismiss={removal.dismissUndo} />}
             </Box>
           )}
