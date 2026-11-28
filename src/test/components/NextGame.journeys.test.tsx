@@ -27,6 +27,7 @@ function serverJoins(row: Row = me) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
   window.history.pushState({}, "", "/events/evt-1");
 });
@@ -82,27 +83,38 @@ describe("Next game — what the block says", () => {
     expect(screen.queryByText("Goalkeeper")).not.toBeInTheDocument();
   });
 
-  it("puts the bench in one plain line and numbers it inside 'Who's in'", async () => {
+  const BENCH = { maxPlayers: 2, players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Bia", userId: null }, { id: "c", name: "Carlos Dias", userId: null }, { id: "d", name: "Duda Lima", userId: null }] };
+  const closeWhosIn = async (user: ReturnType<typeof userEvent.setup>) => user.click(await screen.findByRole("button", { name: "Who's in", expanded: true }));
+
+  it("says the bench once: numbered in 'Who's in' while it is open, in one plain line once it is closed", async () => {
     const user = userEvent.setup();
-    renderPage({ maxPlayers: 2, players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Bia", userId: null }, { id: "c", name: "Carlos Dias", userId: null }, { id: "d", name: "Duda Lima", userId: null }] });
-    const line = await screen.findByTestId("bench-line");
-    expect(line).toHaveTextContent(/^Next up: Carlos D. and Duda L.$/);
-    await user.click(screen.getByRole("button", { name: "Who's in" }));
-    expect(screen.getByText("1. Carlos Dias")).toBeInTheDocument();
+    renderPage(BENCH);
+    // A bench is a reason to see the names: the list starts open, and the bench is in it, numbered.
+    expect(await screen.findByText("1. Carlos Dias")).toBeInTheDocument();
     expect(screen.getByText("2. Duda Lima")).toBeInTheDocument();
+    expect(screen.queryByTestId("bench-line")).not.toBeInTheDocument();
+    await closeWhosIn(user);
+    expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Carlos D. and Duda L.$/);
+    expect(screen.queryByText("1. Carlos Dias")).not.toBeInTheDocument();
   });
 
   it("names the first three on the bench and counts the rest: 'and 1 more', 'and 2 more'", async () => {
+    const user = userEvent.setup();
     const bench = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `b${i}`, name: ["Kátia Lima", "Luís Faria", "Marta Santos", "Nuno Reis", "Olga Pinto"][i], userId: null }));
     renderPage({ maxPlayers: 2, players: [...rows(2), ...bench(4)] });
+    await closeWhosIn(user);
     expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Kátia L., Luís F., Marta S. and 1 more$/);
     cleanup();
+    localStorage.clear();
     renderPage({ maxPlayers: 2, players: [...rows(2), ...bench(5)] });
+    await closeWhosIn(user);
     expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Kátia L., Luís F., Marta S. and 2 more$/);
   });
 
   it("uses the singular verb for a bench of one", async () => {
+    const user = userEvent.setup();
     renderPage({ maxPlayers: 1, players: [{ id: "a", name: "Ana", userId: null }, { id: "c", name: "Carlos", userId: null }] });
+    await closeWhosIn(user);
     expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Carlos$/);
   });
 });
@@ -499,15 +511,46 @@ describe("Next game — telling people apart in the lineup", () => {
     expect(letters).toEqual(["JoW", "JaW", "RC"]);
   });
 
-  it("stays collapsed when every slot is clear on its own, and a person's choice to close it sticks", async () => {
-    const user = userEvent.setup();
+  it("starts closed when every slot is clear on its own, for someone who runs nothing", async () => {
     renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Beto Santos", userId: null }] });
     await screen.findByTestId("lineup-slots");
     expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
-    cleanup();
-    renderPage({ players: [{ id: "a", name: "Joana Weiss", userId: null }, { id: "b", name: "Jack Weiss", userId: null }] });
+    expect(screen.getByRole("button", { name: "Who's in" })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("starts open for the organizer, who has people to manage", async () => {
+    mockSession.data = { user: { id: "owner-9", name: "Sam" } };
+    renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Beto Santos", userId: null }] });
+    expect(await screen.findByTestId("whos-in")).toBeInTheDocument();
+  });
+
+  it("remembers what the viewer chose for this event, both ways, over the default", async () => {
+    const user = userEvent.setup();
+    const two = [{ id: "a", name: "Joana Weiss", userId: null }, { id: "b", name: "Jack Weiss", userId: null }];
+    renderPage({ players: two });
     await user.click(await screen.findByRole("button", { name: "Who's in" }));
     expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
+    expect(localStorage.getItem("whos-in:evt-1")).toBe("closed");
+    cleanup();
+    renderPage({ players: two });
+    await screen.findByTestId("lineup-slots");
+    expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
+    cleanup();
+    localStorage.clear();
+    renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }] });
+    await user.click(await screen.findByRole("button", { name: "Who's in" }));
+    expect(localStorage.getItem("whos-in:evt-1")).toBe("open");
+    cleanup();
+    renderPage({ players: [{ id: "a", name: "Ana Maria", userId: null }] });
+    expect(await screen.findByTestId("whos-in")).toBeInTheDocument();
+  });
+
+  it("marks the viewer's own name by weight and by the slot, not with a third '(you)'", async () => {
+    mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
+    renderPage({ players: [{ id: "a", name: "Jose Silva", userId: "u-1" }, { id: "b", name: "Joana Weiss", userId: null }, { id: "c", name: "Jack Weiss", userId: null }] });
+    const list = await screen.findByTestId("whos-in");
+    expect(list).not.toHaveTextContent("(you)");
+    expect(within(list).getByRole("link", { name: "Jose Silva" })).toBeInTheDocument();
   });
 });
 

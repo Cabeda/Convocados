@@ -46,11 +46,10 @@ function Row({ player, me, number, positionsEnabled, selectable, selected, onSel
         : <span title={t("anonymousPlayer")}><AnonymousPlayerIcon /></span>}
       <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 0.75 }}>
         {player.userId ? (
-          <Link href={`/users/${player.userId}`} underline="hover" color="inherit" sx={{ fontSize: "1rem", lineHeight: 1.35, overflowWrap: "anywhere", borderRadius: 1, ...focusRing }}>{label}</Link>
+          <Link href={`/users/${player.userId}`} underline="hover" color="inherit" sx={{ fontSize: "1rem", lineHeight: 1.35, overflowWrap: "anywhere", borderRadius: 1, fontWeight: me ? 700 : 400, ...focusRing }}>{label}</Link>
         ) : (
-          <Typography component="span" sx={{ fontSize: "1rem", lineHeight: 1.35, overflowWrap: "anywhere" }}>{label}</Typography>
+          <Typography component="span" sx={{ fontSize: "1rem", lineHeight: 1.35, overflowWrap: "anywhere", fontWeight: me ? 700 : 400 }}>{label}</Typography>
         )}
-        {me && <Typography component="span" sx={{ fontSize: "0.875rem", color: "text.secondary" }}>({t("ngYouTag")})</Typography>}
         {positionsEnabled && player.position && POSITION_KEYS[player.position] && (
           <Chip size="small" variant="outlined" label={t(POSITION_KEYS[player.position])} />
         )}

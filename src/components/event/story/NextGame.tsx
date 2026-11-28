@@ -36,6 +36,7 @@ import { usePaymentGate } from "./usePaymentGate";
 import { useRosterActions } from "./useRosterActions";
 import { useRosterAnnouncements } from "./useRosterAnnouncements";
 import { useRosterRemoval } from "./useRosterRemoval";
+import { useWhosInOpen } from "./useWhosInOpen";
 
 export interface NextGameProps {
   eventId: string;
@@ -117,6 +118,9 @@ export function NextGame(p: NextGameProps) {
   const focusRow = () => rowRef.current?.focus();
 
   const { active, bench } = splitRoster(event.players, event.maxPlayers);
+  const [whosInOpen, setWhosInOpen] = useWhosInOpen(
+    p.eventId, perms.canEditSettings || bench.length > 0 || slotLabels(active.map((x) => x.name)).collides,
+  );
   const myRow = viewer ? event.players.find((x) => x.userId === viewer.id) ?? null : null;
   // A row an organizer added under the viewer's name before they signed in: theirs to leave or claim, never linked by guesswork (#1331).
   const nameRow = viewer && !myRow ? findSelfRosterRow(event.players, viewer) : null;
@@ -312,13 +316,14 @@ export function NextGame(p: NextGameProps) {
                 })()}
               />
               <Typography data-testid="lineup-summary" sx={{ mt: 1.25, fontSize: "0.9375rem", lineHeight: 1.45, color: "text.secondary", textWrap: "pretty" }}>{summary}</Typography>
-              {bench.length > 0 && (
+              {/* The names are said once: while "Who's in" is open it lists the bench, numbered. */}
+              {bench.length > 0 && !whosInOpen && (
                 <Typography data-testid="bench-line" sx={{ mt: 1, fontSize: "0.9375rem", lineHeight: 1.45, textWrap: "pretty" }}>
                   {nextUp}
                 </Typography>
               )}
               <WhosIn
-                autoOpen={slotLabels(active.map((x) => x.name)).collides}
+                open={whosInOpen || selection?.from === "row"} onOpenChange={setWhosInOpen}
                 trailing={perms.canEditSettings && (
                   <Button href={`/events/${p.eventId}/lineup`} sx={{ minHeight: 44, px: 1.25, textTransform: "none", fontSize: "1rem", fontWeight: 600, color: "text.secondary", borderRadius: 999, ...tappable }}>
                     {t("menuManageLineup")}

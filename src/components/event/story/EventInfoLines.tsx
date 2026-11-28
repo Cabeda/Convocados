@@ -7,6 +7,7 @@ import { COMMON_TIMEZONES } from "~/lib/timezones";
 import { formatMoneyCompact } from "~/lib/money";
 import { perPlayerShare } from "~/lib/gameCost";
 import { scheduleLabel } from "~/lib/eventHeader";
+import { isGameDay } from "~/lib/nextGame";
 import type { EventData } from "../types";
 import { focusRing, hitArea } from "./styles";
 import { useEventPrice } from "./useEventPrice";
@@ -42,7 +43,9 @@ export function EventInfoLines({ eventId, event, gameDate, canEdit, canViewPrice
   const { loaded, cost } = useEventPrice(eventId, canViewPrice);
 
   const rule = parseRecurrenceRule(event.recurrenceRule);
-  const schedule = scheduleLabel({ rule, gameDate, timezone: event.timezone, durationMinutes: event.durationMinutes, ended: ended && !rule, locale }, t);
+  // On game day the next-game block says "Today · 20:49": the time is not said twice.
+  const gameDay = !ended && !cancelled && isGameDay(Date.now(), gameDate.getTime(), event.timezone);
+  const schedule = scheduleLabel({ rule, gameDate, timezone: event.timezone, durationMinutes: event.durationMinutes, ended: ended && !rule, gameDay, locale }, t);
 
   // The viewer is in another timezone than the game: say which one the time is in.
   const viewerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;

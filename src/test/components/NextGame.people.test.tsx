@@ -42,6 +42,8 @@ beforeEach(() => {
   mockSession.data = { user: { id: "u-1", name: "Jose Silva" } };
   window.history.pushState({}, "", "/events/evt-1");
   localStorage.clear();
+  // These tests are about people, not about the list: it starts closed unless a test asks otherwise (defaults are tested in journeys).
+  localStorage.setItem("whos-in:evt-1", "closed");
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); delete (navigator as { contacts?: unknown }).contacts; });
 
