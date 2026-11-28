@@ -1753,10 +1753,12 @@ statsGoals: "Goals",
   claimThisGame: "Claim this game",
   headerLoading: "Loading the game",
   moreDetails: "More details",
-  editSaveFailed: "Couldn't save your changes. Check your connection and try again.",
   cancelledTitle: "This game was cancelled",
   cancelledBodyAdmin: "A cancelled game can't be reopened. Plan a new one from your games.",
   cancelledBodyPlayer: "Nobody can join or be added any more.",
+  editNotSaved: "Not saved. Your changes are still here.",
+  editNameRequired: "Give the game a name.",
+  editDateRequired: "Pick a date and time.",
 } as const;
 
 export default en;

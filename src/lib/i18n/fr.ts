@@ -1693,10 +1693,12 @@ statsGoals: "Buts",
   claimThisGame: "Prendre ce match en main",
   headerLoading: "Chargement du match",
   moreDetails: "Plus de détails",
-  editSaveFailed: "Impossible d'enregistrer les modifications. Vérifie ta connexion et réessaie.",
   cancelledTitle: "Ce match a été annulé",
   cancelledBodyAdmin: "Un match annulé ne peut pas être rouvert. Organise-en un nouveau depuis tes matchs.",
   cancelledBodyPlayer: "Plus personne ne peut s'inscrire ni être ajouté.",
+  editNotSaved: "Pas enregistré. Tes modifications sont toujours là.",
+  editNameRequired: "Donne un nom au match.",
+  editDateRequired: "Choisis la date et l'heure.",
 };
 
 export default fr;

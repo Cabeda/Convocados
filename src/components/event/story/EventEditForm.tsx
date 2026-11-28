@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Box, Button, FormControl, InputLabel, MenuItem, Select, Stack, TextField } from "@mui/material";
+import { useEffect, useRef, useState } from "react";
+import { Box, Button, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS } from "~/lib/sports";
@@ -16,10 +16,13 @@ export interface EventEdits {
   sport?: string;
 }
 
+export type EditField = keyof EventEdits;
+
 interface Props {
   event: EventData;
   sport: string;
-  onSave: (edits: EventEdits) => void;
+  /** Resolves with the fields the server refused: empty means everything was saved. */
+  onSave: (edits: EventEdits) => Promise<EditField[]>;
   onCancel: () => void;
 }
 
@@ -27,7 +30,8 @@ const pill = { minHeight: ACTION_HEIGHT, borderRadius: 999, textTransform: "none
 
 /**
  * Name, when and where are always there; sport and time zone sit behind "More details".
- * Esc backs out. Save hands only what changed to the page, which shows it straight away.
+ * The form stays open until the server has said yes: a refused save keeps the draft,
+ * says so, and puts the cursor on the field that did not go through. Esc backs out.
  */
 export function EventEditForm({ event, sport, onSave, onCancel }: Props) {
   const t = useT();
@@ -39,25 +43,65 @@ export function EventEditForm({ event, sport, onSave, onCancel }: Props) {
   const [tz, setTz] = useState(tz0);
   const [sportDraft, setSportDraft] = useState(sport);
   const [more, setMore] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState<EditField | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  // What the server already holds, so a retry after a partial failure sends only what is still missing.
+  const saved = useRef({ title: event.title, location: event.location || "", when: when0, tz: tz0, sport });
 
-  const save = () => {
+  // Focus the field that failed once it is on screen (sport and time zone are behind "More details").
+  useEffect(() => {
+    if (!failed) return;
+    formRef.current?.querySelector<HTMLElement>(`[data-field="${failed}"] input, [data-field="${failed}"] [role="combobox"]`)?.focus();
+  }, [failed, more]);
+
+  const nameMissing = !title.trim();
+  const dateMissing = !when;
+
+  const save = async () => {
+    if (saving || nameMissing || dateMissing) return;
     const edits: EventEdits = {};
-    if (title.trim() && title.trim() !== event.title) edits.title = title.trim();
-    if (location !== (event.location || "")) edits.location = location;
-    if (when !== when0 || tz !== tz0) edits.dateTime = { value: when, timezone: tz };
-    if (sportDraft && sportDraft !== sport) edits.sport = sportDraft;
-    if (Object.keys(edits).length === 0) onCancel(); else onSave(edits);
+    const base = saved.current;
+    if (title.trim() !== base.title) edits.title = title.trim();
+    if (location !== base.location) edits.location = location;
+    if (when !== base.when || tz !== base.tz) edits.dateTime = { value: when, timezone: tz };
+    if (sportDraft && sportDraft !== base.sport) edits.sport = sportDraft;
+    if (Object.keys(edits).length === 0) { onCancel(); return; }
+    setSaving(true);
+    setFailed(null);
+    const refused = await onSave(edits);
+    setSaving(false);
+    // Remember what went through, so the retry does not send it again.
+    if (edits.title !== undefined && !refused.includes("title")) base.title = edits.title;
+    if (edits.location !== undefined && !refused.includes("location")) base.location = edits.location;
+    if (edits.dateTime && !refused.includes("dateTime")) { base.when = when; base.tz = tz; }
+    if (edits.sport && !refused.includes("sport")) base.sport = edits.sport;
+    if (refused.length > 0) {
+      if (refused.includes("sport")) setMore(true);
+      setFailed(refused[0]);
+    }
   };
 
+  const busy = saving;
   return (
     <Stack
-      component="form" spacing={1.5} sx={{ mt: 1.5 }}
-      onSubmit={(e) => { e.preventDefault(); save(); }}
-      onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+      component="form" ref={formRef} spacing={1.5} sx={{ mt: 1.5 }} noValidate aria-busy={busy}
+      onSubmit={(e) => { e.preventDefault(); void save(); }}
+      onKeyDown={(e) => { if (e.key === "Escape" && !e.defaultPrevented && !busy) onCancel(); }}
     >
-      <TextField size="small" label={t("name")} value={title} onChange={(e) => setTitle(e.target.value)} fullWidth autoFocus slotProps={{ htmlInput: { maxLength: 100 } }} />
-      <TextField size="small" type="datetime-local" label={t("dateTime")} value={when} onChange={(e) => setWhen(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-      <LocationAutocomplete value={location} onChange={setLocation} label={t("location")} placeholder={t("locationPlaceholder")} size="small" />
+      <TextField
+        size="small" label={t("name")} value={title} onChange={(e) => setTitle(e.target.value)} fullWidth autoFocus
+        error={nameMissing} helperText={nameMissing ? t("editNameRequired") : undefined}
+        data-field="title" slotProps={{ htmlInput: { maxLength: 100 } }}
+      />
+      <TextField
+        size="small" type="datetime-local" label={t("dateTime")} value={when} onChange={(e) => setWhen(e.target.value)} fullWidth
+        error={dateMissing} helperText={dateMissing ? t("editDateRequired") : undefined}
+        data-field="dateTime" slotProps={{ inputLabel: { shrink: true } }}
+      />
+      <Box data-field="location">
+        <LocationAutocomplete value={location} onChange={setLocation} label={t("location")} placeholder={t("locationPlaceholder")} size="small" />
+      </Box>
 
       <Button
         onClick={() => setMore((m) => !m)} aria-expanded={more} aria-controls="edit-more"
@@ -68,7 +112,7 @@ export function EventEditForm({ event, sport, onSave, onCancel }: Props) {
       </Button>
       {more && (
         <Stack id="edit-more" spacing={1.5}>
-          <FormControl size="small" fullWidth>
+          <FormControl size="small" fullWidth data-field="sport">
             <InputLabel id="edit-sport">{t("sport")}</InputLabel>
             <Select labelId="edit-sport" label={t("sport")} value={sportDraft} onChange={(e) => setSportDraft(e.target.value)}>
               {SPORT_PRESETS.map((s) => <MenuItem key={s.id} value={s.id}>{t(s.labelKey)}</MenuItem>)}
@@ -83,9 +127,10 @@ export function EventEditForm({ event, sport, onSave, onCancel }: Props) {
         </Stack>
       )}
 
+      {failed && <Typography role="alert" sx={{ color: "error.main", fontSize: "1rem", lineHeight: 1.4 }}>{t("editNotSaved")}</Typography>}
       <Box sx={{ display: "flex", gap: 1 }}>
-        <Button type="submit" variant="contained" disableElevation sx={pill}>{t("saveDateTime")}</Button>
-        <Button onClick={onCancel} sx={{ ...pill, color: "text.secondary" }}>{t("cancelEdit")}</Button>
+        <Button type="submit" variant="contained" disableElevation disabled={busy || nameMissing || dateMissing} sx={pill}>{t("saveDateTime")}</Button>
+        <Button onClick={onCancel} disabled={busy} sx={{ ...pill, color: "text.secondary" }}>{t("cancelEdit")}</Button>
       </Box>
     </Stack>
   );

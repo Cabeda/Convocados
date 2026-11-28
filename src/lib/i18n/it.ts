@@ -1693,10 +1693,12 @@ statsGoals: "Goal",
   claimThisGame: "Prendi in carico questa partita",
   headerLoading: "Caricamento della partita",
   moreDetails: "Altri dettagli",
-  editSaveFailed: "Impossibile salvare le modifiche. Controlla la connessione e riprova.",
   cancelledTitle: "Questa partita è stata annullata",
   cancelledBodyAdmin: "Una partita annullata non può essere riaperta. Organizzane una nuova dalle tue partite.",
   cancelledBodyPlayer: "Nessuno può più iscriversi o essere aggiunto.",
+  editNotSaved: "Non salvato. Le tue modifiche sono ancora qui.",
+  editNameRequired: "Dai un nome alla partita.",
+  editDateRequired: "Scegli data e ora.",
 };
 
 export default it;

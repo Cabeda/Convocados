@@ -286,9 +286,10 @@ describe("EventHeader — editing", () => {
     expect(screen.getByRole("combobox", { name: "Timezone" })).toBeInTheDocument();
   });
 
-  it("saves only what changed, closes straight away and announces Saved", async () => {
+  it("saves only what changed, announces Saved and closes once the server has answered", async () => {
     const user = userEvent.setup();
-    const props = renderHeader({ canEditSettings: true });
+    let release;
+    const props = renderHeader({ canEditSettings: true, onSaveTitle: vi.fn(() => new Promise<void>((r) => { release = r; })) });
     await openForm(user);
     const name = screen.getByLabelText("Name");
     await user.clear(name);
@@ -297,17 +298,66 @@ describe("EventHeader — editing", () => {
     expect(props.onSaveTitle).toHaveBeenCalledWith("Friday Football");
     expect(props.onSaveLocation).not.toHaveBeenCalled();
     expect(props.onSaveDateTime).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    // Still open while the request is out: nothing to lose yet, and a second tap cannot send a second request.
+    expect(screen.getByLabelText("Name")).toHaveValue("Friday Football");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    release();
+    await waitFor(() => expect(screen.queryByLabelText("Name")).not.toBeInTheDocument());
     expect(await screen.findByRole("status")).toHaveTextContent("Saved");
   });
 
-  it("says plainly when the server refused, and does not claim it saved", async () => {
+  it("keeps the form open with the draft, says nothing was saved and focuses the failing field", async () => {
     const user = userEvent.setup();
-    renderHeader({ canEditSettings: true, onSaveTitle: vi.fn(async () => { throw new Error("no"); }) });
+    const props = renderHeader({ canEditSettings: true, onSaveTitle: vi.fn(async () => { throw new Error("no"); }) });
+    await openForm(user);
+    const name = screen.getByLabelText("Name");
+    await user.type(name, "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Not saved. Your changes are still here.");
+    expect(screen.getByLabelText("Name")).toHaveValue("Monday Football!");
+    expect(screen.getByLabelText("Name")).toHaveFocus();
+    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
+    // Fixing the cause and trying again works, and the page closes the form then.
+    props.onSaveTitle.mockImplementation(async () => {});
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByLabelText("Name")).not.toBeInTheDocument());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("when only some edits fail, the ones that worked are not sent a second time", async () => {
+    const user = userEvent.setup();
+    const props = renderHeader({ canEditSettings: true, onSaveLocation: vi.fn(async () => { throw new Error("no"); }) });
     await openForm(user);
     await user.type(screen.getByLabelText("Name"), "!");
+    await user.type(screen.getByLabelText("Location"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("status")).toHaveTextContent(/couldn't save/i);
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("Location")).toHaveFocus();
+    props.onSaveLocation.mockImplementation(async () => {});
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByLabelText("Name")).not.toBeInTheDocument());
+    expect(props.onSaveTitle).toHaveBeenCalledTimes(1);
+    expect(props.onSaveLocation).toHaveBeenCalledTimes(2);
+  });
+
+  it("disables Save and says why when the name is empty", async () => {
+    const user = userEvent.setup();
+    const props = renderHeader({ canEditSettings: true });
+    await openForm(user);
+    await user.clear(screen.getByLabelText("Name"));
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByText("Give the game a name.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toBeInvalid();
+    expect(props.onSaveTitle).not.toHaveBeenCalled();
+  });
+
+  it("disables Save and says why when the date is cleared", async () => {
+    const user = userEvent.setup();
+    renderHeader({ canEditSettings: true });
+    await openForm(user);
+    fireEvent.change(screen.getByLabelText("Date & time"), { target: { value: "" } });
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByText("Pick a date and time.")).toBeInTheDocument();
   });
 
   it("Cancel and Esc close the form without saving and put focus back on the pencil", async () => {
@@ -325,12 +375,10 @@ describe("EventHeader — editing", () => {
     expect(props.onSaveTitle).not.toHaveBeenCalled();
   });
 
-  it("opens with the e shortcut for an admin and ignores it while typing", async () => {
+  it("has no one-letter shortcut: typing e outside a field does nothing", async () => {
     const user = userEvent.setup();
     renderHeader({ canEditSettings: true });
     await user.keyboard("e");
-    const name = await screen.findByLabelText("Name");
-    await user.type(name, "e");
-    expect(name).toHaveValue("Monday Footballe");
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
   });
 });

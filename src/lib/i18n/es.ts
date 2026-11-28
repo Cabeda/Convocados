@@ -1693,10 +1693,12 @@ statsGoals: "Goles",
   claimThisGame: "Quedarme con este partido",
   headerLoading: "Cargando el partido",
   moreDetails: "Más detalles",
-  editSaveFailed: "No se pudieron guardar los cambios. Revisa la conexión e inténtalo otra vez.",
   cancelledTitle: "Este partido se canceló",
   cancelledBodyAdmin: "Un partido cancelado no se puede reabrir. Organiza uno nuevo desde tus partidos.",
   cancelledBodyPlayer: "Ya nadie puede apuntarse ni ser añadido.",
+  editNotSaved: "No se guardó. Tus cambios siguen aquí.",
+  editNameRequired: "Ponle un nombre al partido.",
+  editDateRequired: "Elige la fecha y la hora.",
 };
 
 export default es;

@@ -1741,10 +1741,12 @@ statsGoals: "Golos",
   claimThisGame: "Ficar com este jogo",
   headerLoading: "A carregar o jogo",
   moreDetails: "Mais detalhes",
-  editSaveFailed: "Não foi possível guardar as alterações. Verifica a ligação e tenta outra vez.",
   cancelledTitle: "Este jogo foi cancelado",
   cancelledBodyAdmin: "Um jogo cancelado não pode ser reaberto. Marca um novo a partir dos teus jogos.",
   cancelledBodyPlayer: "Já ninguém se pode inscrever nem ser adicionado.",
+  editNotSaved: "Não foi guardado. As tuas alterações continuam aqui.",
+  editNameRequired: "Dá um nome ao jogo.",
+  editDateRequired: "Escolhe a data e a hora.",
 };
 
 export default pt;

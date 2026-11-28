@@ -10,7 +10,7 @@ import { menuGroups } from "~/lib/eventHeader";
 import type { Imatch } from "~/lib/random";
 import type { EventData } from "./types";
 import { MyNotificationsDialog } from "./MyNotificationsDialog";
-import { EventEditForm, type EventEdits } from "./story/EventEditForm";
+import { EventEditForm, type EditField, type EventEdits } from "./story/EventEditForm";
 import { EventInfoLines } from "./story/EventInfoLines";
 import { EventMenuSheet } from "./story/EventMenuSheet";
 import { FollowToggle } from "./story/FollowToggle";
@@ -62,31 +62,21 @@ export function EventHeader({
     wasEditingRef.current = editing;
   }, [editing]);
 
-  // Keyboard shortcut `e` toggles the form.
-  useEffect(() => {
-    if (!canEditSettings) return;
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.metaKey || e.ctrlKey) return;
-      if (e.key === "e") { e.preventDefault(); setEditing((v) => !v); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [canEditSettings]);
-
-  const submit = async (e: EventEdits) => {
-    setEditing(false);
-    try {
-      await Promise.all([
-        e.title !== undefined && onSaveTitle(e.title),
-        e.location !== undefined && onSaveLocation(e.location),
-        e.dateTime && onSaveDateTime(e.dateTime.value, e.dateTime.timezone),
-        e.sport && onSaveSport(e.sport),
-      ]);
+  // Close only once the server has said yes. A refused field keeps the form (and the draft) open.
+  const submit = async (e: EventEdits): Promise<EditField[]> => {
+    const jobs: [EditField, Promise<void> | false][] = [
+      ["title", e.title !== undefined && onSaveTitle(e.title)],
+      ["location", e.location !== undefined && onSaveLocation(e.location)],
+      ["dateTime", !!e.dateTime && onSaveDateTime(e.dateTime.value, e.dateTime.timezone)],
+      ["sport", !!e.sport && onSaveSport(e.sport)],
+    ];
+    const results = await Promise.allSettled(jobs.map(([, job]) => job || Promise.resolve()));
+    const refused = jobs.filter((_, i) => results[i].status === "rejected").map(([field]) => field);
+    if (refused.length === 0) {
+      setEditing(false);
       setToast(t("saved"));
-    } catch {
-      setToast(t("editSaveFailed"));
     }
+    return refused;
   };
 
   const claim = async () => {
