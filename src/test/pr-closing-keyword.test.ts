@@ -61,6 +61,80 @@ describe("PR closing-keyword check", () => {
 });
 
 /**
+ * A Dependabot bump closes no issue by design, so every dependency bump would
+ * otherwise need a human to add `no-issue` before the required `PR Links Issue`
+ * check can pass. The exemption is scoped to the dependency bot's exact login;
+ * the factory's own bot and human PRs still fail closed.
+ */
+describe("PR closing-keyword check — dependency bots", () => {
+  it("exempts a Dependabot Change with an empty body and no label", () => {
+    expect(evaluate({ body: "", labels: ["dependencies"], author: "dependabot[bot]" })).toEqual({
+      ok: true,
+      reason: "bot",
+    });
+  });
+
+  it.each([
+    ["convocarados-factory[bot]"],
+    ["app/convocarados-factory"],
+  ])("does not exempt the factory's own bot (%s)", (author) => {
+    expect(evaluate({ body: "", labels: [], author })).toEqual({
+      ok: false,
+      reason: "missing",
+    });
+  });
+
+  it("does not exempt a human PR with an empty body and no label", () => {
+    expect(evaluate({ body: "", labels: [], author: "Cabeda" })).toEqual({
+      ok: false,
+      reason: "missing",
+    });
+  });
+
+  it("reads the PR author from the workflow event, so Dependabot needs no human label", () => {
+    const event = join(tmpdir(), `pr-event-${process.pid}.json`);
+    writeFileSync(
+      event,
+      JSON.stringify({ pull_request: { user: { login: "dependabot[bot]" } } }),
+      "utf8",
+    );
+    try {
+      const input = resolveInput({
+        argv: [],
+        env: { PR_BODY: "", PR_LABELS: "dependencies", GITHUB_EVENT_PATH: event },
+      });
+      expect(evaluate(input)).toEqual({ ok: true, reason: "bot" });
+    } finally {
+      rmSync(event, { force: true });
+    }
+  });
+
+  it("still fails a human PR in the workflow event with no keyword and no label", () => {
+    const event = join(tmpdir(), `pr-event-human-${process.pid}.json`);
+    writeFileSync(
+      event,
+      JSON.stringify({ pull_request: { user: { login: "Cabeda" } } }),
+      "utf8",
+    );
+    try {
+      const input = resolveInput({
+        argv: [],
+        env: { PR_BODY: "", PR_LABELS: "dependencies", GITHUB_EVENT_PATH: event },
+      });
+      expect(evaluate(input)).toEqual({ ok: false, reason: "missing" });
+    } finally {
+      rmSync(event, { force: true });
+    }
+  });
+
+  it("fails closed when neither PR_AUTHOR nor an event file names the author", () => {
+    expect(
+      evaluate(resolveInput({ argv: [], env: { PR_BODY: "", PR_LABELS: "dependencies" } })),
+    ).toEqual({ ok: false, reason: "missing" });
+  });
+});
+
+/**
  * The CI job feeds the check the PR body from the environment. That is the
  * wrong side of the action boundary for the agent, which holds the body in a
  * file and has already run `gh pr create` by the time CI sees it — the failure
