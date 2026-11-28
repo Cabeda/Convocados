@@ -1,0 +1,186 @@
+import { describe, it, expect } from "vitest";
+import {
+  COUNTDOWN_WINDOW_MS, nextGamePhase, countdownOf, nextTickDelay, isGameDay, initials, shortNames,
+  slotMinSize, slotColumns, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval,
+} from "~/lib/nextGame";
+
+const MIN = 60_000;
+const HOUR = 3_600_000;
+const START = Date.UTC(2026, 11, 4, 20, 49); // Fri 4 Dec 2026, 20:49 UTC
+const phaseOf = (now: number, o: Partial<{ weekly: boolean; cancelled: boolean; durationMinutes: number }> = {}) =>
+  nextGamePhase({ now, startMs: START, durationMinutes: 90, weekly: true, cancelled: false, ...o });
+
+describe("nextGamePhase", () => {
+  it("is open before kickoff", () => expect(phaseOf(START - 3 * HOUR)).toBe("open"));
+  it("is live from kickoff until the end, and the roster stays open", () => {
+    expect(phaseOf(START)).toBe("live");
+    expect(phaseOf(START + 89 * MIN)).toBe("live");
+  });
+  it("after the end a weekly game says sign-ups open in a moment (the roster is still the finished game's)", () => {
+    expect(phaseOf(START + 90 * MIN)).toBe("signupsSoon");
+    expect(phaseOf(START + 30 * HOUR)).toBe("signupsSoon");
+  });
+  it("after the end a one-off has no next game", () => expect(phaseOf(START + 2 * HOUR, { weekly: false })).toBe("none"));
+  it("a cancelled game offers nothing, before or after", () => {
+    expect(phaseOf(START - HOUR, { cancelled: true })).toBe("cancelled");
+    expect(phaseOf(START + 5 * HOUR, { cancelled: true })).toBe("cancelled");
+  });
+});
+
+describe("countdownOf", () => {
+  it("is null a day or more ahead, and once it has started", () => {
+    expect(countdownOf(COUNTDOWN_WINDOW_MS)).toBeNull();
+    expect(countdownOf(3 * 24 * HOUR)).toBeNull();
+    expect(countdownOf(0)).toBeNull();
+    expect(countdownOf(-5)).toBeNull();
+  });
+  it("counts hours and minutes, rounding a part-minute up so it never reads 0 min early", () => {
+    expect(countdownOf(3 * HOUR + 12 * MIN)).toEqual({ hours: 3, minutes: 12 });
+    expect(countdownOf(3 * HOUR + 11 * MIN + 1)).toEqual({ hours: 3, minutes: 12 });
+    expect(countdownOf(23 * HOUR + 59 * MIN + 59_000)).toEqual({ hours: 24, minutes: 0 });
+  });
+  it("drops the hours under an hour, and the minutes on the hour", () => {
+    expect(countdownOf(42 * MIN)).toEqual({ hours: 0, minutes: 42 });
+    expect(countdownOf(HOUR)).toEqual({ hours: 1, minutes: 0 });
+    expect(countdownOf(1_000)).toEqual({ hours: 0, minutes: 1 });
+  });
+});
+
+describe("nextTickDelay — one timeout to the next moment the block can change", () => {
+  const end = START + 90 * MIN;
+  it("sleeps until the countdown window opens when the game is more than a day away", () => {
+    expect(nextTickDelay(START - 3 * 24 * HOUR, START, end)).toBe(2 * 24 * HOUR + 50);
+  });
+  it("then wakes when the minute label changes, not every 60 seconds", () => {
+    // 3 h 12 min 30 s left: the label (ceil to minutes) flips in 30 s.
+    expect(nextTickDelay(START - (3 * HOUR + 12 * MIN + 30_000), START, end)).toBe(30_000 + 50);
+    // exactly on a minute: a full minute until the next flip
+    expect(nextTickDelay(START - (3 * HOUR + 12 * MIN), START, end)).toBe(MIN + 50);
+  });
+  it("in the last minute it wakes at kickoff, to show Live", () => {
+    expect(nextTickDelay(START - 20_000, START, end)).toBe(20_000 + 50);
+  });
+  it("while live it wakes at the end", () => {
+    expect(nextTickDelay(START + 10 * MIN, START, end)).toBe(80 * MIN + 50);
+  });
+  it("after the end nothing changes by the clock alone", () => {
+    expect(nextTickDelay(end + 1, START, end)).toBeNull();
+  });
+  it("never asks for a timeout the browser would fire at once", () => {
+    expect(nextTickDelay(START - 24 * HOUR - 5_000, START, end)).toBe(5_050);
+  });
+});
+
+describe("isGameDay", () => {
+  it("is true on the calendar day of the game in the EVENT's timezone", () => {
+    expect(isGameDay(START - 5 * HOUR, START, "UTC")).toBe(true);
+    expect(isGameDay(START - 30 * HOUR, START, "UTC")).toBe(false);
+  });
+  it("uses the event timezone, not the viewer's", () => {
+    // 16:00 UTC on the 3rd is 01:00 on the 4th in Tokyo (+9).
+    const now = Date.UTC(2026, 11, 3, 16, 0); // 01:00 on the 4th in Tokyo
+    expect(isGameDay(now, Date.UTC(2026, 11, 4, 11, 0), "Asia/Tokyo")).toBe(true);
+    expect(isGameDay(now, Date.UTC(2026, 11, 4, 11, 0), "UTC")).toBe(false);
+  });
+});
+
+describe("initials", () => {
+  it("takes the first letters of the first and last word", () => {
+    expect(initials("Ana Maria Silva")).toBe("AS");
+    expect(initials("rui costa")).toBe("RC");
+  });
+  it("takes two letters of a single word", () => expect(initials("Beto")).toBe("BE"));
+  it("copes with emoji, accents and stray spaces", () => {
+    expect(initials("  Éva   ")).toBe("ÉV");
+    expect(initials("😀 Joe")).toBe("😀J");
+    expect(initials("")).toBe("?");
+  });
+});
+
+describe("shortNames — never cut mid-word, never ambiguous", () => {
+  it("shortens to first name and last initial", () => {
+    expect(shortNames(["Ana Maria", "Beto Santos"])).toEqual(["Ana M.", "Beto S."]);
+  });
+  it("keeps a single name whole", () => expect(shortNames(["Beto"])).toEqual(["Beto"]));
+  it("keeps full names when the short forms would collide", () => {
+    expect(shortNames(["Ana Maria", "Ana Moreira", "Rui Costa"])).toEqual(["Ana Maria", "Ana Moreira", "Rui C."]);
+  });
+});
+
+describe("slotMinSize", () => {
+  it("makes slots big for a small game and never under 36px for a big one", () => {
+    expect(slotMinSize(4)).toBeGreaterThanOrEqual(48);
+    expect(slotMinSize(8)).toBeGreaterThanOrEqual(48);
+    expect(slotMinSize(16)).toBe(36);
+    expect(slotMinSize(22)).toBeGreaterThanOrEqual(36);
+    expect(slotMinSize(40)).toBeGreaterThanOrEqual(36);
+  });
+});
+
+describe("slotColumns", () => {
+  it("splits a small game into even rows and fills rows of 8 for a full pitch", () => {
+    expect([1, 2, 4].map(slotColumns)).toEqual([1, 2, 4]);
+    expect([5, 6, 7, 8].map(slotColumns)).toEqual([3, 3, 4, 4]);
+    expect([9, 16, 22, 40].map(slotColumns)).toEqual([8, 8, 8, 8]);
+  });
+  it("never asks for zero columns", () => expect(slotColumns(0)).toBe(1));
+});
+
+describe("rsvpView — one answer for what the RSVP row says", () => {
+  const players = [
+    { id: "a", name: "Ana", userId: "u-a" }, { id: "b", name: "Beto", userId: null },
+    { id: "me", name: "Jose", userId: "u-me" }, { id: "d", name: "Dani", userId: null },
+  ];
+  const base = { viewerId: "u-me" as string | null, players, maxPlayers: 10, rsvp: null as "yes" | "no" | "maybe" | null, teamName: null as string | null };
+
+  it("signed out → sign in", () => expect(rsvpView({ ...base, viewerId: null })).toEqual({ kind: "signIn" }));
+  it("signed in, not on the list → choose, and says when it is full", () => {
+    expect(rsvpView({ ...base, viewerId: "u-x" })).toEqual({ kind: "choose", full: false });
+    expect(rsvpView({ ...base, viewerId: "u-x", maxPlayers: 4 })).toEqual({ kind: "choose", full: true });
+  });
+  it("on the list → in, with the team once teams exist", () => {
+    expect(rsvpView(base)).toEqual({ kind: "in", team: null });
+    expect(rsvpView({ ...base, teamName: "Ninjas" })).toEqual({ kind: "in", team: "Ninjas" });
+  });
+  it("past maxPlayers → bench, numbered from 1", () => {
+    expect(rsvpView({ ...base, maxPlayers: 2 })).toEqual({ kind: "bench", position: 1 });
+    expect(rsvpView({ ...base, maxPlayers: 1 })).toEqual({ kind: "bench", position: 2 });
+  });
+  it("a declined answer and no row → out", () => {
+    expect(rsvpView({ ...base, viewerId: "u-x", rsvp: "no" })).toEqual({ kind: "out" });
+  });
+  it("being on the list wins over an old 'no'", () => {
+    expect(rsvpView({ ...base, rsvp: "no" })).toEqual({ kind: "in", team: null });
+  });
+  it("matches the account, never a same-named row that belongs to someone else", () => {
+    expect(rsvpView({ ...base, viewerId: "u-x", players: [{ id: "z", name: "Jose", userId: "u-other" }] })).toEqual({ kind: "choose", full: false });
+  });
+  it("an unlinked row that merely shares the viewer's name is not the viewer (name match is removal-only)", () => {
+    expect(rsvpView({ ...base, viewerId: "u-x", players: [{ id: "z", name: "Jose", userId: null }] })).toEqual({ kind: "choose", full: false });
+  });
+});
+
+describe("waitingCounts", () => {
+  it("counts pending invites and declines, and hides itself when there are none", () => {
+    expect(waitingCounts(2, 1)).toEqual({ invited: 2, declined: 1, any: true });
+    expect(waitingCounts(0, 0).any).toBe(false);
+  });
+});
+
+describe("benchLabelNames", () => {
+  it("lists up to three short names and counts the rest", () => {
+    expect(benchLabelNames(["Ana Maria", "Beto Santos"])).toEqual({ names: ["Ana M.", "Beto S."], more: 0 });
+    expect(benchLabelNames(["A One", "B Two", "C Three", "D Four", "E Five"])).toEqual({ names: ["A O.", "B T.", "C T."], more: 2 });
+  });
+});
+
+describe("canUndoRemoval — the server only takes an undo from the organizer", () => {
+  it("is true for the owner, an admin, and the open ownerless event", () => {
+    expect(canUndoRemoval({ isOwner: true, isAdmin: false, canEditSettings: true })).toBe(true);
+    expect(canUndoRemoval({ isOwner: false, isAdmin: true, canEditSettings: true })).toBe(true);
+    expect(canUndoRemoval({ isOwner: false, isAdmin: false, canEditSettings: true })).toBe(true);
+  });
+  it("is false for everyone else, who would get a 403 for the Undo they were offered", () => {
+    expect(canUndoRemoval({ isOwner: false, isAdmin: false, canEditSettings: false })).toBe(false);
+  });
+});

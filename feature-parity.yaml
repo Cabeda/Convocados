@@ -60,6 +60,9 @@ event-detail:
     # follow-up: bring the flat header, the ⋮ bottom sheet and the cancelled banner to EventDetailScreen.
     flat-header-actions: { web: true, android: false, wearos: false }
     more-sheet: { web: true, android: false, wearos: false }
+    # Slice 3: the organizer's manage-lineup page (reorder, positions, remove). Android keeps its list;
+    # follow-up: EventDetailScreen gets a manage screen for reorder and positions.
+    manage-lineup: { web: true, android: false, wearos: false }
 
 teams:
   web: true

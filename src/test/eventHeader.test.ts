@@ -24,12 +24,17 @@ describe("menuGroups", () => {
     const all = ids({ canEdit: true, isAuthenticated: true });
     expect(all).toEqual(expect.arrayContaining(["cancel", "ratings", "settings"] satisfies MenuItemId[]));
     const manage = menuGroups({ ...base, canEdit: true }).at(-1);
-    expect(manage).toEqual({ id: "manage", items: ["settings", "cancel"] });
+    expect(manage).toEqual({ id: "manage", items: ["lineup", "settings", "cancel"] });
   });
 
   it("leaves Payments out where the page would only say sign in or players only", () => {
     expect(ids({ paymentsReachable: false })).not.toContain("payments");
     expect(ids({ paymentsReachable: true })).toContain("payments");
+  });
+
+  it("puts Manage lineup in the Manage group for the organizer only, before Settings", () => {
+    expect(menuGroups({ ...base, canEdit: true }).at(-1)).toEqual({ id: "manage", items: ["lineup", "settings", "cancel"] });
+    expect(ids({ canEdit: false, isAuthenticated: true })).not.toContain("lineup");
   });
 
   it("keeps Ratings off ownerless events and off events with ratings disabled", () => {
