@@ -3,7 +3,8 @@ import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../../lib/apiRateLimit.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
-import { isNameInList } from "../../../../../../lib/snapshotParticipants";
+import { findViewerName, isNameInList } from "../../../../../../lib/snapshotParticipants";
+import { viewerRosterNames } from "../../../../../../lib/viewerIdentity.server";
 import { occurrenceRoster } from "../../../../../../lib/gameRoster.server";
 
 export const POST: APIRoute = async ({ params, request }) => {
@@ -69,11 +70,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   let voterName: string | undefined;
   let voterPlayerId: string | undefined;
 
-  const voterNameFromSession = session.user?.name;
-  if (isNameInList(rosterNames, voterNameFromSession)) {
-    const matchName = rosterNames.find(
-      (n) => n.toLowerCase() === voterNameFromSession!.toLowerCase(),
-    );
+  // The viewer is every name their account is known by on this event (the same identity the
+  // post-game status reads), never a name from the request.
+  const viewerNames = await viewerRosterNames(params.id ?? "", session.user);
+  const matchName = findViewerName(viewerNames, rosterNames);
+  if (matchName) {
     voterName = matchName;
     // Try to find the Player record for this user (may exist if they signed up)
     const voterPlayer = await prisma.player.findFirst({
@@ -111,9 +112,9 @@ export const POST: APIRoute = async ({ params, request }) => {
     targetPlayerId = targetPlayer?.id ?? votedForPlayerId;
     targetPlayerName = targetPlayer?.name ?? targetEventPlayer!.name;
 
-    // Prevent self-vote: check by userId or by playerId
+    // Prevent self-vote: check by userId, by playerId, or by any name the voter is known by
     const targetUserId = targetPlayer?.userId ?? targetEventPlayer?.userId;
-    if (targetUserId === userId || targetPlayerId === voterPlayerId) {
+    if (targetUserId === userId || targetPlayerId === voterPlayerId || isNameInList(viewerNames, targetPlayerName)) {
       return Response.json({ error: "You cannot vote for yourself." }, { status: 400 });
     }
   } else {
@@ -131,8 +132,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     targetPlayerId = `name:${match}`;
     targetPlayerName = match;
 
-    // Prevent self-vote by name
-    if (voterName && match.toLowerCase() === voterName.toLowerCase()) {
+    // Prevent self-vote by name — under any name the voter is known by, not only the one they voted as
+    if (isNameInList(viewerNames, match)) {
       return Response.json({ error: "You cannot vote for yourself." }, { status: 400 });
     }
   }
