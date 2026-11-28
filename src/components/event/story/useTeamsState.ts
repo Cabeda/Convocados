@@ -112,7 +112,7 @@ export function useTeamsState({ event, refetch, notify, failed }: Input) {
   // Stakes: only when the teams are drawn and the viewer plays in a season; the same request as before.
   const teamOne = useMemo(() => shown?.[0]?.players.map((p) => p.name) ?? [], [shown]);
   const teamTwo = useMemo(() => shown?.[1]?.players.map((p) => p.name) ?? [], [shown]);
-  const lineups = teamOne.length > 0 && teamTwo.length > 0 ? { teamOne, teamTwo } : null;
+  const lineups = useMemo(() => (teamOne.length > 0 && teamTwo.length > 0 ? { teamOne, teamTwo } : null), [teamOne, teamTwo]);
   const stakes = useStakes(event.id, lineups?.teamOne ?? [], lineups?.teamTwo ?? []);
   const crewMap = useMemo(() => crewMapFromLineup(stakes.data?.lineup ?? []), [stakes.data]);
   const scenario = stakes.scenario;

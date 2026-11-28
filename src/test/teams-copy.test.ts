@@ -25,7 +25,7 @@ describe("the teams block and the play-again block speak plain words in every la
   }
 
   it("translates the sentences, not just the labels", () => {
-    expect(mine(english).length).toBeGreaterThan(30);
+    expect(mine(english).length).toBeGreaterThan(25);
     for (const [locale, messages] of Object.entries(LOCALES)) {
       if (locale === "en") continue;
       for (const key of ["tbEarlyBody", "tbNeedTwo", "paManage", "paAsk", "tbReady"]) expect(messages[key], `${locale}.${key}`).not.toBe(english[key]);

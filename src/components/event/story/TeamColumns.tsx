@@ -19,6 +19,8 @@ const CALM = "@media (prefers-reduced-motion: reduce)";
 const POSITION_KEYS: Record<string, TranslationKey> = { GK: "positionGk", DEF: "positionDef", MID: "positionMid", FWD: "positionFwd" };
 
 /** Names fade in one after another, so the whole list is in within 400ms (200ms each, the last starting at 200ms). */
+/** The two sides keep their place in the page when one is renamed, so they are keyed by side, not by name. */
+const SIDE_KEYS = ["one", "two"];
 const FADE_MS = 200;
 const FADE_STEP_MS = 25;
 const FADE_LAST_START_MS = 200;
@@ -56,15 +58,17 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
   const { t } = useLocale();
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
-  const penRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const penRef = useRef<Array<HTMLButtonElement | null>>([]);
   // The pencil comes back when the field closes; focus goes there, so a keyboard user keeps their place.
-  const refocus = useRef<number | null>(null);
+  const refocusRef = useRef<number | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(focusTimerRef.current), []);
   useEffect(() => {
-    if (editing !== null || refocus.current === null) return;
-    const index = refocus.current;
-    refocus.current = null;
+    if (editing !== null || refocusRef.current === null) return;
+    const index = refocusRef.current;
+    refocusRef.current = null;
     // After the key press has finished: a focused pencil would otherwise take the same Enter as a tap and reopen the field.
-    setTimeout(() => penRefs.current[index]?.focus(), 0);
+    focusTimerRef.current = setTimeout(() => penRef.current[index]?.focus(), 0);
   });
   const [undoMove, setUndoMove] = useState<{ message: string; previous: Imatch[]; expected: Imatch[] } | null>(null);
 
@@ -93,7 +97,7 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
 
   const save = (index: number, team: string) => {
     const value = draft.trim() || team;
-    refocus.current = index;
+    refocusRef.current = index;
     setEditing(null);
     if (value !== team) onRename?.(index, value);
   };
@@ -114,7 +118,7 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
           const dropping = activeDropZone === team.team;
           return (
             <Box
-              key={index} role="group" aria-label={label} data-testid="team-col" data-team={team.team} data-viewer-team={mine ? "true" : undefined}
+              key={SIDE_KEYS[index] ?? `side-${index}`} role="group" aria-label={label} data-testid="team-col" data-team={team.team} data-viewer-team={mine ? "true" : undefined}
               ref={(el: HTMLElement | null) => { zonesRef.current[team.team] = el; }}
               sx={{ minWidth: 0, borderRadius: 1, bgcolor: dropping ? "action.hover" : "transparent" }}
             >
@@ -126,13 +130,13 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
                       onChange={(e) => setDraft(e.target.value.slice(0, 50))}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") { e.preventDefault(); save(index, team.team); }
-                        if (e.key === "Escape") { e.preventDefault(); refocus.current = index; setEditing(null); }
+                        if (e.key === "Escape") { e.preventDefault(); refocusRef.current = index; setEditing(null); }
                       }}
                       slotProps={{ htmlInput: { maxLength: 50, "aria-label": t("renameTeam", { label }) } }}
                       sx={{ minWidth: 0, "& .MuiInputBase-input": { fontSize: "1rem", py: 1 } }}
                     />
                     <IconButton aria-label={t("tbSaveName")} onClick={() => save(index, team.team)} sx={{ width: 44, height: 44, flex: "none", ...tappable }}><CheckIcon fontSize="small" /></IconButton>
-                    <IconButton aria-label={t("cancel")} onClick={() => { refocus.current = index; setEditing(null); }} sx={{ width: 44, height: 44, flex: "none", ...tappable }}><CloseIcon fontSize="small" /></IconButton>
+                    <IconButton aria-label={t("cancel")} onClick={() => { refocusRef.current = index; setEditing(null); }} sx={{ width: 44, height: 44, flex: "none", ...tappable }}><CloseIcon fontSize="small" /></IconButton>
                   </>
                 ) : (
                   <>
@@ -145,7 +149,7 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
                     {mine && <Box component="span" sx={srOnly}> ({t("ngYouTag")})</Box>}
                     {onRename && (
                       <IconButton
-                        ref={(el) => { penRefs.current[index] = el; }} aria-label={t("renameTeam", { label })}
+                        ref={(el) => { penRef.current[index] = el; }} aria-label={t("renameTeam", { label })}
                         onClick={() => { setDraft(team.team); setEditing(index); }}
                         sx={{ width: 44, height: 44, flex: "none", mr: -1, color: "text.secondary", ...tappable }}
                       >
