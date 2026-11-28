@@ -4,6 +4,7 @@ import { advanceDueRecurringEvent } from "../../../../lib/advanceOccurrence.serv
 import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
 import { checkAccess } from "../../../../lib/eventAccess";
 import { computePostGameStatus } from "../../../../lib/postgame.server";
+import { hasRecappableGame } from "../../../../lib/eventStory";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 import { expirePendingInvites } from "../../../../lib/invite.server";
 
@@ -344,7 +345,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({
     wasReset,
     ...event,
-    hasLastGame: !!latestHistory && latestHistory.status !== "cancelled",
+    hasLastGame: hasRecappableGame(latestHistory),
     postGameStatus,
     teamResults: filteredTeamResults,
     gameId: event.currentGameId ?? null,

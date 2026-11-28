@@ -31,6 +31,7 @@ const makeEvent = () => ({
 
 beforeEach(() => {
   overrides = {};
+  localStorage.clear();
   window.history.pushState({}, "", "/events/evt-1");
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -62,5 +63,24 @@ describe("EventPage — what sits above the title", () => {
     renderWithTheme(<EventPage eventId="evt-1" />);
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByText(/player list has been cleared|was reset for the next occurrence/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("EventPage — the loading page holds only the room that will be used", () => {
+  it("shows no recap skeleton for a game with nothing to recap, so nothing jumps when the page arrives", () => {
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    expect(screen.getByTestId("header-skeleton")).toBeInTheDocument();
+    expect(screen.queryByTestId("recap-skeleton")).not.toBeInTheDocument();
+  });
+
+  it("holds the recap's place when the server said a last game exists", () => {
+    renderWithTheme(<EventPage eventId="evt-1" hasLastGame />);
+    expect(screen.getByTestId("recap-skeleton")).toBeInTheDocument();
+  });
+
+  it("holds the strip's smaller place when this viewer last saw the strip here", () => {
+    localStorage.setItem("recap:shape:evt-1", "strip");
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    expect(screen.getByTestId("recap-skeleton")).toBeInTheDocument();
   });
 });

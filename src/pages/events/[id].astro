@@ -5,6 +5,7 @@ import { prisma } from "../../lib/db.server";
 import { activeParticipantsWhere } from "../../lib/activeParticipants.server";
 import { generateEventHead, generateEventMetaTags } from "../../lib/seo";
 import { buildEventSummary, type EventSummary } from "../../lib/eventSummary";
+import { hasRecappableGame } from "../../lib/eventStory";
 
 const { id } = Astro.params;
 
@@ -18,6 +19,7 @@ let jsonLd = "";
 let alternateJson: string | undefined;
 let metaTags: { property: string; content: string }[] = [];
 let summary: EventSummary | null = null;
+let hasLastGame = false;
 
 try {
   const event = await prisma.event.findUnique({
@@ -50,6 +52,10 @@ try {
         select: { name: true, members: { select: { name: true }, orderBy: { order: "asc" } } },
       }),
     ]);
+    // The client-only page holds the recap's place from its first frame, but only when there is one to hold.
+    hasLastGame = hasRecappableGame(await prisma.gameHistory.findFirst({
+      where: { eventId: event.id }, orderBy: { dateTime: "desc" }, select: { status: true },
+    }));
     const playerCount = playerNames.length;
     const spotsLeft = Math.max(0, event.maxPlayers - playerCount);
     title = `${event.title} — Convocados`;
@@ -128,5 +134,5 @@ try {
       </p>
     </section>
   )}
-  <EventPageComponent client:only="react" eventId={id!} />
+  <EventPageComponent client:only="react" eventId={id!} hasLastGame={hasLastGame} />
 </BaseLayout>

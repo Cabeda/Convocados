@@ -47,7 +47,7 @@ export function EventEditForm({ event, sport, onSave, onCancel }: Props) {
   const [failed, setFailed] = useState<EditField | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   // What the server already holds, so a retry after a partial failure sends only what is still missing.
-  const saved = useRef({ title: event.title, location: event.location || "", when: when0, tz: tz0, sport });
+  const savedRef = useRef({ title: event.title, location: event.location || "", when: when0, tz: tz0, sport });
 
   // Focus the field that failed once it is on screen (sport and time zone are behind "More details").
   useEffect(() => {
@@ -61,7 +61,7 @@ export function EventEditForm({ event, sport, onSave, onCancel }: Props) {
   const save = async () => {
     if (saving || nameMissing || dateMissing) return;
     const edits: EventEdits = {};
-    const base = saved.current;
+    const base = savedRef.current;
     if (title.trim() !== base.title) edits.title = title.trim();
     if (location !== base.location) edits.location = location;
     if (when !== base.when || tz !== base.tz) edits.dateTime = { value: when, timezone: tz };

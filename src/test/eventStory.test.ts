@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createT } from "~/lib/i18n";
 import {
   recapPhase, recapTasks, scoreSummary, isSetsScoringSport, RECAP_HIDE_BEFORE_KICKOFF_MS,
-  nextRecapBoundary, pendingTaskCount,
+  nextRecapBoundary, pendingTaskCount, hasRecappableGame,
   type RecapPhaseInput, type RecapTasksInput, type RecapPayment,
 } from "~/lib/eventStory";
 
@@ -306,5 +306,14 @@ describe("nextRecapBoundary", () => {
     expect(nextRecapBoundary({ ...base, weekly: false })).toBeNull();
     expect(nextRecapBoundary({ ...base, nextKickoff: null })).toBeNull();
     expect(nextRecapBoundary({ ...base, hasLastGame: false })).toBeNull();
+  });
+});
+
+describe("hasRecappableGame", () => {
+  it("is true only when the newest history row is a game that was played", () => {
+    expect(hasRecappableGame(null)).toBe(false);
+    expect(hasRecappableGame(undefined)).toBe(false);
+    expect(hasRecappableGame({ status: "played" })).toBe(true);
+    expect(hasRecappableGame({ status: "cancelled" })).toBe(false);
   });
 });

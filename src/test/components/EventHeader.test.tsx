@@ -224,6 +224,15 @@ describe("EventHeader — when and where", () => {
     expect(await screen.findByText("€5 each · €80 total")).toBeInTheDocument();
   });
 
+  it("holds the price's room, unseen and unread, until the answer is in", async () => {
+    cost = { totalAmount: 50, currency: "EUR" };
+    renderHeader();
+    const room = screen.getByTestId("price-room");
+    expect(room).toHaveAttribute("aria-hidden", "true");
+    expect(await screen.findByText("€5 each")).toBeInTheDocument();
+    expect(screen.queryByTestId("price-room")).not.toBeInTheDocument();
+  });
+
   it("does not call the cost API for someone who is neither a player nor an organiser", async () => {
     renderHeader({ isAuthenticated: true, isParticipant: false });
     await screen.findByRole("button", { name: "Follow game" });

@@ -58,7 +58,10 @@ export function EventInfoLines({ eventId, event, gameDate, canEdit, canViewPrice
     ? [t("priceEach", { amount: money(share) }), canEdit && total ? t("priceTotal", { amount: money(total) }) : null].filter(Boolean).join(" · ")
     : null;
   const askForPrice = canEdit && loaded && !price;
-  const showPlace = !!event.location || canEdit || !!price;
+  // Until the price is known, hold its room with invisible text of about its length: if it will wrap to a
+  // second line it does so from the first frame, instead of pushing the page down when it arrives.
+  const holdPriceRoom = canViewPrice && !loaded;
+  const showPlace = !!event.location || canEdit || !!price || holdPriceRoom;
 
   return (
     <Box sx={{ mt: 0.5, display: "grid", gap: 0.25 }}>
@@ -80,6 +83,11 @@ export function EventInfoLines({ eventId, event, gameDate, canEdit, canViewPrice
               ? <Link href={mapsHref(event.location)} target="_blank" rel="noopener noreferrer" underline="always" sx={link}>{event.location}</Link>
               : canEdit && <Typography component="span" sx={{ color: "text.secondary", font: "inherit" }}>{t("locationOptional")}</Typography>}
             {price && <Box component="span" sx={{ whiteSpace: "nowrap" }}>{price}</Box>}
+            {holdPriceRoom && (
+              <Box component="span" aria-hidden data-testid="price-room" sx={{ whiteSpace: "nowrap", visibility: "hidden" }}>
+                {[t("priceEach", { amount: money(10) }), canEdit ? t("priceTotal", { amount: money(100) }) : null].filter(Boolean).join(" · ")}
+              </Box>
+            )}
             {askForPrice && <Link href={`/events/${eventId}/payments`} underline="always" sx={link}>{t("setPrice")}</Link>}
           </Box>
         </Box>

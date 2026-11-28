@@ -43,6 +43,12 @@ const write = (key: string, value: string) => {
   try { localStorage.setItem(key, value); } catch { /* private mode */ }
 };
 
+/** The shape this viewer last saw the recap in on this event, or null if never: the loading page holds that much room. */
+export const lastRecapShape = (eventId: string): "full" | "strip" | null => {
+  const shape = read(shapeKey(eventId));
+  return shape === "full" || shape === "strip" ? shape : null;
+};
+
 /**
  * The last game on top of the next game: decides how much recap to show
  * (full card, strip, game-day reminder or nothing) and wires its data.
@@ -117,7 +123,7 @@ export function EventRecap(p: EventRecapProps) {
   // has ended). A brand-new weekly game has none, and a skeleton for it would be a jump of its own.
   const expectRecap = !!p.hasLastGame || (!p.isRecurring && new Date(p.nextKickoff).getTime() < now);
   if (!loaded && !status) {
-    return expectRecap ? <RecapSkeleton strip={read(shapeKey(p.eventId)) === "strip"} /> : null;
+    return expectRecap ? <RecapSkeleton strip={lastRecapShape(p.eventId) === "strip"} /> : null;
   }
   if (!status || !lastGame) return null;
   if (phase === "hidden" || (phase === "reminder" && payTask?.kind !== "pay" && !reminderReported)) return null;

@@ -83,6 +83,14 @@ export interface RecapTasksInput {
 }
 
 /** Sports whose result is a list of sets, not one number per team. */
+/**
+ * Is there a last game to recap? True when the newest history row is a game that was played: a cancelled
+ * one has no result, scoreboard or tasks (the same rule `computePostGameStatus` applies).
+ * Known without signing in, so the page can hold the recap's place before anything is fetched.
+ */
+export const hasRecappableGame = (latestHistory: { status: string } | null | undefined): boolean =>
+  !!latestHistory && latestHistory.status !== "cancelled";
+
 export const isSetsScoringSport = (sport: string) =>
   ["tennis", "tennis-singles", "tennis-doubles", "padel"].includes(sport.toLowerCase());
 

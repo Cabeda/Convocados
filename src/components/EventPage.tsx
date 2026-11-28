@@ -43,7 +43,7 @@ import {
 } from "./event";
 import { buildEventShareText, shareableUrl, shareEvent } from "./event/shareEvent";
 import type { EventData, Player, KnownPlayer } from "./event";
-import { EventRecap } from "./event/story/EventRecap";
+import { EventRecap, lastRecapShape } from "./event/story/EventRecap";
 import { CancelledBanner } from "./event/story/CancelledBanner";
 import { RecapSkeleton } from "./event/story/RecapSkeleton";
 import { HeaderSkeleton } from "./event/story/HeaderSkeleton";
@@ -71,7 +71,7 @@ function isHighIntentForPush(
   return hoursUntil > 0 && hoursUntil <= PUSH_PROMPT_HIGH_INTENT_HOURS;
 }
 
-export default function EventPage({ eventId }: { eventId: string }) {
+export default function EventPage({ eventId, hasLastGame = false }: { eventId: string; hasLastGame?: boolean }) {
   const { locale, t } = useLocale();
   const { data: session, refetch: refetchSession } = useSession();
 
@@ -1109,10 +1109,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
   if (isLoading) return (
     <ThemeModeProvider>
       <ResponsiveLayout>
-        <Container maxWidth="md" sx={{ py: 4 }}>
+        {/* One viewport tall at least, in this state and the next, so the footer is below the fold in both and never jumps into view. */}
+        <Container maxWidth="md" sx={{ py: 4, minHeight: "100dvh" }}>
           <Stack spacing={3}>
             <HeaderSkeleton />
-            <RecapSkeleton />
+            {/* Only when a last game is known to exist (the page was told so, or this viewer has seen its recap here). */}
+            {(hasLastGame || lastRecapShape(eventId) !== null) && <RecapSkeleton strip={lastRecapShape(eventId) === "strip"} />}
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
               <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
               <Stack spacing={1}>
@@ -1157,7 +1159,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   return (
     <ThemeModeProvider>
       <ResponsiveLayout>
-        <Container maxWidth="md" sx={{ py: 4 }}>
+        <Container maxWidth="md" sx={{ py: 4, minHeight: "100dvh" }}>
           <Stack spacing={3}>
 
             {inviteToken && event && (
