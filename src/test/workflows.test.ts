@@ -504,13 +504,13 @@ describe("a refused Change gets its round from the tick", () => {
 });
 
 describe("the review is readable where a human reads it", () => {
-  // A formal review lands in a separate tab the conversation never shows, and
-  // GitHub refuses one on an App-authored PR anyway. The adversarial review is
-  // the product: it goes in the thread.
-  it("posts the review as a PR comment", () => {
+  // The comment carries the whole review, in the thread a human reads. The
+  // formal review is what branch protection counts and what `REQUEST_CHANGES`
+  // blocks on, so both are posted: body in the comment, verdict in the review.
+  it("posts the body as a comment and the verdict as a review", () => {
     const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
     expect(raw).toContain('gh pr comment "$PR"');
-    expect(raw).not.toContain("gh pr review");
+    expect(raw).toContain('gh pr review "$PR"');
   });
 });
 
@@ -648,5 +648,26 @@ describe("the push job can post its reply", () => {
     const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
     const push = raw.slice(raw.indexOf("\n  push:"));
     expect(push).toContain("permission-pull-requests: write");
+  });
+});
+
+describe("the Reviewer can approve or send a Change back", () => {
+  // A comment is not a review: `required_approving_review_count` ignores it and
+  // a reviewer's objection cannot block. GitHub refuses a review by the author,
+  // which is why the Change is opened with FACTORY_PAT — the push and the
+  // commits stay the App's, so the CLA is unaffected.
+  const reviewer = () => readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+
+  it("submits an approve and a request-changes, not only a comment", () => {
+    expect(reviewer()).toContain('--approve');
+    expect(reviewer()).toContain('--request-changes');
+    expect(reviewer()).toContain('gh pr review "$PR"');
+  });
+
+  it("opens the Change with a person's token so the App is not the author", () => {
+    const fix = readFileSync(join(workflowsDir, "factory-fix.yml"), "utf8");
+    expect(fix).toContain("FACTORY_PAT: ${{ secrets.FACTORY_PAT }}");
+    const deliver = readFileSync(join(process.cwd(), "scripts/factory/deliver.ts"), "utf8");
+    expect(deliver).toContain("ghAsPerson([");
   });
 });
