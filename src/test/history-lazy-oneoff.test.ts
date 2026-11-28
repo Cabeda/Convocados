@@ -76,6 +76,26 @@ describe("an ended one-off with no history row: the score creates it", () => {
     expect((await (await getStatus(getCtx({ id: event.id }))).json()).isPlayer).toBe(false);
   });
 
+  it.each([
+    ["linked to the ledger name", true],
+    ["not linked to anyone", false],
+  ])("a viewer whose account differs from the ledger name: status and the first-score save agree (%s)", async (_label, linked) => {
+    const { event, game } = await seedEnded();
+    // The lineup knows "Ana Lopes"; the account is "Ana Account".
+    const ana = await prisma.teamResult.findFirstOrThrow({ where: { eventId: event.id, name: "Ninjas" } });
+    await prisma.teamMember.create({ data: { name: "Ana Lopes", order: 1, teamResultId: ana.id } });
+    await prisma.user.create({ data: { id: "u-ana", name: "Ana Account", email: "ana@test.com", emailVerified: true } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana Lopes", userId: linked ? "u-ana" : null } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, status: "active", order: 0 } });
+    mockGetSession.mockResolvedValue({ user: { id: "u-ana", name: "Ana Account" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+
+    const status = await (await getStatus(getCtx({ id: event.id }))).json();
+    const save = await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 2, scoreTwo: 1 }));
+    expect({ isPlayer: status.isPlayer, saved: save.status === 200 }).toEqual({ isPlayer: linked, saved: linked });
+    if (!linked) expect(save.status).toBe(403);
+  });
+
   it("PATCH on the live game id creates the history row with the score and the teams", async () => {
     const { event, game, dateTime } = await seedEnded();
     const res = await patchHistory(patchCtx({ id: event.id, historyId: game.id }, { scoreOne: 3, scoreTwo: 1 }));
