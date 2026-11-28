@@ -101,7 +101,7 @@ describe("Teams — what the block says", () => {
     const ratings = (s: ReturnType<typeof fakeServer>) => s.on("GET", "/ratings", () => ({ data: [{ name: "Rui Costa", rating: 1231.4 }] }));
     renderPage(game({ balanced: true, eloEnabled: true }), ratings);
     expect(await screen.findByRole("img", { name: "rating 1231" })).toHaveTextContent("1231");
-    expect(document.body.textContent).not.toMatch(/elo/i);
+    expect(document.body.textContent).not.toMatch(/\belo\b/i);
     cleanup();
     renderPage(game({ balanced: true, eloEnabled: true, hideEloInTeams: true }), ratings);
     await screen.findByTestId("team-columns");

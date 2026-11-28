@@ -90,7 +90,7 @@ export function RsvpRow({ view, emphasis, busy, eventId, onSignedIn, onJoin, onD
     const panelId = "rsvp-change-panel";
     body = (
       <>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", minHeight: 56, columnGap: 1 }}>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", minHeight: 56, columnGap: 1 }}>
           <Typography data-testid="rsvp-status" sx={{ fontSize: "1.1875rem", lineHeight: 1.3, fontWeight: 700, color: view.kind === "out" ? "text.secondary" : "text.primary", textWrap: "balance" }}>{text}</Typography>
           <Button ref={changeRef} aria-expanded={changing} aria-controls={panelId} disabled={busy} onClick={() => setChanging((c) => !c)} sx={{ ...quiet, flexShrink: 0, color: "primary.main" }}>
             {t("ngChange")}

@@ -320,7 +320,7 @@ describe("Next game — changing your answer", () => {
     const call = server.sent("POST", "/rsvp")[0];
     expect(call.body).toEqual({ status: "no" });
     expect(server.sent("POST", "/leave")).toHaveLength(0);
-    await user.click(screen.getByRole("button", { name: "Change" }));
+    await user.click(screen.getByRole("button", { name: "Change my answer" }));
     serverJoins();
     await user.click(screen.getByRole("button", { name: "I'm in" }));
     expect(await screen.findByText("You're in")).toBeInTheDocument();
@@ -339,7 +339,7 @@ describe("Next game — changing your answer", () => {
     const user = userEvent.setup();
     renderPage({ players: [me, ...rows(3)] });
     server.on("POST", "/leave", () => { server.state.event.players = server.state.event.players.filter((p: Row) => p.id !== "me"); return { ok: true }; });
-    await user.click(await screen.findByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("button", { name: "Change my answer" }));
     // Focus moves into the panel.
     const cant = screen.getByRole("button", { name: "Can't make it" });
     expect(cant).toHaveFocus();
@@ -355,10 +355,10 @@ describe("Next game — changing your answer", () => {
   it("'Keep my spot' closes the panel and puts focus back on 'Change'", async () => {
     const user = userEvent.setup();
     renderPage({ players: [me] });
-    await user.click(await screen.findByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("button", { name: "Change my answer" }));
     await user.click(screen.getByRole("button", { name: "Keep my spot" }));
     expect(screen.queryByRole("button", { name: "Keep my spot" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Change my answer" })).toHaveFocus();
     expect(server.sent("POST", "/leave")).toHaveLength(0);
   });
 
@@ -366,7 +366,7 @@ describe("Next game — changing your answer", () => {
     const user = userEvent.setup();
     renderPage({ players: [...rows(2), me, ...rows(1, 5)] });
     server.on("POST", "/leave", () => respond(500, { error: "x" }));
-    await user.click(await screen.findByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("button", { name: "Change my answer" }));
     await user.click(screen.getByRole("button", { name: "Can't make it" }));
     await user.click(await screen.findByTestId("leave-dialog-confirm"));
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't save your answer");
@@ -378,7 +378,7 @@ describe("Next game — changing your answer", () => {
   it("warns about no replacement when it is within 48 hours and nobody is on the bench", async () => {
     const user = userEvent.setup();
     renderPage({ dateTime: new Date(Date.now() + 20 * HOUR).toISOString(), players: [me, ...rows(3)] });
-    await user.click(await screen.findByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("button", { name: "Change my answer" }));
     await user.click(screen.getByRole("button", { name: "Can't make it" }));
     expect(await screen.findByTestId("leave-dialog-no-replacement")).toBeInTheDocument();
   });

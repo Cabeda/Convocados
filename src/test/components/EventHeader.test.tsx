@@ -345,7 +345,7 @@ describe("EventHeader — the More sheet", () => {
     expect(within(sheet).getByRole("link", { name: "History and results" })).toHaveAttribute("href", "/events/evt-1/history");
     expect(within(sheet).getByRole("link", { name: "Payments" })).toHaveAttribute("href", "/events/evt-1/payments");
     expect(within(sheet).getByRole("link", { name: "Event settings" })).toHaveAttribute("href", "/events/evt-1/settings");
-    expect(within(sheet).getByRole("link", { name: "Add to calendar (Apple, Outlook)" })).toHaveAttribute("href", "/api/events/evt-1/calendar");
+    expect(within(sheet).getByRole("link", { name: "Add to calendar Apple or Outlook" })).toHaveAttribute("href", "/api/events/evt-1/calendar");
   });
 
   it("says who manages the game, linking to their profile, at the top", async () => {
@@ -392,7 +392,7 @@ describe("EventHeader — the More sheet", () => {
     const user = userEvent.setup();
     renderHeader({ event: { dateTime: new Date(Date.now() - 5 * 86400_000).toISOString() } });
     const sheet = await openSheet(user);
-    expect(within(sheet).queryByRole("link", { name: "Add to calendar (Apple, Outlook)" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("link", { name: "Add to calendar Apple or Outlook" })).not.toBeInTheDocument();
     expect(within(sheet).getByRole("link", { name: "Attendance" })).toBeInTheDocument();
   });
 
@@ -422,9 +422,13 @@ describe("EventHeader — the More sheet", () => {
     const user = userEvent.setup();
     renderHeader({ canEditSettings: true });
     const sheet = await openSheet(user);
-    for (const name of ["Event settings", "Ratings", "Add to calendar (Apple, Outlook)", "Add to Google Calendar", "My notifications"]) {
+    for (const name of ["Event settings", "Ratings", "My notifications"]) {
       expect(within(sheet).getByText(name)).toBeInTheDocument();
     }
+    // One plain name for the calendar, then who each way is for: no brackets, no brand lists in a label.
+    expect(within(sheet).getAllByText("Add to calendar")).toHaveLength(2);
+    expect(within(sheet).getByText("Apple or Outlook")).toBeInTheDocument();
+    expect(within(sheet).getByText("Google")).toBeInTheDocument();
     expect(within(sheet).queryByText(/Event Settings|Skill Rating|Download/)).not.toBeInTheDocument();
   });
 

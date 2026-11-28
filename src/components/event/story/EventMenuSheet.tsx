@@ -7,7 +7,7 @@ import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import EventBusyIcon from "@mui/icons-material/EventBusy";
-import GroupsIcon from "@mui/icons-material/Groups";
+import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
 import HistoryIcon from "@mui/icons-material/History";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -38,15 +38,18 @@ const GROUP_LABEL: Record<MenuGroupId, TranslationKey> = {
 };
 
 const LABEL: Record<MenuItemId, TranslationKey> = {
-  ics: "menuCalendarFile", gcal: "addToGoogleCalendar", cancel: "cancelGame",
+  ics: "menuCalendar", gcal: "menuCalendar", cancel: "cancelGame",
   history: "menuHistory", seasons: "menuSeasons", attendance: "attendance", log: "activityLog",
   ratings: "menuRatings", payments: "paymentsPageTitle", watch: "watchScore",
   notifications: "myNotificationsMenu", lineup: "menuManageLineup", settings: "menuEventSettings",
 };
 
+/** The two ways to add a game to a calendar say who each is for, in words people use. */
+const SUB: Partial<Record<MenuItemId, TranslationKey>> = { ics: "menuCalendarAppleOutlook", gcal: "menuCalendarGoogle" };
+
 const ICON: Record<MenuItemId, ReactNode> = {
   ics: <CalendarMonthIcon />, gcal: <CalendarMonthIcon />, cancel: <EventBusyIcon />,
-  history: <HistoryIcon />, seasons: <GroupsIcon />, attendance: <EmojiPeopleIcon />, log: <AssignmentIcon />,
+  history: <HistoryIcon />, seasons: <LeaderboardIcon />, attendance: <EmojiPeopleIcon />, log: <AssignmentIcon />,
   ratings: <EmojiEventsIcon />, payments: <PaymentsIcon />, watch: <SportsSoccerIcon />,
   notifications: <NotificationsIcon />, lineup: <FormatListNumberedIcon />, settings: <SettingsIcon />,
 };
@@ -147,7 +150,13 @@ export function EventMenuSheet({ open, onClose, groups, eventId, menuId, owner, 
             </Typography>
             {g.items.map((id) => (
               <ButtonBase key={id} sx={{ ...row, color: id === "cancel" ? "error.main" : "text.primary", fontWeight: id === "cancel" ? 600 : 400 }} {...target(id)}>
-                {ICON[id]}<span>{t(LABEL[id])}</span>
+                {ICON[id]}
+                {SUB[id] ? (
+                  <Box component="span" sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                    <span>{t(LABEL[id])}</span>
+                    <Box component="span" sx={{ fontSize: "0.875rem", color: "text.secondary" }}>{t(SUB[id]!)}</Box>
+                  </Box>
+                ) : <span>{t(LABEL[id])}</span>}
               </ButtonBase>
             ))}
           </Box>
