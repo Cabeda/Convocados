@@ -278,6 +278,11 @@ export function NextGame(p: NextGameProps) {
               )}
               <WhosIn
                 autoOpen={slotLabels(active.map((x) => x.name)).collides}
+                trailing={perms.canEditSettings && (
+                  <Button href={`/events/${p.eventId}/lineup`} sx={{ minHeight: 44, px: 1.25, textTransform: "none", fontSize: "1rem", fontWeight: 600, color: "text.secondary", borderRadius: 999, ...tappable }}>
+                    {t("menuManageLineup")}
+                  </Button>
+                )}
                 playing={active} bench={bench} viewerId={viewer?.id ?? null} positionsEnabled={!!event.positionsEnabled}
                 canSelect={canRemove} selectedId={selection?.from === "row" ? selection.id : null} onSelect={(pl) => select(pl, "row")}
                 options={(pl) => <PlayerOptions player={pl} onRemove={() => requestRemove(pl)} onClose={closeOptions} disabled={removal.busy || claiming} self={isSelf(pl)} onClaim={nameRow?.id === pl.id ? () => void claim(pl) : undefined} />}
@@ -302,7 +307,7 @@ export function NextGame(p: NextGameProps) {
                   />
                 </Box>
               )}
-              {removal.undo && <UndoToast undo={removal.undo} onUndo={() => void removal.runUndo()} onDismiss={removal.dismissUndo} />}
+              {removal.undo && <UndoToast message={t("undoRemoveDesc", { name: removal.undo.name })} onUndo={() => void removal.runUndo()} onDismiss={removal.dismissUndo} />}
               {canDraw && !cancelled && (
                 <Button
                   startIcon={<ShuffleIcon />} variant={p.draw.hasTeams ? "text" : "outlined"} disabled={p.draw.isDrawing} aria-busy={p.draw.isDrawing || undefined}

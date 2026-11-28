@@ -27,6 +27,8 @@ interface Props {
   onOpenChange?: (open: boolean) => void;
   /** Open until the viewer chooses otherwise: set when two people's letters had to be told apart. */
   autoOpen?: boolean;
+  /** Something small on the same line as the toggle, at the far end (the organizer's "Manage lineup"). */
+  trailing?: ReactNode;
 }
 
 interface RowProps {
@@ -70,7 +72,7 @@ function Row({ player, me, number, positionsEnabled, selectable, selected, onSel
  * "Who's in": the names behind the initials, for anyone who recognises people by name
  * (and for screen readers). Two columns; the bench follows, numbered.
  */
-export function WhosIn({ playing, bench, viewerId, positionsEnabled, canSelect, selectedId, onSelect, options, open: openProp, onOpenChange, autoOpen }: Props) {
+export function WhosIn({ playing, bench, viewerId, positionsEnabled, canSelect, selectedId, onSelect, options, open: openProp, onOpenChange, autoOpen, trailing }: Props) {
   const t = useT();
   const id = useId();
   const [chosen, setChosen] = useState<boolean | null>(null);
@@ -80,13 +82,16 @@ export function WhosIn({ playing, bench, viewerId, positionsEnabled, canSelect, 
 
   return (
     <Box>
-      <Button
-        aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}
-        endIcon={open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-        sx={{ minHeight: 44, ml: -1.5, px: 1.5, textTransform: "none", fontSize: "1rem", fontWeight: 700, color: "text.secondary", borderRadius: 999, ...tappable }}
-      >
-        {t("ngWhosIn")}
-      </Button>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 1 }}>
+        <Button
+          aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}
+          endIcon={open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          sx={{ minHeight: 44, ml: -1.5, px: 1.5, textTransform: "none", fontSize: "1rem", fontWeight: 700, color: "text.secondary", borderRadius: 999, ...tappable }}
+        >
+          {t("ngWhosIn")}
+        </Button>
+        {trailing}
+      </Box>
       {open && (
         <Box id={id} data-testid="whos-in">
           <Box component="ul" sx={{ m: 0, p: 0, columnCount: { xs: 1, sm: 2 }, columnGap: 3 }}>

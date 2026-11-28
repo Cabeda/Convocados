@@ -831,3 +831,38 @@ describe("Other people joining and leaving are announced politely", () => {
     expect(announce()).toBeEmptyDOMElement();
   }, 10_000);
 });
+
+describe("Manage lineup — a visible way in for the organizer", () => {
+  it("shows a small 'Manage lineup' link next to 'Who's in' for the owner, going to the lineup page", async () => {
+    mockSession.data = OWNER;
+    renderPage({ players: rows(3) });
+    const link = await screen.findByRole("link", { name: "Manage lineup" });
+    expect(link).toHaveAttribute("href", "/events/evt-1/lineup");
+    const who = screen.getByRole("button", { name: "Who's in" });
+    expect(who.parentElement).toBe(link.parentElement);
+  });
+
+  it("shows it to an event admin too", async () => {
+    mockSession.data = { user: { id: "someone", name: "Admin" } };
+    renderPage({ players: rows(3), isAdmin: true });
+    expect(await screen.findByRole("link", { name: "Manage lineup" })).toBeInTheDocument();
+  });
+
+  it("does not show it to a player, or to a signed-out visitor", async () => {
+    renderPage({ players: rows(3) });
+    await screen.findByTestId("lineup-slots");
+    expect(screen.queryByRole("link", { name: "Manage lineup" })).not.toBeInTheDocument();
+    cleanup();
+    mockSession.data = null;
+    renderPage({ players: rows(3) });
+    await screen.findByTestId("lineup-slots");
+    expect(screen.queryByRole("link", { name: "Manage lineup" })).not.toBeInTheDocument();
+  });
+
+  it("is not shown when nobody is in yet: there is nothing to manage", async () => {
+    mockSession.data = OWNER;
+    renderPage({ players: [] });
+    await screen.findByTestId("lineup-slots");
+    expect(screen.queryByRole("link", { name: "Manage lineup" })).not.toBeInTheDocument();
+  });
+});

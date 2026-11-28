@@ -17,7 +17,8 @@ interface Props {
   players: readonly Player[];
   maxPlayers: number;
   positionsEnabled: boolean;
-  onReorder: (playerIds: string[]) => void;
+  /** Move one person: by a step (the arrows) or to a place (a drag). The page works out the new order from the latest one. */
+  onMove: (playerId: string, target: { by: number } | { to: number }) => void;
   onResetOrder: () => void;
   onSetPosition: (name: string, position: string | null) => void;
   onRemove: (player: Player) => void;
@@ -30,32 +31,27 @@ interface Props {
  * and screen readers), back to sign-up order, one position per player, and remove. The first
  * `maxPlayers` play; the rest wait on the bench.
  */
-export function ManageLineup({ players, maxPlayers, positionsEnabled, onReorder, onResetOrder, onSetPosition, onRemove, error, onDismissError }: Props) {
+export function ManageLineup({ players, maxPlayers, positionsEnabled, onMove, onResetOrder, onSetPosition, onRemove, error, onDismissError }: Props) {
   const t = useT();
   const { active, bench } = splitRoster(players, maxPlayers);
   const [drag, setDrag] = useState<{ from: number; over: number | null } | null>(null);
-
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= players.length || from === to) return;
-    const ids = players.map((p) => p.id);
-    const [moved] = ids.splice(from, 1);
-    ids.splice(to, 0, moved);
-    onReorder(ids);
-  };
 
   const row = (player: Player, index: number) => (
     <Box
       component="li" key={player.id} draggable
       onDragStart={() => setDrag({ from: index, over: null })}
       onDragOver={(e: DragEvent) => { e.preventDefault(); setDrag((d) => (d ? { ...d, over: index } : d)); }}
-      onDrop={() => { if (drag && drag.over !== null) move(drag.from, drag.over); setDrag(null); }}
+      onDrop={() => { if (drag && drag.over !== null && drag.over !== drag.from) onMove(players[drag.from].id, { to: drag.over }); setDrag(null); }}
       onDragEnd={() => setDrag(null)}
       sx={{
         display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1, minHeight: 52, py: 0.5, listStyle: "none", borderTop: 1, borderColor: "divider",
         opacity: drag?.from === index ? 0.4 : 1, boxShadow: drag && drag.over === index && drag.from !== index ? (th) => `inset 0 2px 0 ${th.palette.primary.main}` : "none",
       }}
     >
-      <DragIndicatorIcon aria-hidden fontSize="small" sx={{ color: "text.secondary", cursor: "grab" }} />
+      <Box sx={{ display: "flex", flex: "none" }}>
+        <IconButton aria-label={t("ngManageMoveUp", { name: player.name })} disabled={index === 0} onClick={() => onMove(player.id, { by: -1 })} sx={{ width: 44, height: 44, ...tappable }}><ArrowUpwardIcon fontSize="small" /></IconButton>
+        <IconButton aria-label={t("ngManageMoveDown", { name: player.name })} disabled={index === players.length - 1} onClick={() => onMove(player.id, { by: 1 })} sx={{ width: 44, height: 44, ...tappable }}><ArrowDownwardIcon fontSize="small" /></IconButton>
+      </Box>
       {player.userId
         ? <PlayerAvatar userId={player.userId} name={player.name} image={player.image} size={24} clickable={false} />
         : <span title={t("anonymousPlayer")}><AnonymousPlayerIcon /></span>}
@@ -72,8 +68,10 @@ export function ManageLineup({ players, maxPlayers, positionsEnabled, onReorder,
         </TextField>
       )}
       <Box sx={{ display: "flex", marginLeft: "auto" }}>
-        <IconButton aria-label={t("ngManageMoveUp", { name: player.name })} disabled={index === 0} onClick={() => move(index, index - 1)} sx={{ width: 44, height: 44, ...tappable }}><ArrowUpwardIcon fontSize="small" /></IconButton>
-        <IconButton aria-label={t("ngManageMoveDown", { name: player.name })} disabled={index === players.length - 1} onClick={() => move(index, index + 1)} sx={{ width: 44, height: 44, ...tappable }}><ArrowDownwardIcon fontSize="small" /></IconButton>
+        <DragIndicatorIcon
+          aria-hidden data-testid="drag-grip" fontSize="small"
+          sx={{ alignSelf: "center", mx: 0.5, color: "text.secondary", cursor: "grab", "@media (pointer: coarse)": { display: "none" } }}
+        />
         <IconButton aria-label={t("ngManageRemoveAria", { name: player.name })} onClick={() => onRemove(player)} sx={{ width: 44, height: 44, color: "error.main", ...tappable }}><CloseIcon fontSize="small" /></IconButton>
       </Box>
     </Box>
