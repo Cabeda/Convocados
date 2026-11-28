@@ -32,11 +32,11 @@ instead of `PlayerPayment` + `GameHistory.paymentsSnapshot`.
 MONEY_CHARGING_REASONS = { "per_game_share", "cost_adjustment" }
 
 // Gate balance — "sent" clears the gate (ADR 0006)
-getGateBalance: sum(charging debits) - sum(MONEY_CLEARING_REASONS credits)
+getGateBalance: sum(charging debits) - sum(charging credits + MONEY_CLEARING_REASONS credits)
   where MONEY_CLEARING_REASONS = { payment_received, payment_self_reported, credit_redeemed }
 
 // Outstanding balance — "sent" does NOT clear (player still owes until organizer confirms)
-getOutstandingBalance: sum(charging debits) - sum(OUTSTANDING_CLEARING_REASONS credits)
+getOutstandingBalance: sum(charging debits) - sum(charging credits + OUTSTANDING_CLEARING_REASONS credits)
   where OUTSTANDING_CLEARING_REASONS = { payment_received, credit_redeemed }
 ```
 
