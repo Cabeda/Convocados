@@ -141,6 +141,56 @@ describe("processPaymentEscalation", () => {
     expect(mockSendPush.mock.calls[0][2]).toContain("2/3 players have paid");
   });
 
+  it("stage 3 does not accuse a self-reported payer", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const sentDebtor = await seedUser({ name: "SentDebtor" });
+    const pendingDebtor = await seedUser({ name: "PendingDebtor" });
+    const event = await seedPastEvent(owner.id, 130);
+    await seedOwedPayment(event.id, "Paid", 5, "paid", null);
+    await seedOwedPayment(event.id, "SentDebtor", 5, "sent", sentDebtor.id);
+    await seedOwedPayment(event.id, "PendingDebtor", 5, "pending", pendingDebtor.id);
+    await prisma.paymentNudgeStage.createMany({
+      data: [
+        { eventId: event.id, userId: sentDebtor.id, stage: 2 },
+        { eventId: event.id, userId: pendingDebtor.id, stage: 2 },
+      ],
+    });
+
+    const result = await processPaymentEscalation();
+
+    // Only `paid` settles a row (paymentSummary's definition); `sent` is the
+    // payer's courtesy signal, so the group-facing rate stays 1/3. The sent
+    // payer must not be pushed as delinquent even though the tracker advances.
+    expect(result.stage3Sent).toEqual(
+      expect.arrayContaining([`${sentDebtor.id}:${event.id}`, `${pendingDebtor.id}:${event.id}`]),
+    );
+    expect(mockSendPush).not.toHaveBeenCalledWith(
+      sentDebtor.id,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(mockSendPush).toHaveBeenCalledWith(
+      pendingDebtor.id,
+      "Past Game",
+      expect.stringContaining("1/3 players have paid. You're one of 2 who haven't."),
+      expect.stringContaining("action=pay"),
+    );
+  });
+
+  it("does not send a stage 1 or 2 nudge to a self-reported payment", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const sentDebtor = await seedUser({ name: "SentDebtor" });
+    const event = await seedPastEvent(owner.id, 1);
+    await seedOwedPayment(event.id, "SentDebtor", 5, "sent", sentDebtor.id);
+
+    await processPaymentEscalation();
+
+    expect(mockSendPush).not.toHaveBeenCalled();
+    const tracker = await prisma.paymentNudgeStage.findFirst({ where: { eventId: event.id } });
+    expect(tracker?.stage).toBe(1);
+  });
+
   it("sends organizer alert after 7 days and stops nudging debtor", async () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
