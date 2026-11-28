@@ -4,8 +4,7 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
-import type { PlayerOption } from "./types";
-import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
+import type { AddPlayerIntent, PlayerOption } from "./types";
 
 interface Props {
   value: string;

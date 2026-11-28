@@ -6,6 +6,7 @@ import { activeParticipantsWhere } from "../../lib/activeParticipants.server";
 import { generateEventHead, generateEventMetaTags } from "../../lib/seo";
 import { buildEventSummary, type EventSummary } from "../../lib/eventSummary";
 import { hasRecappableGame } from "../../lib/eventStory";
+import { nextGameHint as nextGameHintFor, type NextGameHint } from "../../lib/nextGame";
 
 const { id } = Astro.params;
 
@@ -20,6 +21,7 @@ let alternateJson: string | undefined;
 let metaTags: { property: string; content: string }[] = [];
 let summary: EventSummary | null = null;
 let hasLastGame = false;
+let nextGameHint: NextGameHint | undefined;
 
 try {
   const event = await prisma.event.findUnique({
@@ -27,7 +29,7 @@ try {
     select: {
       id: true, title: true, location: true, dateTime: true,
       sport: true, maxPlayers: true, isPublic: true, accessPassword: true,
-      currentGameId: true,
+      currentGameId: true, durationMinutes: true, recurrenceRule: true,
       _count: { select: { players: true } },
     },
   });
@@ -56,6 +58,14 @@ try {
     hasLastGame = hasRecappableGame(await prisma.gameHistory.findFirst({
       where: { eventId: event.id }, orderBy: { dateTime: "desc" }, select: { status: true },
     }));
+    // So the loading page draws only the lineup that will be there (and as many places as the game has).
+    const currentGame = event.currentGameId
+      ? await prisma.game.findUnique({ where: { id: event.currentGameId }, select: { status: true } })
+      : null;
+    nextGameHint = nextGameHintFor({
+      dateTime: event.dateTime, durationMinutes: event.durationMinutes, recurrenceRule: event.recurrenceRule,
+      maxPlayers: event.maxPlayers, cancelled: currentGame?.status === "cancelled",
+    }, Date.now());
     const playerCount = playerNames.length;
     const spotsLeft = Math.max(0, event.maxPlayers - playerCount);
     title = `${event.title} — Convocados`;
@@ -134,5 +144,5 @@ try {
       </p>
     </section>
   )}
-  <EventPageComponent client:only="react" eventId={id!} hasLastGame={hasLastGame} />
+  <EventPageComponent client:only="react" eventId={id!} hasLastGame={hasLastGame} nextGameHint={nextGameHint} />
 </BaseLayout>

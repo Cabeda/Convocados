@@ -8,6 +8,7 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import EventBusyIcon from "@mui/icons-material/EventBusy";
 import GroupsIcon from "@mui/icons-material/Groups";
+import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
 import HistoryIcon from "@mui/icons-material/History";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PaymentsIcon from "@mui/icons-material/Payments";
@@ -40,14 +41,14 @@ const LABEL: Record<MenuItemId, TranslationKey> = {
   ics: "menuCalendarFile", gcal: "addToGoogleCalendar", cancel: "cancelGame",
   history: "menuHistory", seasons: "menuSeasons", attendance: "attendance", log: "activityLog",
   ratings: "menuRatings", payments: "paymentsPageTitle", watch: "watchScore",
-  notifications: "myNotificationsMenu", settings: "menuEventSettings",
+  notifications: "myNotificationsMenu", lineup: "menuManageLineup", settings: "menuEventSettings",
 };
 
 const ICON: Record<MenuItemId, ReactNode> = {
   ics: <CalendarMonthIcon />, gcal: <CalendarMonthIcon />, cancel: <EventBusyIcon />,
   history: <HistoryIcon />, seasons: <GroupsIcon />, attendance: <EmojiPeopleIcon />, log: <AssignmentIcon />,
   ratings: <EmojiEventsIcon />, payments: <PaymentsIcon />, watch: <SportsSoccerIcon />,
-  notifications: <NotificationsIcon />, settings: <SettingsIcon />,
+  notifications: <NotificationsIcon />, lineup: <FormatListNumberedIcon />, settings: <SettingsIcon />,
 };
 
 const row = {
@@ -99,6 +100,7 @@ export function EventMenuSheet({ open, onClose, groups, eventId, menuId, owner, 
       case "log": return page("log");
       case "ratings": return page("rankings");
       case "payments": return page("payments");
+      case "lineup": return page("lineup");
       case "settings": return page("settings");
       case "watch": return link(`/watch/${eventId}`, true);
       case "cancel": return { onClick: () => { onClose(); onCancelGame(); } };

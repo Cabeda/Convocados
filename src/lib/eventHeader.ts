@@ -9,7 +9,7 @@ import { dateFormatTag, formatDateInTz } from "./timezones";
 export type MenuItemId =
   | "ics" | "gcal" | "cancel"
   | "history" | "seasons" | "attendance" | "log" | "ratings" | "payments" | "watch"
-  | "notifications" | "settings";
+  | "notifications" | "lineup" | "settings";
 
 export type MenuGroupId = "game" | "back" | "you" | "manage";
 
@@ -50,7 +50,7 @@ export function menuGroups(i: MenuInput): MenuGroup[] {
   ];
   const you: MenuItemId[] = i.isAuthenticated ? ["notifications"] : [];
   // Cancel game is the destructive row: last, away from the calendar rows it used to sit beside.
-  const manage: MenuItemId[] = i.canEdit ? ["settings", ...(i.isCancelled ? [] : (["cancel"] as const))] : [];
+  const manage: MenuItemId[] = i.canEdit ? ["lineup", "settings", ...(i.isCancelled ? [] : (["cancel"] as const))] : [];
   const groups: MenuGroup[] = [
     { id: "game", items: game }, { id: "back", items: back },
     { id: "you", items: you }, { id: "manage", items: manage },

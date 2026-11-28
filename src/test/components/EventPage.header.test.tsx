@@ -49,28 +49,23 @@ describe("EventPage — the header slice", () => {
     expect(screen.queryByText("View payments")).not.toBeInTheDocument();
   });
 
-  it("keeps the next date of a weekly game on the page until the next-game block exists", async () => {
+  it("gives an upcoming game its Next game block, with the date in condensed numerals under a label", async () => {
     overrides = { isRecurring: true, recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }) };
     renderWithTheme(<EventPage eventId="evt-1" />);
-    expect(await screen.findByText(/^Next game · /)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Next game" })).toBeInTheDocument();
+    expect(screen.getByTestId("next-game-date")).toHaveTextContent(/\d{2}:\d{2}$/);
   });
 
-  it("does not repeat the date for a one-off game, which the header already states", async () => {
+  it("a one-off game that has not been played yet is still the next game", async () => {
     renderWithTheme(<EventPage eventId="evt-1" />);
+    expect(await screen.findByRole("heading", { level: 2, name: "Next game" })).toBeInTheDocument();
+  });
+
+  it("shows the next-game skeleton while loading, in the place the block will take", async () => {
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    expect(screen.getByTestId("next-game-skeleton")).toBeInTheDocument();
     await screen.findByRole("heading", { level: 1 });
-    expect(screen.queryByText(/^Next game · /)).not.toBeInTheDocument();
-  });
-
-  it("says the date of the NEXT game, never the one that already passed", async () => {
-    overrides = {
-      isRecurring: true, recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
-      dateTime: new Date(Date.now() - 3 * 3_600_000).toISOString(),
-    };
-    renderWithTheme(<EventPage eventId="evt-1" />);
-    const line = await screen.findByText(/^Next game · /);
-    const past = new Date(overrides.dateTime as string);
-    const day = new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(past);
-    expect(line.textContent).not.toContain(day);
+    expect(screen.queryByTestId("next-game-skeleton")).not.toBeInTheDocument();
   });
 
   describe("a cancelled game", () => {
@@ -95,25 +90,24 @@ describe("EventPage — the header slice", () => {
       expect(screen.queryByRole("link", { name: "Plan a new game" })).not.toBeInTheDocument();
     });
 
-    it("hides Join and the add-a-player field, which the server would refuse with a 409", async () => {
+    it("hides the RSVP and the lineup, which the server would refuse with a 409", async () => {
       renderWithTheme(<EventPage eventId="evt-1" />);
       await screen.findByRole("heading", { level: 2, name: "This game was cancelled" });
-      expect(screen.queryByRole("button", { name: /^Join as/ })).not.toBeInTheDocument();
-      expect(screen.queryByPlaceholderText("Add player name or email")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "I'm in" })).not.toBeInTheDocument();
+      expect(screen.queryByTestId("lineup-slots")).not.toBeInTheDocument();
     });
 
-    it("has no next-game line to point at", async () => {
+    it("has no next game to point at", async () => {
       overrides = { gameStatus: "cancelled", ownerId: "u-1", isRecurring: true, recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }) };
       renderWithTheme(<EventPage eventId="evt-1" />);
       await screen.findByRole("heading", { level: 1 });
-      expect(screen.queryByText(/^Next game · /)).not.toBeInTheDocument();
+      expect(screen.queryByTestId("next-game")).not.toBeInTheDocument();
     });
   });
 
-  it("offers Join on a game that is on, so the cancelled test above means something", async () => {
+  it("offers the RSVP on a game that is on, so the cancelled test above means something", async () => {
     renderWithTheme(<EventPage eventId="evt-1" />);
-    expect(await screen.findByRole("button", { name: "Join as Jose Silva" })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Add player name or email")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "I'm in" })).toBeInTheDocument();
     expect(screen.queryByText("This game was cancelled")).not.toBeInTheDocument();
   });
 });

@@ -5,7 +5,7 @@ import {
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { useT } from "~/lib/useT";
 
-export type LeaveContext = "self" | "organizer";
+export type LeaveContext = "self" | "organizer" | "guest";
 
 /**
  * Pure helpers for the dialog's inputs — extracted out of component bodies so the
@@ -36,7 +36,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  /** Who is initiating the leave. self = the player themselves, organizer = owner/admin acting on someone. */
+  /** Who is initiating the leave. self = the player themselves, organizer = owner/admin acting on someone, guest = a player taking a guest off the list. */
   context: LeaveContext;
   /** Name of the player being removed (used in the organizer copy). For self, this is the user's own name (shown in the title for clarity). */
   playerName: string;
@@ -46,6 +46,8 @@ interface Props {
   within48h: boolean;
   /** Disable the confirm button while the leave API is in flight. */
   busy?: boolean;
+  /** The dialog has finished closing (and its own focus restore has run). */
+  onExited?: () => void;
 }
 
 /**
@@ -68,9 +70,10 @@ export function ConfirmLeaveDialog({
   benchEmptyAfter,
   within48h,
   busy,
+  onExited,
 }: Props) {
   const t = useT();
-  const showReplacementWarning = within48h && benchEmptyAfter;
+  const showReplacementWarning = context !== "guest" && within48h && benchEmptyAfter;
 
   const title = context === "self"
     ? t("leaveDialogSelfTitle")
@@ -78,12 +81,13 @@ export function ConfirmLeaveDialog({
 
   const body = context === "self"
     ? (showReplacementWarning ? t("leaveDialogSelfBody") : t("leaveDialogSelfBodyNoWarn"))
+    : context === "guest" ? t("ngRemoveGuestBody")
     : (showReplacementWarning ? t("leaveDialogOrganizerBody", { name: playerName }) : t("leaveDialogOrganizerBodyNoWarn", { name: playerName }));
 
   const confirmLabel = context === "self" ? t("leaveDialogConfirmSelf") : t("leaveDialogConfirmOrganizer");
 
   return (
-    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth slotProps={onExited ? { transition: { onExited } } : undefined}>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>

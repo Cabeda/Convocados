@@ -61,6 +61,12 @@ event-detail:
     # The manifest has no note field, so the follow-up is named here: https://github.com/Cabeda/Convocados/issues/1910
     flat-header-actions: { web: true, android: false, wearos: false }
     more-sheet: { web: true, android: false, wearos: false }
+    # Slice 3: the next-game block (date and countdown, RSVP row, slot lineup, bench line, waiting row) and the
+    # organizer's manage-lineup page (reorder, positions, remove). Android keeps its list; follow-up: EventDetailScreen
+    # gets the same blocks, with reorder and positions behind a manage screen.
+    # The manifest has no note field, so the follow-up is named here: https://github.com/Cabeda/Convocados/issues/1910
+    next-game-block: { web: true, android: false, wearos: false }
+    manage-lineup: { web: true, android: false, wearos: false }
 
 teams:
   web: true

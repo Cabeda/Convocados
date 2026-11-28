@@ -400,7 +400,7 @@ describe("EventHeader — the More sheet", () => {
     const sheet = await openSheet(user);
     const manage = within(sheet).getByRole("group", { name: "Manage" });
     const rows = [...manage.querySelectorAll("a, button")].map((r) => r.textContent);
-    expect(rows).toEqual(["Event settings", "Cancel game"]);
+    expect(rows).toEqual(["Manage lineup", "Event settings", "Cancel game"]);
     expect(within(sheet).queryByRole("group", { name: "This game" })?.textContent ?? "").not.toMatch(/Cancel game/);
   });
 
