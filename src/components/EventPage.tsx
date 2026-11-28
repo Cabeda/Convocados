@@ -25,6 +25,8 @@ import { NextGame } from "./event/story/NextGame";
 import { NextGameSkeleton } from "./event/story/NextGameSkeleton";
 import { useHeaderToasts } from "./event/story/HeaderToast";
 import { useMyRsvp } from "./event/story/useMyRsvp";
+import { useConnection } from "./event/story/useConnection";
+import { OfflineNotice } from "./event/story/OfflineNotice";
 import type { NextGameHint } from "~/lib/nextGame";
 import { PushPromptBanner } from "./PushPromptBanner";
 import { deriveEventPermissions } from "~/lib/eventView";
@@ -101,6 +103,8 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
     return () => { writesRef.current.active -= 1; writesRef.current.lastEnd = Date.now(); };
   }, []);
 
+  const { offlineSince, report: reportConnection } = useConnection();
+
   const fetchEvent = useCallback(async () => {
     const started = Date.now();
     try {
@@ -108,6 +112,7 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
         params: { id: eventId },
         query: { inviteToken: inviteToken ?? undefined },
       })) as EventData & { locked?: boolean };
+      reportConnection(true);
       if (writesRef.current.active > 0 || started < writesRef.current.lastEnd) return;
       if (data.locked) {
         setLockedEvent({ id: data.id, title: data.title });
@@ -118,11 +123,13 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
         setError(null);
       }
     } catch (e) {
+      // Out of reach is a network failure or a server that is down; an answer like 404 means we did reach it.
+      reportConnection(!(e instanceof ApiError) ? false : e.status < 500);
       setError(e instanceof ApiError && e.status === 404 ? { status: 404 } : {});
     } finally {
       setIsLoading(false);
     }
-  }, [eventId, inviteToken]);
+  }, [eventId, inviteToken, reportConnection]);
 
   // Initial fetch
   useEffect(() => { fetchEvent(); }, [fetchEvent]);
@@ -311,6 +318,7 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
               <InviteBanner token={inviteToken} eventId={event.id} onAccepted={fetchEvent} />
             )}
 
+            <div>
             <EventHeader
               eventId={eventId}
               event={event}
@@ -330,6 +338,8 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
               onSignedIn={() => { refetchSession?.(); fetchEvent(); }}
               onCancelGame={() => setCancelConfirmOpen(true)}
             />
+            <OfflineNotice since={offlineSince} />
+            </div>
 
             {cancelled && <CancelledBanner canManage={canEditSettings} />}
 
