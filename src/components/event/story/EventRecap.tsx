@@ -30,6 +30,8 @@ export interface EventRecapProps {
   deepLinkAction: string | null;
   /** True while the recap is showing something the viewer still has to do (the RSVP below goes quiet). */
   onBlockingChange?: (blocking: boolean) => void;
+  /** How the viewer's last game ended while the recap is on the page (for the tab title); null when there is nothing to say. */
+  onResultChange?: (result: { outcome: "won" | "lost" | "draw"; mine: number; theirs: number } | null) => void;
 }
 
 const seenKey = (eventId: string, gameId: string) => `recap:seen:${eventId}:${gameId}`;
@@ -106,6 +108,17 @@ export function EventRecap(p: EventRecapProps) {
   const blocking = pending > 0 && (phase === "full" || phase === "strip");
   const { onBlockingChange } = p;
   useEffect(() => { onBlockingChange?.(blocking); }, [blocking, onBlockingChange]);
+
+  const { onResultChange } = p;
+  const viewerResult = useMemo(() => {
+    if (!status || !status.hasScore || status.scoreOne === null || status.scoreTwo === null) return null;
+    if (phase !== "full" && phase !== "strip") return null;
+    if (status.viewerTeam === null || status.viewerTeam === undefined) return null;
+    const [mine, theirs] = status.viewerTeam === 0 ? [status.scoreOne, status.scoreTwo] : [status.scoreTwo, status.scoreOne];
+    return { outcome: mine === theirs ? "draw" as const : mine > theirs ? "won" as const : "lost" as const, mine, theirs };
+  }, [status, phase]);
+  const resultKey = viewerResult ? `${viewerResult.outcome}:${viewerResult.mine}:${viewerResult.theirs}` : "";
+  useEffect(() => { onResultChange?.(viewerResult); }, [resultKey]); // eslint-disable-line react-hooks/exhaustive-deps -- the key stands for the value
 
   const onOptimistic = useCallback((patch: Optimistic) => setOptimistic((o) => ({ ...o, ...patch })), []);
   const onRollback = useCallback((key: keyof Optimistic) => setOptimistic((o) => { const { [key]: _gone, ...rest } = o; return rest; }), []);

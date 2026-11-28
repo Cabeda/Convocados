@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck -- component test type suppression for @testing-library/react screen exports
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import EventPage from "~/components/EventPage";
@@ -74,6 +74,25 @@ describe("EventPage — what sits above the title", () => {
     renderWithTheme(<EventPage eventId="evt-1" />);
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByText(/player list has been cleared|was reset for the next occurrence/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("EventPage — the tab title", () => {
+  it("says the result after a game the viewer played, and gives the server's title back when the page closes", async () => {
+    document.title = "Server title for search";
+    overrides = { postGameStatus: { ...status, viewerTeam: 0, scoreOne: 7, scoreTwo: 6 } };
+    const { unmount } = renderWithTheme(<EventPage eventId="evt-1" />);
+    await screen.findByTestId("last-game-recap");
+    await waitFor(() => expect(document.title).toBe("Won 7–6 · Monday Football"));
+    unmount();
+    expect(document.title).toBe("Server title for search");
+  });
+
+  it("says the next day when the viewer has no result to show", async () => {
+    overrides = { hasLastGame: false, postGameStatus: null };
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    await screen.findByRole("heading", { level: 1, name: "Monday Football" });
+    await waitFor(() => expect(document.title).toMatch(/^Monday Football · \w{3} \d{1,2} \w{3}$/));
   });
 });
 

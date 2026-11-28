@@ -4,7 +4,8 @@ import { Container, Typography, Stack, Button } from "@mui/material";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useLocale } from "~/lib/useT";
-import { fromDateTimeLocalValue } from "~/lib/timezones";
+import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
+import { pageTitle, type PageTitleInput } from "~/lib/pageTitle";
 import { useSession } from "~/lib/auth.client";
 import { apiRequest, ApiError, apiErrorMessage } from "~/lib/api/client";
 
@@ -186,10 +187,22 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
 
   const notFound = error?.status === 404;
 
+  // The tab says what matters now: the result after a game the viewer played, the next day otherwise.
+  // The server's own title (search, sharing) is what comes back when the page closes.
+  const [lastResult, setLastResult] = useState<PageTitleInput["result"]>(null);
+  const serverTitle = useRef<string | null>(null);
+  const tabTitle = event
+    ? pageTitle({
+      title: event.title, result: lastResult,
+      date: formatDateInTz(new Date(event.dateTime), locale, event.timezone, { weekday: "short", day: "numeric", month: "short" }),
+    }, t)
+    : null;
   useEffect(() => {
-    if (event) document.title = `${event.title} — Convocados`;
-    return () => { document.title = "Convocados"; };
-  }, [event]);
+    if (tabTitle === null) return;
+    serverTitle.current ??= document.title;
+    document.title = tabTitle;
+  }, [tabTitle]);
+  useEffect(() => () => { if (serverTitle.current !== null) document.title = serverTitle.current; }, []);
 
   // ── Title & location save ───────────────────────────────────────────────────
 
@@ -360,6 +373,7 @@ export default function EventPage({ eventId, hasLastGame = false, nextGameHint }
               sport={event.sport}
               deepLinkAction={deepLinkAction}
               onBlockingChange={setRecapBlocking}
+              onResultChange={setLastResult}
             />
 
             <NextGame

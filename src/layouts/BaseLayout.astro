@@ -18,7 +18,7 @@ interface Props {
    * so agents that do not execute scripts can find the data (ADR 0034).
    */
   alternateJson?: string;
-  /** Override the default theme-color (default: #1b6b4a). */
+  /** Override the theme-color for both light and dark (default: brand green on light, #111412 on dark). */
   themeColor?: string;
   /**
    * Optional `view-transition-name` for this page's main content. Set to a
@@ -52,7 +52,7 @@ const {
   metaTags = [],
   jsonLd,
   alternateJson,
-  themeColor = "#1b6b4a",
+  themeColor,
   mainTransitionName,
   mainClass,
   agentLinks = false,
@@ -79,7 +79,13 @@ import MergeDiscoveryPrompt from "../components/MergeDiscoveryPrompt";
     */}
     <meta name="apple-mobile-web-app-title" content="Convocados" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content={themeColor} />
+    {/* The browser bar follows the system theme: the brand green on light, the page's own dark (the shell background) on dark. */}
+    {themeColor
+      ? <meta name="theme-color" content={themeColor} />
+      : <>
+          <meta name="theme-color" content="#1b6b4a" media="(prefers-color-scheme: light)" />
+          <meta name="theme-color" content="#111412" media="(prefers-color-scheme: dark)" />
+        </>}
     {metaTags.map((tag) => <meta property={tag.property} content={tag.content} />)}
     {alternateJson && <link rel="alternate" type="application/json" href={alternateJson} />}
     {jsonLd && <script type="application/ld+json" set:html={jsonLd} />}
