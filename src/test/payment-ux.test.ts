@@ -10,6 +10,9 @@ vi.mock("~/lib/eventLog.server", () => ({
 
 beforeEach(async () => {
   await prisma.paymentReminderLog.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -18,6 +21,15 @@ beforeEach(async () => {
   await prisma.user.deleteMany();
   resetApiRateLimitStore();
 });
+
+/** Ended occurrence debt on the Game roll (ADR 0016) — what the email reader reads. */
+async function seedOccurrenceDebt(eventId: string, dateTime: Date, name: string, userId: string | null, status = "pending") {
+  const game = await prisma.game.create({ data: { id: `game-${eventId}`, eventId, dateTime, status: "played" } });
+  const eventPlayer = await prisma.eventPlayer.create({ data: { eventId, name, userId } });
+  await prisma.gamePayment.create({
+    data: { gameId: game.id, eventPlayerId: eventPlayer.id, playerName: name, amount: 5, status },
+  });
+}
 
 describe("syncPaymentsForEvent — owner auto-paid", () => {
   it("marks owner's payment as paid on creation", async () => {
@@ -79,13 +91,10 @@ describe("getPlayersWithPendingPayments — timing", () => {
     const event = await prisma.event.create({
       data: { id: "evt-future", title: "Future Game", dateTime: futureDate, durationMinutes: 60, maxPlayers: 10, location: "Test Field" },
     });
-    await prisma.player.create({ data: { eventId: event.id, name: "José", userId: user.id, order: 0 } });
-    const cost = await prisma.eventCost.create({
+    await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
     });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "José", amount: 5, status: "pending" },
-    });
+    await seedOccurrenceDebt(event.id, futureDate, "José", user.id);
 
     const results = await getPlayersWithPendingPayments();
     expect(results).toHaveLength(0);
@@ -97,13 +106,10 @@ describe("getPlayersWithPendingPayments — timing", () => {
     const event = await prisma.event.create({
       data: { id: "evt-past", title: "Past Game", dateTime: pastDate, durationMinutes: 60, maxPlayers: 10, location: "Test Field" },
     });
-    await prisma.player.create({ data: { eventId: event.id, name: "José", userId: user.id, order: 0 } });
-    const cost = await prisma.eventCost.create({
+    await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
     });
-    await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "José", amount: 5, status: "pending" },
-    });
+    await seedOccurrenceDebt(event.id, pastDate, "José", user.id);
 
     const results = await getPlayersWithPendingPayments();
     expect(results).toHaveLength(1);
@@ -116,13 +122,12 @@ describe("getPlayersWithPendingPayments — timing", () => {
     const event = await prisma.event.create({
       data: { id: "evt-1", title: "Game", dateTime: pastDate, durationMinutes: 60, ownerId: owner.id, maxPlayers: 10, location: "Test Field" },
     });
-    await prisma.player.create({ data: { eventId: event.id, name: "Owner", userId: owner.id, order: 0 } });
     await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
     });
 
-    // Sync creates the payment — owner should be auto-marked paid
-    await syncPaymentsForEvent(event.id);
+    // The owner's share is auto-marked paid on the occurrence roll.
+    await seedOccurrenceDebt(event.id, pastDate, "Owner", owner.id, "paid");
 
     const results = await getPlayersWithPendingPayments();
     expect(results).toHaveLength(0); // Owner is "paid", not "pending"

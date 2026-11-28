@@ -55,35 +55,34 @@ async function seedEvent(ownerId: string, id = "evt-pay-1") {
       maxPlayers: 10, ownerId, createdAt: new Date(), updatedAt: new Date(),
     },
   });
-  return id;
-}
-
-async function seedGameHistory(eventId: string, id = "gh-pay-1") {
-  const dateTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  await prisma.gameHistory.upsert({
-    where: { id },
+  const game = await prisma.game.upsert({
+    where: { id: `game-${id}` },
     update: {},
-    create: {
-      id, eventId, dateTime, status: "played",
-      teamOneName: "Team A", teamTwoName: "Team B",
-      createdAt: new Date(),
-    },
+    create: { id: `game-${id}`, eventId: id, dateTime, status: "played" },
   });
+  await prisma.event.update({ where: { id }, data: { currentGameId: game.id } });
   return id;
 }
 
 async function seedCostAndPayment(eventId: string, playerName: string, status = "pending") {
-  const eventCost = await prisma.eventCost.upsert({
+  await prisma.eventCost.upsert({
     where: { eventId },
     update: {},
     create: { eventId, totalAmount: 10, currency: "EUR" },
   });
-  await prisma.playerPayment.upsert({
-    where: { eventCostId_playerName: { eventCostId: eventCost.id, playerName } },
-    update: { status },
-    create: { eventCostId: eventCost.id, playerName, amount: 5, status },
+  // Debt lives on the ended occurrence Game's roll (ADR 0016).
+  const game = await prisma.game.findUniqueOrThrow({ where: { id: `game-${eventId}` } });
+  const player = await prisma.player.findFirst({ where: { eventId, name: playerName } });
+  const eventPlayer = await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId, name: playerName } },
+    create: { eventId, name: playerName, userId: player?.userId ?? null },
+    update: { userId: player?.userId ?? null },
   });
-  return eventCost;
+  await prisma.gamePayment.upsert({
+    where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: eventPlayer.id } },
+    update: { amount: 5, status },
+    create: { gameId: game.id, eventPlayerId: eventPlayer.id, playerName, amount: 5, status },
+  });
 }
 
 async function seedPlayer(eventId: string, name: string, userId: string | null = null, id?: string) {
@@ -97,6 +96,9 @@ async function seedPlayer(eventId: string, name: string, userId: string | null =
 beforeEach(async () => {
   vi.clearAllMocks();
   await prisma.paymentReminderLog.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -162,7 +164,6 @@ describe("getPlayersWithPendingPayments", () => {
   it("returns players with pending payments for played games", async () => {
     const userId = await seedUser();
     const eventId = await seedEvent(userId);
-    await seedGameHistory(eventId);
     await seedPlayer(eventId, "Pay User", userId);
     await seedCostAndPayment(eventId, "Pay User", "pending");
 
@@ -177,7 +178,6 @@ describe("getPlayersWithPendingPayments", () => {
   it("excludes players who already paid", async () => {
     const userId = await seedUser();
     const eventId = await seedEvent(userId);
-    await seedGameHistory(eventId);
     await seedPlayer(eventId, "Pay User", userId);
     await seedCostAndPayment(eventId, "Pay User", "paid");
 
@@ -188,7 +188,6 @@ describe("getPlayersWithPendingPayments", () => {
   it("excludes paid players", async () => {
     const userId = await seedUser();
     const eventId = await seedEvent(userId);
-    await seedGameHistory(eventId);
     await seedPlayer(eventId, "Pay User", userId);
     await seedCostAndPayment(eventId, "Pay User", "paid");
 
@@ -199,7 +198,6 @@ describe("getPlayersWithPendingPayments", () => {
   it("excludes anonymous players (no userId)", async () => {
     const userId = await seedUser();
     const eventId = await seedEvent(userId);
-    await seedGameHistory(eventId);
     await seedPlayer(eventId, "Anon Player", null);
     await seedCostAndPayment(eventId, "Anon Player", "pending");
 
@@ -210,13 +208,7 @@ describe("getPlayersWithPendingPayments", () => {
   it("excludes cancelled games", async () => {
     const userId = await seedUser();
     const eventId = await seedEvent(userId);
-    // Create a cancelled game history
-    await prisma.gameHistory.create({
-      data: {
-        eventId, dateTime: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        status: "cancelled", teamOneName: "A", teamTwoName: "B",
-      },
-    });
+    await prisma.game.update({ where: { id: `game-${eventId}` }, data: { status: "cancelled" } });
     await seedPlayer(eventId, "Pay User", userId);
     await seedCostAndPayment(eventId, "Pay User", "pending");
 

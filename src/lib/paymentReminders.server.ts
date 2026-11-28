@@ -1,4 +1,5 @@
 import { prisma } from "./db.server";
+import { findEndedPaymentOccurrences } from "./paymentDebt.server";
 
 export interface PendingPaymentPlayer {
   eventId: string;
@@ -16,64 +17,32 @@ export interface PendingPaymentPlayer {
  * Only returns players linked to a user account (userId != null) with a verified email.
  */
 export async function getPlayersWithPendingPayments(): Promise<PendingPaymentPlayer[]> {
-  const now = new Date();
-
-  // Find events that have pending payments AND whose game time has already passed
-  const eventCosts = await prisma.eventCost.findMany({
-    where: {
-      payments: { some: { status: "pending" } },
-      event: {
-        dateTime: { lt: now }, // game started before now (duration handled below)
-        archivedAt: null,
-      },
-    },
-    include: {
-      event: { select: { id: true, title: true, dateTime: true, durationMinutes: true, history: { select: { status: true }, orderBy: { dateTime: "desc" }, take: 1 } } },
-      payments: {
-        where: { status: "pending" },
-      },
-    },
-  });
-
-  const results: PendingPaymentPlayer[] = [];
-
-  for (const ec of eventCosts) {
-    // Only remind after the game has ended (dateTime + duration)
-    const gameEnd = new Date(ec.event.dateTime.getTime() + ec.event.durationMinutes * 60_000);
-    if (now < gameEnd) continue;
-
-    // Skip if the latest history entry is cancelled (game didn't happen)
-    const latestHistory = ec.event.history[0];
-    if (latestHistory?.status === "cancelled") continue;
-
-    for (const payment of ec.payments) {
-      // Find the player record to get the userId
-      const player = await prisma.player.findFirst({
-        where: {
-          eventId: ec.eventId,
-          name: payment.playerName,
-          userId: { not: null },
-        },
-        include: {
-          user: { select: { email: true, emailVerified: true } },
-        },
-      });
-
-      if (!player?.userId || !player.user?.email || !player.user.emailVerified) continue;
-
-      results.push({
-        eventId: ec.eventId,
-        eventTitle: ec.event.title,
-        userId: player.userId,
-        email: player.user.email,
-        playerName: payment.playerName,
-        amount: payment.amount,
-        currency: ec.currency,
+  // One reminder per Event+user+currency: a per-Game currency override is
+  // never summed into another currency's total.
+  const debts = new Map<string, PendingPaymentPlayer>();
+  for (const occurrence of await findEndedPaymentOccurrences()) {
+    for (const payment of occurrence.payments) {
+      if (payment.status !== "pending" || !payment.userId) continue;
+      const key = `${occurrence.eventId}::${payment.userId}::${occurrence.currency}`;
+      const debt = debts.get(key);
+      if (debt) debt.amount += payment.amount;
+      else debts.set(key, {
+        eventId: occurrence.eventId, eventTitle: occurrence.eventTitle, userId: payment.userId,
+        email: "", playerName: payment.playerName, amount: payment.amount, currency: occurrence.currency,
       });
     }
   }
+  if (debts.size === 0) return [];
 
-  return results;
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...debts.values()].map((d) => d.userId) }, emailVerified: true },
+    select: { id: true, email: true },
+  });
+  const emails = new Map(users.map((user) => [user.id, user.email]));
+  return [...debts.values()].flatMap((debt) => {
+    const email = emails.get(debt.userId);
+    return email ? [{ ...debt, email }] : [];
+  });
 }
 
 /**

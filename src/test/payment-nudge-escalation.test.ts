@@ -16,6 +16,7 @@ vi.mock("~/lib/notificationPrefs.server", () => ({
 }));
 
 import { processPaymentEscalation } from "~/lib/paymentNudgeEscalation.server";
+import { getPlayersWithPendingPayments } from "~/lib/paymentReminders.server";
 
 function uid() { return `u-${Math.random().toString(36).slice(2, 8)}`; }
 function eid() { return `e-${Math.random().toString(36).slice(2, 8)}`; }
@@ -247,26 +248,79 @@ describe("processPaymentEscalation", () => {
   });
 });
 
+async function advanceRecurringEvent(eventId: string) {
+  const next = new Date(Date.now() + 7 * 24 * 60 * 60_000);
+  const game = await prisma.game.create({ data: { eventId, dateTime: next, status: "upcoming" } });
+  await prisma.event.update({ where: { id: eventId }, data: { dateTime: next, currentGameId: game.id } });
+}
+
+async function seedOccurrenceDebt(eventId: string, hoursAgo: number, name: string, amount: number, status: string, userId: string | null) {
+  const end = Date.now() - hoursAgo * 3_600_000;
+  const game = await prisma.game.create({ data: { eventId, dateTime: new Date(end - 90 * 60_000), status: "played" } });
+  const ep = await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId, name } },
+    create: { eventId, name, userId },
+    update: { userId },
+  });
+  await prisma.gamePayment.create({ data: { gameId: game.id, eventPlayerId: ep.id, playerName: name, amount, status } });
+  return game;
+}
+
 describe("payment chase after a recurring reset (#1767)", () => {
   it("sends stage 1 for the played occurrence even though the Event moved forward", async () => {
     const owner = await seedUser({ name: "Owner" });
     const debtor = await seedUser({ name: "Debtor" });
-    const event = await seedPastEvent(owner.id, 1); // played occurrence ended 1h ago
-    await seedOwedPayment(event.id, "Debtor", 5, "pending", debtor.id);
+    const event = await seedPastEvent(owner.id, 1);
+    await seedOccurrenceDebt(event.id, 1, "Debtor", 5, "pending", debtor.id);
+    await advanceRecurringEvent(event.id);
+    expect((await processPaymentEscalation()).stage1Sent).toEqual([`${debtor.id}:${event.id}`]);
+  });
 
-    // advanceOccurrence.server.ts moves the Event to next week and points
-    // currentGameId at a fresh Game; the played Game keeps the debt.
-    const nextOccurrence = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const freshGame = await prisma.game.create({
-      data: { eventId: event.id, dateTime: nextOccurrence, status: "upcoming" },
+  it("does not fast-forward a fresh debt on the old occurrence's clock", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const oldDebtor = await seedUser({ name: "Old Debtor" });
+    const freshDebtor = await seedUser({ name: "Fresh Debtor" });
+    const event = await seedPastEvent(owner.id, 200);
+    await seedOccurrenceDebt(event.id, 200, "Old Debtor", 5, "pending", oldDebtor.id);
+    await seedOccurrenceDebt(event.id, 2, "Fresh Debtor", 5, "pending", freshDebtor.id);
+    await advanceRecurringEvent(event.id);
+
+    expect((await processPaymentEscalation()).stage1Sent).toHaveLength(2);
+    const second = await processPaymentEscalation();
+    expect(second.stage2Sent).toHaveLength(0);
+    expect(second.stage3Sent).toHaveLength(0);
+    expect(second.organizerAlerts).toHaveLength(0);
+  });
+
+  it("advances stages 2/3 and the organizer alert on the normal schedule after a reset", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const event = await seedPastEvent(owner.id, 170);
+    await seedOccurrenceDebt(event.id, 170, "Debtor", 5, "pending", debtor.id);
+    await advanceRecurringEvent(event.id);
+    const tracker = { eventId_userId: { eventId: event.id, userId: debtor.id } };
+    await prisma.paymentNudgeStage.create({
+      data: { eventId: event.id, userId: debtor.id, stage: 1, lastSentAt: new Date(Date.now() - 49 * 3_600_000) },
     });
-    await prisma.event.update({
-      where: { id: event.id },
-      data: { dateTime: nextOccurrence, currentGameId: freshGame.id },
-    });
+    expect((await processPaymentEscalation()).stage2Sent).toEqual([`${debtor.id}:${event.id}`]);
+    await prisma.paymentNudgeStage.update({ where: tracker, data: { lastSentAt: new Date(Date.now() - 73 * 3_600_000) } });
+    expect((await processPaymentEscalation()).stage3Sent).toEqual([`${debtor.id}:${event.id}`]);
+    await prisma.paymentNudgeStage.update({ where: tracker, data: { lastSentAt: new Date(Date.now() - 49 * 3_600_000) } });
+    expect((await processPaymentEscalation()).organizerAlerts).toEqual([`${debtor.id}:${event.id}`]);
+  });
 
-    const result = await processPaymentEscalation();
-
-    expect(result.stage1Sent).toEqual([`${debtor.id}:${event.id}`]);
+  it("reads a played occurrence per currency for the payment email after a reset", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const event = await seedPastEvent(owner.id, 24);
+    const eur = await seedOccurrenceDebt(event.id, 24, "Debtor", 5, "pending", debtor.id);
+    await prisma.game.update({ where: { id: eur.id }, data: { costCurrency: "EUR" } });
+    const usd = await seedOccurrenceDebt(event.id, 23, "Debtor", 6, "pending", debtor.id);
+    await prisma.game.update({ where: { id: usd.id }, data: { costCurrency: "USD" } });
+    await advanceRecurringEvent(event.id);
+    const pending = await getPlayersWithPendingPayments();
+    expect(pending).toHaveLength(2);
+    expect(pending.find((p) => p.currency === "EUR")?.amount).toBe(5);
+    expect(pending.find((p) => p.currency === "USD")?.amount).toBe(6);
   });
 });

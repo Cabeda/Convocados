@@ -10,13 +10,13 @@
  * ponytail: simple time-based progression, no state machine. Upgrade path: per-event
  * escalation timing config if groups want faster/slower cadence.
  *
- * Debt discovery reads the occurrence Game's GamePayment roll (ADR 0016) —
- * the legacy EventCost/PlayerPayment join is gone (retarget: 5rhgs71k).
+ * Debt discovery reads ended occurrence Games through paymentDebt.server.ts:
+ * a recurrence reset moves Event.dateTime forward, so it cannot date the chase.
  */
 import { prisma } from "./db.server";
 import { sendPushToUser } from "./push.server";
 import { getNotificationPrefs, wantsPaymentReminderPush } from "./notificationPrefs.server";
-import { effectiveGameCost } from "./settlement.server";
+import { findEndedPaymentOccurrences } from "./paymentDebt.server";
 import { fireWebhooks } from "./webhook.server";
 import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 import { createLogger } from "./logger.server";
@@ -45,62 +45,14 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
   const now = new Date();
   const result: EscalationResult = { stage1Sent: [], stage2Sent: [], stage3Sent: [], organizerAlerts: [] };
 
-  // Events whose occurrence has ended and still has an occurrence Game —
-  // unsettled rows are loaded from GamePayment in a second pass (Event has no
-  // currentGame relation, only currentGameId).
-  const candidateEvents = await prisma.event.findMany({
-    where: {
-      dateTime: { lt: now },
-      currentGameId: { not: null },
-      archivedAt: null,
-    },
-    select: {
-      id: true,
-      title: true,
-      dateTime: true,
-      durationMinutes: true,
-      ownerId: true,
-      currentGameId: true,
-      showDebtorNames: true,
-    },
-  });
-  const candidateGameIds = candidateEvents
-    .map((e) => e.currentGameId)
-    .filter((id): id is string => id !== null);
-  const gamesById = new Map(
-    (await prisma.game.findMany({
-      where: {
-        id: { in: candidateGameIds },
-        status: { not: "cancelled" },
-        payments: { some: { status: { in: ["pending", "sent"] }, archivedAt: null } },
-      },
-      select: {
-        id: true,
-        payments: {
-          where: { archivedAt: null },
-          select: {
-            status: true,
-            amount: true,
-            playerName: true,
-            eventPlayer: { select: { userId: true } },
-          },
-        },
-      },
-    })).map((g) => [g.id, g] as const),
-  );
+  const openEvents = await findEndedPaymentOccurrences(now);
 
-  const openEvents = candidateEvents.filter(
-    (e) => e.currentGameId !== null && gamesById.has(e.currentGameId),
-  );
-
-  for (const event of openEvents) {
-    if (!event.currentGameId) continue;
-    const gameEnd = new Date(event.dateTime.getTime() + event.durationMinutes * 60_000);
-    if (now < gameEnd) continue;
-    const hoursSinceEnd = (now.getTime() - gameEnd.getTime()) / (60 * 60 * 1000);
-    const gamePayments = gamesById.get(event.currentGameId)?.payments ?? [];
+  for (const occurrence of openEvents) {
+    const event = { ...occurrence, id: occurrence.eventId, title: occurrence.eventTitle, currentGameId: occurrence.gameId };
+    const hoursSinceEnd = (now.getTime() - event.gameEnd.getTime()) / (60 * 60 * 1000);
+    const gamePayments = event.payments;
     // Per-Game override → EventCost template → EUR (settlement's rule).
-    const currency = (await effectiveGameCost(event.currentGameId, event.id)).currency;
+    const currency = event.currency;
     // Where the money goes, resolved once per event (ADR 0055) so every nudge
     // in this run names the same account the announcement did.
     const { methods: paymentMethods } = await resolvePaymentDetails(event.id, event.currentGameId);
@@ -116,7 +68,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
 
     for (const payment of gamePayments) {
       if (payment.status === "paid") continue;
-      const userId = payment.eventPlayer?.userId;
+      const userId = payment.userId;
       if (!userId) continue;
       activeUserIds.add(userId);
 
@@ -129,6 +81,12 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
 
       // Already alerted organizer — done with this player
       if (tracker.organiserAlert) continue;
+
+      // Paced by the previous send: an old occurrence elsewhere on the Event
+      // must not advance a fresh debt one stage per 5-minute tick.
+      const hoursSinceLastSent = tracker.lastSentAt
+        ? (now.getTime() - tracker.lastSentAt.getTime()) / (60 * 60 * 1000)
+        : Number.POSITIVE_INFINITY;
 
       // Prefs gate the push only — the escalation stage, the webhook fact and
       // the organizer alert are domain facts and run regardless of the
@@ -161,7 +119,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         });
         result.stage1Sent.push(`${userId}:${event.id}`);
         fireNudgeWebhook(1);
-      } else if (tracker.stage === 1 && hoursSinceEnd >= STAGE_2_DELAY_H) {
+      } else if (tracker.stage === 1 && hoursSinceEnd >= STAGE_2_DELAY_H && hoursSinceLastSent >= STAGE_2_DELAY_H) {
         // Stage 2: follow-up
         if (wantsPush) await sendPushToUser(userId, event.title, `⏰ Still pending — ${formatMoney(toCents(payment.amount), currency)} for ${event.title}`, url);
         await prisma.paymentNudgeStage.update({
@@ -170,7 +128,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         });
         result.stage2Sent.push(`${userId}:${event.id}`);
         fireNudgeWebhook(2);
-      } else if (tracker.stage === 2 && hoursSinceEnd >= STAGE_3_DELAY_H) {
+      } else if (tracker.stage === 2 && hoursSinceEnd >= STAGE_3_DELAY_H && hoursSinceLastSent >= STAGE_3_DELAY_H - STAGE_2_DELAY_H) {
         // Stage 3: social proof
         const unpaidCount = totalPayments - paidCount;
         const body = `${paidCount}/${totalPayments} players have paid. You're one of ${unpaidCount} who haven't.`;
@@ -181,7 +139,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         });
         result.stage3Sent.push(`${userId}:${event.id}`);
         fireNudgeWebhook(3);
-      } else if (tracker.stage === 3 && hoursSinceEnd >= ORGANIZER_ALERT_DELAY_H) {
+      } else if (tracker.stage === 3 && hoursSinceEnd >= ORGANIZER_ALERT_DELAY_H && hoursSinceLastSent >= ORGANIZER_ALERT_DELAY_H - STAGE_3_DELAY_H) {
         // Organizer alert — stop nudging, tell the owner
         await prisma.paymentNudgeStage.update({
           where: { eventId_userId: { eventId: event.id, userId } },
@@ -227,22 +185,13 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
   // Sweep trackers for events with no remaining unsettled payment at all.
   // Such events never enter the loop above, so without this their trackers
   // would linger after the debt is fully settled.
+  const activeEventIds = new Set(openEvents.map((o) => o.eventId));
   const trackedEventIds = await prisma.paymentNudgeStage
     .findMany({ select: { eventId: true } })
     .then((rows) => [...new Set(rows.map((r) => r.eventId))])
     .catch(() => [] as string[]);
   for (const eventId of trackedEventIds) {
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { currentGameId: true },
-    }).catch(() => null);
-    let stillOwing = false;
-    if (event?.currentGameId) {
-      stillOwing = (await prisma.gamePayment.count({
-        where: { gameId: event.currentGameId, status: { in: ["pending", "sent"] }, archivedAt: null },
-      }).catch(() => 0)) > 0;
-    }
-    if (!stillOwing) {
+    if (!activeEventIds.has(eventId)) {
       await prisma.paymentNudgeStage.deleteMany({ where: { eventId } }).catch(() => {});
     }
   }
