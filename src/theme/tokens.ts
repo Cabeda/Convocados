@@ -6,6 +6,8 @@ export interface PaletteTokens {
   error: { main: string };
   warning: { main: string };
   success: { main: string };
+  /** "Needs you": the amber dot and the game-day reminder. `ring` keeps a light fill visible on a light surface (≥ 3:1). */
+  attention: { fill: string; ring: string };
   background: { default: string; paper: string };
   divider: string;
 }
@@ -53,6 +55,7 @@ export const tokens: DesignTokens = {
       error: { main: "#ba1a1a" },
       warning: { main: "#7d5700" },
       success: { main: "#1b6b4a" },
+      attention: { fill: "#f2a900", ring: "#7d5700" },
       background: { default: "#f8faf6", paper: "#ffffff" },
       divider: "#c2c9c1",
     },
@@ -62,6 +65,7 @@ export const tokens: DesignTokens = {
       error: { main: "#ffb4ab" },
       warning: { main: "#f5bf48" },
       success: { main: "#7edcab" },
+      attention: { fill: "#f2c14e", ring: "#f2c14e" },
       background: { default: "#111412", paper: "#1a1d1b" },
       divider: "#3a3f3b",
     },

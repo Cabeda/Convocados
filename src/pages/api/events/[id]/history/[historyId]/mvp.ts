@@ -2,11 +2,10 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
-import {
-  isHistoryParticipant,
-  namesFromTeamsSnapshot,
-} from "../../../../../../lib/snapshotParticipants";
+import { findViewerName } from "../../../../../../lib/snapshotParticipants";
 import { occurrenceRoster } from "../../../../../../lib/gameRoster.server";
+import { countEligibleVoters, viewerHasVoted } from "../../../../../../lib/mvp.server";
+import { viewerRosterNames } from "../../../../../../lib/viewerIdentity.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
@@ -61,70 +60,29 @@ export const GET: APIRoute = async ({ params, request }) => {
       .map((t) => ({ playerId: t.playerId, playerName: t.playerName, voteCount: t.count }));
   }
 
-  // Check if authenticated user has voted
+  // Who played: the durable Game roster (snapshot residue as fallback) — the same list the vote
+  // endpoint checks the voter against (mrcokrf9).
+  const roster = await occurrenceRoster(params.id ?? "", {
+    dateTime: history.dateTime,
+    teamsSnapshot: history.teamsSnapshot,
+  });
+
+  // Check if authenticated user has voted. Only players who played can have hasVoted !== null
+  // (owners/admins who didn't play cannot vote); "played" is read by every name the account is
+  // known by on this event, like the post-game status and the vote endpoint.
   let hasVoted: boolean | null = null;
   const session = await getSession(request);
   if (session?.user?.id) {
-    // Only participants (players in teamsSnapshot) can have hasVoted !== null.
-    // Players-only: owners/admins who didn't play cannot vote.
-    let isParticipant = false;
-    let playerIds: string[] = [];
-
-    const participantName = session.user?.name;
-    if (isHistoryParticipant(history, participantName)) {
-      isParticipant = true;
-      const userPlayers = await prisma.player.findMany({
-        where: { eventId: params.id, userId: session.user.id },
-        select: { id: true },
-      });
-      playerIds = userPlayers.map((p) => p.id);
-
-      if (playerIds.length === 0) {
-        const matchName = namesFromTeamsSnapshot(history.teamsSnapshot).find(
-          (n) => n.toLowerCase() === participantName!.toLowerCase(),
-        );
-        if (matchName) {
-          const playerByName = await prisma.player.findFirst({
-            where: { eventId: params.id, name: matchName },
-            select: { id: true },
-          });
-          if (playerByName) playerIds = [playerByName.id];
-        }
-      }
-    }
-
-    if (isParticipant) {
-      if (playerIds.length > 0) {
-        const existingVote = await prisma.mvpVote.findFirst({
-          where: {
-            gameHistoryId: history.id,
-            voterPlayerId: { in: playerIds },
-          },
-        });
-        hasVoted = !!existingVote;
-      } else {
-        // Participant with no Player record — check name-based vote
-        const existingVote = await prisma.mvpVote.findFirst({
-          where: {
-            gameHistoryId: history.id,
-            voterPlayerId: `name:${session.user.name}`,
-          },
-        });
-        hasVoted = !!existingVote;
-      }
-    } else {
-      hasVoted = null;
-    }
+    const viewerNames = await viewerRosterNames(params.id ?? "", session.user);
+    hasVoted = findViewerName(viewerNames, roster.names)
+      ? await viewerHasVoted(history.id, params.id ?? "", session.user, viewerNames)
+      : null;
   }
 
   // Extract participants from the durable Game roster (snapshot residue as
   // fallback) for the voting UI (mrcokrf9)
   let participants: Array<{ id: string; name: string; voteCount: number }> = [];
   let eligibleVoters = 0;
-  const roster = await occurrenceRoster(params.id ?? "", {
-    dateTime: history.dateTime,
-    teamsSnapshot: history.teamsSnapshot,
-  });
   if (roster.names.length > 0) {
     try {
       const names = roster.names;
@@ -150,12 +108,8 @@ export const GET: APIRoute = async ({ params, request }) => {
         return acc;
       }, []);
 
-      // Count eligible voters: participants with user accounts
-      const matchingUsers = await prisma.user.findMany({
-        where: { name: { in: names } },
-        select: { name: true },
-      });
-      eligibleVoters = matchingUsers.length;
+      // Count eligible voters: participants with an account (by name, or by a linked roster row)
+      eligibleVoters = await countEligibleVoters(params.id ?? "", names);
     } catch { /* ignore */ }
   }
 

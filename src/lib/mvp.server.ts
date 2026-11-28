@@ -1,6 +1,7 @@
 import { prisma } from "./db.server";
 import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
-import { namesFromTeamsSnapshot } from "./snapshotParticipants";
+import { findViewerName, namesFromTeamsSnapshot, normalizeName } from "./snapshotParticipants";
+import { viewerRosterNames } from "./viewerIdentity.server";
 
 export interface MvpSummary {
   mvp: { playerId: string; playerName: string; voteCount: number }[] | null;
@@ -23,6 +24,48 @@ interface MvpSummaryEvent {
   id: string;
   durationMinutes: number | null;
   mvpEnabled: boolean | null;
+}
+
+/**
+ * The roster names (normalised) that someone can vote under: a name that is an account's name, or a
+ * roster row linked to an account on this event. The second kind is what a ledger name ("Ana B") is
+ * when the account is "anab99". Duplicates collapse: one roster seat is one voter.
+ */
+export async function eligibleVoterNames(eventId: string, rosterNames: readonly string[]): Promise<Set<string>> {
+  if (rosterNames.length === 0) return new Set();
+  const [users, players, eventPlayers] = await Promise.all([
+    prisma.user.findMany({ where: { name: { in: [...rosterNames] } }, select: { name: true } }),
+    prisma.player.findMany({ where: { eventId, userId: { not: null } }, select: { name: true } }),
+    prisma.eventPlayer.findMany({ where: { eventId, userId: { not: null } }, select: { name: true } }),
+  ]);
+  const accounts = new Set([...users, ...players, ...eventPlayers].map((r) => normalizeName(r.name)));
+  return new Set(rosterNames.map(normalizeName).filter((n) => n && accounts.has(n)));
+}
+
+export async function countEligibleVoters(eventId: string, rosterNames: readonly string[]): Promise<number> {
+  return (await eligibleVoterNames(eventId, rosterNames)).size;
+}
+
+/**
+ * Whether the viewer already voted for this game: a vote under one of their linked roster rows, or a
+ * name-based vote under any name they are known by.
+ */
+export async function viewerHasVoted(
+  gameHistoryId: string,
+  eventId: string,
+  user: { id: string },
+  viewerNames: readonly string[],
+): Promise<boolean> {
+  const [linkedPlayers, votes] = await Promise.all([
+    prisma.player.findMany({ where: { eventId, userId: user.id }, select: { id: true } }),
+    prisma.mvpVote.findMany({ where: { gameHistoryId }, select: { voterPlayerId: true } }),
+  ]);
+  const playerIds = new Set(linkedPlayers.map((p) => p.id));
+  const names = new Set(viewerNames.map(normalizeName));
+  return votes.some((v) =>
+    playerIds.has(v.voterPlayerId)
+    || (v.voterPlayerId.startsWith("name:") && names.has(normalizeName(v.voterPlayerId.slice(5)))),
+  );
 }
 
 /**
@@ -71,23 +114,23 @@ export async function buildMvpSummaries(
   }
   const nameList = [...allNames];
 
-  const [players, users] = await Promise.all([
+  const [players, eligible] = await Promise.all([
     nameList.length
       ? prisma.player.findMany({
           where: { eventId: event.id, name: { in: nameList } },
           select: { id: true, name: true },
         })
       : Promise.resolve([] as { id: string; name: string }[]),
-    nameList.length
-      ? prisma.user.findMany({ where: { name: { in: nameList } }, select: { name: true } })
-      : Promise.resolve([] as { name: string | null }[]),
+    eligibleVoterNames(event.id, nameList),
   ]);
   const playerByName = new Map(players.map((p) => [p.name.toLowerCase(), p]));
-  const userNames = new Set(users.map((u) => u.name ?? "").filter(Boolean));
 
+  // Every name the viewer is known by on this event (account name + linked roster rows), the same
+  // identity the vote endpoint and the post-game status read.
   let sessionPlayerIds: string[] = [];
-  const sessionName = session?.user?.name ?? null;
+  let viewerNames: string[] = [];
   if (session?.user?.id) {
+    viewerNames = await viewerRosterNames(event.id, session.user);
     const userPlayers = await prisma.player.findMany({
       where: { eventId: event.id, userId: session.user.id },
       select: { id: true },
@@ -136,21 +179,19 @@ export async function buildMvpSummaries(
       const id = match ? match.id : `name:${n}`;
       participants.push({ id, name: match?.name ?? n, voteCount: tallyByName.get(id) ?? 0 });
     }
-    const eligibleVoters = names.filter((n) => userNames.has(n)).length;
+    const eligibleVoters = new Set(names.map(normalizeName).filter((n) => eligible.has(n))).size;
 
     let hasVoted: boolean | null = null;
-    if (session?.user?.id && sessionName && names.some((n) => n.toLowerCase() === sessionName.toLowerCase())) {
-      let voterIds = sessionPlayerIds;
-      if (voterIds.length === 0) {
-        const matchName = names.find((n) => n.toLowerCase() === sessionName.toLowerCase());
-        const player = matchName ? playerByName.get(matchName.toLowerCase()) : undefined;
-        if (player) voterIds = [player.id];
-      }
-      if (voterIds.length > 0) {
-        hasVoted = votes.some((v) => voterIds.includes(v.voterPlayerId));
-      } else {
-        hasVoted = votes.some((v) => v.voterPlayerId === `name:${sessionName}`);
-      }
+    const playedAs = session?.user?.id ? findViewerName(viewerNames, names) : null;
+    if (playedAs) {
+      const voterIds = new Set(sessionPlayerIds);
+      const byNameId = playerByName.get(playedAs.toLowerCase())?.id;
+      if (voterIds.size === 0 && byNameId) voterIds.add(byNameId);
+      const known = new Set(viewerNames.map(normalizeName));
+      hasVoted = votes.some((v) =>
+        voterIds.has(v.voterPlayerId)
+        || (v.voterPlayerId.startsWith("name:") && known.has(normalizeName(v.voterPlayerId.slice(5)))),
+      );
     }
 
     result.set(e.id, {
