@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createT } from "~/lib/i18n";
 import {
-  recapPhase, recapTasks, scoreSummary, RECAP_HIDE_BEFORE_KICKOFF_MS,
+  recapPhase, recapTasks, scoreSummary, isSetsScoringSport, RECAP_HIDE_BEFORE_KICKOFF_MS,
   type RecapPhaseInput, type RecapTasksInput, type RecapPayment,
 } from "~/lib/eventStory";
 
@@ -120,6 +120,12 @@ describe("recapTasks — player", () => {
     expect(tasks({ hasScore: false, latestHistoryId: null })[0]).toEqual({ kind: "addScore", inline: false });
   });
 
+  it("sends sets-scored sports (tennis, padel) to the History page instead of inline steppers", () => {
+    expect(tasks({ hasScore: false, setsScoring: true })[0]).toEqual({ kind: "addScore", inline: false });
+    expect(isSetsScoringSport("Padel")).toBe(true);
+    expect(isSetsScoringSport("football")).toBe(false);
+  });
+
   it("drops the mvp task when MVP is turned off", () => {
     expect(kinds({ mvpEnabled: false })).toEqual(["pay"]);
   });
@@ -165,7 +171,12 @@ describe("recapTasks — player", () => {
       viewerName: "Maria", payerName: "Maria", myMvpComplete: true,
       payments: [row("Ana", "pending"), row("Rui", "paid"), row("Maria", "paid", 5, true)],
     });
-    expect(t1).toEqual([{ kind: "collect", paidCount: 2, totalCount: 3, paidAmount: 10, totalAmount: 15 }]);
+    expect(t1).toEqual([{ kind: "collect", collector: null, paidCount: 2, totalCount: 3, paidAmount: 10, totalAmount: 15 }]);
+  });
+
+  it("names the collector for an admin who is watching, not collecting", () => {
+    const [collect] = tasks({ role: "absent", canManage: true, viewerName: "Boss", myMvpComplete: true });
+    expect(collect).toMatchObject({ kind: "collect", collector: "Maria" });
   });
 
   it("collector has nothing to do once everyone paid", () => {

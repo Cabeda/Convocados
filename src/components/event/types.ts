@@ -1,4 +1,4 @@
-import type { PostGameStatus } from "../PostGameBanner";
+import type { PostGameStatus } from "./story/postGameStatus";
 
 export interface Player {
   id: string;

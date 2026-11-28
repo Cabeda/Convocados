@@ -44,8 +44,7 @@ import {
 } from "./event";
 import { buildEventShareText, shareEvent } from "./event/shareEvent";
 import type { EventData, Player, KnownPlayer } from "./event";
-import { PostGameBanner } from "./PostGameBanner";
-import type { PostGameStatus } from "./PostGameBanner";
+import { EventRecap } from "./event/story/EventRecap";
 import { SignInButton } from "./SignInButton";
 import { PushPromptBanner } from "./PushPromptBanner";
 import { ConfirmLeaveDialog, computeBenchEmptyAfter, computeWithin48h } from "./event/ConfirmLeaveDialog";
@@ -106,7 +105,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [selfLeave, setSelfLeave] = useState<{
     open: boolean; benchEmptyAfter: boolean; within48h: boolean; busy: boolean;
   }>({ open: false, benchEmptyAfter: false, within48h: false, busy: false });
-  const [_postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
@@ -393,9 +391,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
       setPaymentNudgeOpen(true);
     }
     // ADR 0018: Handle other deep link actions (runs after first render when event data is ready)
-    if (deepLinkAction === "add-score") {
-      window.location.href = `/events/${eventId}/history`;
-    }
     if (deepLinkAction === "rsvp") {
       setTimeout(() => {
         document.querySelector("[data-player-list]")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1236,23 +1231,20 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSnackbar={setSnackbar}
             />
 
-            {/* Post-game banner — only for authenticated users who can act on it.
-                Seeded from the initial payload so an already-settled game never
-                flashes the banner before the client fetch resolves. */}
-            {isAuthenticated && (
-            <PostGameBanner
+            {/* Last game recap — for everyone (signed-out and non-players get the result).
+                Seeded from the initial payload so nothing flashes before the client fetch. */}
+            <EventRecap
               eventId={eventId}
               initialStatus={event?.postGameStatus ?? null}
-              onStatusChange={setPostGameStatus}
-              isManager={isOwner || isAdmin}
-              onScrollToScore={() => {
-                window.location.href = `/events/${eventId}/history`;
-              }}
-              onScrollToPayments={() => {
-                window.location.href = `/events/${eventId}/payments`;
-              }}
+              viewerName={session?.user?.name ?? null}
+              isAuthenticated={isAuthenticated}
+              canManage={isOwner || isAdmin}
+              isRecurring={!!event.isRecurring}
+              nextKickoff={event.dateTime}
+              timezone={event.timezone}
+              sport={sport}
+              deepLinkAction={deepLinkAction}
             />
-            )}
 
             {/* Join / You joined — replaces YOUR RESPONSE (AttendanceCta) per #818.
                 Web parity with Android hero revamp: single CTA, not Going/Not coming. */}

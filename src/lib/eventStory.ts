@@ -74,14 +74,20 @@ export interface RecapTasksInput {
   payerName: string | null;
   payments: readonly RecapPayment[] | null;
   allPaid: boolean;
+  /** Tennis and padel are scored in sets, which the History page owns. */
+  setsScoring?: boolean;
 }
+
+/** Sports whose result is a list of sets, not one number per team. */
+export const isSetsScoringSport = (sport: string) =>
+  ["tennis", "tennis-singles", "tennis-doubles", "padel"].includes(sport.toLowerCase());
 
 export type RecapTask =
   | { kind: "addScore"; /** False when no history row exists yet, so the score cannot be saved in place. */ inline: boolean }
   | { kind: "mvp" }
   | { kind: "pay"; amount: number; payerName: string; eventPlayerId: string }
   | { kind: "nopayer"; amount: number; canChoose: boolean }
-  | { kind: "collect"; paidCount: number; totalCount: number; paidAmount: number; totalAmount: number };
+  | { kind: "collect"; /** The viewer is the one collecting (otherwise an admin watching, naming the collector). */ collector: string | null; paidCount: number; totalCount: number; paidAmount: number; totalAmount: number };
 
 const same = (a: string | null | undefined, b: string | null | undefined) =>
   !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -93,7 +99,7 @@ export function recapTasks(input: RecapTasksInput): RecapTask[] {
 
   // Anyone who played can add the score, and so can the owner and admins.
   if (!input.hasScore && (input.role === "played" || input.canManage)) {
-    out.push({ kind: "addScore", inline: !!input.latestHistoryId });
+    out.push({ kind: "addScore", inline: !!input.latestHistoryId && !input.setsScoring });
   }
 
   // MVP is for players only, and only once there is a result to vote on.
@@ -117,7 +123,8 @@ export function recapTasks(input: RecapTasksInput): RecapTask[] {
     if (collecting && !input.allPaid) {
       const s = summarizePayments(roll);
       out.push({
-        kind: "collect", paidCount: s.paidCount, totalCount: s.totalCount,
+        kind: "collect", collector: same(input.payerName, input.viewerName) ? null : input.payerName,
+        paidCount: s.paidCount, totalCount: s.totalCount,
         paidAmount: s.paidAmount, totalAmount: roll.reduce((sum, r) => sum + r.amount, 0),
       });
     }

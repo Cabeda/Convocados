@@ -78,6 +78,7 @@ score-tracking:
     edit-score: { web: true, android: true, wearos: false }
     live-score-sync: { web: false, android: false, wearos: true }
     interval-alarms: { web: false, android: false, wearos: true }
+    last-game-recap: { web: true, android: false, wearos: false }
 
 quick-game:
   web: false

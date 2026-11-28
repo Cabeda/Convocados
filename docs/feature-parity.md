@@ -98,6 +98,7 @@
 | Edit Score | ✅ | ✅ | ❌ |
 | Live Score Sync | ❌ | ❌ | ✅ |
 | Interval Alarms | ❌ | ❌ | ✅ |
+| Last Game Recap | ✅ | ❌ | ❌ |
 
 ### Quick Game
 

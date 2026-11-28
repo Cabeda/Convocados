@@ -172,9 +172,9 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(status1.allPaid).toBe(true); // no cost yet
     expect(status1.allComplete).toBe(false);
 
-    // ── Step 7: Visit event page — banner should be visible ──
+    // ── Step 7: Visit event page — recap should be visible ──
     await page.goto(`/events/${eventId}`);
-    await expect(page.locator('[data-testid="post-game-banner"]')).toBeVisible({
+    await expect(page.locator('[data-testid="last-game-recap"]')).toBeVisible({
       timeout: 10_000,
     });
 
@@ -190,9 +190,9 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(paymentsData.payments.length).toBe(4);
     expect(paymentsData.summary.pendingCount).toBe(4);
 
-    // ── Step 9: Verify banner still visible (both tasks pending) ──
+    // ── Step 9: Verify recap still visible (both tasks pending) ──
     await page.reload();
-    await expect(page.locator('[data-testid="post-game-banner"]')).toBeVisible({
+    await expect(page.locator('[data-testid="last-game-recap"]')).toBeVisible({
       timeout: 10_000,
     });
 
@@ -216,9 +216,9 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(status2.allPaid).toBe(false); // payments still pending
     expect(status2.allComplete).toBe(false);
 
-    // ── Step 11: Reload — banner should show score done, payments pending ──
+    // ── Step 11: Reload — recap should show score done, payments pending ──
     await page.reload();
-    await expect(page.locator('[data-testid="post-game-banner"]')).toBeVisible({
+    await expect(page.locator('[data-testid="last-game-recap"]')).toBeVisible({
       timeout: 10_000,
     });
 
@@ -237,10 +237,10 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(status3.allPaid).toBe(true);
     expect(status3.allComplete).toBe(true);
 
-    // ── Step 13: Reload — banner should be GONE ──
+    // ── Step 13: Reload — the recap folds into a one-line strip (nothing left to do) ──
     await page.reload();
     await page.waitForLoadState("networkidle");
-    await expect(page.locator('[data-testid="post-game-banner"]')).not.toBeVisible({
+    await expect(page.locator('[data-testid="last-game-recap"] button[aria-expanded="false"]')).toBeVisible({
       timeout: 10_000,
     });
   });
@@ -264,7 +264,7 @@ test.describe("Post-game experience — banner, score, payments", () => {
 
     await page.goto(`/events/${id}`);
     await expect(page.locator("text=E2E Future Game")).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-testid="post-game-banner"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid="last-game-recap"]')).not.toBeVisible();
   });
 
   test("post-game-status API returns correct states through lifecycle", async ({ request }) => {
