@@ -599,7 +599,12 @@ describe("a review is bounded by minutes that buy a verdict", () => {
     const doc = reviewer();
     // Serialised, not cancelled: the janitor dispatches review twice per tick,
     // and cancel-in-progress let a tick kill the review it had just picked.
-    expect(doc.concurrency).toEqual({ group: "factory-review", "cancel-in-progress": false });
+    // The key is per Change, because a shared one also dropped every run of a
+    // batch but the first — eight dispatches, one review, seven cancellations.
+    expect(doc.concurrency).toEqual({
+      group: "factory-review-${{ inputs.pr || github.event.pull_request.number || 'pick' }}",
+      "cancel-in-progress": false,
+    });
     const step = doc.jobs?.reviewer?.steps?.find((s) => s.name === "Review the Change");
     // 12 was fitted to docs-only diffs and killed real code reviews mid-read;
     // 20 still halves the old 25.
