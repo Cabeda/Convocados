@@ -200,16 +200,20 @@ Never `git push origin main` directly. Always:
 
 ### Merge Authority
 
-`.github/CODEOWNERS` is `* @Cabeda`, so GitHub requests Cabeda's review on every Change. GitHub
-will not stop a machine from merging — the rulesets set `required_approving_review_count: 0`, and
-the App is minted `contents: write`, which is what the merge endpoint needs. What stops it is the
-**Merge gate**, and that is a deliberate policy rather than an absent permission: a named list of
-one-way doors in `scripts/factory/automerge-eligibility.ts`, the Reviewer's verdict on the exact
-head, and the required Checks green on that head. Say it plainly rather than implying a mechanism
-that is not there.
+`.github/CODEOWNERS` is `* @Cabeda`, so GitHub requests Cabeda's review on every Change. Two
+layers stop a machine from merging, and they answer different failures:
 
-An App also cannot approve or request changes on a Change it authored; GitHub refuses both. That
-is why a verdict is a marker and a check, never a review state.
+- **Branch protection.** `required_approving_review_count: 1` and `reviewer` among the required
+  status checks, on both `main` rulesets. A `REQUEST_CHANGES` from the Reviewer blocks the merge
+  in GitHub itself, and a refused Change turns the check red.
+- **The Merge gate.** A named list of one-way doors in
+  `scripts/factory/automerge-eligibility.ts`, the Reviewer's verdict signed over the exact head,
+  and the required Checks green on that head.
+
+An App cannot approve or request changes on a Change it authored; GitHub refuses both. `deliver.ts`
+therefore opens the Change with `FACTORY_PAT` (a person's token) while the push and the commits
+stay the App's, so the Reviewer App is a reviewer rather than the author. Without the secret it
+falls back to the App token and the Change can only be commented on.
 
 **A green PR merges on its own.** Three rulesets guard `main`, and each one speaks to a
 different failure:

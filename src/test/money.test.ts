@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatMoney, toCents } from "~/lib/money";
+import { formatMoney, formatMoneyCompact, toCents } from "~/lib/money";
 
 // Seam: `src/lib/money.ts` — the one money format every surface renders through.
 describe("formatMoney — the one money format", () => {
@@ -49,5 +49,34 @@ describe("toCents — the boundary for the legacy float amounts", () => {
 
   it("rounds away the float artefact at the boundary, once", () => {
     expect(toCents(0.1 + 0.2)).toBe(30);
+  });
+});
+
+describe("formatMoneyCompact — the story card's quiet money format", () => {
+  it("drops the decimals of a whole amount and keeps them otherwise", () => {
+    expect(formatMoneyCompact(5, "EUR", "en")).toBe("€5");
+    expect(formatMoneyCompact(2.5, "EUR", "en")).toBe("€2.50");
+    expect(formatMoneyCompact(12.345, "EUR", "en")).toBe("€12.35");
+  });
+
+  it("puts the symbol where the locale expects it", () => {
+    expect(formatMoneyCompact(5, "EUR", "de")).toMatch(/^5\s€$/);
+    expect(formatMoneyCompact(2.5, "EUR", "fr")).toMatch(/^2,50\s€$/);
+    expect(formatMoneyCompact(5, "EUR", "pt")).toMatch(/€\s?5$/);
+  });
+
+  it("uses the narrow symbol of the currency", () => {
+    expect(formatMoneyCompact(5, "USD", "en")).toBe("$5");
+    expect(formatMoneyCompact(5, "GBP", "en")).toBe("£5");
+    expect(formatMoneyCompact(5, "BRL", "en")).toBe("R$5");
+  });
+
+  it("falls back to EUR when the currency is missing and never throws on a bad one", () => {
+    expect(formatMoneyCompact(5, null, "en")).toBe("€5");
+    expect(() => formatMoneyCompact(5, "not-a-currency", "en")).not.toThrow();
+  });
+
+  it("does not touch the global formatter", () => {
+    expect(formatMoney(500, "EUR")).toBe("5.00€");
   });
 });
