@@ -58,11 +58,13 @@ event-detail:
     contact-picker-invite: { web: true, android: true, wearos: false }
     # Slice 2 of the event-page redesign. Android keeps its own event screen for now;
     # follow-up: bring the flat header, the ⋮ bottom sheet and the cancelled banner to EventDetailScreen.
+    # The manifest has no note field, so the follow-up is named here: https://github.com/Cabeda/Convocados/issues/1910
     flat-header-actions: { web: true, android: false, wearos: false }
     more-sheet: { web: true, android: false, wearos: false }
     # Slice 3: the next-game block (date and countdown, RSVP row, slot lineup, bench line, waiting row) and the
     # organizer's manage-lineup page (reorder, positions, remove). Android keeps its list; follow-up: EventDetailScreen
     # gets the same blocks, with reorder and positions behind a manage screen.
+    # The manifest has no note field, so the follow-up is named here: https://github.com/Cabeda/Convocados/issues/1910
     next-game-block: { web: true, android: false, wearos: false }
     manage-lineup: { web: true, android: false, wearos: false }
 
@@ -80,6 +82,7 @@ teams:
     # Slice 4 of the event-page redesign. Android keeps its teams card; follow-up: the flat two-column teams section
     # (viewer's team marked, one-tap move, early draw with a plain confirm, "What's at stake" behind one button) and the
     # "Play again?" block for a one-off game that has ended (make it weekly / plan another / ask the organizer).
+    # The manifest has no note field, so the follow-up is named here: https://github.com/Cabeda/Convocados/issues/1910
     flat-teams-block: { web: true, android: false, wearos: false }
     play-again-one-off: { web: true, android: false, wearos: false }
 
@@ -92,6 +95,9 @@ score-tracking:
     edit-score: { web: true, android: true, wearos: false }
     live-score-sync: { web: false, android: false, wearos: true }
     interval-alarms: { web: false, android: false, wearos: true }
+    # Slice 1 of the event-page redesign: the last game's recap card on top of the event page (scoreboard, what is
+    # left for the viewer, in-place score entry). The manifest has no note field, so the follow-up is named here:
+    # https://github.com/Cabeda/Convocados/issues/1910
     last-game-recap: { web: true, android: false, wearos: false }
 
 quick-game:

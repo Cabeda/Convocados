@@ -78,40 +78,70 @@ export function applyOptimistic(status: PostGameStatus, o: Optimistic): PostGame
 
 const POLL_MS = 15_000;
 
+/** Same last game (so the same collector and the same payment details)? */
+const sameGame = (a: PostGameStatus, b: PostGameStatus) =>
+  a.latestHistoryId === b.latestHistoryId && (a.gameConfig?.gameId ?? null) === (b.gameConfig?.gameId ?? null);
+
 /**
  * The last game's status: seeded from the page payload (so nothing flashes and
  * nothing is fetched twice), then kept live by a poll and `refresh()`. The poll
  * sleeps while the tab is hidden and while the caller says the recap is gone
  * (`setPaused`). The endpoint needs no session — signed-out visitors get the
  * result too.
+ *
+ * The poll asks for the light answer (`?poll=1`), which leaves out what cannot change
+ * while the page is open: the viewer's roster names and whether the collector has payment
+ * details. Those ride on the page load and on `refresh()` (a full read, after the viewer
+ * did something); the poll keeps the ones it already has, and reads once in full if it
+ * finds the last game has changed under it.
  */
 export function usePostGameStatus(eventId: string, initial: PostGameStatus | null | undefined) {
   const [status, setStatus] = useState<PostGameStatus | null>(initial ?? null);
+  const statusRef = useRef<PostGameStatus | null>(initial ?? null);
   // True once there is a status to show: seeded, or the first read has come back.
   const [loaded, setLoaded] = useState(!!initial);
   const pausedRef = useRef(false);
   const seeded = useRef(!!initial);
 
-  const refresh = useCallback(async () => {
+  /** One read. Resolves true when a light read found a different game, so the static fields it kept are stale. */
+  const readOnce = useCallback(async (light: boolean): Promise<boolean> => {
     try {
-      setStatus((await apiRequest("GET /api/events/{id}/post-game-status", { params: { id: eventId } })) as PostGameStatus);
+      const next = (await apiRequest("GET /api/events/{id}/post-game-status", {
+        params: { id: eventId }, ...(light ? { query: { poll: "1" as const } } : {}),
+      })) as PostGameStatus;
+      const prev = statusRef.current;
+      const merged = light && prev
+        ? { ...next, viewerNames: next.viewerNames ?? prev.viewerNames, payerHasPaymentDetails: next.payerHasPaymentDetails ?? prev.payerHasPaymentDetails }
+        : next;
+      statusRef.current = merged;
+      setStatus(merged);
+      // A different game has a different collector: what the poll kept is for the old one.
+      return light && (!prev || !sameGame(prev, next));
     } catch { /* keep the last known status */ }
-    setLoaded(true);
+    return false;
   }, [eventId]);
+
+  const read = useCallback(async (light: boolean) => {
+    const stale = await readOnce(light);
+    if (stale) await readOnce(false);
+    setLoaded(true);
+  }, [readOnce]);
+
+  const refresh = useCallback(() => read(false), [read]);
 
   const setPaused = useCallback((paused: boolean) => { pausedRef.current = paused; }, []);
 
   useEffect(() => {
     if (!seeded.current) refresh();
     const awake = () => !pausedRef.current && !document.hidden;
-    const id = setInterval(() => { if (awake()) refresh(); }, POLL_MS);
-    const onVisible = () => { if (awake()) refresh(); };
+    const id = setInterval(() => { if (awake()) void read(true); }, POLL_MS);
+    const onVisible = () => { if (awake()) void read(true); };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [refresh]);
+  }, [read, refresh]);
 
   return { status, loaded, refresh, setPaused };
 }

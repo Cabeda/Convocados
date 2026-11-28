@@ -745,7 +745,10 @@ export const openApiSpec = {
       get: {
         summary: "Get post-game status (voting, MVP)",
         tags: ["Events"],
-        parameters: [eventIdParam],
+        parameters: [
+          eventIdParam,
+          { name: "poll", in: "query", required: false, schema: { type: "string", enum: ["1"] }, description: "The page's 15 s refresh: omits viewerNames and payerHasPaymentDetails, which do not change while the page is open" },
+        ],
         responses: { "200": { description: "Post-game status" } },
       },
     },

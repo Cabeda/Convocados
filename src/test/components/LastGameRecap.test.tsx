@@ -102,6 +102,37 @@ describe("LastGameRecap — full card", () => {
     expect(screen.queryByRole("link", { name: /Lineup/ })).toBeNull();
   });
 
+  describe("the Ranking tile is where \"+143 points this season\" is explained", () => {
+    const moved = { seasonId: "s1", seasonName: "Spring", counted: true, delta: 32, before: 1688, after: 1720, tierBefore: 2, tierAfter: 2, provisional: false, gamesThisSeason: 9, edges: [] };
+
+    it("opens the rank explainer for this game when the viewer's points moved", () => {
+      show({ status: { ...status, seasonRank: moved } });
+      const href = screen.getByRole("link", { name: /Ranking/ }).getAttribute("href")!;
+      const url = new URL(href, "http://x");
+      expect(url.pathname).toBe("/events/e1/rank-explainer");
+      expect(Object.fromEntries(url.searchParams)).toEqual({ seasonId: "s1", rank: "1720", delta: "32", outcome: "1" });
+    });
+
+    it("reads the outcome from the viewer's side: a loss for team two is a 0, a draw is 0.5", () => {
+      const { unmount } = show({ status: { ...status, viewerTeam: 1, seasonRank: { ...moved, delta: -12 } } });
+      expect(new URL(screen.getByRole("link", { name: /Ranking/ }).getAttribute("href")!, "http://x").searchParams.get("outcome")).toBe("0");
+      unmount();
+      cleanup();
+      show({ status: { ...status, viewerTeam: 0, scoreOne: 3, scoreTwo: 3, seasonRank: { ...moved, delta: 0 } } });
+      expect(new URL(screen.getByRole("link", { name: /Ranking/ }).getAttribute("href")!, "http://x").searchParams.get("outcome")).toBe("0.5");
+    });
+
+    it("stays on the rankings page when the game did not count for the viewer", () => {
+      show({ status: { ...status, seasonRank: { ...moved, counted: false, delta: 0 } } });
+      expect(screen.getByRole("link", { name: /Ranking/ })).toHaveAttribute("href", "/events/e1/rankings");
+    });
+
+    it("stays on the rankings page for somebody who did not play", () => {
+      show({ status: { ...status, viewerTeam: null, seasonRank: null } });
+      expect(screen.getByRole("link", { name: /Ranking/ })).toHaveAttribute("href", "/events/e1/rankings");
+    });
+  });
+
   it("never writes paid counts as 9/16", () => {
     const { container } = show();
     expect(container.textContent).not.toMatch(/\d+\/\d+/);

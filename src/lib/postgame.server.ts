@@ -70,18 +70,63 @@ export interface PostGameStatusPayload {
   lastGameDateTime: string | null;
   /** Which team the viewer played for in the last game (0 = score one); null when they did not play or are signed out. */
   viewerTeam: 0 | 1 | null;
-  /** Every name the viewer is known by on this event: the account name plus the roster names linked to their account. */
-  viewerNames: string[];
+  /**
+   * Every name the viewer is known by on this event: the account name plus the roster names linked to their account.
+   * Static for a page visit, so the 15 s poll (`light`) leaves it out and the client keeps the one it was given.
+   */
+  viewerNames?: string[];
   /** How many people played the last game (from its lineup snapshot); null when unknown. */
   lastGamePlayerCount: number | null;
-  /** The collector has somewhere to send money to (payment methods resolve), so the card can offer "How to pay". */
-  payerHasPaymentDetails: boolean;
+  /** The collector has somewhere to send money to (payment methods resolve), so the card can offer "How to pay". Left out of a `light` read. */
+  payerHasPaymentDetails?: boolean;
+}
+
+export interface PostGameStatusOptions {
+  /**
+   * The 15 s poll. It answers every field that can change while the page is open and leaves out the
+   * ones that cannot (`viewerNames`, `payerHasPaymentDetails`): the client keeps what the page load gave it.
+   * The viewer's roster names are still needed to answer viewer-scoped fields (isPlayer, viewerTeam, payment
+   * settled), so a light read reuses the names it remembers; a full read always looks them up afresh.
+   */
+  light?: boolean;
+}
+
+const VIEWER_NAMES_TTL_MS = 5 * 60_000;
+const VIEWER_NAMES_MAX = 5_000;
+const viewerNamesCache = new Map<string, { names: string[]; expires: number }>();
+
+/** Forget every remembered viewer name (tests). */
+export const resetViewerNamesCache = () => viewerNamesCache.clear();
+
+/**
+ * The viewer's roster names. A full read (page load, after something the viewer did) looks them up and
+ * remembers them, so that is also the invalidation: a claim or a join is seen the next time the page
+ * reads the event. A light read (the poll) takes the remembered names while they are fresh.
+ */
+async function viewerNamesFor(eventId: string, userId: string, accountName: string, light: boolean): Promise<string[]> {
+  const key = `${eventId}\u0000${userId}\u0000${accountName}`;
+  const now = Date.now();
+  if (light) {
+    const hit = viewerNamesCache.get(key);
+    if (hit && hit.expires > now) return hit.names;
+  }
+  const names = await resolveViewerNames(eventId, userId, accountName);
+  if (viewerNamesCache.size >= VIEWER_NAMES_MAX) {
+    for (const [k, v] of viewerNamesCache) if (v.expires <= now) viewerNamesCache.delete(k);
+    // Still full: drop the oldest entry (a Map iterates in insertion order).
+    if (viewerNamesCache.size >= VIEWER_NAMES_MAX) viewerNamesCache.delete(viewerNamesCache.keys().next().value as string);
+  }
+  viewerNamesCache.delete(key);
+  viewerNamesCache.set(key, { names, expires: now + VIEWER_NAMES_TTL_MS });
+  return names;
 }
 
 export async function computePostGameStatus(
   eventId: string,
   request: Request,
+  options: PostGameStatusOptions = {},
 ): Promise<PostGameStatusPayload | null> {
+  const light = !!options.light;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true, currentGameId: true, isRecurring: true },
@@ -168,7 +213,7 @@ export async function computePostGameStatus(
   // be offered the Vote MVP task nor have the banner held open by MVP state.
   // The account name often differs from the roster name ("anab99" vs "Ana B"), so
   // the roster rows linked to the account count too (falling back to the name).
-  const viewerNames = session?.user ? await resolveViewerNames(event.id, session.user.id, session.user.name) : [];
+  const viewerNames = session?.user ? await viewerNamesFor(event.id, session.user.id, session.user.name, light) : [];
   const playedAs = viewerNames.find((n) => isHistoryParticipant(latestHistory, n)) ?? null;
   // An ended one-off has no history row until its first score: who played is who was on the live game's roster.
   const onLiveRoster = !latestHistory && gameEnded && !event.isRecurring && !!session?.user && event.currentGameId
@@ -406,7 +451,10 @@ export async function computePostGameStatus(
   }
 
   // Whether the collector has somewhere to send money to: drives the card's "How to pay" link.
-  const payerHasPaymentDetails = await collectorHasPaymentDetails(event.id, wrapUpSettlement);
+  // Static for a page visit, so the poll skips the lookup.
+  const staticFields = light
+    ? {}
+    : { viewerNames, payerHasPaymentDetails: await collectorHasPaymentDetails(event.id, wrapUpSettlement) };
 
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
@@ -431,9 +479,8 @@ export async function computePostGameStatus(
       ? latestHistory.dateTime.toISOString()
       : gameEnded ? event.dateTime.toISOString() : null,
     viewerTeam: session?.user ? viewerTeamIndex(latestHistory?.teamsSnapshot ?? null, viewerNames) : null,
-    viewerNames,
     lastGamePlayerCount: namesFromTeamsSnapshot(latestHistory?.teamsSnapshot).length || null,
-    payerHasPaymentDetails,
+    ...staticFields,
   };
 }
 
