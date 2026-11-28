@@ -158,7 +158,15 @@ export function NextGame(p: NextGameProps) {
     }
   }, [canAct, hasViewer, view.kind, p.deepLinkAction]);
 
-  if (phase === "none" || phase === "cancelled") return null;
+  if (phase === "none") return null;
+  // A cancelled game keeps its list for reading — who was in — and nothing to press.
+  if (phase === "cancelled") {
+    return (
+      <Box component="section" aria-label={t("ngWhosIn")} data-testid="cancelled-roster" sx={{ maxWidth: "32rem" }}>
+        <WhosIn autoOpen playing={active} bench={bench} viewerId={viewer?.id ?? null} positionsEnabled={!!event.positionsEnabled} />
+      </Box>
+    );
+  }
 
   const date = phase === "signupsSoon" && rule ? nextOccurrence(new Date(startMs), rule, new Date(now), event.timezone) : new Date(startMs);
   const spotsLeft = Math.max(0, event.maxPlayers - active.length);

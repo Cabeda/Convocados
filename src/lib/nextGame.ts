@@ -56,6 +56,15 @@ export function nextTickDelay(now: number, startMs: number, endMs: number): numb
   return Math.min(delay + SLACK_MS, MAX_TIMEOUT);
 }
 
+/**
+ * How long until the PHASE can change by the clock alone — kickoff, then the end — or null when it cannot.
+ * For the parts of the page that care about the phase only: they sleep through the countdown's minutes.
+ */
+export function phaseChangeDelay(now: number, startMs: number, endMs: number): number | null {
+  const next = now < startMs ? startMs : now < endMs ? endMs : null;
+  return next === null ? null : Math.min(next - now + SLACK_MS, MAX_TIMEOUT);
+}
+
 const dayKey = (ms: number, timezone: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(ms);
 

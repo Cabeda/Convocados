@@ -42,6 +42,8 @@ import { NextGame } from "./event/story/NextGame";
 import { NextGameSkeleton } from "./event/story/NextGameSkeleton";
 import { useHeaderToasts } from "./event/story/HeaderToast";
 import { useMyRsvp } from "./event/story/useMyRsvp";
+import { useNextGamePhase } from "./event/story/useNextGamePhase";
+import { parseRecurrenceRule } from "~/lib/recurrence";
 import { PushPromptBanner } from "./PushPromptBanner";
 import { deriveEventPermissions } from "~/lib/eventView";
 
@@ -444,6 +446,12 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
   // while an answer is still pending and the game kicks off within 48h.
   const [myRsvp, setMyRsvp] = useMyRsvp(eventId, isAuthenticated);
 
+  // Whether this is the next game (open or being played). Between a weekly game's end and its reset the roster
+  // and the drawn teams are still the finished game's: they never show as the next game's.
+  const nextPhase = useNextGamePhase(
+    event ? Date.parse(event.dateTime) : 0, event?.durationMinutes ?? 0, !!parseRecurrenceRule(event?.recurrenceRule ?? null), !!cancelled,
+  );
+
   // ── Loading / locked / not found states ─────────────────────────────────────
 
   if (isLoading) return (
@@ -555,8 +563,8 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
               }}
             />
 
-            {/* Teams — shown below players after randomization */}
-            {localMatches && localMatches.length > 0 && (
+            {/* Teams — shown below players after randomization, for the next game only */}
+            {(nextPhase === "open" || nextPhase === "live") && localMatches && localMatches.length > 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
                 <Stack spacing={2}>
                   <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>

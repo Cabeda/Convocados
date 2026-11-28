@@ -516,3 +516,60 @@ describe("Next game — telling people apart in the lineup", () => {
     expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
   });
 });
+
+describe("Next game — the finished game's teams are never the next game's", () => {
+  const teamResults = [
+    { id: "t1", name: "Ninjas", members: [{ name: "Player 0", order: 0 }, { name: "Player 1", order: 1 }] },
+    { id: "t2", name: "Gunas", members: [{ name: "Player 2", order: 0 }, { name: "Player 3", order: 1 }] },
+  ];
+  const ended = { isRecurring: true, recurrenceRule: WEEKLY, dateTime: new Date(Date.now() - 3 * HOUR).toISOString(), players: rows(4), teamResults };
+
+  it("shows the Teams card for an open game", async () => {
+    renderPage({ players: rows(4), teamResults });
+    expect(await screen.findByRole("heading", { level: 6, name: "Teams" })).toBeInTheDocument();
+  });
+
+  it("shows the Teams card while the game is being played", async () => {
+    renderPage({ players: rows(4), teamResults, dateTime: new Date(Date.now() - HOUR / 2).toISOString() });
+    expect(await screen.findByRole("heading", { level: 6, name: "Teams" })).toBeInTheDocument();
+  });
+
+  it("hides them between the end of a weekly game and its reset (signups soon), with the frozen roster", async () => {
+    renderPage(ended);
+    await screen.findByText("Sign-ups open in a moment");
+    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Ninjas")).not.toBeInTheDocument();
+    expect(screen.queryByText("Player 0")).not.toBeInTheDocument();
+  });
+
+  it("hides them after a one-off game ends: its result lives in the recap", async () => {
+    renderPage({ ...ended, isRecurring: false, recurrenceRule: null });
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+  });
+
+  it("hides them on a cancelled game", async () => {
+    renderPage({ players: rows(4), teamResults, gameStatus: "cancelled" });
+    await screen.findByRole("heading", { level: 2, name: "This game was cancelled" });
+    expect(screen.queryByRole("heading", { name: "Teams" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Next game — a cancelled game keeps a read-only roster", () => {
+  it("lists who was in, with no way to join, add or remove", async () => {
+    renderPage({ gameStatus: "cancelled", players: [{ id: "a", name: "Ana Maria", userId: null }, { id: "b", name: "Beto", userId: null }], ownerId: "u-1" });
+    const list = await screen.findByTestId("whos-in");
+    expect(within(list).getByText("Ana Maria")).toBeInTheDocument();
+    expect(within(list).getByText("Beto")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "I'm in" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add a friend" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Options for/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("lineup-slots")).not.toBeInTheDocument();
+  });
+
+  it("says nothing extra when nobody was in", async () => {
+    renderPage({ gameStatus: "cancelled", players: [] });
+    await screen.findByRole("heading", { level: 2, name: "This game was cancelled" });
+    expect(screen.queryByTestId("whos-in")).not.toBeInTheDocument();
+  });
+});

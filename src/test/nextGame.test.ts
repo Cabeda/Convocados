@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   COUNTDOWN_WINDOW_MS, nextGamePhase, countdownOf, nextTickDelay, isGameDay, initials, shortNames,
-  slotMinSize, slotColumns, slotLabels, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval,
+  slotMinSize, slotColumns, slotLabels, phaseChangeDelay, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval,
 } from "~/lib/nextGame";
 
 const MIN = 60_000;
@@ -24,6 +24,21 @@ describe("nextGamePhase", () => {
   it("a cancelled game offers nothing, before or after", () => {
     expect(phaseOf(START - HOUR, { cancelled: true })).toBe("cancelled");
     expect(phaseOf(START + 5 * HOUR, { cancelled: true })).toBe("cancelled");
+  });
+});
+
+describe("phaseChangeDelay — one timeout to the moment the phase changes", () => {
+  const END = START + 90 * MIN;
+  it("waits for kickoff before the game, then for the end, then never", () => {
+    expect(phaseChangeDelay(START - 3 * HOUR, START, END)).toBe(3 * HOUR + 50);
+    expect(phaseChangeDelay(START + MIN, START, END)).toBe(89 * MIN + 50);
+    expect(phaseChangeDelay(END, START, END)).toBeNull();
+  });
+  it("is not the countdown's minute ticker: far from the game it sleeps the whole way", () => {
+    expect(phaseChangeDelay(START - 20 * HOUR, START, END)).toBe(20 * HOUR + 50);
+  });
+  it("never asks for a timeout the browser would fire at once", () => {
+    expect(phaseChangeDelay(START - 40 * 24 * HOUR, START, END)).toBeLessThanOrEqual(2_147_000_000);
   });
 });
 
