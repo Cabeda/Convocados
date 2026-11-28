@@ -4,7 +4,7 @@ import { createT } from "~/lib/i18n";
 
 const base: MenuInput = {
   canEdit: false, isOwnerless: false, isAuthenticated: false, ratingsOn: true,
-  calendarOpen: true, showAttendance: true, canWatch: false, isCancelled: false,
+  calendarOpen: true, showAttendance: true, canWatch: false, isCancelled: false, paymentsReachable: true,
 };
 const ids = (i: Partial<MenuInput>) => menuGroups({ ...base, ...i }).flatMap((g) => g.items);
 const groups = (i: Partial<MenuInput>) => menuGroups({ ...base, ...i }).map((g) => g.id);
@@ -20,10 +20,16 @@ describe("menuGroups", () => {
     expect(groups({ isAuthenticated: true })).toEqual(["game", "back", "you"]);
   });
 
-  it("gives an admin Cancel game, Ratings and Settings", () => {
+  it("gives an admin Settings and, below it, Cancel game, in the Manage group", () => {
     const all = ids({ canEdit: true, isAuthenticated: true });
     expect(all).toEqual(expect.arrayContaining(["cancel", "ratings", "settings"] satisfies MenuItemId[]));
-    expect(menuGroups({ ...base, canEdit: true }).at(-1)?.id).toBe("manage");
+    const manage = menuGroups({ ...base, canEdit: true }).at(-1);
+    expect(manage).toEqual({ id: "manage", items: ["settings", "cancel"] });
+  });
+
+  it("leaves Payments out where the page would only say sign in or players only", () => {
+    expect(ids({ paymentsReachable: false })).not.toContain("payments");
+    expect(ids({ paymentsReachable: true })).toContain("payments");
   });
 
   it("keeps Ratings off ownerless events and off events with ratings disabled", () => {

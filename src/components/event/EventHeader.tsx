@@ -114,6 +114,7 @@ export function EventHeader({
     showAttendance: gameDate < new Date() || !!event.isRecurring,
     canWatch: isMobile && !!localMatches?.length,
     isCancelled: cancelled,
+    paymentsReachable: isAuthenticated || (isOwnerless && !event.isPublic),
   });
   const googleCalendarHref = googleCalendarUrl({
     id: eventId, title: event.title, location: event.location, dateTime: gameDate,

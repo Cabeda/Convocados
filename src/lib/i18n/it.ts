@@ -148,7 +148,7 @@ const it: TranslationKeys = {
   coPlayedWithYou: "giocato con te {n}\u00d7",
 
   // Watch
-  watchScore: "Punteggio su Orologio",
+  watchScore: "Punteggio su orologio",
   watchScoreDesc: "Apri questo link sul tuo smartwatch per seguire il punteggio in tempo reale.",
   watchCopyLink: "Copia link orologio",
   watchLinkCopied: "Link orologio copiato!",
@@ -578,8 +578,7 @@ sportBadmintonSingles: "Badminton (singolo)",
   ownedGames: "Le Mie Partite",
   joinedGames: "Partite a cui ho Partecipato",
   addToCalendar: "Aggiungi al calendario",
-  downloadIcs: "Scarica .ics",
-  addToGoogleCalendar: "Google Calendar",
+  addToGoogleCalendar: "Aggiungi a Google Calendar",
   loadMore: "Carica altro",
   loading: "Caricamento…",
   docs: "Docs",
@@ -1711,6 +1710,10 @@ statsGoals: "Goal",
   headerEnded: "Terminata {when}",
   headerCancelled: "Annullata",
   planNewGame: "Pianifica una nuova partita",
+  menuCalendarFile: "Aggiungi al calendario (Apple, Outlook)",
+  menuEventSettings: "Impostazioni della partita",
+  menuRatings: "Livello dei giocatori",
+  closeMenu: "Chiudi",
 };
 
 export default it;

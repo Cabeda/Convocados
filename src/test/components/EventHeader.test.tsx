@@ -314,8 +314,8 @@ describe("EventHeader — the More sheet", () => {
     for (const g of ["This game", "Look back", "You", "Manage"]) expect(within(sheet).getByRole("group", { name: g })).toBeInTheDocument();
     expect(within(sheet).getByRole("link", { name: "History and results" })).toHaveAttribute("href", "/events/evt-1/history");
     expect(within(sheet).getByRole("link", { name: "Payments" })).toHaveAttribute("href", "/events/evt-1/payments");
-    expect(within(sheet).getByRole("link", { name: "Event Settings" })).toHaveAttribute("href", "/events/evt-1/settings");
-    expect(within(sheet).getByRole("link", { name: "Download .ics" })).toHaveAttribute("href", "/api/events/evt-1/calendar");
+    expect(within(sheet).getByRole("link", { name: "Event settings" })).toHaveAttribute("href", "/events/evt-1/settings");
+    expect(within(sheet).getByRole("link", { name: "Add to calendar (Apple, Outlook)" })).toHaveAttribute("href", "/api/events/evt-1/calendar");
   });
 
   it("says who manages the game, linking to their profile, at the top", async () => {
@@ -330,7 +330,7 @@ describe("EventHeader — the More sheet", () => {
     const user = userEvent.setup();
     renderHeader({ canEditSettings: false, isAuthenticated: false });
     const sheet = await openSheet(user);
-    for (const name of [/Cancel game/, /Skill Rating/, /Event Settings/, /My notifications/]) {
+    for (const name of [/Cancel game/, /Ratings/, /Event settings/, /My notifications/]) {
       expect(within(sheet).queryByRole(/link|button/, { name })).not.toBeInTheDocument();
     }
   });
@@ -340,14 +340,14 @@ describe("EventHeader — the More sheet", () => {
     const onCancelGame = vi.fn();
     renderHeader({ canEditSettings: true, onCancelGame });
     const sheet = await openSheet(user);
-    expect(within(sheet).getByRole("link", { name: "Skill Rating" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("link", { name: "Ratings" })).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: "Cancel game" }));
     expect(onCancelGame).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "More" })).not.toBeInTheDocument());
     cleanup();
     renderHeader({ canEditSettings: true, isOwnerless: true });
     const again = await openSheet(user);
-    expect(within(again).queryByRole("link", { name: "Skill Rating" })).not.toBeInTheDocument();
+    expect(within(again).queryByRole("link", { name: "Ratings" })).not.toBeInTheDocument();
   });
 
   it("opens My notifications for a signed-in viewer", async () => {
@@ -362,8 +362,71 @@ describe("EventHeader — the More sheet", () => {
     const user = userEvent.setup();
     renderHeader({ event: { dateTime: new Date(Date.now() - 5 * 86400_000).toISOString() } });
     const sheet = await openSheet(user);
-    expect(within(sheet).queryByRole("link", { name: "Download .ics" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("link", { name: "Add to calendar (Apple, Outlook)" })).not.toBeInTheDocument();
     expect(within(sheet).getByRole("link", { name: "Attendance" })).toBeInTheDocument();
+  });
+
+  it("has a visible Close button that closes the sheet and gives focus back to More", async () => {
+    const user = userEvent.setup();
+    renderHeader();
+    const more = screen.getByRole("button", { name: "More" });
+    const sheet = await openSheet(user);
+    const close = within(sheet).getByRole("button", { name: "Close" });
+    expect(close).toHaveTextContent("");
+    await user.click(close);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "More" })).not.toBeInTheDocument());
+    expect(more).toHaveFocus();
+  });
+
+  it("puts Cancel game last, below Event settings, in the Manage group", async () => {
+    const user = userEvent.setup();
+    renderHeader({ canEditSettings: true });
+    const sheet = await openSheet(user);
+    const manage = within(sheet).getByRole("group", { name: "Manage" });
+    const rows = [...manage.querySelectorAll("a, button")].map((r) => r.textContent);
+    expect(rows).toEqual(["Event settings", "Cancel game"]);
+    expect(within(sheet).queryByRole("group", { name: "This game" })?.textContent ?? "").not.toMatch(/Cancel game/);
+  });
+
+  it("writes every row in sentence case and says what the calendar file is for", async () => {
+    const user = userEvent.setup();
+    renderHeader({ canEditSettings: true });
+    const sheet = await openSheet(user);
+    for (const name of ["Event settings", "Ratings", "Add to calendar (Apple, Outlook)", "Add to Google Calendar", "My notifications"]) {
+      expect(within(sheet).getByText(name)).toBeInTheDocument();
+    }
+    expect(within(sheet).queryByText(/Event Settings|Skill Rating|Download/)).not.toBeInTheDocument();
+  });
+
+  it("leaves Payments out for a signed-out viewer of an owned game, where it would be a dead end", async () => {
+    const user = userEvent.setup();
+    renderHeader({ isAuthenticated: false, isParticipant: false });
+    const sheet = await openSheet(user);
+    expect(within(sheet).queryByRole("link", { name: "Payments" })).not.toBeInTheDocument();
+    expect(within(sheet).getByRole("link", { name: "History and results" })).toBeInTheDocument();
+  });
+
+  it("keeps Payments for a signed-out viewer of a game nobody owns, which the link opens", async () => {
+    const user = userEvent.setup();
+    renderHeader({ isAuthenticated: false, isParticipant: false, isOwnerless: true, event: { ownerId: null, ownerName: null } });
+    const sheet = await openSheet(user);
+    expect(within(sheet).getByRole("link", { name: "Payments" })).toBeInTheDocument();
+  });
+
+  it("opens as a side sheet on the right on a wide screen, and from the bottom on a phone", async () => {
+    const user = userEvent.setup();
+    const media = (matches: boolean) => vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: matches && /min-width|up/.test(q) ? true : false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false,
+    }));
+    media(true);
+    renderHeader();
+    let sheet = await openSheet(user);
+    expect(sheet).toHaveAttribute("data-anchor", "right");
+    cleanup();
+    media(false);
+    renderHeader();
+    sheet = await openSheet(user);
+    expect(sheet).toHaveAttribute("data-anchor", "bottom");
   });
 
   it("does not offer to cancel a game that is already cancelled", async () => {

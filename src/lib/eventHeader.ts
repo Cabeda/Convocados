@@ -29,23 +29,28 @@ export interface MenuInput {
   /** Phone with teams drawn: the watch scorer can start. */
   canWatch: boolean;
   isCancelled: boolean;
+  /**
+   * The payments page would show something to this viewer. A signed-out viewer of an owned game, or a
+   * stranger, gets only "sign in" or "players only" there, so the row is left out rather than leading nowhere.
+   */
+  paymentsReachable: boolean;
 }
 
 export function menuGroups(i: MenuInput): MenuGroup[] {
   const game: MenuItemId[] = [
     ...(i.calendarOpen ? (["ics", "gcal"] as const) : []),
-    ...(i.canEdit && !i.isCancelled ? (["cancel"] as const) : []),
   ];
   const back: MenuItemId[] = [
     "history", "seasons",
     ...(i.showAttendance ? (["attendance"] as const) : []),
     "log",
     ...(i.canEdit && !i.isOwnerless && i.ratingsOn ? (["ratings"] as const) : []),
-    "payments",
+    ...(i.paymentsReachable ? (["payments"] as const) : []),
     ...(i.canWatch ? (["watch"] as const) : []),
   ];
   const you: MenuItemId[] = i.isAuthenticated ? ["notifications"] : [];
-  const manage: MenuItemId[] = i.canEdit ? ["settings"] : [];
+  // Cancel game is the destructive row: last, away from the calendar rows it used to sit beside.
+  const manage: MenuItemId[] = i.canEdit ? ["settings", ...(i.isCancelled ? [] : (["cancel"] as const))] : [];
   const groups: MenuGroup[] = [
     { id: "game", items: game }, { id: "back", items: back },
     { id: "you", items: you }, { id: "manage", items: manage },

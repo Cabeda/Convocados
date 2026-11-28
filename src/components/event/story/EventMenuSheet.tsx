@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { Box, ButtonBase, SwipeableDrawer, Typography, useMediaQuery } from "@mui/material";
+import type { Theme } from "@mui/material/styles";
+import { Box, ButtonBase, IconButton, SwipeableDrawer, Typography, useMediaQuery, useTheme } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
@@ -35,10 +37,10 @@ const GROUP_LABEL: Record<MenuGroupId, TranslationKey> = {
 };
 
 const LABEL: Record<MenuItemId, TranslationKey> = {
-  ics: "downloadIcs", gcal: "addToGoogleCalendar", cancel: "cancelGame",
+  ics: "menuCalendarFile", gcal: "addToGoogleCalendar", cancel: "cancelGame",
   history: "menuHistory", seasons: "menuSeasons", attendance: "attendance", log: "activityLog",
-  ratings: "ratings", payments: "paymentsPageTitle", watch: "watchScore",
-  notifications: "myNotificationsMenu", settings: "eventSettings",
+  ratings: "menuRatings", payments: "paymentsPageTitle", watch: "watchScore",
+  notifications: "myNotificationsMenu", settings: "menuEventSettings",
 };
 
 const ICON: Record<MenuItemId, ReactNode> = {
@@ -54,10 +56,36 @@ const row = {
   "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" },
 } as const;
 
-/** The ⋮ menu as a bottom sheet: groups of 48px rows, closes on Esc, swipe or a tap outside. */
+/**
+ * Content that scrolls says so: a soft shadow at an edge that still has more behind it,
+ * drawn by the background itself (no script), so it works where scrollbars hide.
+ */
+const scrollShadow = (th: Theme) => {
+  const paper = th.palette.background.paper;
+  const shade = th.palette.mode === "dark" ? "rgba(0,0,0,.6)" : "rgba(0,0,0,.22)";
+  return {
+    overflowY: "auto", overscrollBehavior: "contain",
+    background: [
+      `linear-gradient(${paper} 30%, transparent) center top`,
+      `linear-gradient(transparent, ${paper} 70%) center bottom`,
+      `radial-gradient(farthest-side at 50% 0, ${shade}, transparent) center top`,
+      `radial-gradient(farthest-side at 50% 100%, ${shade}, transparent) center bottom`,
+    ].join(", "),
+    backgroundRepeat: "no-repeat", backgroundSize: "100% 40px, 100% 40px, 100% 14px, 100% 14px",
+    backgroundAttachment: "local, local, scroll, scroll",
+  } as const;
+};
+
+/**
+ * The ⋮ menu: a bottom sheet on a phone, a side sheet on the right from a tablet up.
+ * Groups of 48px rows under a visible Close; it closes on Close, Esc, swipe or a tap outside,
+ * and on a short screen the rows scroll under it.
+ */
 export function EventMenuSheet({ open, onClose, groups, eventId, menuId, owner, googleCalendarHref, onCancelGame, onOpenNotifications }: Props) {
   const t = useT();
+  const theme = useTheme();
   const calm = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const side = useMediaQuery(theme.breakpoints.up("md"));
 
   const link = (href: string, external = false) => ({ component: "a", href, onClick: onClose, ...(external ? { target: "_blank", rel: "noopener noreferrer" } : {}) });
   const target = (id: MenuItemId) => {
@@ -80,39 +108,49 @@ export function EventMenuSheet({ open, onClose, groups, eventId, menuId, owner, 
 
   return (
     <SwipeableDrawer
-      anchor="bottom" open={open} onOpen={() => {}} onClose={onClose} disableSwipeToOpen
+      anchor={side ? "right" : "bottom"} open={open} onOpen={() => {}} onClose={onClose} disableSwipeToOpen
       transitionDuration={calm ? 0 : undefined}
       // Above the install/update banners, so nothing in the sheet is ever covered by them.
       sx={{ zIndex: (th) => th.zIndex.snackbar + 2 }}
       slotProps={{
         paper: {
-          id: menuId, role: "dialog", "aria-modal": true, "aria-label": t("moreActions"),
-          sx: {
-            left: 0, right: 0, mx: "auto", maxWidth: "32rem", maxHeight: "calc(100dvh - 3rem)", overflowY: "auto",
-            borderRadius: "20px 20px 0 0", pb: "calc(env(safe-area-inset-bottom) + 8px)",
-          },
+          id: menuId, ...{ "data-anchor": side ? "right" : "bottom" }, role: "dialog", "aria-modal": true, "aria-label": t("moreActions"),
+          sx: side
+            ? { width: "min(24rem, 100vw)", maxWidth: "100vw", display: "flex", flexDirection: "column", borderRadius: "20px 0 0 20px" }
+            : {
+              left: 0, right: 0, mx: "auto", maxWidth: "32rem", maxHeight: "calc(100dvh - 3rem)", display: "flex", flexDirection: "column",
+              borderRadius: "20px 20px 0 0", pb: "calc(env(safe-area-inset-bottom) + 8px)",
+            },
         },
       }}
     >
-      <Box aria-hidden sx={{ width: 36, height: 4, borderRadius: 2, bgcolor: "divider", mx: "auto", mt: 1, mb: 0.5 }} />
-      {owner && (
-        <ButtonBase component="a" href={`/users/${owner.id}`} onClick={onClose} sx={{ ...row, minHeight: 44, color: "text.secondary" }}>
-          <PersonOutlinedIcon />
-          <span>{t("managedBy", { name: "" })}<Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>{owner.name}</Box></span>
-        </ButtonBase>
-      )}
-      {groups.map((g) => (
-        <Box key={g.id} role="group" aria-labelledby={`menu-${g.id}`} sx={{ borderTop: 1, borderColor: "divider" }}>
-          <Typography id={`menu-${g.id}`} component="h2" sx={{ px: 2, pt: 1.5, pb: 0.5, fontSize: "0.875rem", fontWeight: 600, color: "text.secondary" }}>
-            {t(GROUP_LABEL[g.id])}
-          </Typography>
-          {g.items.map((id) => (
-            <ButtonBase key={id} sx={{ ...row, color: id === "cancel" ? "error.main" : "text.primary" }} {...target(id)}>
-              {ICON[id]}<span>{t(LABEL[id])}</span>
-            </ButtonBase>
-          ))}
-        </Box>
-      ))}
+      <Box sx={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "space-between", pl: 2, pr: 0.5, pt: side ? 1 : 0.5 }}>
+        {!side && <Box aria-hidden sx={{ position: "absolute", top: 8, left: "50%", ml: "-18px", width: 36, height: 4, borderRadius: 2, bgcolor: "divider" }} />}
+        <Typography component="span" sx={{ fontSize: "1.0625rem", fontWeight: 700, mt: side ? 0 : 1 }}>{t("moreActions")}</Typography>
+        <IconButton aria-label={t("closeMenu")} onClick={onClose} sx={{ width: 44, height: 44, mt: side ? 0 : 1, color: "text.primary", ...tappable }}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+      <Box sx={(th) => ({ flex: "1 1 auto", minHeight: 0, ...scrollShadow(th) })}>
+        {owner && (
+          <ButtonBase component="a" href={`/users/${owner.id}`} onClick={onClose} sx={{ ...row, minHeight: 44, color: "text.secondary" }}>
+            <PersonOutlinedIcon />
+            <span>{t("managedBy", { name: "" })}<Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>{owner.name}</Box></span>
+          </ButtonBase>
+        )}
+        {groups.map((g) => (
+          <Box key={g.id} role="group" aria-labelledby={`menu-${g.id}`} sx={{ borderTop: 1, borderColor: "divider" }}>
+            <Typography id={`menu-${g.id}`} component="h2" sx={{ px: 2, pt: 1.5, pb: 0.5, fontSize: "0.875rem", fontWeight: 600, color: "text.secondary" }}>
+              {t(GROUP_LABEL[g.id])}
+            </Typography>
+            {g.items.map((id) => (
+              <ButtonBase key={id} sx={{ ...row, color: id === "cancel" ? "error.main" : "text.primary", fontWeight: id === "cancel" ? 600 : 400 }} {...target(id)}>
+                {ICON[id]}<span>{t(LABEL[id])}</span>
+              </ButtonBase>
+            ))}
+          </Box>
+        ))}
+      </Box>
     </SwipeableDrawer>
   );
 }

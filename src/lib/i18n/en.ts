@@ -160,7 +160,7 @@ const en = {
   coPlayedWithYou: "played with you {n}\u00d7",
 
   // Watch
-  watchScore: "Watch Score",
+  watchScore: "Watch score",
   watchScoreDesc: "Open this link on your smartwatch to track the score live.",
   watchCopyLink: "Copy watch link",
   watchLinkCopied: "Watch link copied!",
@@ -615,8 +615,7 @@ sportBadmintonSingles: "Badminton (singles)",
 
   // Calendar
   addToCalendar: "Add to calendar",
-  downloadIcs: "Download .ics",
-  addToGoogleCalendar: "Google Calendar",
+  addToGoogleCalendar: "Add to Google Calendar",
 
   // Pagination
   loadMore: "Load more",
@@ -1771,6 +1770,10 @@ statsGoals: "Goals",
   headerEnded: "Ended {when}",
   headerCancelled: "Cancelled",
   planNewGame: "Plan a new game",
+  menuCalendarFile: "Add to calendar (Apple, Outlook)",
+  menuEventSettings: "Event settings",
+  menuRatings: "Ratings",
+  closeMenu: "Close",
 } as const;
 
 export default en;
