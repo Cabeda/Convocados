@@ -29,6 +29,8 @@ export interface EventRecapProps {
   sport?: string;
   /** `?action=` from the URL. */
   deepLinkAction: string | null;
+  /** True while the recap is showing something the viewer still has to do (the RSVP below goes quiet). */
+  onBlockingChange?: (blocking: boolean) => void;
 }
 
 const seenKey = (eventId: string, gameId: string) => `recap:seen:${eventId}:${gameId}`;
@@ -102,6 +104,9 @@ export function EventRecap(p: EventRecapProps) {
     role, taskCount: pending, seen, owesShare: !!payTask || !!reminderReported,
   });
   useEffect(() => { setPaused(phase === "hidden"); }, [phase, setPaused]);
+  const blocking = pending > 0 && (phase === "full" || phase === "strip");
+  const { onBlockingChange } = p;
+  useEffect(() => { onBlockingChange?.(blocking); }, [blocking, onBlockingChange]);
 
   const onOptimistic = useCallback((patch: Optimistic) => setOptimistic((o) => ({ ...o, ...patch })), []);
   const onRollback = useCallback((key: keyof Optimistic) => setOptimistic((o) => { const { [key]: _gone, ...rest } = o; return rest; }), []);

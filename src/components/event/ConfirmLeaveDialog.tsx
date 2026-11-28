@@ -46,6 +46,8 @@ interface Props {
   within48h: boolean;
   /** Disable the confirm button while the leave API is in flight. */
   busy?: boolean;
+  /** The dialog has finished closing (and its own focus restore has run). */
+  onExited?: () => void;
 }
 
 /**
@@ -68,6 +70,7 @@ export function ConfirmLeaveDialog({
   benchEmptyAfter,
   within48h,
   busy,
+  onExited,
 }: Props) {
   const t = useT();
   const showReplacementWarning = within48h && benchEmptyAfter;
@@ -83,7 +86,7 @@ export function ConfirmLeaveDialog({
   const confirmLabel = context === "self" ? t("leaveDialogConfirmSelf") : t("leaveDialogConfirmOrganizer");
 
   return (
-    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth slotProps={onExited ? { transition: { onExited } } : undefined}>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>

@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Container, Paper, Typography, Stack, Button,
-  Skeleton, ToggleButton, ToggleButtonGroup,
+  ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import StadiumIcon from "@mui/icons-material/Stadium";
@@ -21,39 +21,29 @@ import {
 import { TeamField } from "./TeamField";
 import type { Imatch } from "~/lib/random";
 import { useLocale } from "~/lib/useT";
-import { addKnownName, getQjName } from "~/lib/knownNames";
 import { fromDateTimeLocalValue } from "~/lib/timezones";
-import { nextOccurrence, parseRecurrenceRule } from "~/lib/recurrence";
-import { isGameEnded } from "~/lib/gameStatus";
-import { mergeSuggestionPills } from "~/lib/suggestionPills";
 import { useSession } from "~/lib/auth.client";
 import { apiRequest, ApiError, apiErrorMessage } from "~/lib/api/client";
 
 import {
   EventHeader,
-  PlayerList,
-  PaymentNudgeDialog,
   EventDialogs,
   PasswordPrompt,
-  AddPlayerConfirmDialog,
   CreatedShareNudge,
-  InviteShareDialog,
   InviteBanner,
-  type AddPlayerIntent,
 } from "./event";
 import { buildEventShareText, shareableUrl, shareEvent } from "./event/shareEvent";
-import type { EventData, Player, KnownPlayer } from "./event";
+import type { EventData } from "./event";
 import { EventRecap, lastRecapShape } from "./event/story/EventRecap";
 import { CancelledBanner } from "./event/story/CancelledBanner";
 import { RecapSkeleton } from "./event/story/RecapSkeleton";
 import { HeaderSkeleton } from "./event/story/HeaderSkeleton";
-import { NextGameDateTemp } from "./event/story/NextGameDateTemp";
-import { SignInButton } from "./SignInButton";
+import { NextGame } from "./event/story/NextGame";
+import { NextGameSkeleton } from "./event/story/NextGameSkeleton";
+import { useHeaderToasts } from "./event/story/HeaderToast";
+import { useMyRsvp } from "./event/story/useMyRsvp";
 import { PushPromptBanner } from "./PushPromptBanner";
-import { ConfirmLeaveDialog, computeBenchEmptyAfter, computeWithin48h } from "./event/ConfirmLeaveDialog";
-import { deriveEventPermissions, canRemoveEventPlayer, findSelfRosterRow } from "~/lib/eventView";
-import { decidePaymentGate } from "~/lib/paymentGate";
-import { splitRoster } from "~/lib/rosterCapacity";
+import { deriveEventPermissions } from "~/lib/eventView";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -86,16 +76,12 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
     const params = new URLSearchParams(window.location.search);
     return params.get("player");
   });
-  // ponytail: backward compat — autoOpenPay still works for existing links
-  const autoOpenPay = deepLinkAction === "pay";
   const deepLinkShareHandled = useRef(false);
 
   // ── UI state ────────────────────────────────────────────────────────────────
-  const [playerError, setPlayerError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [earlyDrawOpen, setEarlyDrawOpen] = useState(false);
-  const [snackbar, setSnackbar] = useState<string | null>(null);
-  const [inviteShare, setInviteShare] = useState<{ url: string; name: string } | null>(null);
+  const { queue: toastQueue, push: setSnackbar, next: nextToast } = useHeaderToasts();
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [balanced, setBalanced] = useState(false);
   const [_isPublic, setIsPublic] = useState(false);
@@ -103,11 +89,8 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelConfirmBusy, setCancelConfirmBusy] = useState(false);
-  // #1269: self-leave confirm for the hero row — both the linked (userId) and
-  // the name-matched unlinked path go through it (review F4 consistency).
-  const [selfLeave, setSelfLeave] = useState<{
-    open: boolean; benchEmptyAfter: boolean; within48h: boolean; busy: boolean;
-  }>({ open: false, benchEmptyAfter: false, within48h: false, busy: false });
+  // The recap still has something for the viewer to do, so the RSVP is the quiet variant.
+  const [recapBlocking, setRecapBlocking] = useState(false);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
@@ -130,15 +113,6 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
     return map;
   }, [ratingsResponse]);
 
-  // ── Stable client ID ────────────────────────────────────────────────────────
-  const clientIdRef = useRef<string>("");
-  useEffect(() => {
-    if (typeof localStorage === "undefined") return;
-    let id = localStorage.getItem("client_id");
-    if (!id) { id = crypto.randomUUID(); localStorage.setItem("client_id", id); }
-    clientIdRef.current = id;
-  }, []);
-
   // The server renders a read-only event summary into the body so clients that
   // do not run JS (agents, crawlers) can read the event. Once this island
   // hydrates it takes over the page, so drop the summary to avoid duplication.
@@ -160,16 +134,7 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
   const [isLoading, setIsLoading] = useState(true);
   const [lockedEvent, setLockedEvent] = useState<{ id: string; title: string } | null>(null);
 
-  // Roster is frozen once the game has ended — players can no longer be added
-  // from the event page (server gate in POST /players; UI hides add surfaces).
-  const gameEnded = useMemo(
-    () => (event ? isGameEnded(event.dateTime, event.durationMinutes) : false),
-    [event],
-  );
-
-  // A cancelled game takes nobody any more (the server answers 409), so the page offers no way in.
   const cancelled = event?.gameStatus === "cancelled";
-  const joinClosed = gameEnded || cancelled;
 
   // Invite token from ?inviteToken=xxx — lets the link bypass password and shows a banner.
   useEffect(() => {
@@ -178,12 +143,22 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
     if (token) setInviteToken(token);
   }, []);
 
+  // The viewer's own changes (join, leave, add, remove) show at once; until the server has them, a
+  // poll that lands must not put the old list back. A read that began before the last write ended is dropped.
+  const writesRef = useRef({ active: 0, lastEnd: 0 });
+  const beginWrite = useCallback(() => {
+    writesRef.current.active += 1;
+    return () => { writesRef.current.active -= 1; writesRef.current.lastEnd = Date.now(); };
+  }, []);
+
   const fetchEvent = useCallback(async () => {
+    const started = Date.now();
     try {
       const data = (await apiRequest("GET /api/events/{id}", {
         params: { id: eventId },
         query: { inviteToken: inviteToken ?? undefined },
       })) as EventData & { locked?: boolean };
+      if (writesRef.current.active > 0 || started < writesRef.current.lastEnd) return;
       if (data.locked) {
         setLockedEvent({ id: data.id, title: data.title });
         setEvent(null);
@@ -202,9 +177,9 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
   // Initial fetch
   useEffect(() => { fetchEvent(); }, [fetchEvent]);
 
-  // Poll for updates every 10s
+  // Poll for updates every 10s, while the tab is in view
   useEffect(() => {
-    const id = setInterval(fetchEvent, 10_000);
+    const id = setInterval(() => { if (!document.hidden) void fetchEvent(); }, 10_000);
     return () => clearInterval(id);
   }, [fetchEvent]);
 
@@ -215,198 +190,17 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchEvent]);
 
-  // ── Known players for autocomplete ──────────────────────────────────────────
-  const [knownPlayersData, setKnownPlayersData] = useState<{ players: KnownPlayer[] } | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    apiRequest("GET /api/events/{id}/known-players", {
-      params: { id: eventId },
-      init: { signal: controller.signal },
-    })
-      .then((data) => setKnownPlayersData(data as { players: KnownPlayer[] }))
-      .catch(() => {});
-    return () => controller.abort();
-  }, [eventId]);
-
-  // ── Global co-players (people I played with on ANY event) for autocomplete ──
-  const [coPlayersData, setCoPlayersData] = useState<{ players: Array<{ name: string; userId: string; image: string | null; coPlayCount: number }> } | null>(null);
-  useEffect(() => {
-    if (!session?.user) return;
-    const controller = new AbortController();
-    apiRequest("GET /api/me/co-players", { init: { signal: controller.signal } })
-      .then((d) => setCoPlayersData(d as {
-        players: Array<{ name: string; userId: string; image: string | null; coPlayCount: number }>;
-      }))
-      .catch(() => {});
-    return () => controller.abort();
-  }, [eventId, session?.user]);
-
-  // ── ADR 0025: co-play suggestions (owner/admin only) ───────────────────────
-  interface CoPlaySuggestion { userId: string; name: string; image?: string | null; gamesPlayed?: number; score?: number; reason?: string }
-  const [coPlaySuggestions, setCoPlaySuggestions] = useState<CoPlaySuggestion[]>([]);
+  // ── Permissions ─────────────────────────────────────────────────────────────
   const perms = deriveEventPermissions(
     session?.user?.id ?? null,
     { ownerId: event?.ownerId ?? null, isPublic: !!event?.isPublic, isAdmin: !!event?.isAdmin },
     { isParticipant: !!session?.user && !!event?.players.some((p) => p.userId === session.user!.id) },
   );
-  const isOwnerFlag = perms.isOwner;
-  const isAdminFlag = perms.isAdmin;
+
+  // ADR 0018: ?action=confirm-payment sends the organizer to the payments page.
   useEffect(() => {
-    if (!(isOwnerFlag || isAdminFlag) || !event?.gameId) {
-      setCoPlaySuggestions([]);
-      return;
-    }
-    const controller = new AbortController();
-    apiRequest("GET /api/events/{id}/suggestions", {
-      params: { id: eventId },
-      init: { signal: controller.signal },
-    })
-      .then((d) => {
-        const json = d as { suggestions?: CoPlaySuggestion[] } | undefined;
-        setCoPlaySuggestions(Array.isArray(json?.suggestions) ? json.suggestions : []);
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [eventId, event?.gameId, isOwnerFlag, isAdminFlag]);
-
-  /** ADR 0025: send a PlayerInvite to a suggested user (owner/admin). */
-  const [invitingName, setInvitingName] = useState<string | null>(null);
-  const invitePlayer = useCallback(async (userId: string, name: string) => {
-    setPlayerError(null);
-    setInvitingName(name);
-    try {
-      const json = (await apiRequest("POST /api/events/{id}/invites", {
-        params: { id: eventId },
-        body: { userId },
-      })) as { channels?: unknown; inviteUrl?: unknown };
-      // Always surface the shareable link so the organizer can copy/share
-      // via WhatsApp etc., even when push/email channels are enabled.
-      const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
-      const anyChannel = !!(channels?.email || channels?.webPush || channels?.appPush);
-      if (typeof json?.inviteUrl === "string") {
-        if (anyChannel) {
-          const labels: string[] = [];
-          if (channels?.email) labels.push(t("channelEmail"));
-          if (channels?.webPush) labels.push(t("channelWebPush"));
-          if (channels?.appPush) labels.push(t("channelAppPush"));
-          setSnackbar(t("inviteSentVia", { name, channels: labels.join(", ") }));
-        }
-        setInviteShare({ url: json.inviteUrl, name });
-      } else if (anyChannel) {
-        const labels: string[] = [];
-        if (channels?.email) labels.push(t("channelEmail"));
-        if (channels?.webPush) labels.push(t("channelWebPush"));
-        if (channels?.appPush) labels.push(t("channelAppPush"));
-        setSnackbar(t("inviteSentVia", { name, channels: labels.join(", ") }));
-      } else {
-        setSnackbar(t("inviteSent", { name }));
-      }
-      fetchEvent();
-    } catch (e) {
-      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
-    } finally {
-      setInvitingName(null);
-    }
-  }, [eventId, fetchEvent, t]);
-
-  // ── ADR 0025 follow-up: resend a pending invite (24h cooldown enforced server-side) ──
-  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
-  const resendInvite = useCallback(async (invite: { id: string; inviteId?: string | null; name: string }) => {
-    const inviteIdForAction = invite.inviteId ?? invite.id;
-    setResendingInviteId(inviteIdForAction);
-    try {
-      const json = (await apiRequest("PATCH /api/events/{id}/invites", {
-        params: { id: eventId },
-        body: { inviteId: inviteIdForAction },
-      })) as { channels?: unknown };
-      const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
-      const labels: string[] = [];
-      if (channels?.email) labels.push(t("channelEmail"));
-      if (channels?.webPush) labels.push(t("channelWebPush"));
-      if (channels?.appPush) labels.push(t("channelAppPush"));
-      setSnackbar(labels.length > 0
-        ? t("inviteResentVia", { name: invite.name, channels: labels.join(", ") })
-        : t("inviteSent", { name: invite.name }));
-      fetchEvent();
-    } catch (e) {
-      const retryAfter = e instanceof ApiError && e.status === 429
-        ? (e.payload as { retryAfterSeconds?: unknown } | undefined)?.retryAfterSeconds
-        : undefined;
-      if (typeof retryAfter === "number") {
-        const mins = Math.ceil(retryAfter / 60);
-        const time = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
-        setSnackbar(t("inviteResendCooldown", { time }));
-      } else {
-        setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
-      }
-    } finally {
-      setResendingInviteId(null);
-    }
-  }, [eventId, fetchEvent, t]);
-
-  // ── ADR 0025 follow-up: retract (remove) a pending invite ────────────────────
-  const [retractingInviteId, setRetractingInviteId] = useState<string | null>(null);
-  const retractInvite = useCallback(async (invite: { id: string; inviteId?: string | null; name: string }) => {
-    const inviteIdForAction = invite.inviteId ?? invite.id;
-    if (!window.confirm(t("inviteRetractConfirm", { name: invite.name }))) return;
-    setRetractingInviteId(inviteIdForAction);
-    try {
-      await apiRequest("DELETE /api/events/{id}/invites", {
-        params: { id: eventId },
-        body: { inviteId: inviteIdForAction },
-      });
-      setSnackbar(t("inviteRetracted", { name: invite.name }));
-      fetchEvent();
-    } catch (e) {
-      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
-    } finally {
-      setRetractingInviteId(null);
-    }
-  }, [eventId, fetchEvent, t]);
-
-  // ── Payment-nudge state ────────────────────────────────────────────────────
-  // Fetched lazily on first pill click; controls whether the Quick Join pill
-  // routes through the payment-nudge dialog (when the user has a balance) or
-  // joins directly. The dialog also re-fetches its own copy of the balance.
-  const [paymentNudgeOpen, setPaymentNudgeOpen] = useState(false);
-  // Full decidePaymentGate inputs from GET /balance — keeps the Quick Join
-  // client mirror on exactly the same threshold/gate-balance the server uses.
-  const [cachedBalance, setCachedBalance] = useState<{ amount: number; gateAmount: number; enforcement: string; threshold: number } | null>(null);
-  const refreshBalance = useCallback(async () => {
-    try {
-      const j = (await apiRequest("GET /api/events/{id}/balance", {
-        params: { id: eventId },
-      })) as {
-        callerBalance?: { amount?: number };
-        gateAmount?: number;
-        enforcement?: string;
-        threshold?: number;
-      };
-      const amt = j?.callerBalance?.amount ?? 0;
-      setCachedBalance({
-        amount: amt,
-        gateAmount: j?.gateAmount ?? amt,
-        enforcement: j?.enforcement ?? "off",
-        threshold: j?.threshold ?? 0,
-      });
-    } catch { /* ignore */ }
-  }, [eventId]);
-
-  useEffect(() => {
-    if (autoOpenPay && !gameEnded) {
-      refreshBalance();
-      setPaymentNudgeOpen(true);
-    }
-    // ADR 0018: Handle other deep link actions (runs after first render when event data is ready)
-    if (deepLinkAction === "rsvp") {
-      setTimeout(() => {
-        document.querySelector("[data-player-list]")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 300);
-    }
-    if (deepLinkAction === "confirm-payment" && deepLinkPlayer) {
-      window.location.href = `/events/${eventId}/payments`;
-    }
-  }, [autoOpenPay, deepLinkAction, deepLinkPlayer, refreshBalance, eventId, gameEnded]);
+    if (deepLinkAction === "confirm-payment" && deepLinkPlayer) window.location.href = `/events/${eventId}/payments`;
+  }, [deepLinkAction, deepLinkPlayer, eventId]);
 
   // ADR 0018: the T-24h recruitment push asks the owner to share — honour it
   // once the event is loaded, without letting a background refetch reopen it.
@@ -432,70 +226,6 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
       .then((outcome) => { if (outcome === "copied") setSnackbar(t("linkCopiedFull")); })
       .catch(() => setSnackbar(t("shareCopyFailed")));
   }, [deepLinkAction, event, locale, t]);
-
-  const mergedSuggestions = useMemo(() => {
-    const qjName = getQjName().trim();
-    // This event's history first (transparent "X games here"), then global
-    // co-players (transparent "played with you Y×") — deduped by name, event
-    // history wins so the per-event count is shown when both exist.
-    const byName = new Map<string, { name: string; gamesPlayed: number; userId: string | null; image: string | null; coPlayCount: number }>();
-    for (const p of knownPlayersData?.players ?? []) {
-      byName.set(p.name.toLowerCase(), {
-        name: p.name,
-        gamesPlayed: p.gamesPlayed ?? 1,
-        userId: p.userId ?? null,
-        image: p.image ?? null,
-        coPlayCount: 0,
-      });
-    }
-    for (const cp of coPlayersData?.players ?? []) {
-      const key = cp.name.toLowerCase();
-      const existing = byName.get(key);
-      if (existing) {
-        // Same person in both lists — keep the per-event count, absorb the
-        // co-play count so the "from another event" signal survives (matches
-        // Android mergePlayerSuggestions).
-        byName.set(key, { ...existing, coPlayCount: cp.coPlayCount });
-        continue;
-      }
-      byName.set(key, {
-        name: cp.name,
-        gamesPlayed: 0,
-        userId: cp.userId,
-        image: cp.image ?? null,
-        coPlayCount: cp.coPlayCount,
-      });
-    }
-    return [...byName.values()]
-      .sort((a, b) => {
-        if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;
-        if (qjName && b.name.toLowerCase() === qjName.toLowerCase()) return 1;
-        return (b.gamesPlayed + b.coPlayCount) - (a.gamesPlayed + a.coPlayCount);
-      });
-  }, [knownPlayersData, coPlayersData]);
-
-  const currentPlayerNames = useMemo(
-    () => new Set((event?.players ?? []).map((p) => p.name.toLowerCase())),
-    [event?.players]
-  );
-
-  const availableSuggestions = useMemo(
-    () => mergedSuggestions.filter((s) => !currentPlayerNames.has(s.name.toLowerCase())),
-    [mergedSuggestions, currentPlayerNames]
-  );
-
-  // dex f79w7x29: while the roster has room the pills section must never be
-  // empty — ranked inviteable suggestions come first, then this event's known
-  // players + global co-players fill the rest (add-or-invite dialog handles
-  // anonymous guests as direct adds / link-share, since they can't be notified).
-  const suggestionPills = useMemo(
-    () => mergeSuggestionPills(
-      coPlaySuggestions,
-      availableSuggestions.map((s) => ({ name: s.name, userId: s.userId, image: s.image })),
-      { currentNames: currentPlayerNames },
-    ).pills,
-    [coPlaySuggestions, availableSuggestions, currentPlayerNames]
-  );
 
   const notFound = error?.status === 404;
 
@@ -598,344 +328,6 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
     setSport(event.sport);
   }, [event]);
 
-  // ── Player CRUD ─────────────────────────────────────────────────────────────
-
-  // In-flight guard: a single addPlayer call is allowed at a time.
-  // Subsequent calls (from a different chip, dropdown row, or confirm button)
-  // return early and surface an "in flight" snackbar.
-  const addInFlightRef = useRef<{ name: string; idempotencyKey: string } | null>(null);
-  const [addInFlightName, setAddInFlightName] = useState<string | null>(null);
-
-  // Confirmation dialog state. Lifted to EventPage so the dialog content
-  // (bench/email footnotes) can read the same event state that addPlayer uses.
-  const [addIntent, setAddIntent] = useState<AddPlayerIntent | null>(null);
-
-  const performAdd = async (
-    name: string,
-    linkToAccount: boolean,
-    email: string | undefined,
-    idempotencyKey: string,
-    position?: string,
-  ) => {
-    if (addInFlightRef.current) {
-      setSnackbar(t("addPlayerInFlight", { name: addInFlightRef.current.name }));
-      return;
-    }
-    if (!name.trim() && !email?.trim()) return;
-    setPlayerError(null);
-    const trimmed = name.trim().slice(0, 50);
-
-    addInFlightRef.current = { name: trimmed || email!, idempotencyKey };
-    setAddInFlightName(trimmed || email!);
-
-    // Optimistic update (only if we have a name to show)
-    if (trimmed) {
-      setEvent((current) => {
-        if (!current) return current;
-        const optimisticPlayer: Player = { id: `temp-${Date.now()}`, name: trimmed, userId: null };
-        return { ...current, players: [...current.players, optimisticPlayer] };
-      });
-    }
-
-    try {
-      const json = (await apiRequest("POST /api/events/{id}/players", {
-        params: { id: eventId },
-        body: {
-          name: trimmed,
-          linkToAccount,
-          ...(email ? { email: email.trim() } : {}),
-          ...(position ? { position } : {}),
-        },
-        init: {
-          headers: {
-            "X-Client-Id": clientIdRef.current,
-            "Idempotency-Key": idempotencyKey,
-          },
-        },
-      })) as { resolvedName?: string; anonymous?: boolean };
-      const resolvedName: string | undefined = json.resolvedName;
-      // Anonymous player (no account): no notification channel exists — surface
-      // the share-by-link option right away so the inviter can reach them.
-      if (json.anonymous === true) {
-        setInviteShare({ url: window.location.href, name: resolvedName ?? trimmed });
-      } else if (resolvedName && resolvedName !== trimmed && trimmed) {
-        setSnackbar(`Added ${resolvedName} ✓`);
-      }
-      addKnownName(resolvedName ?? trimmed);
-      fetchEvent();
-    } catch (e) {
-      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
-      fetchEvent(); // revert optimistic update
-    } finally {
-      addInFlightRef.current = null;
-      setAddInFlightName(null);
-    }
-  };
-
-  /**
-   * Direct add: bypasses the confirmation dialog. Used by Quick Join
-   * (self-initiated) and by the Enter/IconButton paths in PlayerList
-   * (typing is itself a deliberate action).
-   */
-  const addPlayer = async (name: string, linkToAccount = false, email?: string, position?: string) => {
-    const idempotencyKey = crypto.randomUUID();
-    await performAdd(name, linkToAccount, email, idempotencyKey, position);
-  };
-
-  /** #1448: set or clear one roster row's position. */
-  const setPlayerPosition = async (name: string, position: string | null) => {
-    try {
-      await apiRequest("PATCH /api/events/{id}/players", {
-        params: { id: eventId },
-        body: { name, position },
-        init: { headers: { "X-Client-Id": clientIdRef.current } },
-      });
-    } catch (e) {
-      setSnackbar(apiErrorMessage(e, t("somethingWentWrong")));
-      return;
-    }
-    setEvent((current) => current && {
-      ...current,
-      players: current.players.map((p) => (p.name === name ? { ...p, position } : p)),
-    });
-  };
-
-  /**
-   * Request an add that should be confirmed. Opens the dialog; the actual
-   * add is dispatched from the dialog's confirm handler. Used by chip and
-   * dropdown paths in PlayerList / PlayerAutocomplete (single-tap surfaces).
-   */
-  const requestAddPlayer = (intent: AddPlayerIntent) => {
-    if (addInFlightRef.current) {
-      setSnackbar(t("addPlayerInFlight", { name: addInFlightRef.current.name }));
-      return;
-    }
-    setAddIntent(intent);
-  };
-
-  // Single place for all roster intents — Add (active) vs Invite (pending).
-  // Both chip/dropdown/input paths funnel through here, so the add/invite
-  // decision is in one spot and the two API flows (players vs invites) are
-  // not duplicated across the codebase.
-  const handleConfirm = async (intent: AddPlayerIntent, asInvite: boolean, via: "notify" | "link" = "notify") => {
-    setAddIntent(null);
-    if (asInvite && via === "link") {
-      // Share-a-link flow: create the invite token silently (deliver:false —
-      // no email/push/in-app notification) and hand the URL to the Web Share
-      // API dialog so the inviter delivers it themselves.
-      setPlayerError(null);
-      setInvitingName(intent.name);
-      try {
-        const json = (await apiRequest("POST /api/events/{id}/invites", {
-          params: { id: eventId },
-          body: intent.userId
-            ? { userId: intent.userId, deliver: false }
-            : intent.email
-              ? { email: intent.email, deliver: false }
-              : { name: intent.name },
-        })) as { inviteUrl?: unknown };
-        if (typeof json?.inviteUrl === "string") {
-          setInviteShare({ url: json.inviteUrl, name: intent.name });
-          fetchEvent();
-          return;
-        }
-        setPlayerError(t("somethingWentWrong"));
-      } catch (e) {
-        setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
-      } finally {
-        setInvitingName(null);
-      }
-      return;
-    }
-    if (asInvite) {
-      if (intent.email) {
-        // Invite by email: for registered users create a pending PlayerInvite
-        // (not a direct add). For unregistered emails the invites endpoint
-        // returns 404 and we fall back to the direct-add-with-email flow
-        // which sends the "invite to register" email.
-        setPlayerError(null);
-        setInvitingName(intent.name);
-        try {
-          const json = (await apiRequest("POST /api/events/{id}/invites", {
-            params: { id: eventId },
-            body: { email: intent.email },
-          })) as { channels?: unknown; inviteUrl?: unknown };
-          const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
-          const anyChannel = !!(channels?.email || channels?.webPush || channels?.appPush);
-          if (typeof json?.inviteUrl === "string") {
-            if (anyChannel) {
-              const labels: string[] = [];
-              if (channels?.email) labels.push(t("channelEmail"));
-              if (channels?.webPush) labels.push(t("channelWebPush"));
-              if (channels?.appPush) labels.push(t("channelAppPush"));
-              setSnackbar(t("inviteSentVia", { name: intent.name, channels: labels.join(", ") }));
-            }
-            setInviteShare({ url: json.inviteUrl, name: intent.name });
-          } else if (anyChannel) {
-            const labels: string[] = [];
-            if (channels?.email) labels.push(t("channelEmail"));
-            if (channels?.webPush) labels.push(t("channelWebPush"));
-            if (channels?.appPush) labels.push(t("channelAppPush"));
-            setSnackbar(t("inviteSentVia", { name: intent.name, channels: labels.join(", ") }));
-          } else {
-            setSnackbar(t("inviteSent", { name: intent.name }));
-          }
-          fetchEvent();
-          return;
-        } catch (e) {
-          // An unregistered email is a 404 here; fall back to the direct-add flow.
-          if (e instanceof ApiError && e.status === 404 && e.message.includes("No registered user")) {
-            const idempotencyKey = crypto.randomUUID();
-            await performAdd(intent.name, false, intent.email, idempotencyKey, intent.position);
-            return;
-          }
-          setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
-        } finally {
-          setInvitingName(null);
-        }
-        return;
-      }
-      if (intent.userId) {
-        await invitePlayer(intent.userId, intent.name);
-        return;
-      }
-      return;
-    }
-    const idempotencyKey = crypto.randomUUID();
-    await performAdd(intent.name, false, intent.email, idempotencyKey, intent.position);
-  };
-
-  // Routes the Quick Join pill click: opens the payment-nudge dialog when the user
-  // has a balance, otherwise joins directly. Server PAYMENT_GATE 402 falls back to the dialog.
-  // Client mirror of the server's payment gate: prompt when the shared decision
-  // is anything but "allow". Uses the same gateAmount/threshold inputs the join
-  // path feeds decidePaymentGate (GET /balance). The server stays authoritative
-  // (PAYMENT_GATE 402).
-  const gateWouldPrompt = (b: { amount: number; gateAmount: number; enforcement: string; threshold: number }) =>
-    decidePaymentGate({
-      enforcement: b.enforcement,
-      isSelfService: true,
-      outstandingAmount: b.amount,
-      gateAmount: b.gateAmount,
-      threshold: b.threshold,
-    }) !== "allow";
-
-  const handleQuickJoinPillClick = (name: string) => {
-    const openDialog = () => setPaymentNudgeOpen(true);
-    if (cachedBalance) {
-      if (gateWouldPrompt(cachedBalance)) {
-        openDialog();
-      } else {
-        addPlayer(name, true).catch((err: unknown) => {
-          if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "PAYMENT_GATE") {
-            openDialog();
-          } else {
-            throw err;
-          }
-        });
-      }
-      return;
-    }
-    // No cached balance yet — fetch, then decide.
-    apiRequest("GET /api/events/{id}/balance", { params: { id: eventId } })
-      .then((data) => {
-        const j = data as { callerBalance?: { amount?: number }; gateAmount?: number; enforcement?: string; threshold?: number };
-        const amt = j?.callerBalance?.amount ?? 0;
-        const balance = {
-          amount: amt,
-          gateAmount: j?.gateAmount ?? amt,
-          enforcement: j?.enforcement ?? "off",
-          threshold: j?.threshold ?? 0,
-        };
-        setCachedBalance(balance);
-        if (gateWouldPrompt(balance)) {
-          openDialog();
-        } else {
-          return addPlayer(name, true);
-        }
-      })
-      .catch(() => { /* swallow — player can retry */ });
-  };
-
-  // ADR 0018: Auto-join deep link (needs handleQuickJoinPillClick to be defined)
-  useEffect(() => {
-    if (deepLinkAction === "join" && session?.user?.name && !joinClosed) {
-      setTimeout(() => handleQuickJoinPillClick(session.user!.name), 500);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepLinkAction, session?.user?.name, joinClosed]);
-
-  const removePlayer = async (playerId: string) => {
-    // Optimistic update
-    setEvent((current) => {
-      if (!current) return current;
-      return { ...current, players: current.players.filter((p) => p.id !== playerId) };
-    });
-
-    try {
-      const data = (await apiRequest("DELETE /api/events/{id}/players", {
-        params: { id: eventId },
-        body: { playerId },
-        init: { headers: { "X-Client-Id": clientIdRef.current } },
-      })) as { undo?: { name: string; order: number; userId: string | null; removedAt: number } };
-      if (data.undo) {
-        setUndoData({ eventId, ...data.undo });
-      }
-    } catch {
-      // #1237: the x used to fail silently here, so a player the page still listed
-      // had no way off it and no idea why. Localized text only — the server's error
-      // is a raw English string and this UI is not English-only.
-      setPlayerError(t("somethingWentWrong"));
-      fetchEvent();
-      return;
-    }
-    fetchEvent();
-  };
-
-  // ── Undo remove ─────────────────────────────────────────────────────────────
-  const [undoData, setUndoData] = useState<{ eventId: string; name: string; order: number; userId: string | null; removedAt: number } | null>(null);
-
-  const handleUndo = useCallback(async () => {
-    if (!undoData) return;
-    try {
-      await apiRequest("POST /api/events/{id}/undo-remove", {
-        params: { id: undoData.eventId },
-        body: undoData,
-      });
-      fetchEvent();
-    } catch (e) {
-      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
-    }
-    setUndoData(null);
-  }, [undoData, fetchEvent]);
-
-  useEffect(() => {
-    if (!undoData) return;
-    const timer = setTimeout(() => setUndoData(null), 60_000);
-    return () => clearTimeout(timer);
-  }, [undoData]);
-
-  // ── Player reorder ──────────────────────────────────────────────────────────
-
-  const reorderPlayers = useCallback(async (reorderedIds: string[]) => {
-    try {
-      await apiRequest("PUT /api/events/{id}/reorder-players", {
-        params: { id: eventId },
-        body: { playerIds: reorderedIds },
-      });
-    } catch (e) {
-      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
-    }
-    fetchEvent();
-  }, [eventId, fetchEvent, t]);
-
-  const resetPlayerOrder = useCallback(async () => {
-    try {
-      await apiRequest("POST /api/events/{id}/reset-player-order", { params: { id: eventId } });
-      fetchEvent();
-    } catch { /* nothing to show: the old code only refetched on success */ }
-  }, [eventId, fetchEvent]);
-
   // ── Team operations ─────────────────────────────────────────────────────────
 
   const doRandomize = async () => {
@@ -949,7 +341,7 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
       });
       await fetchEvent();
     } catch (e) {
-      setPlayerError(apiErrorMessage(e, t("somethingWentWrong")));
+      setSnackbar(apiErrorMessage(e, t("somethingWentWrong")));
     } finally {
       setIsRandomizing(false);
     }
@@ -1046,63 +438,11 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
   const gameDate = useMemo(() => event ? new Date(event.dateTime) : new Date(), [event]);
 
   const isAuthenticated = !!session?.user;
-  const { isOwner, isAdmin, isOwnerless, canEditSettings, canManageInvites, canEditTeams } = perms;
+  const { isOwner, isAdmin, isOwnerless, canEditSettings, canEditTeams } = perms;
 
-  // #463 high-intent: fetch the signed-in user's RSVP for this event so the
-  // PushPromptBanner can render as a modal when the user has a pending RSVP
-  // and the game kicks off within 48h.
-  const [myRsvpStatus, setMyRsvpStatus] = useState<"yes" | "no" | "maybe" | null>(null);
-  useEffect(() => {
-    if (!isAuthenticated || !eventId) {
-      setMyRsvpStatus(null);
-      return;
-    }
-    let alive = true;
-    apiRequest("GET /api/events/{id}/rsvp", {
-      params: { id: eventId },
-      init: { credentials: "include" },
-    })
-      .then((data) => {
-        if (!alive) return;
-        setMyRsvpStatus(((data as { status?: unknown }).status ?? null) as "yes" | "no" | "maybe" | null);
-      })
-      .catch(() => alive && setMyRsvpStatus(null));
-    return () => { alive = false; };
-  }, [eventId, isAuthenticated]);
-
-  const handleSetMyRsvp = useCallback(async (status: "yes" | "no") => {
-    const prev = myRsvpStatus;
-    setMyRsvpStatus(status); // optimistic
-    try {
-      // #XXX "no" goes through the leave endpoint: it sets Rsvp="no" AND archives the player.
-      // "yes" stays on the plain rsvp endpoint (user stays on the player list).
-      if (status === "no") {
-        await apiRequest("POST /api/events/{id}/leave", {
-          params: { id: eventId },
-          init: { credentials: "include" },
-        });
-      } else {
-        await apiRequest("POST /api/events/{id}/rsvp", {
-          params: { id: eventId },
-          body: { status },
-          init: { credentials: "include" },
-        });
-      }
-      setSnackbar(status === "yes" ? t("rsvpYesToast") : t("rsvpNoToast"));
-      // Refetch event so the archived player disappears from the list.
-      fetchEvent();
-    } catch (e) {
-      setMyRsvpStatus(prev);
-      setSnackbar(apiErrorMessage(e, t("somethingWentWrong")));
-    }
-  }, [eventId, myRsvpStatus, t, fetchEvent]);
-
-  const canRemovePlayer = (player: Player) =>
-    canRemoveEventPlayer(
-      session?.user?.id ?? null,
-      { ownerId: event?.ownerId ?? null, isPublic: !!event?.isPublic, isAdmin: !!event?.isAdmin },
-      player,
-    );
+  // #463 high-intent: the signed-in viewer's answer, so the PushPromptBanner can render as a modal
+  // while an answer is still pending and the game kicks off within 48h.
+  const [myRsvp, setMyRsvp] = useMyRsvp(eventId, isAuthenticated);
 
   // ── Loading / locked / not found states ─────────────────────────────────────
 
@@ -1115,14 +455,7 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
             <HeaderSkeleton />
             {/* Only when a last game is known to exist (the page was told so, or this viewer has seen its recap here). */}
             {(hasLastGame || lastRecapShape(eventId) !== null) && <RecapSkeleton strip={lastRecapShape(eventId) === "strip"} />}
-            <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
-              <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
-              <Stack spacing={1}>
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} variant="rectangular" height={48} sx={{ borderRadius: 1 }} />
-                ))}
-              </Stack>
-            </Paper>
+            <NextGameSkeleton />
           </Stack>
         </Container>
       </ResponsiveLayout>
@@ -1149,10 +482,6 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
     </ThemeModeProvider>
   );
 
-  // A weekly game keeps its finished date on the page until the next occurrence takes over:
-  // say when the next one is, never the date that already passed.
-  const rule = parseRecurrenceRule(event.recurrenceRule);
-  const nextGameDate = gameEnded && rule ? nextOccurrence(gameDate, rule, new Date(), event.timezone) : gameDate;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -1166,9 +495,6 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
               <InviteBanner token={inviteToken} eventId={event.id} onAccepted={fetchEvent} />
             )}
 
-            {/* #457 Organizer-only attendance summary — now rendered inside the PlayerList footer. */}
-
-            {/* Header */}
             <EventHeader
               eventId={eventId}
               event={event}
@@ -1205,169 +531,29 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
               timezone={event.timezone}
               sport={sport}
               deepLinkAction={deepLinkAction}
+              onBlockingChange={setRecapBlocking}
             />
 
             {/* #457 Push prompt banner — event-detail trigger. A "later" prompt: it comes after the recap, never above
-                the title. #463 high-intent:
-                render as a centered modal when the user has a pending RSVP and
+                the title. #463 high-intent: render as a centered modal when the user has a pending RSVP and
                 the event kicks off within 48h. */}
             <PushPromptBanner
               followCount={0}
               forceOnEventDetail={isAuthenticated}
-              highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvpStatus) : false}
+              highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvp) : false}
             />
 
-            {rule && !cancelled && <NextGameDateTemp date={nextGameDate} timezone={event.timezone} />}
-
-            {/* Join / You joined — replaces YOUR RESPONSE (AttendanceCta) per #818.
-                Web parity with Android hero revamp: single CTA, not Going/Not coming. */}
-            {!joinClosed && (() => {
-              if (!isAuthenticated) {
-                return (
-                  <Paper elevation={1} sx={{ borderRadius: 3, p: 2, textAlign: "center" }}>
-                    <SignInButton
-                      variant="contained"
-                      color="primary"
-                      size="large"
-                      callbackURL={`/events/${eventId}`}
-                      onSuccess={() => {
-                        refetchSession?.();
-                        fetchEvent();
-                      }}
-                      sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
-                    >
-                      {t("signInToJoin")}
-                    </SignInButton>
-                  </Paper>
-                );
-              }
-              // #1269: a linked row still matches on userId; an anonymous row added by
-              // the organizer has no userId, so fall back to the normalized name match.
-              const myPlayer = session?.user?.id ? findSelfRosterRow(event.players, session.user!) : null;
-              // #1331: name-match is removal-only. A linked row (userId) counts as
-              // participation and shows the "you joined as" hero; an unlinked
-              // name-matched row only grants self-leave via the roster X.
-              if (myPlayer?.userId) {
-                const unlinked = false;
-                const isOnBench = event.players.findIndex((p) => p.id === myPlayer.id) >= event.maxPlayers;
-                return (
-                  <Paper elevation={1} sx={{ borderRadius: 3, p: 2, display: "flex", alignItems: "center", gap: 1.5 }}>
-                    <Typography variant="body2" fontWeight={600} sx={{ flex: 1, color: isOnBench ? "warning.main" : "primary.main" }}>
-                      {isOnBench ? t("onBench", { name: myPlayer.name }) : t("youJoinedAs", { name: myPlayer.name })}
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      size="small"
-                      onClick={() => {
-                        setSelfLeave({
-                          open: true,
-                          benchEmptyAfter: computeBenchEmptyAfter(
-                            myPlayer.id, event.players,
-                            splitRoster(event.players, event.maxPlayers).active, event.maxPlayers,
-                          ),
-                          within48h: computeWithin48h(event.dateTime),
-                          busy: false,
-                        });
-                      }}
-                    >
-                      {t("leave")}
-                    </Button>
-                    <ConfirmLeaveDialog
-                      open={selfLeave.open}
-                      onClose={() => setSelfLeave((d) => ({ ...d, open: false }))}
-                      onConfirm={async () => {
-                        const rowId = myPlayer.id;
-                        setSelfLeave((d) => ({ ...d, busy: true }));
-                        try {
-                          if (unlinked) {
-                            // Removal only — never links the row to the account.
-                            await removePlayer(rowId);
-                          } else {
-                            // Linked: the /leave endpoint resolves the row by userId.
-                            await handleSetMyRsvp("no");
-                          }
-                        } finally {
-                          setSelfLeave((d) => ({ ...d, open: false, busy: false }));
-                        }
-                      }}
-                      context="self"
-                      playerName={myPlayer.name}
-                      benchEmptyAfter={selfLeave.benchEmptyAfter}
-                      within48h={selfLeave.within48h}
-                      busy={selfLeave.busy}
-                    />
-                  </Paper>
-                );
-              }
-              return (
-                <Paper elevation={1} sx={{ borderRadius: 3, p: 2, textAlign: "center" }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    size="large"
-                    onClick={() => session?.user?.name && handleQuickJoinPillClick(session.user.name)}
-                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
-                  >
-                    {t("joinAs", { name: session?.user?.name ?? "" })}
-                  </Button>
-                </Paper>
-              );
-            })()}
-
-            {/* Players — single merged component (name+email+contacts+pills).
-                The Quick Join pill is the first pill in the row when authenticated. */}
-            <div data-player-list>
-            <PlayerList
-              players={event.players}
-              maxPlayers={event.maxPlayers}
-              isOwner={isOwner}
-              hasTeams={!!(localMatches && localMatches.length > 0)}
-              availableSuggestions={availableSuggestions}
-              playerError={playerError}
-              onPlayerErrorChange={setPlayerError}
-              onAddPlayer={(name, email, position) => addPlayer(name, false, email, position)}
-              onSetPosition={setPlayerPosition}
-              positionsEnabled={event.positionsEnabled ?? false}
-              onRequestAdd={requestAddPlayer}
-              onRemovePlayer={removePlayer}
-              onReorderPlayers={reorderPlayers}
-              onResetPlayerOrder={resetPlayerOrder}
-              onRandomize={doRandomize}
-              onConfirmReRandomize={() => setConfirmOpen(true)}
-              onConfirmEarlyRandomize={() => setEarlyDrawOpen(true)}
-              isRandomizing={isRandomizing}
-              canRemovePlayer={canRemovePlayer}
-              onSetMyRsvp={handleSetMyRsvp}
-              onJoinAsSelf={isAuthenticated && session?.user?.name
-                ? () => handleQuickJoinPillClick(session.user!.name)
-                : undefined}
-              eventDateTime={event.dateTime}
-              rosterLocked={joinClosed}
-              declined={event.declined}
-              invited={event.invited}
-              canManageInvites={canManageInvites}
-              onResendInvite={resendInvite}
-              resendingInviteId={resendingInviteId}
-              onRetractInvite={retractInvite}
-              retractingInviteId={retractingInviteId}
-              coPlaySuggestions={suggestionPills}
-              />
-            </div>
-
-            {/* Payment nudge dialog — opened by the Quick Join pill on tap when the user
-                has an outstanding balance. Also auto-opens from ?action=pay deep link. */}
-            {isAuthenticated && session?.user?.name && (
-              <PaymentNudgeDialog
-                eventId={event.id}
-                open={paymentNudgeOpen}
-                onClose={() => setPaymentNudgeOpen(false)}
-                onJoin={async () => {
-                  setPaymentNudgeOpen(false);
-                  await addPlayer(session.user!.name, true);
-                }}
-              />
-            )}
+            <NextGame
+              eventId={eventId} event={event} setEvent={setEvent} refetch={fetchEvent} beginWrite={beginWrite}
+              viewer={session?.user ? { id: session.user.id, name: session.user.name } : null}
+              perms={perms} rsvp={myRsvp} setRsvp={setMyRsvp} recapBlocking={recapBlocking}
+              deepLinkAction={deepLinkAction} notify={setSnackbar}
+              onSignedIn={() => { refetchSession?.(); fetchEvent(); }}
+              draw={{
+                hasTeams: !!(localMatches && localMatches.length > 0), isDrawing: isRandomizing, onDraw: doRandomize,
+                onConfirmRedraw: () => setConfirmOpen(true), onConfirmEarlyDraw: () => setEarlyDrawOpen(true),
+              }}
+            />
 
             {/* Teams — shown below players after randomization */}
             {localMatches && localMatches.length > 0 && (
@@ -1474,28 +660,8 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
           onCancelConfirm={handleCancelGame}
           cancelConfirmBusy={cancelConfirmBusy}
           isRecurring={event.isRecurring}
-          snackbar={snackbar}
-          onSnackbarClose={() => setSnackbar(null)}
-          undoData={undoData}
-          onUndoDismiss={() => setUndoData(null)}
-          onUndo={handleUndo}
-        />
-
-        <AddPlayerConfirmDialog
-          intent={addIntent}
-          eventName={event.title}
-          isBench={event.players.length >= event.maxPlayers}
-          isAdding={!!addInFlightName}
-          isInviting={!!invitingName}
-          onConfirm={handleConfirm}
-          onClose={() => setAddIntent(null)}
-        />
-
-        <InviteShareDialog
-          open={!!inviteShare}
-          name={inviteShare?.name ?? ""}
-          url={inviteShare?.url ?? ""}
-          onClose={() => setInviteShare(null)}
+          toastQueue={toastQueue}
+          onToastDone={nextToast}
         />
 
         <CreatedShareNudge title={event.title} />

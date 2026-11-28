@@ -80,6 +80,7 @@
 | Contact Picker Invite | ✅ | ✅ | ❌ |
 | Flat Header Actions | ✅ | ❌ | ❌ |
 | More Sheet | ✅ | ❌ | ❌ |
+| Next Game Block | ✅ | ❌ | ❌ |
 | Manage Lineup | ✅ | ❌ | ❌ |
 
 ### Teams

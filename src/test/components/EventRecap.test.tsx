@@ -164,3 +164,35 @@ describe("EventRecap", () => {
     expect(screen.queryByRole("button", { name: "I've paid" })).toBeNull();
   });
 });
+
+describe("EventRecap — telling the page whether the viewer still has something to do", () => {
+  it("is blocking while the recap shows a task for the viewer", async () => {
+    const onBlockingChange = vi.fn();
+    mount(base, { onBlockingChange });
+    await screen.findByText("You owe €5");
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("is not blocking once everything is done", async () => {
+    const onBlockingChange = vi.fn();
+    mount(paid, { onBlockingChange });
+    await screen.findByText("All done");
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+    expect(onBlockingChange).not.toHaveBeenCalledWith(true);
+  });
+
+  it("is not blocking when the recap is gone on game day and the viewer owes nothing", async () => {
+    const onBlockingChange = vi.fn();
+    mount(paid, { nextKickoff: hours(2), onBlockingChange });
+    await waitFor(() => expect(onBlockingChange).toHaveBeenCalled());
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("goes quiet to blocking and back when the task is completed", async () => {
+    const onBlockingChange = vi.fn();
+    mount(base, { onBlockingChange });
+    fireEvent.click(await screen.findByRole("button", { name: "I've paid" }));
+    await waitFor(() => expect(onBlockingChange).toHaveBeenLastCalledWith(false));
+    expect(onBlockingChange).toHaveBeenCalledWith(true);
+  });
+});

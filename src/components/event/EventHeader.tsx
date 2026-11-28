@@ -51,7 +51,6 @@ interface Props {
  * The top of the event page, flat on the page background: the title with Share and ⋮,
  * then when and where, then a quiet row of words — Follow game, and Edit for an admin.
  * Everything else lives in the ⋮ sheet.
- * TODO(slice-3): the countdown (under 24 h) and the live pill come back with the next-game block.
  */
 export function EventHeader({
   eventId, event, sport, gameDate, canEditSettings, isAuthenticated, isOwnerless, isParticipant, localMatches, gameStatus,

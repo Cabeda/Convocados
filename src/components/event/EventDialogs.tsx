@@ -1,8 +1,9 @@
 import {
   Button, Dialog, DialogTitle, DialogContent,
-  DialogContentText, DialogActions, Snackbar, Alert,
+  DialogContentText, DialogActions, Alert,
 } from "@mui/material";
 import { useT } from "~/lib/useT";
+import { HeaderToast } from "./story/HeaderToast";
 
 interface Props {
   // Re-randomize confirmation
@@ -25,12 +26,8 @@ interface Props {
   cancelConfirmBusy: boolean;
   isRecurring: boolean;
   // Snackbar
-  snackbar: string | null;
-  onSnackbarClose: () => void;
-  // Undo remove
-  undoData: { name: string } | null;
-  onUndoDismiss: () => void;
-  onUndo: () => void;
+  toastQueue: string[];
+  onToastDone: () => void;
 }
 
 export function EventDialogs({
@@ -38,8 +35,7 @@ export function EventDialogs({
   earlyDrawOpen, onEarlyDrawClose, onEarlyDrawConfirm, earlyDrawCount,
   relinquishConfirmOpen, onRelinquishClose, onRelinquishConfirm,
   cancelConfirmOpen, onCancelConfirmClose, onCancelConfirm, cancelConfirmBusy, isRecurring,
-  snackbar, onSnackbarClose,
-  undoData, onUndoDismiss, onUndo,
+  toastQueue, onToastDone,
 }: Props) {
   const t = useT();
 
@@ -102,21 +98,7 @@ export function EventDialogs({
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={onSnackbarClose}
-        message={snackbar} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
-
-      <Snackbar
-        open={!!undoData}
-        autoHideDuration={60000}
-        onClose={onUndoDismiss}
-        message={undoData ? t("undoRemoveDesc", { name: undoData.name }) : ""}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        action={
-          <Button color="inherit" size="small" onClick={onUndo}>
-            {t("undoRemove")}
-          </Button>
-        }
-      />
+      <HeaderToast queue={toastQueue} onDone={onToastDone} />
     </>
   );
 }
