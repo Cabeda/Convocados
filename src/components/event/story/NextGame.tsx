@@ -242,7 +242,10 @@ export function NextGame(p: NextGameProps) {
   const spotsLeft = Math.max(0, event.maxPlayers - active.length);
   const summary = spotsLeft === 0 ? t("ngLineupFull", { max: event.maxPlayers })
     : t(spotsLeft === 1 ? "ngLineupOpenOne" : "ngLineupOpen", { n: active.length, max: event.maxPlayers, left: spotsLeft });
-  const benchNames = benchLabelNames(bench.map((x) => x.name));
+  // Whoever the drawn teams already name is playing, wherever the roster says they are: they are not "next up".
+  const inTeams = new Set(event.teamResults.flatMap((tr) => tr.members.map((m) => normalizeForMatch(m.name))));
+  const waiting = bench.filter((x) => !inTeams.has(normalizeForMatch(x.name)));
+  const benchNames = benchLabelNames(waiting.map((x) => x.name));
   // "Next up: Kátia L., Luís F., Marta S. and 1 more" — a list of names, then how many more.
   const nextUp = benchNames.more > 0
     ? t(benchNames.more === 1 ? "ngNextUpMoreOne" : "ngNextUpMore", { names: benchNames.names.join(", "), n: benchNames.more })
@@ -317,7 +320,7 @@ export function NextGame(p: NextGameProps) {
               />
               <Typography data-testid="lineup-summary" sx={{ mt: 1.25, fontSize: "0.9375rem", lineHeight: 1.45, color: "text.secondary", textWrap: "pretty" }}>{summary}</Typography>
               {/* The names are said once: while "Who's in" is open it lists the bench, numbered. */}
-              {bench.length > 0 && !whosInOpen && (
+              {waiting.length > 0 && !whosInOpen && (
                 <Typography data-testid="bench-line" sx={{ mt: 1, fontSize: "0.9375rem", lineHeight: 1.45, textWrap: "pretty" }}>
                   {nextUp}
                 </Typography>

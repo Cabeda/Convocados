@@ -73,3 +73,25 @@ describe("TeamColumns — one tap", () => {
 });
 
 function render(ui: React.ReactElement) { return renderWithTheme(ui); }
+
+describe("TeamColumns — the line under a name", () => {
+  const show = (crews: Record<string, string | null>) =>
+    renderWithTheme(
+      <TeamColumns
+        matches={initial} viewerTeam={null} viewerName={null} canEdit={false} drag={false} shuffleKey={0} reveal={false}
+        onResultChange={() => {}} crews={crews}
+      />,
+    );
+
+  it("says a person's crew under their name when it tells something the column heading does not", () => {
+    show({ "Alice Jones": "The Owls", "Bob Smith": null });
+    expect(screen.getByTestId("team-player-Alice Jones")).toHaveTextContent("The Owls");
+    expect(screen.getByTestId("team-player-Bob Smith")).not.toHaveTextContent("The Owls");
+  });
+
+  it("leaves it out when the crew is called what the column is called (it would only repeat the heading)", () => {
+    show({ "Alice Jones": "blue", "Bob Smith": "RED" });
+    expect(screen.getByTestId("team-player-Alice Jones")).not.toHaveTextContent(/blue/i);
+    expect(screen.getByTestId("team-player-Bob Smith")).not.toHaveTextContent(/red/i);
+  });
+});

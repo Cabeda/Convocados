@@ -111,6 +111,18 @@ describe("Next game — what the block says", () => {
     expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Kátia L., Luís F., Marta S. and 2 more$/);
   });
 
+  it("never calls somebody 'next up' while the drawn teams already name them", async () => {
+    const user = userEvent.setup();
+    const players = [...rows(2), { id: "b1", name: "Kátia Lima", userId: null }, { id: "b2", name: "Luís Faria", userId: null }];
+    const teamResults = [
+      { id: "t1", name: "Ninjas", members: [{ name: "Player 0", order: 0 }, { name: "Kátia Lima", order: 1 }] },
+      { id: "t2", name: "Gunas", members: [{ name: "Player 1", order: 0 }] },
+    ];
+    renderPage({ maxPlayers: 2, players, teamResults });
+    await closeWhosIn(user);
+    expect(await screen.findByTestId("bench-line")).toHaveTextContent(/^Next up: Luís F\.$/);
+  });
+
   it("uses the singular verb for a bench of one", async () => {
     const user = userEvent.setup();
     renderPage({ maxPlayers: 1, players: [{ id: "a", name: "Ana", userId: null }, { id: "c", name: "Carlos", userId: null }] });

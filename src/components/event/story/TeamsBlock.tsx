@@ -56,10 +56,11 @@ export function TeamsBlock({ event, perms, viewer, refetch, notify, date, gameDa
   const stakes = teams.stakes;
   const ratings = showRatings(event) ? teams.ratings : undefined;
   const crews = useMemo(() => {
+    // Only when the server sent stakes for this lineup, and only the people it put in a crew.
     if (!stakes.hasLineups || !stakes.data) return undefined;
     const map: Record<string, string | null> = {};
-    for (const [name, crew] of Object.entries(stakes.crewMap)) map[name] = crew?.crewName ?? null;
-    return map;
+    for (const [name, crew] of Object.entries(stakes.crewMap)) if (crew?.crewName) map[name] = crew.crewName;
+    return Object.keys(map).length > 0 ? map : undefined;
   }, [stakes.hasLineups, stakes.data, stakes.crewMap]);
   const positions = useMemo(() => {
     if (!event.positionsEnabled) return undefined;

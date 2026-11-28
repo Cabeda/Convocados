@@ -7,6 +7,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import EditIcon from "@mui/icons-material/Edit";
 import { useLocale } from "~/lib/useT";
+import { normalizeForMatch } from "~/lib/stringMatch";
 import type { TranslationKey } from "~/lib/i18n";
 import type { Imatch } from "~/lib/random";
 import { movePlayer } from "~/lib/teams";
@@ -164,7 +165,9 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
                   const me = !!viewerName && viewerTeam === index && player.name === viewerName;
                   const short = shorts.get(player.name) ?? player.name;
                   const rating = ratings?.[player.name];
-                  const crew = crews?.[player.name];
+                  // A crew called what the column is called only repeats the heading above it.
+                  const crewName = crews?.[player.name];
+                  const crew = crewName && normalizeForMatch(crewName) !== normalizeForMatch(label) ? crewName : null;
                   const position = positions?.[player.name];
                   const arriving = playerMotion?.name === player.name && playerMotion.destinationTeam === team.team;
                   const delay = Math.min(order++ * FADE_STEP_MS, FADE_LAST_START_MS);
