@@ -1,6 +1,7 @@
 import { prisma } from "./db.server";
 import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
 import { namesFromTeamsSnapshot } from "./snapshotParticipants";
+import { settledGameEligibleVotersByOccurrence } from "./participants.server";
 
 export interface MvpSummary {
   mvp: { playerId: string; playerName: string; voteCount: number }[] | null;
@@ -21,6 +22,8 @@ export interface MvpSummaryEntry {
 
 interface MvpSummaryEvent {
   id: string;
+  dateTime: Date | string;
+  currentGameId?: string | null;
   durationMinutes: number | null;
   mvpEnabled: boolean | null;
 }
@@ -71,23 +74,28 @@ export async function buildMvpSummaries(
   }
   const nameList = [...allNames];
 
-  const [players, linkedPlayers] = await Promise.all([
-    nameList.length
-      ? prisma.player.findMany({
-          where: { eventId: event.id, name: { in: nameList } },
-          select: { id: true, name: true },
-        })
-      : Promise.resolve([] as { id: string; name: string }[]),
-    nameList.length
-      ? prisma.eventPlayer.findMany({
-          where: { eventId: event.id, userId: { not: null }, name: { in: nameList } },
-          select: { name: true, userId: true },
-        })
-      : Promise.resolve([] as { name: string; userId: string | null }[]),
-  ]);
+  const players = nameList.length
+    ? await prisma.player.findMany({
+        where: { eventId: event.id, name: { in: nameList } },
+        select: { id: true, name: true },
+      })
+    : [];
   const playerByName = new Map(players.map((p) => [p.name.toLowerCase(), p]));
-  const linkedByName = linkedPlayers.filter(
-    (p): p is { name: string; userId: string } => typeof p.userId === "string",
+
+  // Same eligible-voter seam as the post-game banner and GET …/mvp.
+  const voterCountByEntry = await settledGameEligibleVotersByOccurrence(
+    entries.map((e) => ({
+      key: e.id,
+      event: {
+        id: event.id,
+        dateTime: event.dateTime instanceof Date ? event.dateTime : new Date(event.dateTime),
+        currentGameId: event.currentGameId ?? null,
+      },
+      latestHistory: {
+        teamsSnapshot: e.teamsSnapshot,
+        dateTime: e.dateTime instanceof Date ? e.dateTime : new Date(e.dateTime),
+      },
+    })),
   );
 
   let sessionPlayerIds: string[] = [];
@@ -148,12 +156,9 @@ export async function buildMvpSummaries(
       const id = match ? match.id : `name:${n}`;
       participants.push({ id, name: match?.name ?? n, voteCount: tallyByName.get(id) ?? 0 });
     }
-    // Eligible voters are the linked EventPlayers on this game's roster; the
-    // self-editable User.name neither adds an outsider nor hides a player.
+    // Eligible voters come from the shared seam, not a second name match.
     const nameSet = new Set(names.map((n) => n.toLowerCase()));
-    const eligibleVoters = new Set(
-      linkedByName.filter((p) => nameSet.has(p.name.toLowerCase())).map((p) => p.userId),
-    ).size;
+    const eligibleVoters = voterCountByEntry.get(e.id) ?? 0;
 
     let hasVoted: boolean | null = null;
     const sessionEventPlayer = session?.user?.id

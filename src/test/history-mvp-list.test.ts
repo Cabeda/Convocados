@@ -55,6 +55,9 @@ beforeEach(async () => {
   await prisma.mvpVote.deleteMany();
   await prisma.playerRating.deleteMany();
   await prisma.gameHistory.deleteMany();
+  await prisma.gameParticipant.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.game.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
   await prisma.eventPlayer.deleteMany();
@@ -164,5 +167,24 @@ describe("GET history list — batched MVP summaries", () => {
     // The outsider's User.name is "Alice" but its linked EventPlayer is not on
     // this roster, so it has no vote to recognize.
     expect(body.data[0].mvp.hasVoted).toBeNull();
+  });
+
+  it("uses the banner's eligible-voter count when a Game has no durable rows", async () => {
+    const event = await seedEvent();
+    const history = await seedHistory(event.id);
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: history.dateTime, status: "played" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    await prisma.user.create({
+      data: { id: "u-alina", name: "Alina", email: "alina2@test.com", emailVerified: false },
+    });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: "u-alina" } });
+
+    const res = await GET(getCtx({ id: event.id }));
+    const body = await res.json();
+    // The banner's settledGameEligibleVoters also reports 0: a Game row with no
+    // durable roster/payment rows is not bridged by the frozen snapshot.
+    expect(body.data[0].mvp.eligibleVoters).toBe(0);
   });
 });

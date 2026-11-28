@@ -218,6 +218,59 @@ describe("computeHomeActions", () => {
     expect(await computeHomeActions(outsider.id)).toEqual([]);
   });
 
+  it("returns vote_mvp for a linked player on the durable Game roster", async () => {
+    const user = await seedUser("u-durable", "Alice");
+    const event = await seedEvent({ dateTime: new Date(Date.now() - 2 * HOUR) });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: user.id } });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() - 1 * HOUR), status: "played" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: game.dateTime,
+        status: "played",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
+        scoreOne: 2,
+        scoreTwo: 1,
+      },
+    });
+
+    const actions = await computeHomeActions(user.id);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ type: "vote_mvp", eventId: event.id });
+  });
+
+  it("does not offer vote_mvp from a stale snapshot when the Game has a durable roster", async () => {
+    const user = await seedUser("u-stale", "Alice");
+    await prisma.user.create({ data: { id: "u-bob-stale", name: "Bob", email: "bob-stale@test.com", emailVerified: true } });
+    const event = await seedEvent({ dateTime: new Date(Date.now() - 2 * HOUR) });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: user.id } });
+    const bob = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob", userId: "u-bob-stale" } });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() - 1 * HOUR), status: "played" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: bob.id, order: 0 } });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: game.dateTime,
+        status: "played",
+        teamOneName: "Reds",
+        teamTwoName: "Blues",
+        scoreOne: 2,
+        scoreTwo: 1,
+        teamsSnapshot: JSON.stringify([{ team: "Reds", players: [{ name: "Alice", order: 0 }] }]),
+      },
+    });
+
+    expect(await computeHomeActions(user.id)).toEqual([]);
+  });
+
   it("caps at 3 and orders by deadline ascending", async () => {
     const user = await seedUser();
     for (const [i, hours] of [4, 1, 3, 2].entries()) {

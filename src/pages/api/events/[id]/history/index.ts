@@ -225,6 +225,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   const mvpMap = await buildMvpSummaries(
     {
       id: event.id,
+      dateTime: event.dateTime,
+      currentGameId: event.currentGameId,
       durationMinutes: event.durationMinutes ?? null,
       mvpEnabled: event.mvpEnabled ?? null,
     },

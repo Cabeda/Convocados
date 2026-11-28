@@ -18,7 +18,7 @@
 import { prisma } from "./db.server";
 import { isGameEnded } from "./gameStatus";
 import { getRosterCapacity } from "./roster.server";
-import { settledGamePlayer } from "./participants.server";
+import { settledGamePlayersByOccurrence } from "./participants.server";
 
 export type HomeActionType = "fill_spots" | "settle_score" | "pay_share" | "vote_mvp";
 
@@ -214,15 +214,15 @@ export async function computeHomeActions(
       where: { gameHistoryId: { in: histories.map((h) => h.id) } },
       select: { gameHistoryId: true, voterPlayerId: true },
     });
+    // Same identity seam as the vote endpoint — resolved for the whole batch
+    // instead of two queries inside the loop.
+    const playerByHistory = await settledGamePlayersByOccurrence(
+      histories.map((h) => ({ key: h.id, event: h.event, latestHistory: h })),
+      userId,
+    );
     for (const h of histories) {
       if (!isGameEnded(h.dateTime, h.event.durationMinutes, now)) continue;
-      // Same identity seam as the vote endpoint: the linked EventPlayer, never
-      // the self-editable User.name.
-      const eventPlayer = await settledGamePlayer({
-        sessionUser: { id: userId },
-        event: h.event,
-        latestHistory: h,
-      });
+      const eventPlayer = playerByHistory.get(h.id);
       if (!eventPlayer) continue;
       const playerIds = playerRows.filter((p) => p.eventId === h.event.id).map((p) => p.id);
       const voterKeys = playerIds.length > 0 ? playerIds : [`name:${eventPlayer.name}`];
