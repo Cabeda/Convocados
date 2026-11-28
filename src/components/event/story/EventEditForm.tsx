@@ -92,7 +92,7 @@ export function EventEditForm({ event, sport, onSave, onCancel }: Props) {
       <TextField
         size="small" label={t("name")} value={title} onChange={(e) => setTitle(e.target.value)} fullWidth autoFocus
         error={nameMissing} helperText={nameMissing ? t("editNameRequired") : undefined}
-        data-field="title" slotProps={{ htmlInput: { maxLength: 100 } }}
+        data-field="title" slotProps={{ htmlInput: { maxLength: 100, name: "event-title", autoComplete: "off", autoCapitalize: "sentences", enterKeyHint: "done" } }}
       />
       <TextField
         size="small" type="datetime-local" label={t("dateTime")} value={when} onChange={(e) => setWhen(e.target.value)} fullWidth

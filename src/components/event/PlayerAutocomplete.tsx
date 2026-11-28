@@ -30,6 +30,12 @@ export const playerInputPasswordManagerProps = {
   "data-1p-ignore": "true", // 1Password
   "data-lpignore": "true", // LastPass
   "data-form-type": "other", // Dashlane / Bitwarden heuristics
+  // A person's name on a phone: capitals at the start of each word, and no autocorrect turning "Beto" into "Bet".
+  autoCapitalize: "words",
+  autoCorrect: "off",
+  spellCheck: false,
+  inputMode: "text",
+  enterKeyHint: "done",
 } as const;
 
 export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, suggestions, disabled, label }: Props) {

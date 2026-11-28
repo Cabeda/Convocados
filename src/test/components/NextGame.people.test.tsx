@@ -117,6 +117,21 @@ describe("Add a friend — the panel", () => {
     expect(screen.queryByRole("button", { name: "Or add just your name" })).not.toBeInTheDocument();
   });
 
+  it("is a name field for a phone: capitals per word, no autocorrect or spellcheck, nothing for a browser to autofill with the viewer's own name", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: rows(3) });
+    const field = await openPanel(user);
+    expect(field).toHaveAttribute("autocapitalize", "words");
+    expect(field).toHaveAttribute("autocorrect", "off");
+    expect(field).toHaveAttribute("spellcheck", "false");
+    expect(field).toHaveAttribute("enterkeyhint", "done");
+    expect(field).toHaveAttribute("inputmode", "text");
+    expect(field).toHaveAttribute("autocomplete", "off");
+    expect(field).toHaveAttribute("name", "player-name");
+    await user.click(screen.getByRole("button", { name: "Add several" }));
+    expect(screen.getByRole("textbox", { name: "One name per line. You can paste a list." })).toHaveAttribute("enterkeyhint", "enter");
+  });
+
   it("is not offered on a cancelled game, or once the game has ended", async () => {
     renderPage({ gameStatus: "cancelled" });
     await screen.findByRole("heading", { level: 1 });

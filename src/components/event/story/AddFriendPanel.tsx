@@ -164,7 +164,8 @@ export function AddFriendPanel({ variant = "friend", full, positionsEnabled, sug
           }}
           helperText={error || " "}
           slotProps={{
-            htmlInput: { maxLength: several ? 2000 : 120, ...playerInputPasswordManagerProps },
+            // Enter adds one name; in the list it starts the next line.
+            htmlInput: { maxLength: several ? 2000 : 120, ...playerInputPasswordManagerProps, enterKeyHint: several ? "enter" : "done" },
             formHelperText: error ? { role: "alert" } : undefined,
           }}
         />
