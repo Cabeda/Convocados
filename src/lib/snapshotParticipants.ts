@@ -99,3 +99,14 @@ export function isNameInList(
   if (!needle) return false;
   return names.some((n) => normalizeName(n) === needle);
 }
+
+/**
+ * The entry of `roster` that any of the viewer's names points at (the roster's own spelling), or null.
+ * `viewerNames` is the server-resolved list from `viewerRosterNames`, never a client-supplied name.
+ */
+export function findViewerName(
+  viewerNames: readonly string[],
+  roster: readonly string[],
+): string | null {
+  return roster.find((n) => isNameInList(viewerNames, n)) ?? null;
+}
