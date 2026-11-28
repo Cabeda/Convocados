@@ -107,11 +107,12 @@ describe("LastGameRecap — full card", () => {
     expect(container.textContent).not.toMatch(/\d+\/\d+/);
   });
 
-  it("gives every link tile the same minimum height and a sub line", () => {
+  // The tiles' alignment is layout: e2e/event-recap-layout.spec.ts measures it in five locales at 320 and 390px.
+  it("gives every link tile a name and a one-line sub that says what it holds", () => {
     show();
-    for (const name of [/Game details/, /Payments/, /Ranking/]) {
-      expect(cssFor(screen.getByRole("link", { name }))).toMatch(/min-height:\s*72px/);
-    }
+    expect(screen.getByRole("link", { name: "Game details 12 played" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Payments 1 of 2 paid" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ranking this season" })).toBeInTheDocument();
   });
 
   it("hides the payments link when no cost exists", () => {

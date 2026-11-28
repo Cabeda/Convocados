@@ -245,14 +245,14 @@ export function LastGameRecap(p: LastGameRecapProps) {
         onClick={expanded ? undefined : p.onToggle}
         sx={{
           px: 2, pt: expanded ? 1.5 : 1, pb: expanded ? 2.5 : 1, cursor: expanded ? "default" : "pointer",
-          display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: 1, alignItems: "center",
+          display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: 1, rowGap: expanded ? 0.5 : 0, alignItems: "center",
           gridTemplateAreas: expanded ? '"label toggle" "board board" "summary summary"' : '"board toggle" "label toggle"',
           ...motion("padding"),
         }}
       >
         <Typography
           id="recap-heading" component="h2" key={allDoneNow ? "done" : "label"} data-testid="recap-header-label"
-          sx={{ gridArea: "label", fontSize: expanded ? "0.9375rem" : "0.8125rem", color: allDoneNow ? "primary.main" : "text.secondary", fontWeight: allDoneNow ? 700 : 400, minHeight: expanded ? 44 : undefined, display: "flex", alignItems: "center", ...(allDoneNow ? fadeIn : {}) }}
+          sx={{ gridArea: "label", fontSize: expanded ? "0.9375rem" : "0.8125rem", color: allDoneNow ? "primary.main" : "text.secondary", fontWeight: allDoneNow ? 700 : 400, minHeight: expanded ? 44 : undefined, display: "flex", alignItems: "center", py: expanded ? 0.5 : 0, lineHeight: 1.3, ...(allDoneNow ? fadeIn : {}) }}
         >
           {headerText}
         </Typography>

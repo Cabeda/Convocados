@@ -24,17 +24,18 @@ export function RecapLinks({ eventId, status, showPayments }: { eventId: string;
     { key: "ranking", label: t("recapLinkRanking"), icon: <LeaderboardIcon fontSize="small" />, href: `/events/${eventId}/rankings`, sub: t("recapLinkRankingSub") },
   ];
   return (
-    <Box sx={{ display: "flex", flexWrap: "wrap", gap: "1px", bgcolor: "divider", borderTop: 1, borderColor: "divider" }}>
+    <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))`, gap: "1px", bgcolor: "divider", borderTop: 1, borderColor: "divider" }}>
       {tiles.map((l) => (
         <Button
           key={l.key} component="a" href={l.href}
           sx={{
-            flex: "1 1 6rem", minWidth: 0, minHeight: 72, flexDirection: "column", justifyContent: "center", gap: 0.25, px: 1, borderRadius: 0,
+            minWidth: 0, minHeight: 84, flexDirection: "column", justifyContent: "flex-start", alignItems: "center", gap: 0.25, px: 0.75, pt: 1.25, pb: 1, borderRadius: 0,
             textTransform: "none", color: "text.primary", bgcolor: "background.paper", hyphens: "manual", ...tappable,
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, fontSize: "0.9375rem", fontWeight: 700, lineHeight: 1.25, textAlign: "center" }}>{l.icon}{l.label}</Box>
-          <Box sx={{ fontSize: "0.8125rem", color: "text.secondary", lineHeight: 1.3, textAlign: "center" }}>{l.sub}</Box>
+          <Box aria-hidden sx={{ display: "flex", height: 20, color: "text.secondary" }}>{l.icon}</Box>
+          <Box sx={{ fontSize: "0.9375rem", fontWeight: 700, lineHeight: 1.25, textAlign: "center", overflowWrap: "break-word", maxWidth: "100%" }}>{l.label}</Box>
+          <Box sx={{ fontSize: "0.8125rem", color: "text.secondary", lineHeight: 1.3, textAlign: "center", maxWidth: "100%" }}>{l.sub}</Box>
         </Button>
       ))}
     </Box>

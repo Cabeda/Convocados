@@ -11,8 +11,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.resolve(__dirname, "../e2e-test.db");
 const sql = (statement: string) => execSync(`sqlite3 "${DB_PATH}" "${statement}"`, { stdio: "pipe" });
 
-let ipCounter = 200;
-const uniqueIp = () => { ipCounter++; return `10.77.${Math.floor(ipCounter / 256)}.${ipCounter % 256}`; };
+// A random start: a failed test restarts the worker, and a reused address would trip the per-minute write limit.
+let ipCounter = Math.floor(Math.random() * 60_000);
+const uniqueIp = () => { ipCounter++; return `10.77.${Math.floor(ipCounter / 256) % 256}.${ipCounter % 256}`; };
 
 function withIp(request: APIRequestContext, ip: string) {
   const headers = { "X-Forwarded-For": ip };
@@ -24,13 +25,14 @@ function withIp(request: APIRequestContext, ip: string) {
 }
 
 /** A finished game the signed-in viewer played in: 16 players, one of them is the viewer. */
-async function finishedGame(page: Page, opts: { score: boolean; name: string }) {
+async function finishedGame(page: Page, opts: { score: boolean; name: string; cost?: boolean }) {
   const request = page.context().request;
-  const api = withIp(request, uniqueIp());
+  const ip = uniqueIp();
+  const api = withIp(request, ip);
   const email = `e2e-layout-${Date.now()}-${Math.floor(Math.random() * 1e6)}@test.com`;
-  await request.post("/api/auth/sign-up/email", { data: { email, password: "TestPassword123!", name: opts.name } });
+  await request.post("/api/auth/sign-up/email", { data: { email, password: "TestPassword123!", name: opts.name }, headers: { "X-Forwarded-For": ip } });
   sql(`UPDATE User SET emailVerified = 1 WHERE email = '${email}'`);
-  const signIn = await request.post("/api/auth/sign-in/email", { data: { email, password: "TestPassword123!" } });
+  const signIn = await request.post("/api/auth/sign-in/email", { data: { email, password: "TestPassword123!" }, headers: { "X-Forwarded-For": ip } });
   expect(signIn.status()).toBe(200);
 
   const create = await api.post("/api/events", {
@@ -41,7 +43,9 @@ async function finishedGame(page: Page, opts: { score: boolean; name: string }) 
   for (const name of names) await api.post(`/api/events/${eventId}/players`, { data: { name, linkToAccount: name === opts.name } });
   const port = Number(process.env.PLAYWRIGHT_PORT ?? 3001);
   await api.post(`/api/events/${eventId}/randomize`, { headers: { Origin: `http://localhost:${port}` } });
-  const data = await (await api.get(`/api/events/${eventId}`)).json();
+  const eventRes = await api.get(`/api/events/${eventId}`);
+  expect(eventRes.status(), "the event is readable").toBe(200);
+  const data = await eventRes.json();
   const teamsSnapshot = data.teamResults.map((tr: { name: string; members: { name: string; order: number }[] }) => ({
     team: tr.name, players: tr.members.map((m) => ({ name: m.name, order: m.order })),
   }));
@@ -54,6 +58,7 @@ async function finishedGame(page: Page, opts: { score: boolean; name: string }) 
     },
   });
   expect(history.status()).toBe(201);
+  if (opts.cost) expect((await api.put(`/api/events/${eventId}/cost`, { data: { totalAmount: 80, currency: "EUR" } })).status()).toBe(200);
   return eventId as string;
 }
 
@@ -97,4 +102,31 @@ test.describe("Recap layout on a phone (390 x 667)", () => {
     const card = await page.getByTestId("last-game-recap").boundingBox();
     expect(card!.y + card!.height).toBeGreaterThan(0);
   });
+
+  for (const lang of ["de", "pt", "fr", "es", "it"]) {
+    for (const width of [320, 390]) {
+      test(`${lang} at ${width}px: the eyebrow clears the scoreboard, the link tiles line up, nothing scrolls sideways`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 700 });
+        await page.addInitScript((l) => localStorage.setItem("convocados-locale", l), lang);
+        const eventId = await finishedGame(page, { score: true, name: "Layout Viewer", cost: true });
+        await page.goto(`/events/${eventId}`);
+        const heading = page.locator("#recap-heading");
+        await expect(heading).toBeVisible();
+        const eyebrow = (await heading.boundingBox())!;
+        const board = (await page.getByTestId("score-one").boundingBox())!;
+        const names = (await page.getByTestId("last-game-recap").locator("p").first().boundingBox())!;
+        expect(eyebrow.y + eyebrow.height, "eyebrow ends above the team names").toBeLessThanOrEqual(Math.min(board.y, names.y) + 1);
+        // The three tiles: same top, same height, and their label rows start at the same y.
+        const tiles = await page.getByTestId("last-game-recap").locator("a[href$='/history'], a[href$='/payments'], a[href$='/rankings']").evaluateAll((els) =>
+          els.map((el) => ({ top: el.getBoundingClientRect().top, h: el.getBoundingClientRect().height, label: (el.children[1] as HTMLElement).getBoundingClientRect().top })));
+        expect(tiles).toHaveLength(3);
+        for (const tile of tiles) {
+          expect(Math.abs(tile.top - tiles[0].top)).toBeLessThan(1);
+          expect(Math.abs(tile.h - tiles[0].h)).toBeLessThan(1);
+          expect(Math.abs(tile.label - tiles[0].label)).toBeLessThan(1);
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      });
+    }
+  }
 });

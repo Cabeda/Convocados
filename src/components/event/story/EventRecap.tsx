@@ -138,7 +138,7 @@ export function EventRecap(p: EventRecapProps) {
   };
   const summary = scoreSummary({ ...result, seasonDelta: status.seasonRank?.counted ? status.seasonRank.delta : null }, t);
   const outcome = scoreSummary({ ...result, seasonDelta: null }, t);
-  const dateLabel = formatDateInTz(new Date(lastGame), locale, p.timezone, { weekday: "short", day: "numeric", month: "short" });
+  const dateLabel = formatDateInTz(new Date(lastGame), locale, p.timezone, { day: "numeric", month: "short" });
   return (
     <Stack spacing={1.5}>
       {phase === "reminder" && (payTask?.kind === "pay" || reminderReported) && (
