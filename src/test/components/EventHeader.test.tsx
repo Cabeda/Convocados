@@ -208,6 +208,13 @@ describe("EventHeader — when and where", () => {
     expect(screen.getByText(/^Weekly · \w{3} \d\d:\d\d · 90 min$/)).toBeInTheDocument();
   });
 
+  it("names another time zone on its own line, with no dot left hanging", () => {
+    renderHeader({ event: { timezone: "Asia/Tokyo" } });
+    const tz = screen.getByTestId("tz-label");
+    expect(tz).toHaveTextContent(/Tokyo|JST|Japan/);
+    expect(tz.previousSibling?.textContent ?? "").not.toMatch(/·\s*$/);
+  });
+
   it("links the place to a map", () => {
     renderHeader();
     expect(screen.getByRole("link", { name: "Campo" })).toHaveAttribute("href", expect.stringContaining("google.com/maps"));

@@ -71,7 +71,8 @@ export function EventInfoLines({ eventId, event, gameDate, canEdit, canViewPrice
           {cancelled
             ? <><Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>{t("headerCancelled")}</Box>{" · "}<s>{schedule}</s></>
             : schedule}
-          {tzLabel && <>{" · "}{tzLabel}</>}
+          {/* Its own line, so no wrap can strand a "·" at the end of the one above. */}
+          {tzLabel && <Box component="span" sx={{ display: "block" }} data-testid="tz-label">{tzLabel}</Box>}
         </span>
       </Box>
       {showPlace && (
