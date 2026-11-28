@@ -419,9 +419,11 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
             <NotificationsBell signedIn={!!session?.user} />
 
             <Tooltip title={t("publicGames")}>
+              {/* Below 340px the bar is wider than the screen and pushes the avatar out of it: this one goes. */}
               <IconButton color="inherit" aria-label={t("publicGames")}
                 href="/public"
-                component="a">
+                component="a"
+                sx={{ "@media (max-width:339.95px)": { display: "none" } }}>
                 <PublicIcon />
               </IconButton>
             </Tooltip>

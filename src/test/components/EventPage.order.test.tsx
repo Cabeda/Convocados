@@ -5,6 +5,7 @@ import { screen, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import EventPage from "~/components/EventPage";
+import { cssFor } from "../emotionCss";
 
 const mockSession = { data: { user: { id: "u-1", name: "Jose Silva" } }, isPending: false, refetch: vi.fn() };
 vi.mock("~/lib/auth.client", () => ({ useSession: () => mockSession, signOut: vi.fn() }));
@@ -82,5 +83,14 @@ describe("EventPage — the loading page holds only the room that will be used",
     localStorage.setItem("recap:shape:evt-1", "strip");
     renderWithTheme(<EventPage eventId="evt-1" />);
     expect(screen.getByTestId("recap-skeleton")).toBeInTheDocument();
+  });
+});
+
+describe("the app bar on the narrowest phones", () => {
+  it("drops the Public games globe under 340px, so the avatar is not pushed off the screen (jsdom cannot measure: checked at 320px in a browser)", async () => {
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    await screen.findByRole("heading", { level: 1 });
+    const globe = screen.getByRole("link", { name: "Public Games" });
+    expect(cssFor(globe)).toMatch(/@media \(max-width:\s*339\.95px\)\s*\{[^}]*display:\s*none/);
   });
 });
