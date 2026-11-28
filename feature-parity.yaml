@@ -78,6 +78,9 @@ score-tracking:
     edit-score: { web: true, android: true, wearos: false }
     live-score-sync: { web: false, android: false, wearos: true }
     interval-alarms: { web: false, android: false, wearos: true }
+    # Slice 1 of the event-page redesign: the last game's recap card on top of the event page (scoreboard, what is
+    # left for the viewer, in-place score entry). The manifest has no note field, so the follow-up is named here:
+    # https://github.com/Cabeda/Convocados/issues/1910
     last-game-recap: { web: true, android: false, wearos: false }
 
 quick-game:
