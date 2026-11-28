@@ -4,6 +4,7 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { useLocale } from "~/lib/useT";
 import { nextOccurrence, parseRecurrenceRule } from "~/lib/recurrence";
 import { benchLabelNames, canUndoRemoval, isGameDay, nextGamePhase, removeRule, rsvpView, slotLabels, type RemoveRule } from "~/lib/nextGame";
+import { teamTitle } from "~/lib/teamsView";
 import { splitRoster } from "~/lib/rosterCapacity";
 import { findSelfRosterRow, type EventPermissions } from "~/lib/eventView";
 import { apiRequest } from "~/lib/api/client";
@@ -118,7 +119,10 @@ export function NextGame(p: NextGameProps) {
   const myRow = viewer ? event.players.find((x) => x.userId === viewer.id) ?? null : null;
   // A row an organizer added under the viewer's name before they signed in: theirs to leave or claim, never linked by guesswork (#1331).
   const nameRow = viewer && !myRow ? findSelfRosterRow(event.players, viewer) : null;
-  const teamName = myRow ? event.teamResults.find((tr) => tr.members.some((m) => m.name === myRow.name))?.name ?? null : null;
+  // The team is called what the teams block calls it: "Team 2" until a group renames it.
+  const teamIndex = myRow ? event.teamResults.findIndex((tr) => tr.members.some((m) => m.name === myRow.name)) : -1;
+  const myTeam = teamIndex >= 0 ? teamTitle(event.teamResults[teamIndex].name, teamIndex) : null;
+  const teamName = myTeam ? (myTeam.custom ? myTeam.name : t(teamIndex === 0 ? "tbTeam1" : "tbTeam2")) : null;
   const takenNames = [...event.players.map((x) => x.name), ...(event.invited ?? []).map((x) => x.name)];
   const takenKey = takenNames.join("\u0000");
   const takenStable = useMemo(() => (takenKey ? takenKey.split("\u0000") : []), [takenKey]);

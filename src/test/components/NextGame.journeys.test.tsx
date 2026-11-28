@@ -257,9 +257,12 @@ describe("Next game — the RSVP row", () => {
     expect(server.sent("POST", "/players")).toHaveLength(0);
   });
 
-  it("says 'You're in' with the team once teams are drawn", async () => {
+  it("says 'You're in' with the team once teams are drawn: a chosen name as it is, a stock one as 'Team 1' / 'Team 2'", async () => {
     renderPage({ players: [me, ...rows(1)], teamResults: [{ id: "t1", name: "Gunas", members: [{ name: "Jose Silva", order: 0 }] }, { id: "t2", name: "Ninjas", members: [{ name: "Player 0", order: 0 }] }] });
     expect(await screen.findByTestId("rsvp-status")).toHaveTextContent("You're in · Gunas");
+    cleanup();
+    renderPage({ players: [me, ...rows(1)], teamResults: [{ id: "t1", name: "Ninjas", members: [{ name: "Player 0", order: 0 }] }, { id: "t2", name: "Gunas", members: [{ name: "Jose Silva", order: 0 }] }] });
+    expect(await screen.findByTestId("rsvp-status")).toHaveTextContent("You're in · Team 2");
   });
 
   it("says where on the bench the viewer is", async () => {
