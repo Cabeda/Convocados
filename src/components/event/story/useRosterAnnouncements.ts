@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useLocale } from "~/lib/useT";
 import { rosterChanges, shortNames } from "~/lib/nextGame";
 import type { Player } from "../types";
@@ -23,9 +23,9 @@ export function useRosterAnnouncements(players: readonly Player[], viewerId: str
   const pending = useRef<{ joined: string[]; left: string[] }>({ joined: [], left: [] });
   const flushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const speak = useRef<(joined: string[], left: string[]) => string>(() => "");
 
-  speak.current = (joined, left) => {
+  // Reads the viewer's language when the timer fires, not when it was set.
+  const speak = useEffectEvent((joined: string[], left: string[]): string => {
     const list = new Intl.ListFormat(locale, { type: "conjunction" });
     const part = (names: string[], one: "ngJoined" | "ngLeft", many: "ngJoinedMany" | "ngLeftMany", count: "ngJoinedCount" | "ngLeftCount") => {
       if (names.length === 0) return "";
@@ -33,7 +33,7 @@ export function useRosterAnnouncements(players: readonly Player[], viewerId: str
       return t(names.length === 1 ? one : many, { names: list.format(shortNames(names)) });
     };
     return [part(joined, "ngJoined", "ngJoinedMany", "ngJoinedCount"), part(left, "ngLeft", "ngLeftMany", "ngLeftCount")].filter(Boolean).join(". ");
-  };
+  });
 
   useEffect(() => {
     const before = last.current;
@@ -53,7 +53,7 @@ export function useRosterAnnouncements(players: readonly Player[], viewerId: str
       const net = rosterChanges(j.map((name) => ({ name })), l.map((name) => ({ name })), null);
       const stillJoined = net.left; // in the "joined" list and not in the "left" one
       const stillLeft = net.joined;
-      setMessage(speak.current(stillJoined, stillLeft));
+      setMessage(speak(stillJoined, stillLeft));
       clearTimeout(clearTimer.current);
       clearTimer.current = setTimeout(() => setMessage(""), CLEAR_AFTER_MS);
     }, ANNOUNCE_BATCH_MS);

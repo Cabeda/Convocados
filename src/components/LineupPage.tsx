@@ -81,11 +81,11 @@ export default function LineupPage({ eventId }: { eventId: string }) {
   useEffect(() => { orderRef.current = (event?.players ?? []).map((p) => p.id); }, [event]);
 
   // Requests go out one after the other, in the order they were tapped, so the last tap is the one that stands.
-  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const chainRef = useRef<Promise<unknown>>(Promise.resolve());
   const send = (request: () => Promise<unknown>) => {
     setError(null);
     const end = beginWrite();
-    chain.current = chain.current.then(request).then(() => true, () => false).then(async (ok) => {
+    chainRef.current = chainRef.current.then(request).then(() => true, () => false).then(async (ok) => {
       if (!ok) setError(t("ngManageError"));
       end();
       await refetch();

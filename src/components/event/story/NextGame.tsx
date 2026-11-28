@@ -75,14 +75,14 @@ export function NextGame(p: NextGameProps) {
   const phase = nextGamePhase({ now, startMs, durationMinutes, weekly: !!rule, cancelled });
 
   // The viewer's own changes are tracked, so the polite announcement of OTHER people's changes stays out of their way.
-  const ownWrites = useRef({ active: 0, lastEnd: 0 });
+  const ownWritesRef = useRef({ active: 0, lastEnd: 0 });
   const upstreamBegin = p.beginWrite;
   const beginWrite = useCallback(() => {
-    ownWrites.current.active += 1;
+    ownWritesRef.current.active += 1;
     const end = upstreamBegin();
-    return () => { end(); ownWrites.current.active -= 1; ownWrites.current.lastEnd = Date.now(); };
+    return () => { end(); ownWritesRef.current.active -= 1; ownWritesRef.current.lastEnd = Date.now(); };
   }, [upstreamBegin]);
-  const viewerBusy = useCallback(() => ownWrites.current.active > 0 || Date.now() - ownWrites.current.lastEnd < 2500, []);
+  const viewerBusy = useCallback(() => ownWritesRef.current.active > 0 || Date.now() - ownWritesRef.current.lastEnd < 2500, []);
   const announcement = useRosterAnnouncements(event.players, viewer?.id ?? null, viewerBusy);
 
   const roster = useRosterActions({
