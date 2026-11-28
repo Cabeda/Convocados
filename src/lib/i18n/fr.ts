@@ -489,7 +489,7 @@ sportBadmintonSingles: "Badminton (simple)",
   tableStatus: "Statut",
   tableType: "Type",
   full: "Complet",
-  spotsLeft: "{n} place(s)",
+  spotsLeft: "{n} place(s) restante(s)",
   momentumFull: "Complet — rejoignez le banc !",
   momentumFillingFast: "Se remplit vite — {n} place(s) restante(s)",
   momentumAlmostHalf: "Encore {n} place(s) disponible(s)",
@@ -1699,6 +1699,7 @@ statsGoals: "Buts",
   editNotSaved: "Pas enregistré. Tes modifications sont toujours là.",
   editNameRequired: "Donne un nom au match.",
   editDateRequired: "Choisis la date et l'heure.",
+  shareCopyFailed: "Impossible de copier le lien. Appuie longuement sur la barre d'adresse pour le copier.",
 };
 
 export default fr;

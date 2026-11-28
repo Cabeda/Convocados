@@ -34,22 +34,31 @@ export function buildEventShareText(
 }
 
 /**
- * Open the native share sheet, falling back to the clipboard when the
- * platform has no Web Share API or the user dismisses it. Returns true when
- * the link was copied so the caller can surface the "link copied" snackbar.
+ * The address people should pass on: the page itself, never its query. A link with `?inviteToken`
+ * opens a password-locked game, so it must not travel in a share.
  */
-export async function shareEvent(payload: { title: string; text: string; url: string }): Promise<boolean> {
-  const canShare = typeof navigator !== "undefined" && !!navigator.share;
+export function shareableUrl(location: Pick<Location, "origin" | "pathname">): string {
+  return `${location.origin}${location.pathname}`;
+}
 
-  if (canShare) {
+export type ShareOutcome = "shared" | "copied" | "dismissed";
+
+/**
+ * Open the native share sheet, falling back to the clipboard when the platform has no
+ * Web Share API. "dismissed" means the person closed the sheet: nothing was shared or copied.
+ * A clipboard refusal is thrown so the caller can say how to copy by hand.
+ */
+export async function shareEvent(payload: { title: string; text: string; url: string }): Promise<ShareOutcome> {
+  if (typeof navigator !== "undefined" && navigator.share) {
     try {
       await navigator.share(payload);
-      return false;
-    } catch {
-      // Dismissed — fall through to the clipboard fallback.
+      return "shared";
+    } catch (e) {
+      if ((e as { name?: string })?.name === "AbortError") return "dismissed";
+      // The share sheet itself failed: fall through to the clipboard.
     }
   }
 
   await navigator.clipboard.writeText(payload.url);
-  return true;
+  return "copied";
 }

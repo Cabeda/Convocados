@@ -1759,6 +1759,7 @@ statsGoals: "Goals",
   editNotSaved: "Not saved. Your changes are still here.",
   editNameRequired: "Give the game a name.",
   editDateRequired: "Pick a date and time.",
+  shareCopyFailed: "Couldn't copy the link. Press and hold the address bar to copy it.",
 } as const;
 
 export default en;

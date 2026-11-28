@@ -1,7 +1,7 @@
 import { IconButton } from "@mui/material";
 import ShareIcon from "@mui/icons-material/Share";
 import { useLocale } from "~/lib/useT";
-import { buildEventShareText, shareEvent } from "../shareEvent";
+import { buildEventShareText, shareableUrl, shareEvent } from "../shareEvent";
 import { iconAction } from "./styles";
 
 interface Props {
@@ -19,15 +19,15 @@ export function ShareButton({ title, dateTime, timezone, location, maxPlayers, p
   const { locale, t } = useLocale();
 
   const handleShare = async () => {
-    const url = window.location.href;
+    const url = shareableUrl(window.location);
     const text = buildEventShareText(
       { title, dateTime, timezone, location, maxPlayers, playerCount, url }, locale,
       { spotsLeft: (n) => t("spotsLeft", { n }), full: t("full") },
     );
     try {
-      if (await shareEvent({ title, text, url })) onToast(t("linkCopiedFull"));
+      if ((await shareEvent({ title, text, url })) === "copied") onToast(t("linkCopiedFull"));
     } catch {
-      onToast(t("somethingWentWrong"));
+      onToast(t("shareCopyFailed"));
     }
   };
 

@@ -103,8 +103,22 @@ describe("EventHeader — the line-up of actions", () => {
     stubNavigator({ share: undefined, clipboard: { writeText } });
     renderHeader();
     await user.click(screen.getByRole("button", { name: "Share with players" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(window.location.href));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}${window.location.pathname}`));
     expect(await screen.findByRole("status")).toHaveTextContent(/copied/i);
+  });
+
+  it("shares the address without its query, so an invite token or a password bypass never travels", async () => {
+    const share = vi.fn(async () => {});
+    const user = userEvent.setup();
+    stubNavigator({ share });
+    window.history.pushState({}, "", "/events/evt-1?inviteToken=secret&action=join");
+    renderHeader();
+    await user.click(screen.getByRole("button", { name: "Share with players" }));
+    await waitFor(() => expect(share).toHaveBeenCalled());
+    const payload = share.mock.calls[0][0];
+    expect(payload.url).toBe(`${window.location.origin}/events/evt-1`);
+    expect(payload.text).not.toContain("secret");
+    window.history.pushState({}, "", "/");
   });
 
   it("uses the native share sheet when there is one and does not also copy", async () => {
@@ -116,6 +130,26 @@ describe("EventHeader — the line-up of actions", () => {
     await user.click(screen.getByRole("button", { name: "Share with players" }));
     await waitFor(() => expect(share).toHaveBeenCalled());
     expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("dismissing the share sheet is not an error and does not claim a copy", async () => {
+    const share = vi.fn(async () => { throw new DOMException("dismissed", "AbortError"); });
+    const writeText = vi.fn(async () => {});
+    const user = userEvent.setup();
+    stubNavigator({ share, clipboard: { writeText } });
+    renderHeader();
+    await user.click(screen.getByRole("button", { name: "Share with players" }));
+    await waitFor(() => expect(share).toHaveBeenCalled());
+    expect(writeText).not.toHaveBeenCalled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("tells a viewer whose browser refuses the clipboard how to copy the link by hand", async () => {
+    const user = userEvent.setup();
+    stubNavigator({ share: undefined, clipboard: { writeText: vi.fn(async () => { throw new DOMException("no", "NotAllowedError"); }) } });
+    renderHeader();
+    await user.click(screen.getByRole("button", { name: "Share with players" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Couldn't copy the link. Press and hold the address bar to copy it.");
   });
 });
 

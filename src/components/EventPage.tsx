@@ -42,7 +42,7 @@ import {
   InviteBanner,
   type AddPlayerIntent,
 } from "./event";
-import { buildEventShareText, shareEvent } from "./event/shareEvent";
+import { buildEventShareText, shareableUrl, shareEvent } from "./event/shareEvent";
 import type { EventData, Player, KnownPlayer } from "./event";
 import { EventRecap } from "./event/story/EventRecap";
 import { CancelledBanner } from "./event/story/CancelledBanner";
@@ -415,8 +415,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (deepLinkAction !== "share" || !event || deepLinkShareHandled.current) return;
     deepLinkShareHandled.current = true;
 
-    const url = new URL(window.location.href);
-    url.searchParams.delete("action");
     const details = {
       title: event.title,
       dateTime: new Date(event.dateTime),
@@ -424,7 +422,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       location: event.location,
       maxPlayers: event.maxPlayers,
       playerCount: event.players.length,
-      url: url.toString(),
+      url: shareableUrl(window.location),
     };
     const text = buildEventShareText(details, locale, {
       spotsLeft: (n) => t("spotsLeft", { n }),
@@ -432,8 +430,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
     });
 
     shareEvent({ title: details.title, text, url: details.url })
-      .then((copied) => { if (copied) setSnackbar(t("linkCopiedFull")); })
-      .catch(() => {});
+      .then((outcome) => { if (outcome === "copied") setSnackbar(t("linkCopiedFull")); })
+      .catch(() => setSnackbar(t("shareCopyFailed")));
   }, [deepLinkAction, event, locale, t]);
 
   const mergedSuggestions = useMemo(() => {
