@@ -42,6 +42,7 @@ import { NextGame } from "./event/story/NextGame";
 import { NextGameSkeleton } from "./event/story/NextGameSkeleton";
 import { useHeaderToasts } from "./event/story/HeaderToast";
 import { useMyRsvp } from "./event/story/useMyRsvp";
+import type { NextGameHint } from "~/lib/nextGame";
 import { useNextGamePhase } from "./event/story/useNextGamePhase";
 import { parseRecurrenceRule } from "~/lib/recurrence";
 import { PushPromptBanner } from "./PushPromptBanner";
@@ -63,7 +64,7 @@ function isHighIntentForPush(
   return hoursUntil > 0 && hoursUntil <= PUSH_PROMPT_HIGH_INTENT_HOURS;
 }
 
-export default function EventPage({ eventId, hasLastGame = false }: { eventId: string; hasLastGame?: boolean }) {
+export default function EventPage({ eventId, hasLastGame = false, nextGameHint }: { eventId: string; hasLastGame?: boolean; nextGameHint?: NextGameHint }) {
   const { locale, t } = useLocale();
   const { data: session, refetch: refetchSession } = useSession();
 
@@ -463,7 +464,10 @@ export default function EventPage({ eventId, hasLastGame = false }: { eventId: s
             <HeaderSkeleton />
             {/* Only when a last game is known to exist (the page was told so, or this viewer has seen its recap here). */}
             {(hasLastGame || lastRecapShape(eventId) !== null) && <RecapSkeleton strip={lastRecapShape(eventId) === "strip"} />}
-            <NextGameSkeleton />
+            {/* Only what will be there: as many places as the game has, and none for a game with no next game. */}
+            {(!nextGameHint || ["open", "live", "signupsSoon"].includes(nextGameHint.phase)) && (
+              <NextGameSkeleton maxPlayers={nextGameHint?.maxPlayers} headerOnly={nextGameHint?.phase === "signupsSoon"} />
+            )}
           </Stack>
         </Container>
       </ResponsiveLayout>

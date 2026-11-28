@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   COUNTDOWN_WINDOW_MS, nextGamePhase, countdownOf, nextTickDelay, isGameDay, initials, shortNames,
-  slotMinSize, slotColumns, slotLabels, phaseChangeDelay, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval,
+  slotMinSize, slotColumns, slotLabels, phaseChangeDelay, nextGameHint, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval,
 } from "~/lib/nextGame";
 
 const MIN = 60_000;
@@ -39,6 +39,20 @@ describe("phaseChangeDelay — one timeout to the moment the phase changes", () 
   });
   it("never asks for a timeout the browser would fire at once", () => {
     expect(phaseChangeDelay(START - 40 * 24 * HOUR, START, END)).toBeLessThanOrEqual(2_147_000_000);
+  });
+});
+
+describe("nextGameHint — what the server tells the loading page about the next game", () => {
+  const base = { dateTime: new Date(START).toISOString(), durationMinutes: 90, recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }), maxPlayers: 12, cancelled: false };
+  it("says open, with the size of the lineup, before kickoff", () => {
+    expect(nextGameHint(base, START - HOUR)).toEqual({ maxPlayers: 12, phase: "open" });
+  });
+  it("says there is no next game for a one-off that has ended, and signups soon for a weekly one", () => {
+    expect(nextGameHint({ ...base, recurrenceRule: null }, START + 5 * HOUR).phase).toBe("none");
+    expect(nextGameHint(base, START + 5 * HOUR).phase).toBe("signupsSoon");
+  });
+  it("says cancelled for a cancelled game", () => {
+    expect(nextGameHint({ ...base, cancelled: true }, START - HOUR).phase).toBe("cancelled");
   });
 });
 

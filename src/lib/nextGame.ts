@@ -4,6 +4,8 @@
  * `src/test/nextGame.test.ts`, and the components only render what it says.
  */
 
+import { parseRecurrenceRule } from "./recurrence";
+
 const MINUTE = 60_000;
 const HOUR = 3_600_000;
 /** The countdown ("Starts in 3 h 12 min") shows for the last day before kickoff. */
@@ -29,6 +31,24 @@ export function nextGamePhase(i: { now: number; startMs: number; durationMinutes
   const endMs = i.startMs + i.durationMinutes * MINUTE;
   if (i.now >= endMs) return i.weekly ? "signupsSoon" : "none";
   return i.now >= i.startMs ? "live" : "open";
+}
+
+export interface NextGameHint { maxPlayers: number; phase: NextGamePhase }
+
+/**
+ * What the server tells the loading page about the next game, so it draws only what will be there:
+ * how many places, and whether there is a lineup at all (a one-off that ended has none; a weekly one
+ * between its end and its reset shows only the date; a cancelled one shows a list).
+ */
+export function nextGameHint(
+  e: { dateTime: string | Date; durationMinutes: number; recurrenceRule: string | null; maxPlayers: number; cancelled: boolean },
+  now: number,
+): NextGameHint {
+  const weekly = !!parseRecurrenceRule(e.recurrenceRule);
+  return {
+    maxPlayers: e.maxPlayers,
+    phase: nextGamePhase({ now, startMs: new Date(e.dateTime).getTime(), durationMinutes: e.durationMinutes, weekly, cancelled: e.cancelled }),
+  };
 }
 
 export interface Countdown { hours: number; minutes: number }

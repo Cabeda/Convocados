@@ -79,6 +79,30 @@ describe("EventPage — the loading page holds only the room that will be used",
     expect(screen.getByTestId("recap-skeleton")).toBeInTheDocument();
   });
 
+  it("holds one slot per place once the server has said how many there are, not a pitch of 16", () => {
+    renderWithTheme(<EventPage eventId="evt-1" nextGameHint={{ maxPlayers: 6, phase: "open" }} />);
+    expect(screen.getAllByTestId("skeleton-slot")).toHaveLength(6);
+  });
+
+  it("holds a pitch of 16 until it knows better", () => {
+    renderWithTheme(<EventPage eventId="evt-1" />);
+    expect(screen.getAllByTestId("skeleton-slot")).toHaveLength(16);
+  });
+
+  it("holds no next game when the server said there is none (a one-off that has ended) or it is cancelled", () => {
+    renderWithTheme(<EventPage eventId="evt-1" nextGameHint={{ maxPlayers: 10, phase: "none" }} />);
+    expect(screen.queryByTestId("next-game-skeleton")).not.toBeInTheDocument();
+    cleanup();
+    renderWithTheme(<EventPage eventId="evt-1" nextGameHint={{ maxPlayers: 10, phase: "cancelled" }} />);
+    expect(screen.queryByTestId("next-game-skeleton")).not.toBeInTheDocument();
+  });
+
+  it("holds only the date line when sign-ups are about to open: there is no lineup to draw yet", () => {
+    renderWithTheme(<EventPage eventId="evt-1" nextGameHint={{ maxPlayers: 10, phase: "signupsSoon" }} />);
+    expect(screen.getByTestId("next-game-skeleton")).toBeInTheDocument();
+    expect(screen.queryAllByTestId("skeleton-slot")).toHaveLength(0);
+  });
+
   it("holds the strip's smaller place when this viewer last saw the strip here", () => {
     localStorage.setItem("recap:shape:evt-1", "strip");
     renderWithTheme(<EventPage eventId="evt-1" />);
