@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createTheme } from "@mui/material/styles";
 import { buildThemeOptions } from "../theme";
+import { controlBorder } from "~/components/event/story/styles";
 
 /** WCAG relative luminance of an `rgb()`/`rgba()`/`#rrggbb` colour over an opaque backdrop. */
 function toRgb(color: string, backdrop?: [number, number, number]): [number, number, number] {
@@ -54,5 +55,27 @@ describe("header and story components", () => {
     ];
     const offenders = files.filter((f) => /\bcolor: "text\.disabled"/.test(readFileSync(f, "utf8")));
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("the outline of a control shows at 3:1 on the page and on a card, in both themes (WCAG 1.4.11)", () => {
+  for (const mode of ["light", "dark"] as const) {
+    const theme = createTheme(buildThemeOptions(mode));
+    it(`${mode}: controlBorder`, () => {
+      for (const bg of [theme.palette.background.default, theme.palette.background.paper]) {
+        expect(ratio(controlBorder(theme), bg)).toBeGreaterThanOrEqual(3);
+      }
+    });
+    it(`${mode}: the hairline divider is NOT enough for a control (so it is not used for one)`, () => {
+      expect(ratio(theme.palette.divider, theme.palette.background.default)).toBeLessThan(3);
+    });
+  }
+
+  it("is not the divider in the lineup's open spots, Add a friend or the chips", () => {
+    const dir = resolve(__dirname, "../components/event/story");
+    for (const file of ["LineupSlots.tsx", "NextGame.tsx", "AddFriendPanel.tsx"]) {
+      const source = readFileSync(resolve(dir, file), "utf8");
+      expect(source, file).toMatch(/controlBorder/);
+    }
   });
 });

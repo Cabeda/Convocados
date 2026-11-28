@@ -53,10 +53,12 @@ describe("Next game — what the block says", () => {
     await screen.findByTestId("lineup-slots");
     expect(screen.getAllByTestId("slot")).toHaveLength(3);
     expect(screen.getAllByTestId("open-slot")).toHaveLength(6);
-    expect(screen.getByTestId("slot-me")).toHaveAccessibleName("Jose Silva (you)");
-    // A row the viewer may not touch is a picture with a name; one they may remove is a button with the same name.
+    // A slot the viewer may open is a button named for what it does; one they may not touch is a picture with the name.
+    expect(screen.getByTestId("slot-me")).toHaveAccessibleName("Options for Jose Silva (you)");
+    expect(screen.getByTestId("slot-me")).toHaveAttribute("title", "Jose Silva");
+    for (const open of screen.getAllByTestId("open-slot")) expect(open).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByRole("img", { name: "Linked Lia" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Player 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Options for Player 1" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "4 of 10 places taken" })).toBeInTheDocument();
   });
 
@@ -343,7 +345,7 @@ describe("Next game — changing your answer", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't save your answer");
     expect(screen.getByTestId("rsvp-status")).toHaveTextContent("You're in");
     expect(screen.getAllByTestId("slot")).toHaveLength(3);
-    expect(screen.getAllByTestId("slot").map((n) => n.getAttribute("aria-label"))).toEqual(expect.arrayContaining(["Player 0", "Player 1", "Player 5"]));
+    expect(screen.getAllByTestId("slot").map((n) => n.getAttribute("aria-label"))).toEqual(expect.arrayContaining(["Options for Player 0", "Options for Player 1", "Options for Player 5"]));
   });
 
   it("warns about no replacement when it is within 48 hours and nobody is on the bench", async () => {

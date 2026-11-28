@@ -5,6 +5,7 @@
  */
 
 import { parseRecurrenceRule } from "./recurrence";
+import { normalizeForMatch } from "./stringMatch";
 
 const MINUTE = 60_000;
 const HOUR = 3_600_000;
@@ -273,4 +274,29 @@ export function removeRule(i: {
   if (i.player.userId) return "none";
   if (!i.viewerId) return i.addedHere ? "direct" : "none";
   return "confirmGuest";
+}
+
+/**
+ * Who joined and who left between two readings of the list, for a polite announcement. People are told
+ * apart by name (case and accents ignored); the viewer is never in it. Order does not matter.
+ */
+export function rosterChanges(
+  prev: readonly { name: string; userId?: string | null }[],
+  next: readonly { name: string; userId?: string | null }[],
+  viewerId: string | null,
+): { joined: string[]; left: string[] } {
+  const others = (list: readonly { name: string; userId?: string | null }[]) => list.filter((p) => !viewerId || p.userId !== viewerId);
+  const tally = (list: readonly { name: string }[]) => {
+    const m = new Map<string, { name: string; n: number }>();
+    for (const p of list) { const k = normalizeForMatch(p.name); const e = m.get(k); if (e) e.n += 1; else m.set(k, { name: p.name, n: 1 }); }
+    return m;
+  };
+  const before = tally(others(prev));
+  const after = tally(others(next));
+  const diff = (from: typeof before, to: typeof before) => {
+    const out: string[] = [];
+    for (const [k, e] of to) for (let i = 0; i < e.n - (from.get(k)?.n ?? 0); i++) out.push(e.name);
+    return out;
+  };
+  return { joined: diff(before, after), left: diff(after, before) };
 }

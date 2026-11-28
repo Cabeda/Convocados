@@ -5,6 +5,7 @@ import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import EventPage from "~/components/EventPage";
 import { fakeServer, makeEvent, respond, type Row } from "./eventPageHarness";
+import { cssFor } from "../emotionCss";
 
 const mockSession = { data: { user: { id: "u-1", name: "Jose Silva" } } as { user: { id: string; name: string } } | null, isPending: false, refetch: vi.fn() };
 vi.mock("~/lib/auth.client", () => ({ useSession: () => mockSession, signOut: vi.fn() }));
@@ -517,7 +518,7 @@ describe("Remove — from the slot or the name", () => {
   it("a tap on a slot opens its name with Remove, focus on Remove, and Escape closes it with focus back on the slot", async () => {
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    const slot = await screen.findByRole("button", { name: "Ana Maria" });
+    const slot = await screen.findByRole("button", { name: "Options for Ana Maria" });
     expect(slot).toHaveAttribute("aria-expanded", "false");
     await user.click(slot);
     const options = await screen.findByRole("group", { name: "Options for Ana Maria" });
@@ -525,28 +526,28 @@ describe("Remove — from the slot or the name", () => {
     expect(slot).toHaveAttribute("aria-expanded", "true");
     await user.keyboard("{Escape}");
     expect(screen.queryByTestId("player-options")).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Ana Maria" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Options for Ana Maria" })).toHaveFocus());
   });
 
   it("a signed-in player gets options for guests, never for somebody else's account", async () => {
     renderPage({ players: withMe() });
     await screen.findByTestId("lineup-slots");
-    expect(screen.getByRole("button", { name: "Ana Maria" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Beto" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Options for Ana Maria" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Options for Beto" })).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Beto" })).toBeInTheDocument();
   });
 
   it("an organizer may remove anyone", async () => {
     mockSession.data = OWNER;
     renderPage({ players: withMe() });
-    expect(await screen.findByRole("button", { name: "Beto" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Options for Beto" })).toBeInTheDocument();
   });
 
   it("removes an anonymous player at once, with Undo for the organizer", async () => {
     mockSession.data = OWNER;
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Ana Maria" }));
     await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
     expect(await screen.findByTestId("undo-toast")).toHaveTextContent("Ana Maria removed");
     expect(screen.getByTestId("undo-progress")).toBeInTheDocument();
@@ -559,7 +560,7 @@ describe("Remove — from the slot or the name", () => {
     mockSession.data = null;
     renderPage({ players: withMe() });
     await screen.findByTestId("lineup-slots");
-    expect(screen.queryByRole("button", { name: "Ana Maria" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Options for Ana Maria" })).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Ana Maria" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Options for Ana Maria" })).not.toBeInTheDocument();
   });
@@ -570,11 +571,11 @@ describe("Remove — from the slot or the name", () => {
     renderPage({ players: withMe() });
     await user.type(await openPanel(user), "Rui{Enter}");
     await screen.findByText("Added Rui ✓");
-    await user.click(await screen.findByRole("button", { name: "Rui" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Rui" }));
     await user.click(screen.getByRole("button", { name: "Remove Rui" }));
     await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
     expect(server.sent("DELETE", "/players")[0].body).toEqual({ playerId: "srv-Rui" });
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Rui" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Options for Rui" })).not.toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
     // …and the name is forgotten: a row of that name added by somebody else later is not this visitor's to remove.
     expect(localStorage.getItem("added-here:evt-1")).toBe("[]");
@@ -586,14 +587,14 @@ describe("Remove — from the slot or the name", () => {
     renderPage({ players: withMe() });
     await user.type(await openPanel(user), "Rui{Enter}");
     await screen.findByText("Added Rui ✓");
-    expect(screen.queryByRole("button", { name: "Ana Maria" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rui" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Options for Ana Maria" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Options for Rui" })).toBeInTheDocument();
   });
 
   it("a signed-in player asks first before taking a guest off: 'They will lose their place', and Cancel sends nothing", async () => {
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Ana Maria" }));
     await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
     expect(await screen.findByText("Remove Ana Maria?")).toBeInTheDocument();
     expect(screen.getByText("They will lose their place.")).toBeInTheDocument();
@@ -605,7 +606,7 @@ describe("Remove — from the slot or the name", () => {
   it("…then removes them, and does not offer Undo (the server would answer 403)", async () => {
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Ana Maria" }));
     await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
     await user.click(await screen.findByTestId("leave-dialog-confirm"));
     await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
@@ -617,7 +618,7 @@ describe("Remove — from the slot or the name", () => {
     mockSession.data = OWNER;
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Ana Maria" }));
     await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
     await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
     expect(screen.queryByTestId("leave-dialog-confirm")).not.toBeInTheDocument();
@@ -626,12 +627,12 @@ describe("Remove — from the slot or the name", () => {
   it("your own slot says Leave; everyone else's says Remove", async () => {
     const user = userEvent.setup();
     renderPage({ players: [{ id: "me", name: "Jose Silva", userId: "u-1" }, ...withMe()] });
-    await user.click(await screen.findByRole("button", { name: "Jose Silva (you)" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Jose Silva (you)" }));
     const own = await screen.findByTestId("player-options");
     expect(within(own).getByRole("button", { name: "Leave" })).toBeInTheDocument();
     expect(within(own).queryByRole("button", { name: /Remove/ })).not.toBeInTheDocument();
     await user.keyboard("{Escape}");
-    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Ana Maria" }));
     expect(within(await screen.findByTestId("player-options")).getByRole("button", { name: "Remove Ana Maria" })).toHaveTextContent("Remove");
   });
 
@@ -639,7 +640,7 @@ describe("Remove — from the slot or the name", () => {
     mockSession.data = OWNER;
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Ana Maria" }));
     await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
     await user.click(await screen.findByRole("button", { name: "Undo" }));
     await waitFor(() => expect(server.sent("POST", "/undo-remove")).toHaveLength(1));
@@ -651,7 +652,7 @@ describe("Remove — from the slot or the name", () => {
     mockSession.data = OWNER;
     const user = userEvent.setup();
     renderPage({ players: withMe() });
-    await user.click(await screen.findByRole("button", { name: "Beto" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Beto" }));
     await user.click(screen.getByRole("button", { name: "Remove Beto" }));
     expect(await screen.findByText("Remove Beto?")).toBeInTheDocument();
     expect(server.sent("DELETE", "/players")).toHaveLength(0);
@@ -662,7 +663,7 @@ describe("Remove — from the slot or the name", () => {
   it("removing yourself from your own slot is leaving: the leave dialog, not a delete", async () => {
     const user = userEvent.setup();
     renderPage({ players: [{ id: "me", name: "Jose Silva", userId: "u-1" }, ...withMe()] });
-    await user.click(await screen.findByRole("button", { name: "Jose Silva (you)" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Jose Silva (you)" }));
     await user.click(screen.getByRole("button", { name: "Leave" }));
     expect(await screen.findByText("Leave this game?")).toBeInTheDocument();
     expect(server.sent("DELETE", "/players")).toHaveLength(0);
@@ -672,7 +673,7 @@ describe("Remove — from the slot or the name", () => {
     mockSession.data = OWNER;
     const user = userEvent.setup();
     renderPage({ players: withMe() }, (s) => s.on("DELETE", "/players", () => respond(500, { error: "x" })));
-    await user.click(await screen.findByRole("button", { name: "Ana Maria" }));
+    await user.click(await screen.findByRole("button", { name: "Options for Ana Maria" }));
     await user.click(screen.getByRole("button", { name: "Remove Ana Maria" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't remove Ana Maria.");
     expect(screen.getAllByTestId("slot")).toHaveLength(2);
@@ -684,7 +685,7 @@ describe("Remove — from the slot or the name", () => {
     const user = userEvent.setup();
     renderPage({ players: withMe() });
     await user.click(await screen.findByRole("button", { name: "Who's in" }));
-    await user.click(screen.getByRole("button", { name: "Options for Ana Maria" }));
+    await user.click(within(screen.getByTestId("whos-in")).getByRole("button", { name: "Options for Ana Maria" }));
     const options = await screen.findByRole("group", { name: "Options for Ana Maria" });
     await user.click(within(options).getByRole("button", { name: "Remove Ana Maria" }));
     await waitFor(() => expect(server.sent("DELETE", "/players")).toHaveLength(1));
@@ -763,4 +764,70 @@ describe("An unlinked row with the viewer's own name (the organizer added them b
     expect(await screen.findByRole("alert")).toHaveTextContent("Jose Silva is already in the list.");
     expect(screen.queryByTestId("thats-you")).not.toBeInTheDocument();
   });
+});
+
+describe("Options open right under the slot that was tapped", () => {
+  it("puts the options in the grid itself, directly after the tapped slot, spanning the whole row (the row layout is checked in a real browser: jsdom has no layout)", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: rows(5) });
+    await user.click(await screen.findByRole("button", { name: "Options for Player 1" }));
+    const grid = screen.getByTestId("lineup-slots");
+    const row = await screen.findByTestId("slot-options-row");
+    expect(row.parentElement).toBe(grid);
+    expect(row.previousElementSibling).toBe(screen.getByRole("button", { name: "Options for Player 1" }));
+    expect(cssFor(row)).toMatch(/grid-column:\s*1\s*\/\s*-1/);
+    expect(cssFor(grid)).toMatch(/grid-auto-flow:\s*row dense/);
+    // Not at the end of the grid, and only one set of options.
+    expect(grid.lastElementChild).not.toBe(row);
+    expect(screen.getAllByTestId("player-options")).toHaveLength(1);
+  });
+
+  it("keeps focus on Remove while open and gives it back to the slot on Escape", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: rows(3) });
+    await user.click(await screen.findByRole("button", { name: "Options for Player 2" }));
+    expect(within(await screen.findByTestId("slot-options-row")).getByRole("button", { name: "Remove Player 2" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Options for Player 2" })).toHaveFocus());
+    expect(screen.queryByTestId("slot-options-row")).not.toBeInTheDocument();
+  });
+});
+
+describe("Other people joining and leaving are announced politely", () => {
+  const announce = () => screen.getByTestId("roster-announcement");
+
+  it("is a polite, atomic live region that is always there, so a screen reader has it before the news", async () => {
+    renderPage({ players: rows(2) });
+    await screen.findByTestId("lineup-slots");
+    expect(announce()).toHaveAttribute("role", "status");
+    expect(announce()).toHaveAttribute("aria-live", "polite");
+    expect(announce()).toHaveAttribute("aria-atomic", "true");
+    expect(announce()).toBeEmptyDOMElement();
+  });
+
+  it("says 'Ana M. joined' once the poll finds her — and says nothing about the first reading", async () => {
+    renderPage({ players: rows(2) });
+    await screen.findByTestId("lineup-slots");
+    expect(announce()).toBeEmptyDOMElement();
+    server.state.event.players = [...server.state.event.players, { id: "x", name: "Ana Maria", userId: "u-ana" }];
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(announce()).toHaveTextContent("Ana M. joined"), { timeout: 5000 });
+  }, 10_000);
+
+  it("batches several changes into one sentence, and says who left", async () => {
+    renderPage({ players: [...rows(3), { id: "l", name: "Leo Reis", userId: null }] });
+    await screen.findByTestId("lineup-slots");
+    server.state.event.players = [...rows(3), { id: "a", name: "Ana Maria", userId: "u-a" }, { id: "b", name: "Beto Santos", userId: "u-b" }];
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(announce()).toHaveTextContent("Ana M. and Beto S. joined. Leo R. left"), { timeout: 5000 });
+  }, 10_000);
+
+  it("never announces what the viewer just did themselves", async () => {
+    const user = userEvent.setup();
+    renderPage({ players: rows(2) });
+    await user.type(await openPanel(user), "Rui{Enter}");
+    await screen.findByText("Added Rui ✓");
+    await new Promise((r) => setTimeout(r, 3200));
+    expect(announce()).toBeEmptyDOMElement();
+  }, 10_000);
 });

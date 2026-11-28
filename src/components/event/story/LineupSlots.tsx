@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Box } from "@mui/material";
 import { useT } from "~/lib/useT";
 import { SLOT_GAP, SLOT_MAX_SIZE, slotColumns, slotLabels, slotMinSize } from "~/lib/nextGame";
 import type { Player } from "../types";
-import { EASE, focusRing, pressable } from "./styles";
+import { EASE, controlBorder, focusRing, pressable } from "./styles";
 
 const CALM = "@media (prefers-reduced-motion: reduce)";
 
@@ -35,6 +35,8 @@ interface Props {
   onOpenSpot?: () => void;
   /** Id of the options row a pressed slot controls. */
   controlsId?: string;
+  /** The options of the selected slot: they open in the grid itself, right under the row of the slot that was tapped. */
+  options?: ReactNode;
 }
 
 /**
@@ -43,7 +45,7 @@ interface Props {
  * get more of their name. The grid balances its rows (10 → 5 + 5) and never makes a slot smaller
  * than 36px — widths and wrapping are checked in a real browser, not in jsdom.
  */
-export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedId, onPress, onOpenSpot, controlsId }: Props) {
+export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedId, onPress, onOpenSpot, controlsId, options }: Props) {
   const t = useT();
   const fresh = useFreshNames(players.map((p) => p.name));
   const { labels } = slotLabels(players.map((p) => p.name));
@@ -56,7 +58,8 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
     <Box
       role="group" aria-label={t("ngLineupAria", { n: players.length, max: maxPlayers })} data-testid="lineup-slots"
       sx={{
-        display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${track}, 1fr))`, gap: `${SLOT_GAP}px`,
+        // "dense": the options span a whole row, and the slots after the tapped one fill the rest of its row.
+        display: "grid", gridAutoFlow: "row dense", gridTemplateColumns: `repeat(auto-fill, minmax(${track}, 1fr))`, gap: `${SLOT_GAP}px`,
         maxWidth: columns * SLOT_MAX_SIZE + (columns - 1) * SLOT_GAP,
       }}
     >
@@ -66,7 +69,7 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
           return (
             <Box
               key={`open-${i}`} aria-hidden data-testid="open-slot" onClick={onOpenSpot}
-              sx={{ aspectRatio: "1", borderRadius: "50%", border: "1.5px dashed", borderColor: "text.secondary", opacity: 0.75, boxSizing: "border-box", cursor: onOpenSpot ? "pointer" : "default" }}
+              sx={{ aspectRatio: "1", borderRadius: "50%", border: "1.5px dashed", borderColor: controlBorder, boxSizing: "border-box", cursor: onOpenSpot ? "pointer" : "default" }}
             />
           );
         }
@@ -75,13 +78,13 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
         const selected = selectedId === player.id;
         const name = me ? `${player.name} (${t("ngYouTag")})` : player.name;
         return (
+          <Fragment key={`slot-${i}`}>
           <Box
-            key={`slot-${i}`}
             component={pressable_ ? "button" : "div"}
             {...(pressable_
               ? { type: "button", onClick: () => onPress?.(player), "aria-expanded": selected, ...(controlsId ? { "aria-controls": controlsId } : {}) }
               : { role: "img" })}
-            aria-label={name} title={player.name} data-testid={me ? "slot-me" : "slot"} data-trigger={`slot:${player.id}`}
+            aria-label={pressable_ ? t("ngOptionsFor", { name }) : name} title={player.name} data-testid={me ? "slot-me" : "slot"} data-trigger={`slot:${player.id}`}
             sx={{
               all: pressable_ ? "unset" : undefined, boxSizing: "border-box", position: "relative", aspectRatio: "1", borderRadius: "50%",
               display: "grid", placeItems: "center", minWidth: 0, fontSize: "0.8125rem", fontWeight: 700, lineHeight: 1, letterSpacing: "0.01em",
@@ -97,6 +100,8 @@ export function LineupSlots({ players, maxPlayers, viewerId, canPress, selectedI
           >
             <span aria-hidden>{labels[i]}</span>
           </Box>
+          {selected && options && <Box data-testid="slot-options-row" sx={{ gridColumn: "1 / -1" }}>{options}</Box>}
+          </Fragment>
         );
       })}
     </Box>

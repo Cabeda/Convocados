@@ -7,7 +7,7 @@ import type { SuggestionPill } from "~/lib/suggestionPills";
 import { normalizeForMatch } from "~/lib/stringMatch";
 import { PlayerAvatar } from "../PlayerIdentity";
 import { playerInputPasswordManagerProps } from "../PlayerAutocomplete";
-import { tappable } from "./styles";
+import { controlBorder, tappable } from "./styles";
 import { isEmailLike, type FriendInput, type FriendResult } from "./useFriendActions";
 
 const POSITIONS = [["", "positionNone"], ["GK", "positionGk"], ["DEF", "positionDef"], ["MID", "positionMid"], ["FWD", "positionFwd"]] as const;
@@ -177,7 +177,7 @@ export function AddFriendPanel({ full, positionsEnabled, suggestions, busy, onSu
                 key={s.userId ?? `name:${s.name}`} variant="outlined" disabled={busy} onClick={() => void addOne(s.name)}
                 aria-label={s.name} aria-describedby={s.reason ? `${id}-why-${i}` : undefined}
                 startIcon={s.image ? <PlayerAvatar userId={s.userId} name={s.name} image={s.image} size={20} clickable={false} /> : undefined}
-                sx={{ minHeight: 44, borderRadius: 999, textTransform: "none", fontSize: "0.9375rem", px: 1.75, py: 0.5, borderColor: "divider", color: "text.primary", ...tappable }}
+                sx={{ minHeight: 44, borderRadius: 999, textTransform: "none", fontSize: "0.9375rem", px: 1.75, py: 0.5, borderColor: controlBorder, color: "text.primary", ...tappable }}
               >
                 <Box component="span" sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.2 }}>
                   <span>{s.name}</span>

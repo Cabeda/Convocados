@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   COUNTDOWN_WINDOW_MS, nextGamePhase, countdownOf, nextTickDelay, isGameDay, initials, shortNames,
-  slotMinSize, slotColumns, slotLabels, phaseChangeDelay, nextGameHint, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval, removeRule,
+  slotMinSize, slotColumns, slotLabels, phaseChangeDelay, nextGameHint, rosterChanges, rsvpView, waitingCounts, benchLabelNames, canUndoRemoval, removeRule,
 } from "~/lib/nextGame";
 
 const MIN = 60_000;
@@ -309,5 +309,22 @@ describe("removeRule — who may take whom off the list, and how", () => {
     expect(rule({ viewerId: null })).toBe("none");
     expect(rule({ viewerId: null, addedHere: true })).toBe("direct");
     expect(rule({ viewerId: null, player: linked, addedHere: true })).toBe("none");
+  });
+});
+
+describe("rosterChanges — who joined and who left between two readings of the list", () => {
+  const row = (name: string, userId: string | null = null) => ({ name, userId });
+  it("names who joined and who left, ignoring order, case and accents", () => {
+    expect(rosterChanges([row("Ana"), row("José")], [row("jose"), row("Beto"), row("Cris")], null)).toEqual({ joined: ["Beto", "Cris"], left: ["Ana"] });
+  });
+  it("is empty when nothing changed, or only the order did", () => {
+    expect(rosterChanges([row("Ana"), row("Beto")], [row("Beto"), row("Ana")], null)).toEqual({ joined: [], left: [] });
+  });
+  it("never announces the viewer: they know what they did, or did on another device", () => {
+    expect(rosterChanges([row("Ana")], [row("Ana"), row("Jose Silva", "u-1")], "u-1")).toEqual({ joined: [], left: [] });
+    expect(rosterChanges([row("Ana"), row("Jose Silva", "u-1")], [row("Ana")], "u-1")).toEqual({ joined: [], left: [] });
+  });
+  it("counts two people with one name as two", () => {
+    expect(rosterChanges([row("Ana")], [row("Ana"), row("Ana")], null)).toEqual({ joined: ["Ana"], left: [] });
   });
 });

@@ -74,7 +74,7 @@ export function WhosIn({ playing, bench, viewerId, positionsEnabled, canSelect, 
   const t = useT();
   const id = useId();
   const [chosen, setChosen] = useState<boolean | null>(null);
-  const open = openProp ?? chosen ?? !!autoOpen;
+  const open = openProp ?? chosen ?? (!!autoOpen || !!selectedId);
   const setOpen = (v: boolean) => { setChosen(v); onOpenChange?.(v); };
   if (playing.length === 0 && bench.length === 0) return null;
 

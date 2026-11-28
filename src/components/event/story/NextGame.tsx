@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
@@ -22,7 +22,7 @@ import { RsvpRow } from "./RsvpRow";
 import { UndoToast } from "./UndoToast";
 import { WaitingRow } from "./WaitingRow";
 import { WhosIn } from "./WhosIn";
-import { tappable } from "./styles";
+import { controlBorder, srOnly, tappable } from "./styles";
 import { useFriendActions } from "./useFriendActions";
 import { useFriendSuggestions } from "./useFriendSuggestions";
 import { useInviteActions } from "./useInviteActions";
@@ -30,6 +30,7 @@ import type { MyRsvp } from "./useMyRsvp";
 import { useNextGameClock } from "./useNextGameClock";
 import { usePaymentGate } from "./usePaymentGate";
 import { useRosterActions } from "./useRosterActions";
+import { useRosterAnnouncements } from "./useRosterAnnouncements";
 import { useRosterRemoval } from "./useRosterRemoval";
 
 export interface DrawControls {
@@ -73,13 +74,24 @@ export function NextGame(p: NextGameProps) {
   const cancelled = event.gameStatus === "cancelled";
   const phase = nextGamePhase({ now, startMs, durationMinutes, weekly: !!rule, cancelled });
 
+  // The viewer's own changes are tracked, so the polite announcement of OTHER people's changes stays out of their way.
+  const ownWrites = useRef({ active: 0, lastEnd: 0 });
+  const upstreamBegin = p.beginWrite;
+  const beginWrite = useCallback(() => {
+    ownWrites.current.active += 1;
+    const end = upstreamBegin();
+    return () => { end(); ownWrites.current.active -= 1; ownWrites.current.lastEnd = Date.now(); };
+  }, [upstreamBegin]);
+  const viewerBusy = useCallback(() => ownWrites.current.active > 0 || Date.now() - ownWrites.current.lastEnd < 2500, []);
+  const announcement = useRosterAnnouncements(event.players, viewer?.id ?? null, viewerBusy);
+
   const roster = useRosterActions({
-    eventId: p.eventId, event, setEvent: p.setEvent, refetch: p.refetch, beginWrite: p.beginWrite,
+    eventId: p.eventId, event, setEvent: p.setEvent, refetch: p.refetch, beginWrite,
     viewer, rsvp: p.rsvp, setRsvp: p.setRsvp, notify: p.notify,
   });
   const invites = useInviteActions({ eventId: p.eventId, refetch: p.refetch, notify: p.notify });
   const gate = usePaymentGate(p.eventId);
-  const removal = useRosterRemoval({ eventId: p.eventId, players: event.players, setEvent: p.setEvent, refetch: p.refetch, beginWrite: p.beginWrite, perms, notify: p.notify });
+  const removal = useRosterRemoval({ eventId: p.eventId, players: event.players, setEvent: p.setEvent, refetch: p.refetch, beginWrite, perms, notify: p.notify });
 
   const [nudgeOpen, setNudgeOpen] = useState(false);
   // The warnings the leave dialog shows are worked out when it opens, not on every render.
@@ -129,7 +141,7 @@ export function NextGame(p: NextGameProps) {
       // Not an error: that row is probably them. Open its options, with focus on Leave.
       roster.clearError();
       setThatsYou(true);
-      setSelection({ id: nameRow.id, from: "slot" });
+      setSelection({ id: nameRow.id, from: active.some((x) => x.id === nameRow.id) ? "slot" : "row" });
     } else if (outcome !== "busy") focusRow();
   };
   const askToLeave = (row: Player | null = myRow ?? nameRow) => {
@@ -140,7 +152,7 @@ export function NextGame(p: NextGameProps) {
     setClaiming(true);
     setSelection(null);
     setThatsYou(false);
-    const end = p.beginWrite();
+    const end = beginWrite();
     try {
       await apiRequest("POST /api/events/{id}/claim-player", { params: { id: p.eventId }, body: { playerId: player.id } });
       end();
@@ -227,6 +239,8 @@ export function NextGame(p: NextGameProps) {
 
   return (
     <Box component="section" aria-label={t("nextGame")} data-testid="next-game" sx={{ maxWidth: "32rem" }}>
+      {/* Other people joining or leaving, read out politely by a screen reader; never shown. */}
+      <Box role="status" aria-live="polite" aria-atomic data-testid="roster-announcement" sx={srOnly}>{announcement}</Box>
       <NextGameHeader phase={phase} date={date} timezone={event.timezone} now={now} startMs={startMs} />
 
       {phase !== "signupsSoon" && (
@@ -251,11 +265,11 @@ export function NextGame(p: NextGameProps) {
                 players={active} maxPlayers={event.maxPlayers} viewerId={viewer?.id ?? null}
                 canPress={canRemove} selectedId={selection?.from === "slot" ? selection.id : null} onPress={(pl) => select(pl, "slot")}
                 controlsId="slot-options" onOpenSpot={() => { setAdding(true); setAddingEver(true); }}
+                options={(() => {
+                  const chosen = selection?.from === "slot" ? event.players.find((x) => x.id === selection.id) : null;
+                  return chosen ? <PlayerOptions id="slot-options" player={chosen} onRemove={() => requestRemove(chosen)} onClose={closeOptions} disabled={removal.busy} self={isSelf(chosen)} onClaim={nameRow?.id === chosen.id ? () => void claim(chosen) : undefined} /> : null;
+                })()}
               />
-              {selection?.from === "slot" && (() => {
-                const chosen = event.players.find((x) => x.id === selection.id);
-                return chosen ? <PlayerOptions id="slot-options" player={chosen} onRemove={() => requestRemove(chosen)} onClose={closeOptions} disabled={removal.busy} self={isSelf(chosen)} onClaim={nameRow?.id === chosen.id ? () => void claim(chosen) : undefined} /> : null;
-              })()}
               <Typography data-testid="lineup-summary" sx={{ mt: 1.25, fontSize: "0.9375rem", lineHeight: 1.45, color: "text.secondary", textWrap: "pretty" }}>{summary}</Typography>
               {bench.length > 0 && (
                 <Typography data-testid="bench-line" sx={{ mt: 1, fontSize: "0.9375rem", lineHeight: 1.45, textWrap: "pretty" }}>
@@ -275,7 +289,7 @@ export function NextGame(p: NextGameProps) {
               <Button
                 ref={addButtonRef} variant="outlined" startIcon={<PersonAddIcon />} aria-expanded={adding} aria-controls="add-friend"
                 onClick={() => { setAdding((a) => !a); setAddingEver(true); }}
-                sx={{ mt: 1, mr: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, color: "text.primary", borderColor: "divider", ...tappable }}
+                sx={{ mt: 1, mr: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, color: "text.primary", borderColor: controlBorder, ...tappable }}
               >
                 {t("ngAddFriend")}
               </Button>
@@ -293,7 +307,7 @@ export function NextGame(p: NextGameProps) {
                 <Button
                   startIcon={<ShuffleIcon />} variant={p.draw.hasTeams ? "text" : "outlined"} disabled={p.draw.isDrawing} aria-busy={p.draw.isDrawing || undefined}
                   onClick={drawNow}
-                  sx={{ mt: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, ...(p.draw.hasTeams ? { color: "text.secondary" } : { color: "text.primary", borderColor: "divider" }), ...tappable }}
+                  sx={{ mt: 1, minHeight: 48, borderRadius: 999, textTransform: "none", fontWeight: 700, ...(p.draw.hasTeams ? { color: "text.secondary" } : { color: "text.primary", borderColor: controlBorder }), ...tappable }}
                 >
                   {p.draw.hasTeams ? t("ngDrawAgain") : t("ngDrawNow")}
                 </Button>

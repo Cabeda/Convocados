@@ -1,3 +1,5 @@
+import { alpha, type Theme } from "@mui/material/styles";
+
 /**
  * The few style fragments every tappable on the story cards shares, so a button,
  * a link tile and a stepper all feel the same under a thumb and under a keyboard.
@@ -54,4 +56,16 @@ export const hitArea = {
 export const textAction = {
   minHeight: 44, px: 1.25, gap: 0.75, borderRadius: 999, textTransform: "none", fontSize: "1rem", fontWeight: 600,
   color: "text.secondary", ...tappable,
+} as const;
+
+/**
+ * The outline of a control (an open spot's ring, "Add a friend", a chip) must show at 3:1 against the page
+ * (WCAG 1.4.11). The theme's `divider` is a hairline for separators and reads at about 1.7:1, so it is not
+ * used for these; this is the page's secondary text colour, a little softened.
+ */
+export const controlBorder = (theme: Theme) => alpha(theme.palette.text.secondary, 0.75);
+
+/** Read by a screen reader, never seen: the live region for what other people just did. */
+export const srOnly = {
+  position: "absolute", width: 1, height: 1, p: 0, m: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0,
 } as const;
