@@ -187,7 +187,9 @@ test.describe("Accessibility settings", () => {
     // The server's read-only summary has its own heading until the page takes over.
     await expect(page.locator("[data-ssr-event-summary]")).toHaveCount(0);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Thursday night");
-    const m = await page.getByRole("heading", { level: 1 }).evaluate((el) => ({ h: el.getBoundingClientRect().height, fs: getComputedStyle(el).fontSize, sh: el.scrollHeight }));
+    const measure = () => page.getByRole("heading", { level: 1 }).evaluate((el) => ({ h: el.getBoundingClientRect().height, fs: getComputedStyle(el).fontSize, sh: el.scrollHeight })).catch(() => ({ h: 0, fs: "", sh: 0 }));
+    await expect.poll(async () => (await measure()).h, { message: "the title has a size once the page is up" }).toBeGreaterThan(0);
+    const m = await measure();
     const lines = Math.round(m.h / (parseFloat(m.fs) * 1.15));
     expect(lines, JSON.stringify(m)).toBeLessThanOrEqual(3);
     expect(m.sh, "the rest of the title is cut off, not shown").toBeGreaterThan(m.h);
@@ -242,7 +244,10 @@ test.describe("Toasts and the fixed banners", () => {
     });
     const eventId = await finishedGameFuture(page, "Toast Viewer");
     await page.goto(`/events/${eventId}`);
-    await page.getByRole("button", { name: "Follow game" }).click();
+    // Adding a name says so in a toast.
+    await page.getByRole("button", { name: "Add a friend" }).click();
+    await page.getByRole("textbox", { name: "Their name or email" }).fill("Rui Costa");
+    await page.keyboard.press("Enter");
     const banner = page.locator(".MuiPaper-root").filter({ has: page.getByRole("button", { name: "Update", exact: true }) }).last();
     await expect(banner).toBeVisible();
     const toast = page.locator(".MuiSnackbar-root").first();
