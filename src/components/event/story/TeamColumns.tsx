@@ -205,7 +205,7 @@ export function TeamColumns({ matches, viewerTeam, viewerName, canEdit, drag: dr
                       {canEdit && dragEnabled && (
                         <Box
                           aria-hidden data-testid={`team-player-handle-${player.name}`} onPointerDown={(e) => handlePointerDown(e, player.name, team.team)}
-                          sx={{ display: { xs: "none", sm: "flex" }, p: 0.5, cursor: drag ? "grabbing" : "grab", touchAction: "none", color: "text.disabled" }}
+                          sx={{ display: { xs: "none", sm: "flex" }, p: 0.5, cursor: drag ? "grabbing" : "grab", touchAction: "none", color: "text.secondary" }}
                         >
                           <DragIndicatorIcon fontSize="small" />
                         </Box>
