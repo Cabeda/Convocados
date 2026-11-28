@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Box, Button, IconButton, MenuItem, TextField, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ContactsIcon from "@mui/icons-material/Contacts";
@@ -56,8 +56,26 @@ export function AddFriendPanel({ variant = "friend", full, positionsEnabled, sug
   const [namingEmail, setNamingEmail] = useState<string | null>(null);
   const [theirName, setTheirName] = useState("");
   const fieldRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
   const self = variant === "self";
   const contacts = self ? null : contactsApi();
+
+  // The on-screen keyboard takes half of a phone: when the room changes, the field and its button must both stay in sight
+  // (the whole panel if it fits, otherwise at least the button that finishes it).
+  useEffect(() => {
+    const keepInSight = () => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const room = window.visualViewport?.height ?? window.innerHeight;
+      (panel.getBoundingClientRect().height <= room ? panel : submitRef.current)?.scrollIntoView?.({ block: "nearest" });
+    };
+    keepInSight();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", keepInSight);
+    window.addEventListener("resize", keepInSight);
+    return () => { vv?.removeEventListener("resize", keepInSight); window.removeEventListener("resize", keepInSight); };
+  }, []);
 
   const refocus = () => setTimeout(() => fieldRef.current?.focus(), 0);
   const value = several ? list : text;
@@ -120,7 +138,7 @@ export function AddFriendPanel({ variant = "friend", full, positionsEnabled, sug
   const canSubmit = naming ? !!theirName.trim() : !!value.trim();
   return (
     <Box
-      id={id} role="group" aria-label={title} data-testid="add-friend-panel"
+      ref={panelRef} id={id} role="group" aria-label={title} data-testid="add-friend-panel"
       onKeyDown={(e) => {
         if (e.key !== "Escape") return;
         e.stopPropagation();
@@ -204,7 +222,7 @@ export function AddFriendPanel({ variant = "friend", full, positionsEnabled, sug
       )}
 
       <Button
-        variant="contained" fullWidth disableElevation disabled={!canSubmit || busy} onClick={submit}
+        ref={submitRef} variant="contained" fullWidth disableElevation disabled={!canSubmit || busy} onClick={submit}
         sx={{ minHeight: 56, borderRadius: 999, fontSize: "1.125rem", fontWeight: 700, textTransform: "none", ...tappable }}
       >
         {several ? t("ngAddAll") : self ? t("ngAddMe") : full ? t("ngAddToBench") : t("ngAddToGame")}

@@ -226,3 +226,48 @@ async function finishedGameFuture(page: Page, name: string) {
   for (const n of [name, "Ana Maria", "Beto Santos", "Carla Dias"]) await api.post(`/api/events/${id}/players`, { data: { name: n, linkToAccount: n === name } });
   return id as string;
 }
+
+test.describe("Toasts and the fixed banners", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  test.setTimeout(60_000);
+
+  test("a toast shows above the Update banner, not behind it", async ({ page }) => {
+    // A waiting service worker is what makes the Update banner appear.
+    await page.addInitScript(() => {
+      const fake = { waiting: { postMessage() {} }, addEventListener() {}, installing: null };
+      Object.defineProperty(navigator, "serviceWorker", {
+        configurable: true,
+        value: { register: async () => fake, ready: Promise.resolve(fake), addEventListener() {}, removeEventListener() {}, controller: {}, getRegistration: async () => fake },
+      });
+    });
+    const eventId = await finishedGameFuture(page, "Toast Viewer");
+    await page.goto(`/events/${eventId}`);
+    await page.getByRole("button", { name: "Follow game" }).click();
+    const banner = page.locator(".MuiPaper-root").filter({ has: page.getByRole("button", { name: "Update", exact: true }) }).last();
+    await expect(banner).toBeVisible();
+    const toast = page.locator(".MuiSnackbar-root").first();
+    await expect(toast).toBeVisible();
+    const t = (await toast.boundingBox())!;
+    const b = (await banner.boundingBox())!;
+    expect(t.y + t.height, "the toast ends above the banner").toBeLessThanOrEqual(b.y + 1);
+  });
+});
+
+test.describe("Soft keyboard", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  test.setTimeout(60_000);
+
+  test("with the keyboard up (a short screen) the Add field and its button are both still on screen", async ({ page }) => {
+    const eventId = await finishedGameFuture(page, "Keyboard Viewer");
+    await page.goto(`/events/${eventId}`);
+    await page.getByRole("button", { name: "Add a friend" }).click();
+    const field = page.getByRole("textbox", { name: "Their name or email" });
+    await expect(field).toBeFocused();
+    // The keyboard takes about half of a phone's height: the page now has this much room.
+    await page.setViewportSize({ width: 390, height: 380 });
+    await page.getByRole("textbox", { name: "Their name or email" }).fill("Rui Costa");
+    const button = page.getByRole("button", { name: "Add to the game" });
+    await expect.poll(() => inView(page, field), { message: "the field is on screen", timeout: 3000 }).toBe(true);
+    await expect.poll(() => inView(page, button), { message: "the Add button is on screen", timeout: 3000 }).toBe(true);
+  });
+});
