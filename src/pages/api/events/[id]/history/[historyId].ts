@@ -8,7 +8,7 @@ import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
-import { getGameSettlement, syncGamePayments, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
+import { getGameSettlement, syncGamePaymentsTx, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
 import { perPlayerShare } from "../../../../../lib/gameCost";
 import { postLedgerEntry } from "../../../../../lib/ledger.server";
 import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
@@ -340,14 +340,22 @@ export const PATCH: APIRoute = async ({ params, request }) => {
         });
 
         // ADR 0019: Write cost_adjustment correction rows for post-migration games
-        const existingDebits = await tx.walletTransaction.findMany({
-          where: { eventId: params.id, eventInstanceId: game.id, reason: "per_game_share", direction: "debit" },
-          select: { userId: true, amountCents: true },
+        const chargeRows = await tx.walletTransaction.findMany({
+          where: { eventId: params.id, eventInstanceId: game.id, reason: { in: ["per_game_share", "cost_adjustment"] } },
+          select: { userId: true, reason: true, direction: true, amountCents: true },
         });
+        const existingDebits = chargeRows.filter((r) => r.reason === "per_game_share" && r.direction === "debit");
 
         if (existingDebits.length > 0) {
+          const netByUser = new Map<string, number>();
+          for (const row of chargeRows) {
+            const signed = row.direction === "debit" ? row.amountCents : -row.amountCents;
+            netByUser.set(row.userId, (netByUser.get(row.userId) ?? 0) + signed);
+          }
           for (const debit of existingDebits) {
-            const delta = newShareCents - debit.amountCents;
+            const currentCents = netByUser.get(debit.userId) ?? 0;
+            if (currentCents <= 0) continue;
+            const delta = newShareCents - currentCents;
             if (delta === 0) continue;
             await postLedgerEntry({
               eventId: params.id!,
@@ -472,7 +480,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     ? (body.paymentsSnapshot === null ? null : JSON.stringify(body.paymentsSnapshot))
     : undefined;
 
-  const updated = await prisma.gameHistory.update({
+  const updated = await prisma.$transaction(async (tx) => {
+  const entryAfter = await tx.gameHistory.update({
     where: { id: historyId },
     data: {
       ...(status !== undefined && { status }),
@@ -486,7 +495,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   });
 
   // Dual-write the occurrence data to the Game model (ADR 0016) so readers
-  // that migrated off GameHistory never see a stale score/status/roster.
+  // that migrated off GameHistory never see a stale score/status/roster. The
+  // teams mirror and its settlement re-sync share this transaction, so a torn
+  // write can never leave the roll and the ledger disagreeing.
   if (mirrorGame) {
     const scoreChanged =
       status !== undefined ||
@@ -495,7 +506,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       scoreSetsProvided ||
       clearStructuredScore;
     if (scoreChanged) {
-      await prisma.game.update({
+      await tx.game.update({
         where: { id: mirrorGame.id },
         data: {
           ...(status !== undefined && { status }),
@@ -508,19 +519,23 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     }
     if (teamsSnapshot !== undefined) {
       await applyTeamsSnapshotToGame(
-        { id: mirrorGame.id, eventId: params.id ?? "", dateTime: updated.dateTime },
-        updated.teamsSnapshot,
+        { id: mirrorGame.id, eventId: params.id ?? "", dateTime: entryAfter.dateTime },
+        entryAfter.teamsSnapshot,
+        tx,
       );
       // Keep the durable payment roll aligned with the lineup this edit just
       // wrote. A team move can leave a player's GameParticipant order past the
       // bench; without a re-sync their GamePayment row stays stale or archived
       // even though they played.
-      await syncGamePayments(mirrorGame.id, params.id ?? "");
+      await syncGamePaymentsTx(tx, mirrorGame.id, params.id ?? "");
     }
     if (paymentsSnapshot !== undefined) {
-      await mirrorPaymentsSnapshotToGame(mirrorGame, updated.paymentsSnapshot, params.id ?? "");
+      await mirrorPaymentsSnapshotToGame(mirrorGame, entryAfter.paymentsSnapshot, params.id ?? "", tx);
     }
   }
+
+  return entryAfter;
+  });
 
   // Log activity for each type of change
   const actor = session.user.name ?? session.user.email ?? "Unknown";

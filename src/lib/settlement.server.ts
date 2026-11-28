@@ -294,7 +294,8 @@ export async function isGamePayer(eventId: string, gameId: string, userId: strin
  * - Archives rows for players no longer charged (soft, keeps history).
  * - Untracked games get no rows.
  * - Re-applies payer auto-settlement when the payer is an active participant.
- * - Played games: amounts/rows are frozen — only payer auto-settle/revert applies.
+ * - Played games: amounts/rows are frozen, so charge changes are reconciled with
+ *   idempotent corrections (payer auto-settle/revert still applies).
  */
 async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: string): Promise<void> {
   const [effective, game, participants, event] = await Promise.all([
@@ -428,32 +429,43 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     });
   }
 
-  // ADR 0007/0019: the ledger is the source of truth for money. Charge each
-  // lineup player a `per_game_share` debit so the outstanding balance is real
-  // (previously only `payment_received` credits existed, clamping the balance
-  // to zero). Frozen for played games, and reversed when a player is uncharged.
-  if (game?.status !== "played") {
-    await syncChargeDebits(db, gameId, eventId, charged, share, effective.currency);
-  }
+  // ADR 0007/0019: charge each lineup player a `per_game_share` debit, at the
+  // row's frozen amount for a played game; only pre-game sync reverses one.
+  const frozen = game?.status === "played";
+  const rows = await db.gamePayment.findMany({
+    where: { gameId, archivedAt: null },
+    select: { eventPlayerId: true, amount: true },
+  });
+  const amountByPlayer = new Map(rows.map((r) => [r.eventPlayerId, r.amount]));
+  const chargedWithAmount = charged.map((p) => ({
+    ...p,
+    amount: amountByPlayer.get(p.eventPlayer.id) ?? share,
+  }));
+  await syncChargeDebits(db, gameId, eventId, chargedWithAmount, effective.currency, frozen);
 
   await applyPayer();
 }
 
 /**
  * Keep the ledger's `per_game_share` charge side in step with the game's
- * charged players: a debit per charged player, removed for anyone no longer
- * charged (soft-archived GamePayment rows).
+ * charged players. Pre-game, a debit is posted per charged player and a removed
+ * player's debit is deleted. A played game instead gets idempotent
+ * `cost_adjustment` corrections: revive debits, remove credits, no rewrites.
  */
 async function syncChargeDebits(
   db: DbClient,
   gameId: string,
   eventId: string,
-  charged: Array<{ eventPlayer: { id: string; name: string; userId: string | null } }>,
-  share: number,
+  charged: Array<{ eventPlayer: { id: string; name: string; userId: string | null }; amount: number }>,
   currency: string,
+  frozen: boolean,
 ): Promise<void> {
-  const shareCents = Math.round(share * 100);
   const activeIds = new Set(charged.map((p) => p.eventPlayer.id));
+
+  if (frozen) {
+    await syncPlayedChargeDebits(db, gameId, eventId, charged, activeIds, currency);
+    return;
+  }
 
   for (const p of charged) {
     const userId = p.eventPlayer.userId ?? (await ensureSystemUserId(eventId, p.eventPlayer.name, db));
@@ -461,7 +473,7 @@ async function syncChargeDebits(
       {
         eventId,
         userId,
-        amountCents: shareCents,
+        amountCents: Math.round(p.amount * 100),
         currency,
         direction: "debit",
         reason: "per_game_share",
@@ -490,6 +502,93 @@ async function syncChargeDebits(
         idempotencyKey: ledgerKey("share", eventId, userId, gameId),
       },
     });
+  }
+}
+
+/**
+ * Played-game charge reconciliation. The game's amounts are frozen, so the
+ * ledger must converge on the roll without deleting or rewriting a settled
+ * debit. ADR 0019 §6: a legacy game — one with no `per_game_share` row at all —
+ * is corrected on `GamePayment` only, never by inventing ledger debt here.
+ */
+async function syncPlayedChargeDebits(
+  db: DbClient,
+  gameId: string,
+  eventId: string,
+  charged: Array<{ eventPlayer: { id: string; name: string; userId: string | null }; amount: number }>,
+  activeIds: Set<string>,
+  currency: string,
+): Promise<void> {
+  const rows = await db.walletTransaction.findMany({
+    where: {
+      eventId,
+      eventInstanceId: gameId,
+      OR: [{ reason: "per_game_share" }, { reason: "cost_adjustment" }],
+    },
+    select: { userId: true, reason: true, direction: true, amountCents: true },
+  });
+  const netByUser = new Map<string, number>();
+  const hasShareDebit = new Set<string>();
+  for (const row of rows) {
+    if (row.reason === "per_game_share" && row.direction === "debit") hasShareDebit.add(row.userId);
+    const delta = row.direction === "debit" ? row.amountCents : -row.amountCents;
+    netByUser.set(row.userId, (netByUser.get(row.userId) ?? 0) + delta);
+  }
+  if (hasShareDebit.size === 0) return;
+
+  const postAdjustment = async (userId: string, amountCents: number, direction: "debit" | "credit") => {
+    await postLedgerEntry(
+      {
+        eventId,
+        userId,
+        amountCents,
+        currency,
+        direction,
+        reason: "cost_adjustment",
+        eventInstanceId: gameId,
+      },
+      db,
+    );
+  };
+
+  for (const p of charged) {
+    const userId = p.eventPlayer.userId ?? (await ensureSystemUserId(eventId, p.eventPlayer.name, db));
+    const desiredCents = Math.round(p.amount * 100);
+    const currentCents = netByUser.get(userId) ?? 0;
+    const delta = desiredCents - currentCents;
+    if (delta === 0) continue;
+    if (delta > 0 && currentCents === 0 && !hasShareDebit.has(userId)) {
+      // First charge for a revived/added player keeps the stable share key.
+      await postLedgerEntry(
+        {
+          eventId,
+          userId,
+          amountCents: delta,
+          currency,
+          direction: "debit",
+          reason: "per_game_share",
+          eventInstanceId: gameId,
+          idempotencyKey: ledgerKey("share", eventId, userId, gameId),
+        },
+        db,
+      );
+    } else {
+      await postAdjustment(userId, Math.abs(delta), delta > 0 ? "debit" : "credit");
+    }
+  }
+
+  // Removing a player cancels the share they still owe with a correction
+  // credit; the original debit stays in the ledger.
+  const archived = await db.gamePayment.findMany({
+    where: { gameId, archivedAt: { not: null } },
+    include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
+  });
+  for (const row of archived) {
+    if (activeIds.has(row.eventPlayerId)) continue;
+    const userId = row.eventPlayer.userId ?? systemUserId(eventId, row.eventPlayer.name);
+    const currentCents = netByUser.get(userId) ?? 0;
+    if (currentCents <= 0) continue;
+    await postAdjustment(userId, currentCents, "credit");
   }
 }
 
