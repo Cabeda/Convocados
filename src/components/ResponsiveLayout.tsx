@@ -427,11 +427,12 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               sx={{
                 flexGrow: 1, fontWeight: 700, textDecoration: "none", color: "inherit",
                 "&:hover": { color: theme.palette.primary.main },
-                display: "flex", alignItems: "center", gap: 0.5,
+                display: "flex", alignItems: "center", gap: 0.5, minWidth: 0,
               }}
             >
               {t("appName")}
-              <Chip label="beta" size="small" sx={{ fontSize: "0.6rem", height: 18, ml: 0.5 }} />
+              {/* Below 400px the room is for the buttons that do something: the badge goes first. */}
+              <Chip label="beta" size="small" sx={{ fontSize: "0.6rem", height: 18, ml: 0.5, "@media (max-width:399.95px)": { display: "none" } }} />
             </Typography>
             {/* The in-app feed has been written since the notification queue
                 landed; the web had no way to read it (#1560). */}
@@ -541,7 +542,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                     // full-page navigation — the user stays on the current page.
                     refetchSession?.();
                   }}
-                  sx={{ textTransform: "none", fontWeight: 600 }}
+                  sx={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, minHeight: 44 }}
                 >
                   {t("signIn")}
                 </SignInButton>
@@ -618,7 +619,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
           <Typography variant="body2" align="center" sx={{ color: theme.palette.text.secondary }}>
             © {new Date().getFullYear()} {t("appName")}
           </Typography>
-          <Typography variant="caption" align="center" component="div" sx={{ color: theme.palette.text.disabled }}>
+          <Typography variant="caption" align="center" component="div" sx={{ color: theme.palette.text.secondary }}>
             <Typography
               component="a"
               href="https://github.com/Cabeda/Convocados/releases"

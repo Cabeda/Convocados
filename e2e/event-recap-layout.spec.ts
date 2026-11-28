@@ -130,3 +130,27 @@ test.describe("Recap layout on a phone (390 x 667)", () => {
     }
   }
 });
+
+test.describe("App bar when signed out", () => {
+  test.setTimeout(60_000);
+
+  for (const width of [320, 360, 390]) {
+    test(`at ${width}px "Sign in" stays on one line and the bar does not overflow`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 700 });
+      const api = withIp(page.context().request, uniqueIp());
+      const created = await api.post("/api/events", {
+        data: { title: "Bar game", location: "Test Stadium", dateTime: new Date(Date.now() + 86_400_000).toISOString(), maxPlayers: 10, sport: "football-5v5" },
+      });
+      const { id } = await created.json();
+      await page.goto(`/events/${id}`);
+      const signIn = page.locator("header").first().getByRole("button", { name: "Sign in", exact: true });
+      await expect(signIn).toBeVisible();
+      const box = (await signIn.boundingBox())!;
+      expect(box.height, "one line of text, not two").toBeLessThan(50);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      // The preferences (language, dark mode) stay reachable: the gear is still there.
+      await expect(page.locator("header").first().getByRole("button", { name: "Preferences" })).toBeVisible();
+    });
+  }
+});
