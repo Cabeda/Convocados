@@ -3,11 +3,15 @@ import { isGameEnded } from "./gameStatus";
 import { getSession, checkOwnership } from "./auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
 import { isSettledGameParticipant } from "./participants.server";
-import { isHistoryParticipant } from "./snapshotParticipants";
 import { getWrapUpGameSettlement } from "./settlement.server";
 import { occurrencePaymentRoll } from "./paymentRoll.server";
 import { getViewerGameRank, getViewerRankStanding, type ViewerGameRank, type ViewerRankStanding } from "./seasonRank.server";
 import { summarizePayments } from "./paymentSummary";
+import { parseTeamsSnapshot } from "./gameSnapshot";
+import { findViewerName, isNameInList, namesFromTeamsSnapshot } from "./snapshotParticipants";
+import { viewerRosterNames } from "./viewerIdentity.server";
+import { countEligibleVoters, viewerHasVoted } from "./mvp.server";
+import { resolvePaymentDetails } from "./paymentDetailsResolve.server";
 
 /**
  * Shared post-game wrap-up status computation.
@@ -58,12 +62,67 @@ export interface PostGameStatusPayload {
   viewerPaymentSettled: boolean;
   /** Whether the Event already recurs — drives the post-game "make it recurring" prompt. */
   isRecurring: boolean;
+  /** Kickoff of the last game (latest history row, or the ended event itself); null when there is none or it was cancelled. */
+  lastGameDateTime: string | null;
+  /** Which team the viewer played for in the last game (0 = score one); null when they did not play or are signed out. */
+  viewerTeam: 0 | 1 | null;
+  /**
+   * Every name the viewer is known by on this event: the account name plus the roster names linked to their account.
+   * Static for a page visit, so the 15 s poll (`light`) leaves it out and the client keeps the one it was given.
+   */
+  viewerNames?: string[];
+  /** How many people played the last game (from its lineup snapshot); null when unknown. */
+  lastGamePlayerCount: number | null;
+  /** The collector has somewhere to send money to (payment methods resolve), so the card can offer "How to pay". Left out of a `light` read. */
+  payerHasPaymentDetails?: boolean;
+}
+
+export interface PostGameStatusOptions {
+  /**
+   * The 15 s poll. It answers every field that can change while the page is open and leaves out the
+   * ones that cannot (`viewerNames`, `payerHasPaymentDetails`): the client keeps what the page load gave it.
+   * The viewer's roster names are still needed to answer viewer-scoped fields (isPlayer, viewerTeam, payment
+   * settled), so a light read reuses the names it remembers; a full read always looks them up afresh.
+   */
+  light?: boolean;
+}
+
+const VIEWER_NAMES_TTL_MS = 5 * 60_000;
+const VIEWER_NAMES_MAX = 5_000;
+const viewerNamesCache = new Map<string, { names: string[]; expires: number }>();
+
+/** Forget every remembered viewer name (tests). */
+export const resetViewerNamesCache = () => viewerNamesCache.clear();
+
+/**
+ * The viewer's roster names. A full read (page load, after something the viewer did) looks them up and
+ * remembers them, so that is also the invalidation: a claim or a join is seen the next time the page
+ * reads the event. A light read (the poll) takes the remembered names while they are fresh.
+ */
+async function viewerNamesFor(eventId: string, userId: string, accountName: string, light: boolean): Promise<string[]> {
+  const key = `${eventId}\u0000${userId}\u0000${accountName}`;
+  const now = Date.now();
+  if (light) {
+    const hit = viewerNamesCache.get(key);
+    if (hit && hit.expires > now) return hit.names;
+  }
+  const names = await viewerRosterNames(eventId, { id: userId, name: accountName });
+  if (viewerNamesCache.size >= VIEWER_NAMES_MAX) {
+    for (const [k, v] of viewerNamesCache) if (v.expires <= now) viewerNamesCache.delete(k);
+    // Still full: drop the oldest entry (a Map iterates in insertion order).
+    if (viewerNamesCache.size >= VIEWER_NAMES_MAX) viewerNamesCache.delete(viewerNamesCache.keys().next().value as string);
+  }
+  viewerNamesCache.delete(key);
+  viewerNamesCache.set(key, { names, expires: now + VIEWER_NAMES_TTL_MS });
+  return names;
 }
 
 export async function computePostGameStatus(
   eventId: string,
   request: Request,
+  options: PostGameStatusOptions = {},
 ): Promise<PostGameStatusPayload | null> {
+  const light = !!options.light;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true, currentGameId: true, isRecurring: true },
@@ -94,6 +153,7 @@ export async function computePostGameStatus(
       gamePayments: null, gameConfig: null, seasonRank: null,
       rankStanding: null, viewerPaymentSettled: false,
       isRecurring: event.isRecurring ?? false,
+      lastGameDateTime: null, viewerTeam: null, viewerNames: [], lastGamePlayerCount: null, payerHasPaymentDetails: false,
     };
   }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
@@ -147,7 +207,11 @@ export async function computePostGameStatus(
   // Unlike isParticipant, the Owner/Admin settlement override does NOT apply —
   // MVP voting is restricted to players, so an admin who didn't play must not
   // be offered the Vote MVP task nor have the banner held open by MVP state.
-  const isPlayer = session?.user ? isHistoryParticipant(latestHistory, session.user.name) : false;
+  // The account name often differs from the roster name ("anab99" vs "Ana B"), so
+  // the roster rows linked to the account count too (falling back to the name).
+  const viewerNames = session?.user ? await viewerNamesFor(event.id, session.user.id, session.user.name, light) : [];
+  const playedAs = findViewerName(viewerNames, namesFromTeamsSnapshot(latestHistory?.teamsSnapshot));
+  const isPlayer = playedAs !== null;
 
   // ─── MVP voting completion ──────────────────────────────────────────
   let mvpComplete = true;
@@ -176,20 +240,8 @@ export async function computePostGameStatus(
     const isVotingOpen = gameHasEnded && !newerGame && withinWindow;
 
     if (isVotingOpen) {
-      // Count eligible voters: participants in teamsSnapshot that have user accounts
-      let eligibleCount = 0;
-      if (latestHistory.teamsSnapshot) {
-        try {
-          const teams = JSON.parse(latestHistory.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
-          const allNames = teams.flatMap((t) => t.players.map((p) => p.name));
-          // Find users whose names match participants (case-insensitive)
-          const matchingUsers = await prisma.user.findMany({
-            where: { name: { in: allNames } },
-            select: { name: true },
-          });
-          eligibleCount = matchingUsers.length;
-        } catch { /* ignore */ }
-      }
+      // Count eligible voters: lineup names that belong to an account (by name or by a linked roster row)
+      const eligibleCount = await countEligibleVoters(event.id, namesFromTeamsSnapshot(latestHistory.teamsSnapshot));
 
       if (eligibleCount > 0) {
         // Count votes already cast for this game
@@ -205,25 +257,7 @@ export async function computePostGameStatus(
 
       // Personal task: has THIS user voted?
       if (isPlayer && session?.user) {
-        let viewerVoted: boolean;
-        const userPlayers = await prisma.player.findMany({
-          where: { eventId: event.id, userId: session.user.id },
-          select: { id: true },
-        });
-        if (userPlayers.length > 0) {
-          const existing = await prisma.mvpVote.findFirst({
-            where: { gameHistoryId: latestHistory.id, voterPlayerId: { in: userPlayers.map((p) => p.id) } },
-            select: { id: true },
-          });
-          viewerVoted = !!existing;
-        } else {
-          // Participant with no Player record — votes are stored name-based.
-          const existing = await prisma.mvpVote.findFirst({
-            where: { gameHistoryId: latestHistory.id, voterPlayerId: `name:${session.user.name}` },
-            select: { id: true },
-          });
-          viewerVoted = !!existing;
-        }
+        const viewerVoted = await viewerHasVoted(latestHistory.id, event.id, session.user, viewerNames);
         // After 24h the banner stops nagging even without a vote (same
         // ceiling as bannerMvpComplete); voting itself stays open on history.
         myMvpComplete = viewerVoted || hoursSinceGameEnd >= 24;
@@ -310,6 +344,7 @@ export async function computePostGameStatus(
         sessionUser: session.user,
         event,
         latestHistory,
+        viewerNames,
       });
     }
   }
@@ -347,7 +382,7 @@ export async function computePostGameStatus(
         scoreTwo: latestHistory.scoreTwo,
         teamsSnapshot: latestHistory.teamsSnapshot,
       },
-      session.user.name,
+      playedAs ?? session.user.name,
     );
   }
 
@@ -363,7 +398,7 @@ export async function computePostGameStatus(
         isFriendly: latestHistory.isFriendly,
         teamsSnapshot: latestHistory.teamsSnapshot,
       },
-      session.user.name,
+      playedAs ?? session.user.name,
     );
   }
 
@@ -372,12 +407,17 @@ export async function computePostGameStatus(
   // admins keep the task open until every share is in.
   let viewerPaymentSettled = false;
   if (session?.user && !isSettlementAdmin) {
-    const viewerName = session.user.name;
     const rows = wrapUpSettlement?.rows ?? [];
-    const mine = rows.find((r) => r.name === viewerName);
-    const isReceiver = (wrapUpSettlement?.payerName ?? null) === viewerName;
+    const mine = rows.find((r) => isNameInList(viewerNames, r.name));
+    const isReceiver = isNameInList(viewerNames, wrapUpSettlement?.payerName ?? null);
     viewerPaymentSettled = !isReceiver && !!mine && !mine.isPayer && mine.status === "paid";
   }
+
+  // Whether the collector has somewhere to send money to: drives the card's "How to pay" link.
+  // Static for a page visit, so the poll skips the lookup.
+  const staticFields = light
+    ? {}
+    : { viewerNames, payerHasPaymentDetails: await collectorHasPaymentDetails(event.id, wrapUpSettlement) };
 
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
@@ -397,5 +437,32 @@ export async function computePostGameStatus(
     rankStanding,
     viewerPaymentSettled,
     isRecurring: event.isRecurring ?? false,
+    lastGameDateTime: latestHistory
+      ? latestHistory.dateTime.toISOString()
+      : gameEnded ? event.dateTime.toISOString() : null,
+    viewerTeam: session?.user ? viewerTeamIndex(latestHistory?.teamsSnapshot ?? null, viewerNames) : null,
+    lastGamePlayerCount: namesFromTeamsSnapshot(latestHistory?.teamsSnapshot).length || null,
+    ...staticFields,
   };
+}
+
+/** Whether the collector of a tracked game has somewhere to send money to. A courtesy: it never fails the status. */
+async function collectorHasPaymentDetails(
+  eventId: string,
+  settlement: { mode: string; payerName: string | null; gameId: string } | null,
+): Promise<boolean> {
+  if (!settlement || settlement.mode !== "tracked" || !settlement.payerName) return false;
+  try {
+    return (await resolvePaymentDetails(eventId, settlement.gameId)).methods.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** The index of the team (0 = score one) whose snapshot lineup contains any of `names`, or null. */
+function viewerTeamIndex(teamsSnapshot: string | null, names: readonly string[]): 0 | 1 | null {
+  const teams = parseTeamsSnapshot(teamsSnapshot);
+  if (!teams) return null;
+  const idx = teams.findIndex((team) => team.players.some((p) => isNameInList(names, p)));
+  return idx === 0 || idx === 1 ? idx : null;
 }

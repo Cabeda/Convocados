@@ -27,8 +27,12 @@ on:
 # in-flight run lets a tick kill the review it just picked — observed 2026-11-27
 # on #1881, where a 45-second-old review was cancelled and wrote no verdict.
 # Queueing wastes at most one run; cancelling loses the work and posts nothing.
+# One read per Change. The shared key kept a single pending run in the group and
+# cancelled every other dispatch, so a batch of eight reviews ran one and dropped
+# seven. Two reads of the same Change still serialise; different Changes do not
+# contend for anything — the role is read-only.
 concurrency:
-  group: factory-review
+  group: factory-review-${{ inputs.pr || github.event.pull_request.number || 'pick' }}
   cancel-in-progress: false
 
 # Everything flows through the App token minted in the job below. The
@@ -171,12 +175,15 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Review the Change
-        # 12, not 25. Every review that finished took 3-5 minutes; the only runs
-        # that used the full 25 wrote no verdict at all. The shorter cap turns a
-        # stuck run into a cheap miss instead of half an hour of billed minutes.
+        # 20. The 12-minute cap was fitted to docs-only diffs (3-5 min) and killed
+        # real code reviews mid-exploration: run 46071914557 was still reading
+        # `cancelEvent.server.ts` at 11 minutes and wrote no verdict, which the
+        # gate reads as "no review has named its head". 20 leaves room for a code
+        # diff while still halving the old 25, and the prompt below keeps the
+        # exploration bounded.
         # A step that times out exits non-zero, and `continue-on-error` absorbs
         # it, so the job stays green and the verdict step reports the miss.
-        timeout-minutes: 12
+        timeout-minutes: 20
         # Advisory, not a gate: see factory-issue.yml for why.
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
@@ -206,6 +213,11 @@ jobs:
             the Gates, which already passed. Report findings with `path:line` and the concrete
             failure each one causes. Treat migrations, auth and tokens, the scheduler, workflows
             and deploy config, and coverage-threshold edits as Hard Block: report, do not judge.
+
+            Start from `gh pr diff <number>` and open only the files the diff names, one read
+            each. At most six reads in total, and every read must answer a question the diff
+            raised. Do not survey the repository: the Change is the subject, and exploring past it
+            spends the review's minutes without changing the verdict.
 
             Do not install, build, or run anything: no `pnpm install`, `pnpm test`, `pnpm typecheck`,
             Gradle, Playwright or Lighthouse. Those results already exist as checks on the Change and
@@ -259,13 +271,26 @@ jobs:
             if [ -n "$verdict" ]; then echo "<!-- factory:verdict:$verdict -->"; fi
             echo "<!-- factory:reviewed:$head:$sig -->"
           } > .factory-review/post.md
-          # Post as a comment, always. GitHub refuses a review on a PR the App
-          # authored, so the comment fallback was already the only path that
-          # worked for every machine Change — and a formal review lands in a
-          # separate tab that the conversation never shows. The adversarial
-          # review is the point: it belongs in the thread a human reads.
-          # The daemon reads both surfaces, so nothing downstream changes.
+          # The comment carries the whole review, in the thread a human reads.
           gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file .factory-review/post.md
+          # Then the formal review, which is what `required_approving_review_count`
+          # reads and what a `REQUEST_CHANGES` blocks on. GitHub refuses a review
+          # by the author, so this only lands on Changes opened by a person —
+          # `deliver.ts` opens new ones with `FACTORY_PAT` for exactly this.
+          # A refusal here is not a failure: the signed verdict and the check
+          # still decide, and older App-authored Changes keep the comment path.
+          case "$verdict" in
+            approve) flag="--approve"; note="Approved — the review is in the comment above." ;;
+            refuse)
+              flag="--request-changes"
+              note="Changes requested — the findings are in the comment above."
+              ;;
+            *) flag=""; note="" ;;
+          esac
+          if [ -n "$flag" ]; then
+            gh pr review "$PR" --repo "$GITHUB_REPOSITORY" "$flag" --body "$note" \
+              || echo "::warning title=Reviewer::GitHub refused the formal review (App-authored Change)"
+          fi
 
       - name: Record the verdict
         # This check IS the gate: `reviewer` is a required status check, so a

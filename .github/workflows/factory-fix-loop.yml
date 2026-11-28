@@ -38,10 +38,14 @@ on:
         required: false
         type: string
 
-# One round at a time, across every Change. The Fixer is a single writer: two
-# runs on the same branch race the push, and the second one loses silently.
+# One round at a time **per Change**. Two runs on the same branch race the push
+# and the second loses silently, so the lock is keyed on the Change — one shared
+# group serialised every refused Change behind the previous one, which put nine
+# of them four hours apart. Different Changes are different branches, so they do
+# not contend. A run that has to pick (schedule, no PR named) keeps the shared
+# key, because two pickers would choose the same Change.
 concurrency:
-  group: factory-fix-loop
+  group: factory-fix-loop-${{ inputs.pr || github.event.pull_request.number || github.event.issue.number || github.event.check_suite.pull_requests[0].number || 'pick' }}
   cancel-in-progress: false
 
 # Nothing here needs the default token. The App token is minted in the job that
@@ -74,7 +78,11 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      # `gh pr comment` posts through the pull-requests API, not the issues one,
+      # so `issues: write` alone leaves it with no scope at all: the Attempt
+      # comment failed with an empty stderr and this job recorded no round for
+      # two hours on 2026-11-27 (runs 46077295707, 46077554300).
+      pull-requests: write
     outputs:
       pr: ${{ steps.resolve.outputs.pr }}
       branch: ${{ steps.resolve.outputs.branch }}
@@ -337,6 +345,11 @@ jobs:
           # adjudicate them.
           permission-contents: write
           permission-issues: write
+          # The reply is a PR comment, and `gh pr comment` posts through the
+          # pull-requests API: without this the push succeeded and the job died
+          # on "GraphQL: Resource not accessible by integration (addComment)"
+          # (run 46080012846, 2026-11-27).
+          permission-pull-requests: write
 
       - name: Push the round and post its reply
         env:

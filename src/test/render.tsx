@@ -4,7 +4,7 @@ import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { CssBaseline } from "@mui/material";
 
 const theme = createTheme({
-  palette: { mode: "light", primary: { main: "#1b6b4a" } },
+  palette: { mode: "light", primary: { main: "#1b6b4a" }, attention: { main: "#f2a900", ring: "#7d5700" } },
 });
 
 /**

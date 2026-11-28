@@ -498,6 +498,9 @@ export interface ApiOperations {
     params: {
       id: string;
     };
+    query: {
+      poll?: "1";
+    };
   };
   "GET /api/events/{id}/priority": {
     params: {

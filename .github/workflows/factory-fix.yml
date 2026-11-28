@@ -315,6 +315,9 @@ jobs:
       - name: Push the branch, open the Change, and report
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Opens the Change as a person so the App can review it. Everything
+          # else in this step stays on the App token above.
+          FACTORY_PAT: ${{ secrets.FACTORY_PAT }}
           ISSUE: ${{ needs.queue.outputs.issue }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           HANDOFF_DIR: .factory-handoff

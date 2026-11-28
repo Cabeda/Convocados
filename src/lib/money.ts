@@ -21,6 +21,29 @@ export function formatMoney(cents: number, currency?: string | null): string {
   return `${(cents / 100).toFixed(2)}${CURRENCY_SYMBOLS[code] ?? code}`;
 }
 
+/**
+ * The quiet money format for the story cards: whole amounts without decimals
+ * (`€5`), fractional ones with two (`€2.50`), the currency's narrow symbol placed
+ * where the locale expects it. `formatMoney` stays the format of every other
+ * surface; this one is for sentences, not ledgers.
+ *
+ * `amount` is in major units. It is rounded to cents first, so `0.1 + 0.2` reads `€0.30`.
+ */
+export function formatMoneyCompact(amount: number, currency: string | null | undefined, locale: string): string {
+  const code = currency?.trim().toUpperCase() || "EUR";
+  const rounded = Math.round(amount * 100) / 100;
+  const whole = Number.isInteger(rounded);
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency", currency: code, currencyDisplay: "narrowSymbol",
+      minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2,
+    }).format(rounded);
+  } catch {
+    // An unknown locale or a malformed currency code: say it plainly in the one format we trust.
+    return formatMoney(toCents(rounded), code);
+  }
+}
+
 /** Boundary conversion for the legacy float amounts (`EventCost.totalAmount`, `PlayerPayment.amount`). */
 export function toCents(amount: number): number {
   return Math.round(amount * 100);

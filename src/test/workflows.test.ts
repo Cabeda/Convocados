@@ -504,13 +504,13 @@ describe("a refused Change gets its round from the tick", () => {
 });
 
 describe("the review is readable where a human reads it", () => {
-  // A formal review lands in a separate tab the conversation never shows, and
-  // GitHub refuses one on an App-authored PR anyway. The adversarial review is
-  // the product: it goes in the thread.
-  it("posts the review as a PR comment", () => {
+  // The comment carries the whole review, in the thread a human reads. The
+  // formal review is what branch protection counts and what `REQUEST_CHANGES`
+  // blocks on, so both are posted: body in the comment, verdict in the review.
+  it("posts the body as a comment and the verdict as a review", () => {
     const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
     expect(raw).toContain('gh pr comment "$PR"');
-    expect(raw).not.toContain("gh pr review");
+    expect(raw).toContain('gh pr review "$PR"');
   });
 });
 
@@ -599,13 +599,114 @@ describe("a review is bounded by minutes that buy a verdict", () => {
     const doc = reviewer();
     // Serialised, not cancelled: the janitor dispatches review twice per tick,
     // and cancel-in-progress let a tick kill the review it had just picked.
-    expect(doc.concurrency).toEqual({ group: "factory-review", "cancel-in-progress": false });
+    // The key is per Change, because a shared one also dropped every run of a
+    // batch but the first — eight dispatches, one review, seven cancellations.
+    expect(doc.concurrency).toEqual({
+      group: "factory-review-${{ inputs.pr || github.event.pull_request.number || 'pick' }}",
+      "cancel-in-progress": false,
+    });
     const step = doc.jobs?.reviewer?.steps?.find((s) => s.name === "Review the Change");
-    expect(step?.["timeout-minutes"]).toBeLessThanOrEqual(12);
+    // 12 was fitted to docs-only diffs and killed real code reviews mid-read;
+    // 20 still halves the old 25.
+    const cap = step?.["timeout-minutes"] ?? 0;
+    expect(cap).toBeGreaterThanOrEqual(15);
+    expect(cap).toBeLessThanOrEqual(20);
   });
 
   it("forbids rebuilding what the checks already produced", () => {
     const raw = readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
     expect(raw).toContain("no `pnpm install`, `pnpm test`, `pnpm typecheck`");
+    expect(raw).toContain("Start from `gh pr diff <number>`");
+  });
+});
+
+describe("the janitor dispatches one review per tick", () => {
+  // Two were dispatched on the theory that reviews were the bottleneck. A
+  // concurrency group holds one running and one pending run, so the second
+  // replaced the first: six Changes ended up with "no review has named its
+  // head" while the janitor logged two dispatches per tick.
+  it("sends exactly one factory-review", () => {
+    const janitor = readFileSync(join(workflowsDir, "factory-janitor.yml"), "utf8");
+    const ticks = janitor.match(/tick factory-review\b/g) ?? [];
+    expect(ticks).toHaveLength(1);
+  });
+});
+
+describe("the Attempt ledger can post its comment", () => {
+  // `gh pr comment` goes through the pull-requests API. With only `issues: write`
+  // the call failed with an empty stderr, and every round was refused as
+  // unrecorded — six Changes sat unreviewed behind it on 2026-11-27.
+  it("grants the ledger pull-requests: write", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      jobs?: Record<string, { permissions?: Record<string, string> }>;
+    };
+    expect(doc.jobs?.ledger?.permissions?.["pull-requests"]).toBe("write");
+  });
+});
+
+describe("the push job can post its reply", () => {
+  // The round's reply is a PR comment. `gh pr comment` goes through the
+  // pull-requests API, so the App token needs that scope even though the push
+  // itself only needs contents:write. Without it the push lands and the job
+  // dies on "Resource not accessible by integration (addComment)".
+  it("grants the push job pull-requests: write", () => {
+    const raw = readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8");
+    const push = raw.slice(raw.indexOf("\n  push:"));
+    expect(push).toContain("permission-pull-requests: write");
+  });
+});
+
+describe("the Reviewer can approve or send a Change back", () => {
+  // A comment is not a review: `required_approving_review_count` ignores it and
+  // a reviewer's objection cannot block. GitHub refuses a review by the author,
+  // which is why the Change is opened with FACTORY_PAT — the push and the
+  // commits stay the App's, so the CLA is unaffected.
+  const reviewer = () => readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8");
+
+  it("submits an approve and a request-changes, not only a comment", () => {
+    expect(reviewer()).toContain('--approve');
+    expect(reviewer()).toContain('--request-changes');
+    expect(reviewer()).toContain('gh pr review "$PR"');
+  });
+
+  it("opens the Change with a person's token so the App is not the author", () => {
+    const fix = readFileSync(join(workflowsDir, "factory-fix.yml"), "utf8");
+    expect(fix).toContain("FACTORY_PAT: ${{ secrets.FACTORY_PAT }}");
+    const deliver = readFileSync(join(process.cwd(), "scripts/factory/deliver.ts"), "utf8");
+    expect(deliver).toContain("ghAsPerson([");
+  });
+});
+
+
+describe("rounds on different Changes do not queue behind each other", () => {
+  // One shared lock put nine refused Changes four hours apart; they are nine
+  // branches, so only two rounds on the *same* Change actually contend.
+  it("keys the lock on the Change, and keeps a shared key for the picker", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-fix-loop.yml"), "utf8")) as {
+      concurrency?: { group?: string };
+    };
+    // The whole expression, not a member of it: dropping `issue_comment` or
+    // `check_suite` would leave both on the shared key — the four-hour queue
+    // this Change removes — while a `toContain` kept the suite green.
+    expect(doc.concurrency?.group).toBe(
+      "factory-fix-loop-${{ inputs.pr || github.event.pull_request.number || github.event.issue.number || github.event.check_suite.pull_requests[0].number || 'pick' }}",
+    );
+  });
+});
+
+
+describe("a batch of reviews is not one review and seven cancellations", () => {
+  // `group: factory-review` kept one pending run and cancelled the rest: eight
+  // dispatches produced one review. Reads of different Changes contend for
+  // nothing.
+  it("keys the Reviewer's lock on the Change too", () => {
+    const doc = parse(readFileSync(join(workflowsDir, "factory-reviewer.yml"), "utf8")) as {
+      concurrency?: { group?: string };
+    };
+    // The whole expression: a `pull_request` run that lost its own key would
+    // collapse back into one group, which is the eight-into-one this fixes.
+    expect(doc.concurrency?.group).toBe(
+      "factory-review-${{ inputs.pr || github.event.pull_request.number || 'pick' }}",
+    );
   });
 });

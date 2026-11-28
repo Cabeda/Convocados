@@ -3,7 +3,7 @@ import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { authorizeEventMutation } from "../../../../../../lib/eventAuthz.server";
 import { rateLimitResponse } from "../../../../../../lib/apiRateLimit.server";
-import { bulkUnsettleGame, isGameParticipant } from "../../../../../../lib/settlement.server";
+import { bulkUnsettleGame, isGamePayer } from "../../../../../../lib/settlement.server";
 
 /**
  * POST /api/events/[id]/payments/settlement/bulk-undo
@@ -32,7 +32,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   const authz = await authorizeEventMutation(request, event);
-  if (!authz.allowed && !(session?.user && (await isGameParticipant(eventId, gameId, session.user.id)))) {
+  if (!authz.allowed && !(session?.user && (await isGamePayer(eventId, gameId, session.user.id)))) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 

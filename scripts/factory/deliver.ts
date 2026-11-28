@@ -71,8 +71,22 @@ export function readHandoff(dir: string): Handoff {
   };
 }
 
-function run(command: string, args: string[]): string {
-  return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
+/**
+ * The environment for a call made as a person rather than the App.
+ *
+ * `undefined` means "inherit", which keeps the App token: a missing secret must
+ * never send an empty `GH_TOKEN`, because that stops every Change from opening.
+ */
+export function envForPerson(pat: string | undefined): NodeJS.ProcessEnv | undefined {
+  return pat ? { GH_TOKEN: pat } : undefined;
+}
+
+function run(command: string, args: string[], env?: NodeJS.ProcessEnv): string {
+  return execFileSync(command, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+    env: env ? { ...process.env, ...env } : process.env,
+  });
 }
 
 function main(): number {
@@ -91,6 +105,21 @@ function main(): number {
   const bundle = path.join(dir, "change.bundle");
   const bodyFile = path.join(dir, "pr-body.md");
   const gh = (args: string[]) => run("gh", args);
+
+  /**
+   * The Change is opened as a person, not as the App.
+   *
+   * GitHub refuses a review by the author, and the Reviewer *is* the App: a
+   * Change the App opened can only ever be commented on, never approved or sent
+   * back, so `required_approving_review_count` could never be satisfied and a
+   * `REQUEST_CHANGES` could never block. Opening the Change with a person's
+   * token makes the App a reviewer rather than the author.
+   *
+   * Only the `pr create` call uses it. The push, the labels and the comments
+   * stay on the App token, so the CLA allowlist is untouched — the commits are
+   * still the App's.
+   */
+  const ghAsPerson = (args: string[]) => run("gh", args, envForPerson(process.env.FACTORY_PAT));
 
   /** A terminal report the Issue can always receive, even when delivery fails. */
   const comment = (body: string) => {
@@ -148,7 +177,7 @@ function main(): number {
 
     const prUrl = existing
       ? gh(["pr", "view", existing, "--repo", repo, "--json", "url", "--jq", ".url"]).trim()
-      : gh([
+      : ghAsPerson([
           "pr", "create", "--repo", repo, "--base", "main", "--head", handoff.branch,
           "--title", titleFor(handoff.title, issue), "--body-file", bodyFile,
         ]).trim();

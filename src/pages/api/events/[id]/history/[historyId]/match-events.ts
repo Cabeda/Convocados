@@ -9,7 +9,8 @@ import {
   type MatchEventTeam,
   type MatchEventType,
 } from "../../../../../../lib/matchEvents";
-import { isHistoryParticipant } from "../../../../../../lib/snapshotParticipants";
+import { namesFromTeamsSnapshot } from "../../../../../../lib/snapshotParticipants";
+import { viewerNameOnRoster } from "../../../../../../lib/viewerIdentity.server";
 
 const EVENT_TYPES: MatchEventType[] = ["goal", "assist"];
 const TEAMS: MatchEventTeam[] = ["one", "two", "unknown"];
@@ -134,7 +135,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     : await prisma.eventAdmin.findUnique({
         where: { eventId_userId: { eventId: params.id ?? "", userId } },
       });
-  const isParticipant = isHistoryParticipant(history, session?.user?.name);
+  // A participant is known by any name their account has on this event (the post-game status reads the same).
+  const isParticipant = !!session?.user && !!(await viewerNameOnRoster(params.id ?? "", session.user, namesFromTeamsSnapshot(history.teamsSnapshot)));
   if (!isOwner && !admin && !isParticipant) {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
