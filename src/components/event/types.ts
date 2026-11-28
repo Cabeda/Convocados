@@ -53,6 +53,8 @@ export interface EventData {
   players: Player[];
   teamResults: TeamResult[];
   wasReset?: boolean;
+  /** A played game exists to recap (known for signed-out viewers too). */
+  hasLastGame?: boolean;
   hasPassword?: boolean;
   locked?: boolean;
   archivedAt?: string | null;

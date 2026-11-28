@@ -203,7 +203,7 @@ describe("EventRecap clock", () => {
 
 describe("EventRecap skeleton", () => {
   const unseeded = (over = {}) => renderWithTheme(
-    <EventRecap eventId="e1" initialStatus={null} viewerName={null} isAuthenticated={false} canManage={false} isRecurring
+    <EventRecap eventId="e1" initialStatus={null} viewerName={null} isAuthenticated={false} canManage={false} isRecurring hasLastGame
       nextKickoff={hours(72)} timezone="UTC" deepLinkAction={null} {...over} />,
   );
 
@@ -216,8 +216,18 @@ describe("EventRecap skeleton", () => {
   });
 
   it("shows nothing for an event that has not been played and does not repeat", async () => {
-    unseeded({ isRecurring: false });
+    unseeded({ isRecurring: false, hasLastGame: false });
     expect(screen.queryByTestId("recap-skeleton")).toBeNull();
+  });
+
+  it("does not hold a place for a weekly game that has never been played: there is nothing coming to fill it", () => {
+    unseeded({ hasLastGame: false });
+    expect(screen.queryByTestId("recap-skeleton")).toBeNull();
+  });
+
+  it("holds the place for a one-off whose game is over, even before the payload names a last game", () => {
+    unseeded({ isRecurring: false, hasLastGame: false, nextKickoff: hours(-3) });
+    expect(screen.getByTestId("recap-skeleton")).toBeInTheDocument();
   });
 
   it("is a one-line strip when the viewer last saw the strip", () => {

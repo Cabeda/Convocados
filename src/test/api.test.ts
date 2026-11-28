@@ -332,6 +332,19 @@ describe("GET /api/events/[id]", () => {
     expect(body.postGameStatus.isParticipant).toBe(true);
   });
 
+  it("tells even a signed-out viewer whether there is a last game to recap", async () => {
+    const id = await seedEvent();
+    const read = async () => (await (await getEvent(ctx({ id }))).json()).hasLastGame;
+    expect(await read()).toBe(false);
+
+    await prisma.gameHistory.create({ data: { eventId: id, dateTime: new Date(Date.now() - 86400_000 * 7), status: "played", teamOneName: "Ninjas", teamTwoName: "Gunas", teamsSnapshot: "[]" } });
+    expect(await read()).toBe(true);
+
+    // The newest history being a cancelled game means there is nothing to recap (same rule as the recap itself).
+    await prisma.gameHistory.create({ data: { eventId: id, dateTime: new Date(Date.now() - 86400_000), status: "cancelled", teamOneName: "Ninjas", teamTwoName: "Gunas", teamsSnapshot: "[]" } });
+    expect(await read()).toBe(false);
+  });
+
   it("performs lazy recurrence reset when nextResetAt is in the past", async () => {
     const event = await prisma.event.create({
       data: {

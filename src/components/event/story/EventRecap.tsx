@@ -22,6 +22,8 @@ export interface EventRecapProps {
   /** Owner or event admin. */
   canManage: boolean;
   isRecurring: boolean;
+  /** The payload says a played game exists to recap, so the card's place can be held while it loads. */
+  hasLastGame?: boolean;
   /** The event's current kickoff (ISO). Counts as "next game" only once it is after the last game. */
   nextKickoff: string;
   timezone: string;
@@ -124,8 +126,10 @@ export function EventRecap(p: EventRecapProps) {
     if (expanded) { setOpen(false); setJustCompleted(false); } else setOpen(true);
   };
 
-  // Not known yet: hold the card's place so the page below does not jump when it arrives.
-  const expectRecap = p.isRecurring || new Date(p.nextKickoff).getTime() < now;
+  // Not known yet: hold the card's place so the page below does not jump when it arrives —
+  // but only when a last game is known to exist (a played game in the payload, or a one-off that
+  // has ended). A brand-new weekly game has none, and a skeleton for it would be a jump of its own.
+  const expectRecap = !!p.hasLastGame || (!p.isRecurring && new Date(p.nextKickoff).getTime() < now);
   if (!loaded && !status) {
     return expectRecap ? <RecapSkeleton strip={read(shapeKey(p.eventId)) === "strip"} /> : null;
   }

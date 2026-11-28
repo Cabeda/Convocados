@@ -1240,6 +1240,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               isAuthenticated={isAuthenticated}
               canManage={isOwner || isAdmin}
               isRecurring={!!event.isRecurring}
+              hasLastGame={event.hasLastGame}
               nextKickoff={event.dateTime}
               timezone={event.timezone}
               sport={sport}
