@@ -34,6 +34,7 @@ vi.mock("~/lib/priority.server", () => ({
 
 let ownerId = "";
 let ownerToken = "";
+let paymentsToken = "";
 let readToken = "";
 let participantId = "";
 let participantReadToken = "";
@@ -65,7 +66,7 @@ async function mintToken(userId: string, scopes: string) {
   return token;
 }
 
-async function seedEvent(owner: string) {
+async function seedEvent(owner: string | null) {
   return prisma.event.create({
     data: {
       title: "Scope Event",
@@ -116,6 +117,19 @@ function putCtx(eventId: string, token: string, body?: unknown) {
   } as any;
 }
 
+/** A link holder: no bearer, no cookie — the share link is the capability. */
+function anonymousPutCtx(eventId: string, body?: unknown) {
+  return {
+    request: new Request("http://localhost/api/test", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+    params: { id: eventId },
+    url: new URL("http://localhost/api/test"),
+  } as any;
+}
+
 beforeEach(async () => {
   await resetApiRateLimitStore();
   await prisma.walletTransaction.deleteMany();
@@ -135,6 +149,7 @@ beforeEach(async () => {
 
   ownerId = await seedUser("owner");
   ownerToken = await mintToken(ownerId, "write:events");
+  paymentsToken = await mintToken(ownerId, "manage:payments");
   readToken = await mintToken(ownerId, "openid read:events");
   participantId = await seedUser("participant");
   participantReadToken = await mintToken(participantId, "openid read:events");
@@ -211,12 +226,40 @@ describe("event mutation scope enforcement", () => {
     expect(await prisma.gameHistory.findUnique({ where: { id: history.id } })).not.toBeNull();
   });
 
-  it("still treats a session-style caller (scopes *) as full access", async () => {
+  it("still treats a bearer token carrying the * scope as full access", async () => {
     const fullToken = await mintToken(ownerId, "*");
     const event = await seedEvent(ownerId);
     const game = await seedUpcomingGame(event.id);
     expect((await cancelGame(putCtx(event.id, fullToken))).status).toBe(200);
     expect((await prisma.game.findUniqueOrThrow({ where: { id: game.id } })).status).toBe("cancelled");
+  });
+
+  it("still lets a no-bearer link holder rename an ownerless unlisted Event", async () => {
+    // The seam must not treat the absence of a bearer as insufficient scope: a
+    // link holder carries no token at all, and locking them out would break the
+    // no-account flow.
+    const event = await seedEvent(null);
+    const res = await updateTitle(anonymousPutCtx(event.id, { title: "Link Holder Renamed" }));
+    expect(res.status).toBe(200);
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: event.id } })).title).toBe(
+      "Link Holder Renamed",
+    );
+  });
+
+  it("lets a manage:payments token perform the payment write it exists for", async () => {
+    // `EVENT_MUTATION_WRITE_SCOPES` accepts either scope; this pins the
+    // manage:payments half so dropping it cannot ship green.
+    const event = await seedEvent(ownerId);
+    const cost = await seedCost(event.id);
+    const res = await updatePayments(
+      putCtx(event.id, paymentsToken, { playerName: "Ana", status: "paid" }),
+    );
+    expect(res.status).toBe(200);
+    expect(
+      (await prisma.playerPayment.findUniqueOrThrow({
+        where: { eventCostId_playerName: { eventCostId: cost.id, playerName: "Ana" } },
+      })).status,
+    ).toBe("paid");
   });
 
   it("refuses a linked participant's self-report with a read:events token", async () => {
